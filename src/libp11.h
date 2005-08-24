@@ -69,6 +69,7 @@ typedef struct PKCS11_token_st {
 	char *label;
 	char *manufacturer;
 	char *model;
+	char *serialnr;
 	unsigned char initialized;
 	unsigned char loginRequired;
 	unsigned char secureLogin;

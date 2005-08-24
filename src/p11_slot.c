@@ -362,6 +362,7 @@ int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	token->label = PKCS11_DUP(info.label);
 	token->manufacturer = PKCS11_DUP(info.manufacturerID);
 	token->model = PKCS11_DUP(info.model);
+	token->serialnr = PKCS11_DUP(info.serialNumber);
 	token->initialized = (info.flags & CKF_TOKEN_INITIALIZED) ? 1 : 0;
 	token->loginRequired = (info.flags & CKF_LOGIN_REQUIRED) ? 1 : 0;
 	token->secureLogin = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
@@ -378,6 +379,7 @@ void pkcs11_destroy_token(PKCS11_TOKEN * token)
 	OPENSSL_free(token->label);
 	OPENSSL_free(token->manufacturer);
 	OPENSSL_free(token->model);
+	OPENSSL_free(token->serialnr);
 	OPENSSL_free(token->_private);
 	memset(token, 0, sizeof(*token));
 }
