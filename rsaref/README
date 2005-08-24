@@ -19,3 +19,14 @@ This software is provided AS IS and RSA Security, Inc. disclaims all warranties
 including but not limited to the implied warranty of merchantability, fitness
 for a particular purpose, and noninfringement.
 
+Note: on linux cryptoki.h did not compile without changes.
+The file was edited and 
+	#ifndef _WIN32
+	#define CK_IMPORT_SPEC
+	#define CK_EXPORT_SPEC
+	#define CK_CALL_SPEC
+
+	#else
+...
+	#endif
+was added. If anyone knows a better solution, please let us know.
