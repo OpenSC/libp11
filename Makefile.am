@@ -2,8 +2,7 @@
 
 SUBDIRS = aclocal doc libltdl src rsaref .
 
-EXTRA_DIST = ANNOUNCE CodingStyle QUICKSTART README \
-	bootstrap Makefile.mak depcomp 
+EXTRA_DIST = bootstrap Makefile.mak depcomp 
 
 MAINTAINERCLEANFILES = \
 	Makefile.in config.h.in configure \
