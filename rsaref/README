@@ -1,0 +1,21 @@
+These files have been downloaded from 
+http://www.rsasecurity.com/rsalabs/node.asp?id=2133
+
+They were marked version 2.20.
+This note was linked to the files:
+
+Regarding the header / include files:
+
+License to copy and use this software is granted provided that it is identified
+as "RSA Security Inc. PKCS #11 Cryptographic Token Interface (Cryptoki)" in all
+material mentioning or referencing this software or this function. 
+
+License is also granted to make and use derivative works provided that such
+works are identified as "derived from the RSA Security Inc. PKCS #11
+Cryptographic Token Interface (Cryptoki)" in all material mentioning or
+referencing the derived work. 
+
+This software is provided AS IS and RSA Security, Inc. disclaims all warranties
+including but not limited to the implied warranty of merchantability, fitness
+for a particular purpose, and noninfringement.
+

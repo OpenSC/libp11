@@ -1,0 +1,31 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:html="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>ResourcesLinks - Library to make using PKCS#11 implementations easy - Trac</title><style type="text/css">
+           @import url(trac.css);
+          </style></head><body><div class="wikipage">
+    <div id="searchable"><h1>Resources, Links</h1>
+<p>
+<a class="ext-link" title="http://www.rsasecurity.com/rsalabs/" href="http://www.rsasecurity.com/rsalabs/" shape="rect">RSA Labs</a> defined the Public Key Cryptography Standards (PKCS).
+</p>
+<p>
+<a class="ext-link" title="http://www.rsasecurity.com/rsalabs/node.asp?id=2133" href="http://www.rsasecurity.com/rsalabs/node.asp?id=2133" shape="rect">PKCS#11</a> defines an API to use software modules
+that give access to cryptographic token hardware.
+</p>
+<p>
+We think PKCS#11 is not easy to use, libp11 has the goal to make it easier.
+</p>
+<p>
+Libp11 is tested with <a class="ext-link" title="http://www.opensc.org/opensc/" href="http://www.opensc.org/opensc/" shape="rect">OpenSC</a>, but should work fine
+with other implementations of PKCS#11, too.
+</p>
+<p>
+Software using libp11:
+</p>
+<ul><li><a class="ext-link" title="http://www.opensc.org/pam_p11/" href="http://www.opensc.org/pam_p11/" shape="rect">Pam_p11</a> is a simple pam module that allows login via smart card.
+To use pam_p11 you need to store the certificates allowed for login in a file, either in pem format
+or the public keys in ssh format in your .ssh/authorized_keys file. Pam_p11 is very simple, it has
+no config file, no options, does not know about certificate chains, certificate authorities, revocation
+lists or OCSP. Perfect for the small installation with no frills.
+</li><li><a class="ext-link" title="http://www.opensc.org/engine_pkcs11/" href="http://www.opensc.org/engine_pkcs11/" shape="rect">Engine_pkcs11</a> is an Engine for OpenSSL, a loadable module that
+allows you to use openssl, but redirect crypto operations to your smart card hardware.
+</li></ul></div>
+   </div><div class="footer"><hr></hr><p><a href="index.html">Back to Index</a></p></div></body></html>
