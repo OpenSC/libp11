@@ -4,7 +4,7 @@ dnl Process this file with autoconf to produce a configure script.
 # Require autoconf 2.52
 AC_PREREQ(2.52)
 
-AC_INIT(libp11, 0.0)
+AC_INIT(libp11, 0.1.0)
 AM_INIT_AUTOMAKE
 
 AC_CONFIG_SRCDIR(src/libp11.h)
