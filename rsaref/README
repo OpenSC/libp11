@@ -30,3 +30,6 @@ The file was edited and
 ...
 	#endif
 was added. If anyone knows a better solution, please let us know.
+
+Also the files were converted from dos line endings (\r\n) to unix
+line endings (\n) using "fromdos" command.
