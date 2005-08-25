@@ -27,13 +27,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <opensc/scdl.h>
+#include <ltdl.h>
 
 #define MAGIC			0xd00bed00
 
 struct sc_pkcs11_module {
 	unsigned int _magic;
-	void *handle;
+	lt_dlhandle *handle;
 };
 typedef struct sc_pkcs11_module sc_pkcs11_module_t;
 
@@ -48,18 +48,21 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	CK_RV (*c_get_function_list)(CK_FUNCTION_LIST_PTR_PTR);
 	int rv;
 
+	if (lt_dlinit() != 0)
+		return NULL;
+
 	mod = (sc_pkcs11_module_t *) calloc(1, sizeof(*mod));
 	mod->_magic = MAGIC;
 
 	if (mspec == NULL)
 		mspec = PKCS11_DEFAULT_MODULE_NAME;
-	mod->handle = scdl_open(mspec);
+	mod->handle = lt_dlopen(mspec);
 	if (mod->handle == NULL)
 		goto failed;
 
 	/* Get the list of function pointers */
 	c_get_function_list = (CK_RV (*)(CK_FUNCTION_LIST_PTR_PTR))
-				scdl_get_address(mod->handle, "C_GetFunctionList");
+				lt_dlsym(mod->handle, "C_GetFunctionList");
 	if (!c_get_function_list)
 		goto failed;
 	rv = c_get_function_list(funcs);
@@ -84,7 +87,7 @@ C_UnloadModule(void *module)
 	if (!mod || mod->_magic != MAGIC)
 		return CKR_ARGUMENTS_BAD;
 
-	if (scdl_close(mod->handle) < 0)
+	if (lt_dlclose(mod->handle) < 0)
 		return CKR_FUNCTION_FAILED;
 
 	memset(mod, 0, sizeof(*mod));
