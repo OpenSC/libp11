@@ -10,7 +10,7 @@ test -f `basename $0`
 
 rm -rf *.html *.css
 
-wget $SERVER/$WIKI/TitleIndex -O TitleIndex.tmp
+wget --no-verbose $SERVER/$WIKI/TitleIndex -O TitleIndex.tmp
 
 grep "\"/$WIKI/[^\"]*\"" TitleIndex.tmp \
         |sed -e "s#.*\"/$WIKI/\([^\"]*\)\".*#\1#g" \
@@ -21,7 +21,7 @@ sed -e /^Trac/d -e /^Wiki/d -e /^TitleIndex/d -e /^RecentChanges/d \
 for A in WikiStart `cat WikiWords.tmp`
 do
 	F=`echo $A|sed -e 's/\//_/g'`
-	wget $SERVER/$WIKI/$A  -O $F.tmp
+	wget --no-verbose $SERVER/$WIKI/$A  -O $F.tmp
 	xsltproc --output $F.html $XSL $F.tmp
 	sed -e "s#<a href=\"/$WIKI/\([^\"]*\)\"#<a href=\"\1.html\"#g" \
 		-i $F.html
@@ -29,6 +29,6 @@ done
 
 mv WikiStart.html index.html
 
-wget http://www.opensc.org/trac/css/trac.css
+wget --no-verbose http://www.opensc.org/trac/css/trac.css
 
 rm *.tmp
