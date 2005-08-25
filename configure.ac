@@ -30,6 +30,7 @@ AC_PROG_CPP
 AC_PROG_INSTALL
 
 dnl use ltdl
+dnl see http://www.gnu.org/software/libtool/manual.html#Distributing-libltdl
 AC_LIBLTDL_INSTALLABLE
 AC_SUBST(LTDLINCL)
 AC_SUBST(LIBLTDL)
