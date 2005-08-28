@@ -23,11 +23,11 @@
  * Copyright (C) 2002  Olaf Kirch <okir@lst.de>
  */
 
-#include "pkcs11.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ltdl.h>
+#include "cryptoki.h"
 
 #define MAGIC			0xd00bed00
 
@@ -48,14 +48,15 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	CK_RV (*c_get_function_list)(CK_FUNCTION_LIST_PTR_PTR);
 	int rv;
 
+	if (mspec == NULL)
+		return NULL;
+
 	if (lt_dlinit() != 0)
 		return NULL;
 
 	mod = (sc_pkcs11_module_t *) calloc(1, sizeof(*mod));
 	mod->_magic = MAGIC;
 
-	if (mspec == NULL)
-		mspec = PKCS11_DEFAULT_MODULE_NAME;
 	mod->handle = lt_dlopen(mspec);
 	if (mod->handle == NULL)
 		goto failed;
