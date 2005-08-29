@@ -8,5 +8,5 @@ fi
 rm -rf *.cache *.m4 config.guess config.log \
 config.status config.sub depcomp ltmain.sh libltdl
 (cat aclocal/*.m4 > acinclude.m4 2> /dev/null)
-libtoolize --ltdl --copy
+libtoolize --copy
 autoreconf --verbose --install
