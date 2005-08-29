@@ -1,6 +1,6 @@
 # Process this file with automake to create Makefile.in
 
-SUBDIRS = aclocal doc libltdl src rsaref .
+SUBDIRS = aclocal doc src rsaref .
 
 EXTRA_DIST = bootstrap depcomp 
 
@@ -14,5 +14,3 @@ DEPCLEANFILES = config.log configure
 
 AUTOMAKE_OPTIONS = foreign 1.5
 
-maintainer-clean-local:
-	rm -rf libltdl
