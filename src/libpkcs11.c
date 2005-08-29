@@ -34,7 +34,7 @@
 
 struct sc_pkcs11_module {
 	unsigned int _magic;
-	lt_dlhandle *handle;
+	lt_dlhandle handle;
 };
 typedef struct sc_pkcs11_module sc_pkcs11_module_t;
 
