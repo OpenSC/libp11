@@ -23,7 +23,9 @@
 #ifndef ___CRYPTOKI_H_INC___
 #define ___CRYPTOKI_H_INC___
 
+#ifdef WIN32
 #pragma pack(push, cryptoki, 1)
+#endif
 
 #ifndef _WIN32
 #define CK_IMPORT_SPEC
@@ -70,6 +72,8 @@
 
 #include "pkcs11.h"
 
+#ifdef WIN32
 #pragma pack(pop, cryptoki)
+#endif
 
 #endif /* ___CRYPTOKI_H_INC___ */
