@@ -30,20 +30,10 @@ AC_PROG_CPP
 AC_PROG_INSTALL
 
 dnl use ltdl
-dnl see http://www.gnu.org/software/libtool/manual.html#Distributing-libltdl
-AC_LIBLTDL_INSTALLABLE
-AC_SUBST(LTDLINCL)
-AC_SUBST(LIBLTDL)
-dnl and make sure libtool knows, too
-AC_LIBTOOL_DLOPEN
+AC_CHECK_LIB(ltdl, lt_dlopen,, [AC_MSG_ERROR([libltdl not found])])
 
 dnl Add libtool support.
-AM_PROG_LIBTOOL
-dnl Automatically update the libtool script if it becomes out-of-date.
-dnl AC_SUBST(LIBTOOL_DEPS)
-
-dnl configure libltdl
-AC_CONFIG_SUBDIRS(libltdl)
+AC_PROG_LIBTOOL
 
 dnl Checks for header files.
 AC_HEADER_STDC
