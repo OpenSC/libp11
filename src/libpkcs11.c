@@ -94,5 +94,8 @@ C_UnloadModule(void *module)
 
 	memset(mod, 0, sizeof(*mod));
 	free(mod);
+
+	lt_dlexit();
+
 	return CKR_OK;
 }
