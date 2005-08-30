@@ -2,7 +2,7 @@
 
 SUBDIRS = aclocal doc src rsaref .
 
-EXTRA_DIST = bootstrap depcomp 
+EXTRA_DIST = bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
 
 MAINTAINERCLEANFILES = \
 	Makefile.in config.h.in configure \
