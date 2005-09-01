@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
 norandom:
 notoken:
-	PKCS11_destroy_all_slots(ctx, slots, nslots);
+	PKCS11_release_all_slots(ctx, slots, nslots);
 
 noslots:
 	PKCS11_CTX_unload(ctx);
