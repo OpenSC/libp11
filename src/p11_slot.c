@@ -44,7 +44,7 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 	for (n = 0; n < nslots; n++) {
 		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
 			while (n--)
-				PKCS11_destroy_slot(ctx, slots + n);
+				PKCS11_release_slot(ctx, slots + n);
 			OPENSSL_free(slots);
 			return -1;
 		}
