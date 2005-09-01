@@ -303,15 +303,16 @@ int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	return 0;
 }
 
-void PKCS11_destroy_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned int nslots)
+void PKCS11_release_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned int nslots)
 {
 	int i;
 
 	for (i=0; i < nslots; i++)
 		PKCS11_destroy_slot(ctx, &slots[i]);
+	OPENSSL_free(slots);
 }
 
-void PKCS11_destroy_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
+void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 

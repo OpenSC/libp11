@@ -119,6 +119,8 @@ typedef struct pkcs11_cert_private {
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 
+extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
+
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern void *pkcs11_malloc(size_t);

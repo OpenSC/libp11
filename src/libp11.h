@@ -106,9 +106,8 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX *,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /* and free them again */
-extern void PKCS11_destroy_all_slots(PKCS11_CTX *,
+extern void PKCS11_release_all_slots(PKCS11_CTX *,
 			PKCS11_SLOT *slots, unsigned int nslots);
-extern void PKCS11_destroy_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
 /* Find the first slot with a token */
 PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx, 
