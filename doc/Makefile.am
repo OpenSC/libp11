@@ -4,5 +4,4 @@ MAINTAINERCLEANFILES = Makefile.in
 
 EXTRA_DIST = README export-wiki.sh export-wiki.xsl $(HTML)
 
-HTML= MailingLists.html OperatingSystems.html QuickStart.html \
-	ResourcesLinks.html index.html trac.css
+HTML= $(shell ls $(srcdir)/*.html $(srcdir)/*.css)
