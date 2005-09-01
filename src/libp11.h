@@ -102,10 +102,17 @@ extern void PKCS11_CTX_free(PKCS11_CTX *);
 extern int PKCS11_open_session(PKCS11_SLOT *, int);
 
 /* Get a list of all slots */
-extern int PKCS11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
+extern int PKCS11_enumerate_slots(PKCS11_CTX *,
+			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
+
+/* and free them again */
+extern void PKCS11_destroy_all_slots(PKCS11_CTX *,
+			PKCS11_SLOT *slots, unsigned int nslots);
+extern void PKCS11_destroy_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
 /* Find the first slot with a token */
-extern PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *);
+PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx, 
+			PKCS11_SLOT *slots, unsigned int nslots);
 
 /* Authenticate to the card */
 extern int PKCS11_login(PKCS11_SLOT *, int so, const char *pin);

@@ -41,8 +41,6 @@ typedef struct pkcs11_ctx_private {
 	CK_FUNCTION_LIST_PTR method;
 
 	CK_SESSION_HANDLE session;
-	int nslots;
-	PKCS11_SLOT *slots;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) (ctx->_private))
 
@@ -121,8 +119,6 @@ typedef struct pkcs11_cert_private {
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 
-extern void pkcs11_destroy_all_slots(PKCS11_CTX *);
-extern void pkcs11_destroy_slot(PKCS11_CTX *, PKCS11_SLOT *);
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern void *pkcs11_malloc(size_t);

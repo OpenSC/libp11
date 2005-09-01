@@ -36,9 +36,6 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	ctx = PKCS11_NEW(PKCS11_CTX);
 	ctx->_private = priv;
 
-	/* Mark list of slots as "need to fetch from card" */
-	priv->nslots = -1;
-
 	return ctx;
 }
 
@@ -82,9 +79,6 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *priv;
 	priv = PRIVCTX(ctx);
-
-	/* Free any slot info we have allocated */
-	pkcs11_destroy_all_slots(ctx);
 
 	/* Tell the PKCS11 library to shut down */
 	priv->method->C_Finalize(NULL);

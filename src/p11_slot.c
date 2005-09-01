@@ -32,47 +32,43 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 
-	if (priv->nslots < 0) {
-		CK_SLOT_ID slotid[64];
-		CK_ULONG nslots = sizeof(slotid), n;
-		PKCS11_SLOT *slots;
-		int rv;
+	CK_SLOT_ID slotid[64];
+	CK_ULONG nslots = sizeof(slotid), n;
+	PKCS11_SLOT *slots;
+	int rv;
 
-		rv = priv->method->C_GetSlotList(FALSE, slotid, &nslots);
-		CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
+	rv = priv->method->C_GetSlotList(FALSE, slotid, &nslots);
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
 
-		slots = (PKCS11_SLOT *) pkcs11_malloc(nslots * sizeof(PKCS11_SLOT));
-		for (n = 0; n < nslots; n++) {
-			if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
-				while (n--)
-					pkcs11_destroy_slot(ctx, slots + n);
-				OPENSSL_free(slots);
-				return -1;
-			}
+	slots = (PKCS11_SLOT *) pkcs11_malloc(nslots * sizeof(PKCS11_SLOT));
+	for (n = 0; n < nslots; n++) {
+		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
+			while (n--)
+				PKCS11_destroy_slot(ctx, slots + n);
+			OPENSSL_free(slots);
+			return -1;
 		}
-		priv->nslots = nslots;
-		priv->slots = slots;
 	}
 
-	*slotp = priv->slots;
-	*countp = priv->nslots;
+	*slotp = slots;
+	*countp = nslots;
 	return 0;
 }
 
 /*
  * Find a slot with a token that looks "valuable"
  */
-PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx)
+PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned int nslots)
 {
-	PKCS11_SLOT *slot_list, *slot, *best;
+	PKCS11_SLOT *slot, *best;
 	PKCS11_TOKEN *tok;
-	unsigned int n, nslots;
+	unsigned int n;
 
-	if (PKCS11_enumerate_slots(ctx, &slot_list, &nslots))
+	if (! slots)
 		return NULL;
 
 	best = NULL;
-	for (n = 0, slot = slot_list; n < nslots; n++, slot++) {
+	for (n = 0, slot = slots; n < nslots; n++, slot++) {
 		if ((tok = slot->token) != NULL) {
 			if (best == NULL
 			    || (tok->initialized > best->token->initialized
@@ -182,11 +178,13 @@ int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 					    (CK_UTF8CHAR *) label));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_TOKEN, rv);
 
-	cpriv = PRIVCTX(ctx);
-	for (n = 0; n < cpriv->nslots; n++) {
-		if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
-			return -1;
-	}
+	/* FIXME: how to update the token?
+	 * cpriv = PRIVCTX(ctx);
+	 * for (n = 0; n < cpriv->nslots; n++) {
+	 * 	if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
+	 * 		return -1;
+	 * }
+	 */
 
 	return 0;
 }
@@ -305,18 +303,15 @@ int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	return 0;
 }
 
-void pkcs11_destroy_all_slots(PKCS11_CTX * ctx)
+void PKCS11_destroy_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned int nslots)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	int i;
 
-	while (priv->nslots > 0)
-		pkcs11_destroy_slot(ctx, &priv->slots[--(priv->nslots)]);
-	OPENSSL_free(priv->slots);
-	priv->slots = NULL;
-	priv->nslots = -1;
+	for (i=0; i < nslots; i++)
+		PKCS11_destroy_slot(ctx, &slots[i]);
 }
 
-void pkcs11_destroy_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
+void PKCS11_destroy_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
