@@ -1,19 +1,22 @@
 #include <stdio.h>
 #include <libp11.h>
 
-#define PKCS11_LIB "/usr/lib/opensc-pkcs11.so"
-
 int main(int argc, char *argv[])
 {
 	PKCS11_CTX *ctx;
-	PKCS11_SLOT *slot;
+	PKCS11_SLOT *slots, *slot;
 	unsigned char random[10];
-	int rc = 0, i, len;
+	int rc = 0, i, len, nslots;
+
+	if (argc != 2) {
+		fprintf(stderr,"usage: auth /usr/lib/opensc-pkcs11.so\n");
+		return 1;
+	}
 
 	ctx = PKCS11_CTX_new();
 
 	/* load pkcs #11 module */
-	rc = PKCS11_CTX_load(ctx, PKCS11_LIB);
+	rc = PKCS11_CTX_load(ctx, argv[1]);
 	if (rc) {
 		fprintf(stderr, "loading pkcs11 engine failed: %s\n",
 			ERR_reason_error_string(ERR_get_error()));
@@ -21,12 +24,20 @@ int main(int argc, char *argv[])
 		goto nolib;
 	}
 
+	/* get information on all slots */
+	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
+	if (rc < 0) {
+		fprintf(stderr, "no slots available\n");
+		rc = 2;
+		goto noslots;
+	}
+
 	/* get first slot with a token */
-	slot = PKCS11_find_token(ctx);
+	slot = PKCS11_find_token(ctx, slots, nslots);
 	if (!slot || !slot->token) {
 		fprintf(stderr, "no token available\n");
-		rc = 2;
-		goto noslot;
+		rc = 3;
+		goto notoken;
 	}
 	printf("Slot manufacturer......: %s\n", slot->manufacturer);
 	printf("Slot description.......: %s\n", slot->description);
@@ -41,7 +52,7 @@ int main(int argc, char *argv[])
 	if (rc < 0) {
 		fprintf(stderr, "generate_random failed: %s\n",
 			ERR_reason_error_string(ERR_get_error()));
-		rc = 3;
+		rc = 4;
 		goto norandom;
 	}
 
@@ -51,8 +62,12 @@ int main(int argc, char *argv[])
 	printf("\n");
 
 	rc = 0;
+
 norandom:
-noslot:
+notoken:
+	PKCS11_destroy_all_slots(ctx, slots, nslots);
+
+noslots:
 	PKCS11_CTX_unload(ctx);
 
 nolib:
