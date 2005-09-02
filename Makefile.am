@@ -1,6 +1,7 @@
 # Process this file with automake to create Makefile.in
 
-SUBDIRS = . aclocal doc src rsaref 
+SUBDIRS = . aclocal src rsaref 
+DIST_SUBDIRS = . aclocal doc src rsaref 
 
 EXTRA_DIST = bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
 
@@ -13,9 +14,3 @@ MAINTAINERCLEANFILES = \
 DEPCLEANFILES = config.log configure
 
 AUTOMAKE_OPTIONS = foreign 1.5
-
-dist: gendoc
-
-gendoc:
-	sh $(srcdir)/doc/export-wiki.sh $(srcdir)/doc
-	sh $(srcdir)/doc/generate-api.sh $(srcdir)/doc
