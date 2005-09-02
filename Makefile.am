@@ -14,6 +14,8 @@ DEPCLEANFILES = config.log configure
 
 AUTOMAKE_OPTIONS = foreign 1.5
 
-dist-hook:
+dist: doc
+
+doc:
 	sh $(srcdir)/doc/export-wiki.sh $(srcdir)/doc
 	sh $(srcdir)/doc/generate-api.sh $(srcdir)/doc
