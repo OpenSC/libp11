@@ -15,7 +15,7 @@ libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_key.c \
 	p11_load.c p11_misc.c p11_ops.c p11_rsa.c p11_slot.c 
 
 libp11_la_LDFLAGS = -version-info @LIBP11_VERSION@
-libp11_la_LIBADD = @OPENSSL_LIBS@
+libp11_la_LIBADD = @OPENSSL_LIBS@ @LIBLTDL@
 
 pkgconfigdir = @libdir@/pkgconfig
 pkgconfig_DATA = libp11.pc

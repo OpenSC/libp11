@@ -29,18 +29,24 @@ dnl Checks for programs.
 AC_PROG_CPP
 AC_PROG_INSTALL
 
-dnl use ltdl
-AC_CHECK_LIB(ltdl, lt_dlopen,, [AC_MSG_ERROR([libltdl not found])])
-
 dnl Add libtool support.
 AC_PROG_LIBTOOL
 
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([errno.h fcntl.h malloc.h stdlib.h inttypes.h string.h strings.h sys/time.h unistd.h locale.h getopt.h dlfcn.h utmp.h ltdl.h])
+AC_CHECK_HEADERS([errno.h fcntl.h malloc.h stdlib.h inttypes.h string.h strings.h sys/time.h unistd.h locale.h getopt.h dlfcn.h utmp.h])
 
-PKG_CHECK_MODULES([OPENSSL], [openssl])
+dnl use ltdl
+AC_LIB_LINKFLAGS(ltdl)
+
+saved_LIBS="$LIBS"
+LIBS="$saved_LIBS $LIBLTDL"
+AC_CHECK_HEADER([ltdl.h], [ AC_MSG_RESULT "yes" ],
+   [ AC_MSG_ERROR([ltdl.h not found, please install libltdl and/or libtool]) ])
+LIBS="$saved_LIBS"
+
+PKG_CHECK_MODULES(OPENSSL, [openssl])
 
 AC_OUTPUT([
 Makefile
