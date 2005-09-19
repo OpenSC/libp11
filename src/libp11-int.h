@@ -28,7 +28,7 @@
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 
-#include <libp11.h>
+#include "libp11.h"
 
 /* get private implementations of PKCS11 structures */
 

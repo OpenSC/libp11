@@ -433,7 +433,7 @@ int PKCS11_get_key_exponent(PKCS11_KEY * key, BIGNUM **bn)
 }
 
 
-int PKCS11_get_key_size(PKCS11_KEY * key) 
+int PKCS11_get_key_size(const PKCS11_KEY * key) 
 {
    BIGNUM* n;
    int numbytes=0;

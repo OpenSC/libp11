@@ -124,7 +124,7 @@ extern int PKCS11_enumerate_keys(PKCS11_TOKEN *, PKCS11_KEY **, unsigned int *);
 extern int PKCS11_get_key_type(PKCS11_KEY *);
 
 /* Get size of key modulus in number of bytes */
-extern int PKCS11_get_key_size(PKCS11_KEY *);
+extern int PKCS11_get_key_size(const PKCS11_KEY *);
 /* Get actual modules and public exponent as BIGNUM */
 extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
 extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
