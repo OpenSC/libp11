@@ -14,7 +14,7 @@ AC_CONFIG_SRCDIR(src/libp11.h)
 #   (Interfaces added/removed/changed:  CURRENT++, REVISION=0)
 #   (Interfaces added:                  AGE++)
 #   (Interfaces removed:                AGE=0)
-LIBP11_VERSION=0:1:0
+LIBP11_VERSION=1:0:0
 
 AC_SUBST(LIBP11_VERSION)
 
