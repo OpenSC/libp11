@@ -16,6 +16,11 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
  */
 
+/**
+ * @file libp11.h
+ * @brief libp11 header file
+ */
+
 #ifndef _LIB11_H
 #define _LIB11_H
 
@@ -44,18 +49,18 @@ ERR_PUT_error(ERR_LIB_PKCS11,(f),(r),__FILE__,__LINE__)
  *  	i.e. readonly-login
  */
 
-/* PKCS11 key object (public or private) */
+/** PKCS11 key object (public or private) */
 typedef struct PKCS11_key_st {
 	char *label;
 	unsigned char *id;
 	int id_len;
-	unsigned char isPrivate;	/* private key present? */
-	unsigned char needLogin;	/* login to read private key? */
-	EVP_PKEY *evp_key;		/* initially NULL, need to call PKCS11_load_key */
+	unsigned char isPrivate;	/**< private key present? */
+	unsigned char needLogin;	/**< login to read private key? */
+	EVP_PKEY *evp_key;		/**< initially NULL, need to call PKCS11_load_key */
 	void *_private;
 } PKCS11_KEY;
 
-/* PKCS11 certificate object */
+/** PKCS11 certificate object */
 typedef struct PKCS11_cert_st {
 	char *label;
 	unsigned char *id;
@@ -64,7 +69,7 @@ typedef struct PKCS11_cert_st {
 	void *_private;
 } PKCS11_CERT;
 
-/* PKCS11 token, e.g. smart card or USB key */
+/** PKCS11 token: smart card or USB key */
 typedef struct PKCS11_token_st {
 	char *label;
 	char *manufacturer;
@@ -78,44 +83,116 @@ typedef struct PKCS11_token_st {
 	void *_private;
 } PKCS11_TOKEN;
 
-/* PKCS11 slot, e.g. card reader */
+/** PKCS11 slot: card reader */
 typedef struct PKCS11_slot_st {
 	char *manufacturer;
 	char *description;
 	unsigned char removable;
-	PKCS11_TOKEN *token;	/* NULL if no token present */
+	PKCS11_TOKEN *token;	/**< NULL if no token present */
 	void *_private;
 } PKCS11_SLOT;
 
+/** PKCS11 context */
 typedef struct PKCS11_ctx_st {
 	char *manufacturer;
 	char *description;
 	void *_private;
 } PKCS11_CTX;
 
+/**
+ * Create a new libp11 context
+ *
+ * This should be the first function called in the use of libp11
+ * @return an allocated context
+ */
 extern PKCS11_CTX *PKCS11_CTX_new(void);
-extern int PKCS11_CTX_load(PKCS11_CTX *, const char *ident);
-extern void PKCS11_CTX_unload(PKCS11_CTX *);
-extern void PKCS11_CTX_free(PKCS11_CTX *);
 
-/* open a session in RO or RW mode */
-extern int PKCS11_open_session(PKCS11_SLOT *, int);
+/**
+ * Load a PKCS#11 module
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param ident PKCS#11 library filename
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_CTX_load(PKCS11_CTX * ctx, const char * ident);
 
-/* Get a list of all slots */
-extern int PKCS11_enumerate_slots(PKCS11_CTX *,
+/**
+ * Unload a PKCS#11 module
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ */
+extern void PKCS11_CTX_unload(PKCS11_CTX * ctx);
+
+/**
+ * Free a libp11 context
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ */
+extern void PKCS11_CTX_free(PKCS11_CTX * ctx);
+
+/** Open a session in RO or RW mode
+ *
+ * @param slot slot descriptor returned by PKCS11_find_token() or PKCS11_enumerate_slots()
+ * @param rw open in read/write mode is mode != 0, otherwise in read only mode
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_open_session(PKCS11_SLOT * slot, int rw);
+
+/**
+ * Get a list of all slots
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slotsp pointer on a list of slots
+ * @param nslotsp size of the allocated list
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
-/* and free them again */
-extern void PKCS11_release_all_slots(PKCS11_CTX *,
+/**
+ * Free the list of slots allocated by PKCS11_enumerate_slots()
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slots list of slots allocated by PKCS11_enumerate_slots()
+ * @param nslots size of the list
+ */
+extern void PKCS11_release_all_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
-/* Find the first slot with a token */
+/**
+ * Find the first slot with a token
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slots list of slots allocated by PKCS11_enumerate_slots()
+ * @param nslots size of the list
+ * @return != NULL pointer on a slot structure
+ * @return NULL error
+ */
 PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx, 
 			PKCS11_SLOT *slots, unsigned int nslots);
 
-/* Authenticate to the card */
-extern int PKCS11_login(PKCS11_SLOT *, int so, const char *pin);
-extern int PKCS11_logout(PKCS11_SLOT *);
+/**
+ * Authenticate to the card
+ *
+ * @param slot slot returned by PKCS11_find_token()
+ * @param so login as CKU_SO if != 0, otherwise login as CKU_USER
+ * @param pin PIN value
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
+
+/**
+ * De-authenticate from the card
+ *
+ * @param slot slot returned by PKCS11_find_token()
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_logout(PKCS11_SLOT * slot);
 
 /* Get a list of all keys associated with this token */
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *, PKCS11_KEY **, unsigned int *);
@@ -142,15 +219,38 @@ extern PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *);
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
 
-/* Initialize a token */
-extern int PKCS11_init_token(PKCS11_TOKEN *, const char *pin,
+/**
+ * Initialize a token
+ *
+ * @param token token descriptor (in general slot->token)
+ * @param pin Security Officer PIN value
+ * @param label new name of the token
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
 	const char *label);
 
-/* Initialize the user PIN on a token */
-extern int PKCS11_init_pin(PKCS11_TOKEN *, const char *pin);
+/**
+ * Initialize the user PIN on a token
+ *
+ * @param token token descriptor (in general slot->token)
+ * @param pin new user PIN value
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
 
-/* Change the user PIN on a token */
-extern int PKCS11_change_pin(PKCS11_SLOT *, const char *old_pin,
+/**
+ * Change the user PIN on a token
+ *
+ * @param slot slot returned by PKCS11_find_token()
+ * @param old_pin old PIN value
+ * @param new_pin new PIN value
+ * @return 0 success
+ * @return -1 error
+ */
+extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 	const char *new_pin);
 
 /* Store various objects on the token */
@@ -171,7 +271,12 @@ extern int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 extern int PKCS11_seed_random(PKCS11_SLOT *, const unsigned char *s, unsigned int s_len);
 extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int r_len);
 
-/* Load PKCS11 error strings */
+/**
+ * Load PKCS11 error strings
+ *
+ * Call this function to be able to use ERR_reason_error_string(ERR_get_error())
+ * to get an textual version of the latest error code
+ */
 extern void ERR_load_PKCS11_strings(void);
 
 /*
