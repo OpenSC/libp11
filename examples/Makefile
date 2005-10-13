@@ -1,7 +1,7 @@
-CFLAGS=$(shell pkg-config --cflags libp11)
+CFLAGS=-O2 -g $(shell pkg-config --cflags libp11)
 LDFLAGS=$(shell pkg-config --libs libp11)
 
-all: auth
+all: auth getrandom
 
 clean:
-	rm auth
+	rm auth getrandom
