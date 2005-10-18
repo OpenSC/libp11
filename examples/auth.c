@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <string.h>
 #include <libp11.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
