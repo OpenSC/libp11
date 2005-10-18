@@ -32,7 +32,8 @@ int main(int argc, char *argv[])
 	unsigned char *random, *signature;
 
 	char password[20];
-	int rc = 0, fd, i, len, nslots, ncerts, siglen;
+	int rc = 0, fd, i, len;
+	unsigned int nslots, ncerts, siglen;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so\n");
