@@ -10,13 +10,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <termios.h>
 #include <stdio.h>
 #include <string.h>
 #include <libp11.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
-#define RANDOM_SIZE 128
+#define RANDOM_SIZE 64
 #define MAX_SIGSIZE 256
 
 int main(int argc, char *argv[])
@@ -32,8 +33,8 @@ int main(int argc, char *argv[])
 	unsigned char *random, *encrypted, *decrypted;
 
 	char password[20];
-	int rc = 0, fd, i, len;
-	unsigned int nslots, ncerts, siglen;
+	int rc = 0, fd, len;
+	unsigned int nslots, ncerts;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so\n");
@@ -131,9 +132,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* use public key for encryption */
-	rc = RSA_public_encrypt(RANDOM_SIZE, random, encrypted,
+	len = RSA_public_encrypt(RANDOM_SIZE, random, encrypted,
 			pubkey->pkey.rsa, RSA_PKCS1_PADDING);
-	if (rc != 1) {
+	if (len < 0) {
 		fprintf(stderr, "fatal: RSA_public_encrypt failed\n");
 		goto failed;
 	}
@@ -144,7 +145,6 @@ int main(int argc, char *argv[])
 
 	/* get password */
 	struct termios old, new;
-	int nread;
 
 	/* Turn echoing off and fail if we can't. */
 	if (tcgetattr(0, &old) != 0)
@@ -185,13 +185,13 @@ int main(int argc, char *argv[])
 	}
 
 	/* allocate space for decrypted. */
-	decrypted = malloc(RANDOM_SIZE);
+	decrypted = malloc(RSA_size(pubkey->pkey.rsa));
 	if (!decrypted)
 		goto failed;
 
-	rc = PKCS11_private_decrypt(RSA_size(pubkey->pkey.rsa), encrypted,
+	rc = PKCS11_private_decrypt(len, encrypted,
 			decrypted, authkey, RSA_PKCS1_PADDING);
-	if (rc != 1) {
+	if (rc != RANDOM_SIZE) {
 		fprintf(stderr, "fatal: PKCS11_private_decrypt failed\n");
 		goto failed;
 	}
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 
 
       failed:
-      norandom:
+	ERR_print_errors_fp(stderr); 
       notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
