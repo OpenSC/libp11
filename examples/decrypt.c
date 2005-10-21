@@ -28,9 +28,9 @@ int main(int argc, char *argv[])
 	
 	PKCS11_KEY *authkey;
 	PKCS11_CERT *authcert;
-	EVP_PKEY *pubkey;
+	EVP_PKEY *pubkey = NULL;
 
-	unsigned char *random, *encrypted, *decrypted;
+	unsigned char *random = NULL, *encrypted = NULL, *decrypted = NULL;
 
 	char password[20];
 	int rc = 0, fd, len;
@@ -205,6 +205,18 @@ int main(int argc, char *argv[])
 	PKCS11_release_all_slots(ctx, slots, nslots);
 	PKCS11_CTX_unload(ctx);
 	PKCS11_CTX_free(ctx);
+
+	if (pubkey != NULL)
+		EVP_PKEY_free(pubkey);
+	if (random != NULL)
+		free(random);
+	if (encrypted != NULL)
+		free(encrypted);
+	if (decrypted != NULL)
+		free(decrypted);
+
+	ERR_free_strings();
+	ERR_remove_state(0);
 
 	printf("decryption successfull.\n");
 	return 0;
