@@ -437,14 +437,13 @@ int PKCS11_get_key_exponent(PKCS11_KEY * key, BIGNUM **bn)
 
 int PKCS11_get_key_size(const PKCS11_KEY * key) 
 {
-   BIGNUM* n;
-   int numbytes=0;
-   n=BN_new();
-   if(key_getattr_bn(key, CKA_MODULUS, &n)) 
-	   return 0;
-   numbytes=BN_num_bytes(n);
-   BN_free(n);
-   return numbytes;
+	BIGNUM* n;
+	int     numbytes = 0;
+	if(key_getattr_bn(key, CKA_MODULUS, &n))
+		return 0;
+	numbytes = BN_num_bytes(n);
+	BN_free(n);
+	return numbytes;
 }
 
 
