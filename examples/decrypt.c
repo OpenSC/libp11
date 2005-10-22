@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
 		goto failed;
 	}
 
-	/* allocate space for decrypted. */
+	/* allocate space for decrypted data */
 	decrypted = malloc(RSA_size(pubkey->pkey.rsa));
 	if (!decrypted)
 		goto failed;
@@ -215,6 +215,7 @@ int main(int argc, char *argv[])
 	if (decrypted != NULL)
 		free(decrypted);
 
+	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
 	ERR_remove_state(0);
 
