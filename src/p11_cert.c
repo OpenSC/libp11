@@ -208,6 +208,8 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
 		OPENSSL_free(cert->label);
 		if (cert->id)
 			free(cert->id);
+		if (cert->_private != NULL)
+			OPENSSL_free(cert->_private);
 	}
 	if (priv->certs)
 		OPENSSL_free(priv->certs);

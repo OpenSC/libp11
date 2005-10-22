@@ -306,6 +306,8 @@ void pkcs11_destroy_keys(PKCS11_TOKEN * token)
 		OPENSSL_free(key->label);
 		if (key->id)
 			free(key->id);
+		if (key->_private != NULL)
+			OPENSSL_free(key->_private);
 	}
 	if (priv->keys)
 		OPENSSL_free(priv->keys);
