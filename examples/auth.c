@@ -12,11 +12,12 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <libp11.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
-#define RANDOM_SIZE 128
+#define RANDOM_SIZE 20
 #define MAX_SIGSIZE 256
 
 int main(int argc, char *argv[])
@@ -27,12 +28,12 @@ int main(int argc, char *argv[])
 	
 	PKCS11_KEY *authkey;
 	PKCS11_CERT *authcert;
-	EVP_PKEY *pubkey;
+	EVP_PKEY *pubkey = NULL;
 
-	unsigned char *random, *signature;
+	unsigned char *random = NULL, *signature = NULL;
 
 	char password[20];
-	int rc = 0, fd, i, len;
+	int rc = 0, fd;
 	unsigned int nslots, ncerts, siglen;
 
 	if (argc != 2) {
@@ -92,7 +93,6 @@ int main(int argc, char *argv[])
 
 	/* get password */
 	struct termios old, new;
-	int nread;
 
 	/* Turn echoing off and fail if we can't. */
 	if (tcgetattr(0, &old) != 0)
@@ -188,16 +188,28 @@ int main(int argc, char *argv[])
 		goto failed;
 	}
 
+	if (pubkey != NULL)
+		EVP_PKEY_free(pubkey);
+
+	if (random != NULL)
+		free(random);
+	if (signature != NULL)
+		free(signature);
+
 	PKCS11_release_all_slots(ctx, slots, nslots);
 	PKCS11_CTX_unload(ctx);
 	PKCS11_CTX_free(ctx);
+
+	CRYPTO_cleanup_all_ex_data();
+	ERR_free_strings();
+	ERR_remove_state(0);
 
 	printf("authentication successfull.\n");
 	return 0;
 
 
       failed:
-      norandom:
+	ERR_print_errors_fp(stderr);
       notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
