@@ -46,13 +46,16 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	}
 
 	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable)))
+	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+		RSA_free(rsa);
 		return -1;
+	}
 
-	if (!rsa->n && key_getattr_bn(key, CKA_MODULUS, &rsa->n))
+	if (key_getattr_bn(key, CKA_MODULUS, &rsa->n) ||
+	    key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+		RSA_free(rsa);
 		return -1;
-	if (!rsa->e && key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e))
-		return -1;
+	}
 
 	/* If the key is not extractable, create a key object
 	 * that will use the card's functions to sign & decrypt */
@@ -60,6 +63,8 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 		RSA_set_method(rsa, pkcs11_get_rsa_method());
 		rsa->flags |= RSA_FLAG_SIGN_VER;
 		RSA_set_app_data(rsa, key);
+
+		RSA_free(rsa);
 		return 0;
 	}
 
@@ -68,6 +73,9 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	RSA_set_method(rsa, pkcs11_get_rsa_method());
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_app_data(rsa, key);
+
+	RSA_free(rsa);
+
 	return 0;
 	/*
 	PKCS11err(PKCS11_F_PKCS11_GET_KEY, PKCS11_NOT_SUPPORTED);

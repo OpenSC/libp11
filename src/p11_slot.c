@@ -371,7 +371,9 @@ int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 
 void pkcs11_destroy_token(PKCS11_TOKEN * token)
 {
-	/* XXX destroy keys associated with this token */
+	pkcs11_destroy_keys(token);
+	pkcs11_destroy_certs(token);
+
 	OPENSSL_free(token->label);
 	OPENSSL_free(token->manufacturer);
 	OPENSSL_free(token->model);

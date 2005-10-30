@@ -118,7 +118,7 @@ PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 	PKCS11_CTX *ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
-	CK_ULONG size;
+	CK_ULONG size = flen;
 								
 	if (padding != RSA_PKCS1_PADDING) {
 			printf("pkcs11 engine: only RSA_PKCS1_PADDING allowed so far\n");

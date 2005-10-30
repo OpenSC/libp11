@@ -93,7 +93,7 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 			  pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
 		return -1;
 	}
-	*bn = BN_bin2bn(binary, size, NULL);
+	*bn = BN_bin2bn(binary, size, *bn);
 	return *bn ? 0 : -1;
 }
 

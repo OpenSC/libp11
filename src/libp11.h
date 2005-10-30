@@ -207,8 +207,24 @@ extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
 extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
 
 /* Get the enveloped private key */
-extern EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *);
-extern EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *);
+/**
+ * Returns a EVP_PKEY object for the private key
+ *
+ * @param   key  PKCS11_KEY object
+ * @return reference to EVP_PKEY object or NULL if an error occurred.
+ *         The returned EVP_PKEY object should be treated as const 
+ *         and must not be freed.
+ */
+extern EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *key);
+/**
+ * Returns a EVP_PKEY object with the public key
+ *
+ * @param  key  PKCS11_KEY object
+ * @return reference to EVP_PKEY object or NULL if an error occurred.
+ *         The returned EVP_PKEY object should be treated as const
+ *         and must not be freed.
+ */
+extern EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *key);
 
 /* Find the corresponding certificate (if any) */
 extern PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *);
@@ -262,6 +278,16 @@ extern int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key);
 extern int PKCS11_private_encrypt(int flen, const unsigned char *from,
 	unsigned char *to, const PKCS11_KEY * rsa, int padding);
+/**
+ * Decrypts data using the private key
+ * 
+ * @param  flen     length of the encrypted data
+ * @param  from     encrypted data
+ * @param  to       output buffer (MUST be a least flen bytes long)
+ * @param  key      private key object 
+ * @param  padding  padding algorithm to be used
+ * @return the length of the decrypted data or 0 if an error occurred
+ */
 extern int PKCS11_private_decrypt(int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding);
 extern int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,

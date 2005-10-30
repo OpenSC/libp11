@@ -160,16 +160,20 @@ int PKCS11_get_key_type(PKCS11_KEY * key)
 EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY * key)
 {
 	PKCS11_KEY_private *priv = PRIVKEY(key);
-	EVP_PKEY *pk;
 
-	pk = EVP_PKEY_new();
-	if (priv->ops->get_private(key, pk)
-	    || priv->ops->get_public(key, pk)) {
-		EVP_PKEY_free(pk);
-		return NULL;
+	if (key->evp_key == NULL) {
+		EVP_PKEY *pk = EVP_PKEY_new();
+		if (pk == NULL)
+			return NULL;
+		if (priv->ops->get_private(key, pk)
+		    || priv->ops->get_public(key, pk)) {
+			EVP_PKEY_free(pk);
+			return NULL;
+		}
+		key->evp_key = pk;
 	}
-	key->evp_key = pk;
-	return pk;
+
+	return key->evp_key;
 }
 
 EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY * key)
@@ -437,7 +441,7 @@ int PKCS11_get_key_exponent(PKCS11_KEY * key, BIGNUM **bn)
 
 int PKCS11_get_key_size(const PKCS11_KEY * key) 
 {
-	BIGNUM* n;
+	BIGNUM* n = NULL;
 	int     numbytes = 0;
 	if(key_getattr_bn(key, CKA_MODULUS, &n))
 		return 0;
