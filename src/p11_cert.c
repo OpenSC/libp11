@@ -30,9 +30,6 @@ static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 			    CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o,
 			    PKCS11_CERT **);
-static int pkcs11_store_certificate(PKCS11_TOKEN *, X509 *,
-				    char *, unsigned char *, unsigned int,
-				    PKCS11_CERT **);
 
 static CK_OBJECT_CLASS cert_search_class;
 static CK_ATTRIBUTE cert_search_attrs[] = {
@@ -221,7 +218,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
  * Store certificate
  */
 int
-pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
+PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 			 unsigned char *id, unsigned int id_len,
 			 PKCS11_CERT ** ret_cert)
 {
