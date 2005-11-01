@@ -313,6 +313,9 @@ extern int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 extern int PKCS11_seed_random(PKCS11_SLOT *, const unsigned char *s, unsigned int s_len);
 extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int r_len);
 
+/* using with openssl method mechanism */
+RSA_METHOD *PKCS11_get_rsa_method(void);
+
 /**
  * Load PKCS11 error strings
  *

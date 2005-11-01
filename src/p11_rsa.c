@@ -28,7 +28,6 @@
 
 static int pkcs11_get_rsa_public(PKCS11_KEY *, EVP_PKEY *);
 static int pkcs11_get_rsa_private(PKCS11_KEY *, EVP_PKEY *);
-RSA_METHOD *pkcs11_get_rsa_method(void);
 
 
 /*
@@ -60,7 +59,7 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	/* If the key is not extractable, create a key object
 	 * that will use the card's functions to sign & decrypt */
 	if (sensitive || !extractable) {
-		RSA_set_method(rsa, pkcs11_get_rsa_method());
+		RSA_set_method(rsa, PKCS11_get_rsa_method());
 		rsa->flags |= RSA_FLAG_SIGN_VER;
 		RSA_set_app_data(rsa, key);
 
@@ -70,7 +69,7 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 
 	/* TBD - extract RSA private key. */
 	/* In the mean time let's use the card anyway */
-	RSA_set_method(rsa, pkcs11_get_rsa_method());
+	RSA_set_method(rsa, PKCS11_get_rsa_method());
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_app_data(rsa, key);
 
@@ -140,7 +139,7 @@ pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
 /*
  * Overload the default OpenSSL methods for RSA
  */
-RSA_METHOD *pkcs11_get_rsa_method(void)
+RSA_METHOD *PKCS11_get_rsa_method(void)
 {
 	static RSA_METHOD ops;
 
