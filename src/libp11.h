@@ -112,8 +112,8 @@ extern PKCS11_CTX *PKCS11_CTX_new(void);
  *
  * @param ctx context allocated by PKCS11_CTX_new()
  * @param ident PKCS#11 library filename
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_CTX_load(PKCS11_CTX * ctx, const char * ident);
 
@@ -135,8 +135,8 @@ extern void PKCS11_CTX_free(PKCS11_CTX * ctx);
  *
  * @param slot slot descriptor returned by PKCS11_find_token() or PKCS11_enumerate_slots()
  * @param rw open in read/write mode is mode != 0, otherwise in read only mode
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_open_session(PKCS11_SLOT * slot, int rw);
 
@@ -146,8 +146,8 @@ extern int PKCS11_open_session(PKCS11_SLOT * slot, int rw);
  * @param ctx context allocated by PKCS11_CTX_new()
  * @param slotsp pointer on a list of slots
  * @param nslotsp size of the allocated list
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
@@ -168,8 +168,8 @@ extern void PKCS11_release_all_slots(PKCS11_CTX * ctx,
  * @param ctx context allocated by PKCS11_CTX_new()
  * @param slots list of slots allocated by PKCS11_enumerate_slots()
  * @param nslots size of the list
- * @return != NULL pointer on a slot structure
- * @return NULL error
+ * @retval !=NULL pointer on a slot structure
+ * @retval NULL error
  */
 PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx, 
 			PKCS11_SLOT *slots, unsigned int nslots);
@@ -180,8 +180,8 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
  * @param slot slot returned by PKCS11_find_token()
  * @param so login as CKU_SO if != 0, otherwise login as CKU_USER
  * @param pin PIN value
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
 
@@ -189,8 +189,8 @@ extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
  * De-authenticate from the card
  *
  * @param slot slot returned by PKCS11_find_token()
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_logout(PKCS11_SLOT * slot);
 
@@ -211,18 +211,20 @@ extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
  * Returns a EVP_PKEY object for the private key
  *
  * @param   key  PKCS11_KEY object
- * @return reference to EVP_PKEY object or NULL if an error occurred.
+ * @retval !=NULL reference to EVP_PKEY object.
  *         The returned EVP_PKEY object should be treated as const 
  *         and must not be freed.
+ * @retval NULL error
  */
 extern EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *key);
 /**
  * Returns a EVP_PKEY object with the public key
  *
  * @param  key  PKCS11_KEY object
- * @return reference to EVP_PKEY object or NULL if an error occurred.
+ * @retval !=NULL reference to EVP_PKEY object.
  *         The returned EVP_PKEY object should be treated as const
  *         and must not be freed.
+ * @retval NULL error
  */
 extern EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *key);
 
@@ -241,8 +243,8 @@ extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *
  * @param token token descriptor (in general slot->token)
  * @param pin Security Officer PIN value
  * @param label new name of the token
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
 	const char *label);
@@ -252,8 +254,8 @@ extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
  *
  * @param token token descriptor (in general slot->token)
  * @param pin new user PIN value
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
 
@@ -263,8 +265,8 @@ extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
  * @param slot slot returned by PKCS11_find_token()
  * @param old_pin old PIN value
  * @param new_pin new PIN value
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 	const char *new_pin);
@@ -282,8 +284,8 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN *, EVP_PKEY *, char *);
  * @param id bytes to use as id value
  * @param id_len length of id value.
  * @param ret_cert put new PKCS11_CERT object here
- * @return 0 success
- * @return -1 error
+ * @retval 0 success
+ * @retval -1 error
  */
 extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 		char *label, unsigned char *id, unsigned int id_len,
