@@ -15,7 +15,8 @@ int main(int argc, char *argv[])
 	PKCS11_CTX *ctx;
 	PKCS11_SLOT *slots, *slot;
 	unsigned char random[10];
-	int rc = 0, i, len, nslots;
+	int rc = 0, i, len;
+	unsigned int nslots;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: getrandom /usr/lib/opensc-pkcs11.so\n");
