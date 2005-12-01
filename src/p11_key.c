@@ -464,9 +464,9 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen)
 
 	while (*in != '\0') {
 		int byte = 0, nybbles = 2;
-		char c;
 
 		while (nybbles-- && *in && *in != ':') {
+			char c;
 			byte <<= 4;
 			c = *in++;
 			if ('0' <= c && c <= '9')
@@ -491,7 +491,6 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen)
 		}
 		out[count++] = (unsigned char) byte;
 		left--;
-		c++;
 	}
 
 	*outlen = count;
