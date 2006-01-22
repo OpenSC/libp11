@@ -1,7 +1,7 @@
 This directory contains a snapshot of the LibP11 Wiki
 =====================================================
 
-The original wiki page is at http://www.opensc.org/libp11/
+The original wiki page is at http://www.opensc-project.org/libp11/
 and includes a bug tracker and source browser.
 
 The wiki was transformed to html using the export-wiki shell
