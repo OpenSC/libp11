@@ -32,10 +32,16 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 
-	CK_SLOT_ID slotid[64];
-	CK_ULONG nslots = sizeof(slotid), n;
+	CK_SLOT_ID *slotid;
+	CK_ULONG nslots, n;
 	PKCS11_SLOT *slots;
 	int rv;
+
+	rv = priv->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
+
+	slotid = (CK_SLOT_ID *)OPENSSL_malloc(nslots * sizeof(CK_SLOT_ID));
+	if (slotid == NULL) return (-1);
 
 	rv = priv->method->C_GetSlotList(FALSE, slotid, &nslots);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
@@ -45,6 +51,7 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
 			while (n--)
 				pkcs11_release_slot(ctx, slots + n);
+			OPENSSL_free(slotid);
 			OPENSSL_free(slots);
 			return -1;
 		}
@@ -52,6 +59,7 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 
 	*slotp = slots;
 	*countp = nslots;
+	OPENSSL_free(slotid);
 	return 0;
 }
 
