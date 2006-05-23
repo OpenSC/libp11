@@ -50,7 +50,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 
 	if (ssl) {
 		if((m_len != 36) /* SHA1 + MD5 */ ||
-		   ((m_len + RSA_PKCS1_PADDING) > sigsize)) {
+		   ((m_len + RSA_PKCS1_PADDING_SIZE) > sigsize)) {
 			return(0); /* the size is wrong */
 		}
 	} else {
@@ -65,7 +65,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		   /* Get the size of the encoded DigestInfo */
 		   (size = i2d_X509_SIG(&digest_info, NULL)) &&
 		   /* Check that size is compatible with PKCS#11 padding */
-		   (size + RSA_PKCS1_PADDING <= sigsize) &&
+		   (size + RSA_PKCS1_PADDING_SIZE <= sigsize) &&
 		   (encoded = (unsigned char *) malloc(sigsize))) {
 			unsigned char *tmp = encoded;
 			/* Actually do the encoding */
