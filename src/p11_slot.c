@@ -139,7 +139,8 @@ int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin)
 
 	rv = CRYPTOKI_call(ctx, C_Login(priv->session,
 					so ? CKU_SO : CKU_USER,
-					(CK_UTF8CHAR *) pin, strlen(pin)));
+					(CK_UTF8CHAR *) pin,
+					pin ? strlen(pin) : 0));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
 	priv->loggedIn = 1;
 	return 0;
