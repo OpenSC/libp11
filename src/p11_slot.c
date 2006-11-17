@@ -176,9 +176,8 @@ int PKCS11_logout(PKCS11_SLOT * slot)
 int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(TOKEN2SLOT(token));
-	PKCS11_CTX_private *cpriv;
 	PKCS11_CTX *ctx = priv->parent;
-	int n, rv;
+	int rv;
 
 	if (!label)
 		label = "PKCS#11 Token";
@@ -188,6 +187,8 @@ int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
+	 * PKCS11_CTX_private *cpriv;
+	 * int n;
 	 * cpriv = PRIVCTX(ctx);
 	 * for (n = 0; n < cpriv->nslots; n++) {
 	 * 	if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
