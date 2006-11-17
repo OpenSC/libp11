@@ -144,6 +144,7 @@ extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
 extern void pkcs11_addattr(CK_ATTRIBUTE_PTR, int, const void *, size_t);
 extern void pkcs11_addattr_int(CK_ATTRIBUTE_PTR, int, unsigned long);
+extern void pkcs11_addattr_bool(CK_ATTRIBUTE_PTR, int, int);
 extern void pkcs11_addattr_s(CK_ATTRIBUTE_PTR, int, const char *);
 extern void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR, int, const BIGNUM *);
 extern void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR, int, pkcs11_i2d_fn, void *);

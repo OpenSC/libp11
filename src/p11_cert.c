@@ -237,6 +237,7 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 
 	/* Now build the template */
 	pkcs11_addattr_int(attrs + n++, CKA_CLASS, CKO_CERTIFICATE);
+	pkcs11_addattr_bool(attrs + n++, CKA_TOKEN, TRUE);
 	pkcs11_addattr_int(attrs + n++, CKA_CERTIFICATE_TYPE, CKC_X_509);
 	pkcs11_addattr_obj(attrs + n++, CKA_VALUE, (pkcs11_i2d_fn) i2d_X509, x509);
 	if (label)

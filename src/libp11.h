@@ -271,9 +271,33 @@ extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
 extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 	const char *new_pin);
 
-/* Store various objects on the token */
-extern int PKCS11_generate_key(PKCS11_TOKEN *, int, unsigned int, char *);
-extern int PKCS11_store_private_key(PKCS11_TOKEN *, EVP_PKEY *, char *);
+/** 
+ * Generate and store a private key on the token
+ *
+ * @param token token returned by PKCS11_find_token()
+ * @param algorithm EVP_PKEY_RSA
+ * @param label label for this key
+ * @param id bytes to use as id value
+ * @param id_len length of id value.
+ * @retval 0 success
+ * @retval -1 error
+ */
+
+extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits, char *label, unsigned char* id, unsigned int id_len);
+
+/** 
+ * Store private key on a token
+ *
+ * @param token token returned by PKCS11_find_token()
+ * @param pk private key
+ * @param label label for this key
+ * @param id bytes to use as id value
+ * @param id_len length of id value.
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
+
 
 /** 
  * Store certificate on a token

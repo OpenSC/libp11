@@ -33,7 +33,6 @@ static int pkcs11_store_private_key(PKCS11_TOKEN *, EVP_PKEY *, char *,
 				    unsigned char *, unsigned int, PKCS11_KEY **);
 static int pkcs11_store_public_key(PKCS11_TOKEN *, EVP_PKEY *, char *,
 				   unsigned char *, unsigned int, PKCS11_KEY **);
-static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen);
 
 static CK_OBJECT_CLASS key_search_class;
 static CK_ATTRIBUTE key_search_attrs[] = {
@@ -93,9 +92,16 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
 /*
  * Store a private key on the token
  */
-int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label)
+int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len)
 {
-	if (pkcs11_store_private_key(token, pk, label, NULL, 0, NULL))
+	if (pkcs11_store_private_key(token, pk, label, id, id_len, NULL))
+		return -1;
+	return 0;
+}
+
+int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len)
+{
+	if (pkcs11_store_public_key(token, pk, label, id, id_len, NULL))
 		return -1;
 	return 0;
 }
@@ -107,7 +113,7 @@ int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label)
  */
 int
 PKCS11_generate_key(PKCS11_TOKEN * token,
-		    int algorithm, unsigned int bits, char *label)
+		    int algorithm, unsigned int bits, char *label, unsigned char* id, unsigned int id_len)
 {
 	PKCS11_KEY *key_obj;
 	EVP_PKEY *pk;
@@ -130,7 +136,7 @@ PKCS11_generate_key(PKCS11_TOKEN * token,
 
 	pk = EVP_PKEY_new();
 	EVP_PKEY_assign_RSA(pk, rsa);
-	rc = pkcs11_store_private_key(token, pk, label, NULL, 0, &key_obj);
+	rc = pkcs11_store_private_key(token, pk, label, id, id_len, &key_obj);
 
 	if (rc == 0) {
 		PKCS11_KEY_private *kpriv;
@@ -347,15 +353,25 @@ pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label,
 
 		pkcs11_addattr_int(attrs + n++, CKA_CLASS, CKO_PRIVATE_KEY);
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
+
+		pkcs11_addattr_bool(attrs + n++, CKA_TOKEN, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_PRIVATE, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_SENSITIVE, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_DECRYPT, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_SIGN, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_UNWRAP, TRUE);
+
 		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa->n);
 		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa->e);
 		pkcs11_addattr_bn(attrs + n++, CKA_PRIVATE_EXPONENT, rsa->d);
 		pkcs11_addattr_bn(attrs + n++, CKA_PRIME_1, rsa->p);
 		pkcs11_addattr_bn(attrs + n++, CKA_PRIME_2, rsa->q);
+
 		if (label)
 			pkcs11_addattr_s(attrs + n++, CKA_LABEL, label);
 		if (id && id_len)
 			pkcs11_addattr(attrs + n++, CKA_ID, id, id_len);
+
 	} else {
 		PKCS11err(PKCS11_F_PKCS11_STORE_PRIVATE_KEY, PKCS11_NOT_SUPPORTED);
 		return -1;
@@ -401,6 +417,12 @@ pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label,
 
 		pkcs11_addattr_int(attrs + n++, CKA_CLASS, CKO_PUBLIC_KEY);
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
+
+		pkcs11_addattr_bool(attrs + n++, CKA_TOKEN, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_ENCRYPT, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_VERIFY, TRUE);
+		pkcs11_addattr_bool(attrs + n++, CKA_WRAP, TRUE);
+
 		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa->n);
 		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa->e);
 		if (label)
@@ -449,51 +471,3 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 	BN_free(n);
 	return numbytes;
 }
-
-
-static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen)
-{
-	size_t left, count = 0;
-
-	if (in == NULL || *in == '\0') {
-		*outlen = 0;
-		return 1;
-	}
-
-	left = *outlen;
-
-	while (*in != '\0') {
-		int byte = 0, nybbles = 2;
-
-		while (nybbles-- && *in && *in != ':') {
-			char c;
-			byte <<= 4;
-			c = *in++;
-			if ('0' <= c && c <= '9')
-				c -= '0';
-			else if ('a' <= c && c <= 'f')
-				c = c - 'a' + 10;
-			else if ('A' <= c && c <= 'F')
-				c = c - 'A' + 10;
-			else {
-				fprintf(stderr,"hex_to_bin(): invalid char '%c' in hex string\n", c);
-				*outlen = 0;
-				return 0;
-			}
-			byte |= c;
-		}
-		if (*in == ':')
-			in++;
-		if (left <= 0) {
-			fprintf(stderr,"hex_to_bin(): hex string too long");
-			*outlen = 0;
-			return 0;
-		}
-		out[count++] = (unsigned char) byte;
-		left--;
-	}
-
-	*outlen = count;
-	return 1;
-}
-
