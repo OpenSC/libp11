@@ -28,7 +28,6 @@
 #include <string.h>
 #include <ltdl.h>
 #include "libp11-int.h"
-#include "cryptoki.h"
 
 #define MAGIC			0xd00bed00
 

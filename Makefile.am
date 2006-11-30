@@ -1,7 +1,7 @@
 # Process this file with automake to create Makefile.in
 
-SUBDIRS = . aclocal src rsaref 
-DIST_SUBDIRS = . aclocal doc src rsaref 
+SUBDIRS = . aclocal src 
+DIST_SUBDIRS = . aclocal doc src
 
 EXTRA_DIST = bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
 

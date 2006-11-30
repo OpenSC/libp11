@@ -4,9 +4,9 @@ MAINTAINERCLEANFILES = Makefile.in
 DISTCLEANFILES= libp11.pc
 EXTRA_DIST = Makefile.mak makedef.pl
 
-INCLUDES = -I$(top_srcdir)/rsaref/ $(OPENSSL_CFLAGS)
+INCLUDES = $(OPENSSL_CFLAGS)
 
-noinst_HEADERS= libp11-int.h
+noinst_HEADERS= libp11-int.h pkcs11.h
 include_HEADERS= libp11.h
 
 lib_LTLIBRARIES = libp11.la

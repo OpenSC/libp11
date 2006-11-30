@@ -23,7 +23,9 @@
 #include <openssl/err.h>
 #include <openssl/x509.h>
 
-#include <cryptoki.h>
+#define CRYPTOKI_EXPORTS
+#define CRYPTOKI_COMPAT
+#include <pkcs11.h>
 
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);

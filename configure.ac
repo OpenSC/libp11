@@ -54,7 +54,6 @@ Makefile
 aclocal/Makefile
 doc/Makefile
 doc/doxygen.conf
-rsaref/Makefile
 src/Makefile
 src/libp11.pc
 ])
