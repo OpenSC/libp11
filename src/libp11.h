@@ -276,6 +276,7 @@ extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
  *
  * @param token token returned by PKCS11_find_token()
  * @param algorithm EVP_PKEY_RSA
+ * @param bits size of the modulus in bits
  * @param label label for this key
  * @param id bytes to use as id value
  * @param id_len length of id value.
