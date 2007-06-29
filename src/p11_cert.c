@@ -83,7 +83,7 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY * key)
 /*
  * Find all certs of a given type (public or private)
  */
-int pkcs11_find_certs(PKCS11_TOKEN * token)
+static int pkcs11_find_certs(PKCS11_TOKEN * token)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
@@ -109,8 +109,8 @@ int pkcs11_find_certs(PKCS11_TOKEN * token)
 	return (res < 0) ? -1 : 0;
 }
 
-int
-pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token, CK_SESSION_HANDLE session)
+static int pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+		CK_SESSION_HANDLE session)
 {
 	CK_OBJECT_HANDLE obj;
 	CK_ULONG count;
@@ -129,9 +129,8 @@ pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token, CK_SESSION_HANDLE sessi
 	return 0;
 }
 
-int
-pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
-		 CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
+static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+	 CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
 {
 	PKCS11_TOKEN_private *tpriv;
 	PKCS11_CERT_private *kpriv;
