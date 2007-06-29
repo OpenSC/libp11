@@ -312,8 +312,7 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
  */
 extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
 
-*
-/** 
+/*
  * Store certificate on a token
  *
  * @param token token returned by PKCS11_find_token()
