@@ -90,7 +90,8 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 				    sigret, &ck_sigsize));
 	}
 	*siglen = ck_sigsize;
-	free(encoded);
+	if (encoded != NULL)  /* NULL on SSL case */
+		free(encoded);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_SIGN, pkcs11_map_err(rv));
