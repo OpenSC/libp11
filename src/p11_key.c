@@ -191,7 +191,7 @@ EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY * key)
 /*
  * Find all keys of a given type (public or private)
  */
-int pkcs11_find_keys(PKCS11_TOKEN * token, unsigned int type)
+static int pkcs11_find_keys(PKCS11_TOKEN * token, unsigned int type)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
@@ -217,8 +217,7 @@ int pkcs11_find_keys(PKCS11_TOKEN * token, unsigned int type)
 	return (res < 0) ? -1 : 0;
 }
 
-int
-pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+static int pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		CK_SESSION_HANDLE session, CK_OBJECT_CLASS type)
 {
 	CK_OBJECT_HANDLE obj;
@@ -238,8 +237,7 @@ pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	return 0;
 }
 
-int
-pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj,
 		CK_OBJECT_CLASS type, PKCS11_KEY ** ret)
 {
@@ -329,10 +327,9 @@ void pkcs11_destroy_keys(PKCS11_TOKEN * token)
 /*
  * Store private key
  */
-int
-pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label,
-			 unsigned char *id, unsigned int id_len,
-			 PKCS11_KEY ** ret_key)
+static int pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
+		char *label, unsigned char *id, unsigned int id_len,
+		PKCS11_KEY ** ret_key)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
@@ -393,10 +390,9 @@ pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label,
 /*
  * Store public key
  */
-int
-pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label,
-			unsigned char *id, unsigned int id_len,
-			PKCS11_KEY ** ret_key)
+static int pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
+		char *label, unsigned char *id, unsigned int id_len,
+		PKCS11_KEY ** ret_key)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
