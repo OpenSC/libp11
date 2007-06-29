@@ -33,7 +33,7 @@ static int pkcs11_get_rsa_private(PKCS11_KEY *, EVP_PKEY *);
 /*
  * Get RSA key material
  */
-int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
+static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 {
 	CK_BBOOL sensitive, extractable;
 	RSA *rsa;
@@ -82,7 +82,7 @@ int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	*/
 }
 
-int pkcs11_get_rsa_public(PKCS11_KEY * key, EVP_PKEY * pk)
+static int pkcs11_get_rsa_public(PKCS11_KEY * key, EVP_PKEY * pk)
 {
 	/* TBD */
 	return 0;
@@ -90,23 +90,20 @@ int pkcs11_get_rsa_public(PKCS11_KEY * key, EVP_PKEY * pk)
 }
 
 
-static int
-pkcs11_rsa_decrypt(int flen, const unsigned char *from, unsigned char *to,
-		   RSA * rsa, int padding)
+static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
+		unsigned char *to, RSA * rsa, int padding)
 {
 
 	return PKCS11_private_decrypt(	flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
 }
 
-static int
-pkcs11_rsa_encrypt(int flen, const unsigned char *from, unsigned char *to,
-		   RSA * rsa, int padding)
+static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
+		unsigned char *to, RSA * rsa, int padding)
 {
 	return PKCS11_private_encrypt(flen,from,to,(PKCS11_KEY *) RSA_get_app_data(rsa), padding);
 }
 
-static int
-pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
+static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
 {
 	

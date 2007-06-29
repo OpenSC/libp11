@@ -290,7 +290,7 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r,
 /*
  * Helper functions
  */
-int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
+static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 {
 	PKCS11_SLOT_private *priv;
 	CK_SLOT_INFO info;
@@ -338,7 +338,7 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	memset(slot, 0, sizeof(*slot));
 }
 
-int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
+static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_TOKEN_private *tpriv;
@@ -380,7 +380,7 @@ int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	return 0;
 }
 
-void pkcs11_destroy_token(PKCS11_TOKEN * token)
+static void pkcs11_destroy_token(PKCS11_TOKEN * token)
 {
 	pkcs11_destroy_keys(token);
 	pkcs11_destroy_certs(token);
