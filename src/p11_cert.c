@@ -168,7 +168,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		cert->label = BUF_strdup(label);
 	size = sizeof(data);
 	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
-		unsigned char *p = (unsigned char *) data;
+		const unsigned char *p = (unsigned char *) data;
 
 		cert->x509 = d2i_X509(NULL, &p, size);
 	}
