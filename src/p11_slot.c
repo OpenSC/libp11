@@ -353,7 +353,7 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	token = slot->token;
 
 	rv = CRYPTOKI_call(ctx, C_GetTokenInfo(priv->id, &info));
-	if (rv == CKR_TOKEN_NOT_PRESENT) {
+	if (rv == CKR_TOKEN_NOT_PRESENT || rv == CKR_TOKEN_NOT_RECOGNIZED) {
 		OPENSSL_free(token);
 		slot->token = NULL;
 		return 0;
