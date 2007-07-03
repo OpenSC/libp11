@@ -4,7 +4,7 @@ dnl Process this file with autoconf to produce a configure script.
 # Require autoconf 2.52
 AC_PREREQ(2.52)
 
-AC_INIT(libp11, [0.2.2-svn])
+AC_INIT(libp11, [0.2.3])
 
 AM_INIT_AUTOMAKE
 
