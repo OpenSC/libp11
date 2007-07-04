@@ -3,7 +3,7 @@
 SUBDIRS = . aclocal src 
 DIST_SUBDIRS = . aclocal doc src
 
-EXTRA_DIST = bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
+EXTRA_DIST = COPYING NEWS bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
 
 MAINTAINERCLEANFILES = \
 	Makefile.in config.h.in configure \

@@ -1,6 +1,6 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.2.3; 2007-07-03 Andreas Jellinghaus
+New in 0.2.3; 2007-07-07 Andreas Jellinghaus
 * replaced rsa header files from rsalabs (official) with scute (open source)
 * allow CKR_USER_ALREADY_LOGGED_IN on C_Login.
 * mark internal functions as static.
