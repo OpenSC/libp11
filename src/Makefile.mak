@@ -4,7 +4,7 @@ LIBLTDL_LIB =     # E.g. C:\libtool-1.5.8-lib\lib\libltdl.lib
 OPENSSL_INC = /IC:\openssl\include
 OPENSSL_LIB = C:\openssl\out32dll\libeay32.lib
 
-COPTS = /Zi /MD /nologo /I..\rsaref $(OPENSSL_INC) $(LIBLTDL_INC) /D_WIN32_WINNT=0x0400 /DWIN32
+COPTS = /Zi /MD /nologo /I. $(OPENSSL_INC) $(LIBLTDL_INC) /D_WIN32_WINNT=0x0400 /DWIN32
 LINKFLAGS = /DEBUG /NOLOGO /INCREMENTAL:NO /MACHINE:IX86
 
 TARGET                  = libp11.dll
