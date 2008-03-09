@@ -286,7 +286,7 @@ extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 
 extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits, char *label, unsigned char* id, unsigned int id_len);
 
-/* 
+/**
  * Store private key on a token
  *
  * @param token token returned by PKCS11_find_token()
@@ -299,7 +299,7 @@ extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int
  */
 extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
 
-/*
+/**
  * Store public key on a token
  *
  * @param token token returned by PKCS11_find_token()
@@ -312,7 +312,7 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
  */
 extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
 
-/*
+/**
  * Store certificate on a token
  *
  * @param token token returned by PKCS11_find_token()
