@@ -25,6 +25,7 @@
  * Copyright (C) 2002, Olaf Kirch <okir@lst.de>
  */
 
+#include <config.h>
 #include <assert.h>
 #include <string.h>
 

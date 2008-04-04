@@ -23,6 +23,7 @@
  * Copyright (C) 2002  Olaf Kirch <okir@lst.de>
  */
 
+#include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

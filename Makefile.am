@@ -1,17 +1,21 @@
-# Process this file with automake to create Makefile.in
-
-SUBDIRS = . aclocal src 
-DIST_SUBDIRS = . aclocal doc src
-
-EXTRA_DIST = COPYING NEWS bootstrap depcomp $(shell ls examples/{README,Makefile,*.c})
+AUTOMAKE_OPTIONS = foreign 1.10
 
 MAINTAINERCLEANFILES = \
-	Makefile.in config.h.in configure \
-	install-sh ltmain.sh missing mkinstalldirs \
-	compile depcomp config.log config.status \
-	config.guess config.sub acinclude.m4 aclocal.m4
+	config.log config.status \
+	$(srcdir)/Makefile.in \
+	$(srcdir)/config.h.in $(srcdir)/config.h.in~ $(srcdir)/configure \
+	$(srcdir)/install-sh $(srcdir)/ltmain.sh $(srcdir)/missing \
+	$(srcdir)/depcomp $(srcdir)/aclocal.m4 \
+	$(srcdir)/config.guess $(srcdir)/config.sub \
+	$(srcdir)/packaged
+EXTRA_DIST = svnignore
 
-DEPCLEANFILES = config.log configure
+dist_noinst_DATA = COPYING bootstrap \
+	$(srcdir)/examples/Makefile $(srcdir)/examples/*.c $(srcdir)/examples/README
+dist_doc_DATA = NEWS
 
-AUTOMAKE_OPTIONS = foreign 1.5
-ACLOCAL_AMFLAGS = -I aclocal
+SUBDIRS = src doc
+
+# Allow detection of packaged tarball
+dist-hook:
+	echo > "$(distdir)/packaged"

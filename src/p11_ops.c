@@ -20,6 +20,7 @@
 
 /* this file does certain cryptographic operations via the pkcs11 library */
 
+#include <config.h>
 #include <string.h>
 #include "libp11-int.h"
 
