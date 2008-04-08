@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 CLEANFILES = libp11.pc
-EXTRA_DIST = Makefile.mak makedef.pl
+EXTRA_DIST = Makefile.mak
 
 noinst_HEADERS= libp11-int.h pkcs11.h
 include_HEADERS= libp11.h
@@ -11,7 +11,9 @@ libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_key.c \
 	p11_load.c p11_misc.c p11_ops.c p11_rsa.c p11_slot.c \
 	libp11.exports
 if WIN32
-nodist_libp11_la_SOURCES = versioninfo.rc
+libp11_la_SOURCES += versioninfo.rc
+else
+dist_noinst_DATA = versioninfo.rc
 endif
 libp11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_CFLAGS) $(LTLIB_CFLAGS)
 libp11_la_LIBADD = $(OPENSSL_LIBS) $(LTLIB_LIBS)

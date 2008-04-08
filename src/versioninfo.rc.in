@@ -24,7 +24,7 @@ BEGIN
 			VALUE "InternalName", "@PACKAGE_NAME@\0"
 			VALUE "LegalCopyright", "OpenSC Project\0"
 			VALUE "LegalTrademarks", "\0"
-			VALUE "OriginalFilename", "@PACKAGE_NAME@-@LIBP11_LT_MAJOR_SUFFIX@.dll\0"
+			VALUE "OriginalFilename", "@PACKAGE_NAME@-@LIBP11_LT_OLDEST@.dll\0"
 			VALUE "PrivateBuild", "\0"
 			VALUE "ProductName", "@PACKAGE_NAME@\0"
 			VALUE "ProductVersion", "@LIBP11_VERSION_MAJOR@,@LIBP11_VERSION_MINOR@,@LIBP11_VERSION_FIX@,0\0"
