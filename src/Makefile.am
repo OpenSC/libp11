@@ -1,4 +1,5 @@
-MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
+MAINTAINERCLEANFILES = \
+	$(srcdir)/Makefile.in $(srcdir)/versioninfo.rc
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak
 
