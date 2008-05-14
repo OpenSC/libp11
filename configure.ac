@@ -88,21 +88,21 @@ AC_ARG_ENABLE(
 
 AC_ARG_ENABLE(
 	[doc],
-	[AC_HELP_STRING([--enable-doc], [enable installation of documents. @<:@disabled@:>@])],
+	[AC_HELP_STRING([--enable-doc], [enable installation of documents @<:@disabled@:>@])],
 	,
 	[enable_doc="no"]
 )
 
 AC_ARG_ENABLE(
 	[api-doc],
-	[AC_HELP_STRING([--enable-api-doc], [enable generation and installation of api documents. @<:@disabled@:>@])],
+	[AC_HELP_STRING([--enable-api-doc], [enable generation and installation of api documents @<:@disabled@:>@])],
 	,
 	[enable_api_doc="no"]
 )
 
 AC_ARG_WITH(
 	[apidocdir],
-	[AC_HELP_STRING([--with-apidocdir], [put API documents at this directory, default HTMLDIR/api])],
+	[AC_HELP_STRING([--with-apidocdir], [put API documents at this directory @<:@HTMLDIR/api@:>@])],
 	[apidocdir="${with_apidocdir}"],
 	[apidocdir="\$(htmldir)/api"]
 )
