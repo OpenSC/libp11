@@ -1,14 +1,15 @@
 dnl -*- mode: m4; -*-
 
-AC_PREREQ([2.60])
+AC_PREREQ(2.61)
 
 define([PACKAGE_VERSION_MAJOR], [0])
 define([PACKAGE_VERSION_MINOR], [2])
 define([PACKAGE_VERSION_FIX], [3])
 
-AC_INIT([libp11], [PACKAGE_VERSION_MAJOR.PACKAGE_VERSION_MINOR.PACKAGE_VERSION_FIX-svn])
+AC_INIT([libp11],[PACKAGE_VERSION_MAJOR.PACKAGE_VERSION_MINOR.PACKAGE_VERSION_FIX-svn])
 AC_CONFIG_AUX_DIR([.])
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([${PACKAGE_NAME}], [${PACKAGE_VERSION}])
 
 LIBP11_VERSION_MAJOR="PACKAGE_VERSION_MAJOR"
@@ -41,7 +42,7 @@ AC_MSG_RESULT([${svn_checkout}])
 
 AC_ARG_WITH(
 	[cygwin-native],
-	[AC_HELP_STRING([--with-cygwin-native], [compile native win32])],
+	[AS_HELP_STRING([--with-cygwin-native],[compile native win32])],
 	,
 	[with_cygwin_native="no"]
 )
@@ -74,35 +75,35 @@ esac
 
 AC_ARG_ENABLE(
 	[strict],
-	[AC_HELP_STRING([--enable-strict], [enable strict compile mode @<:@disabled@:>@])],
+	[AS_HELP_STRING([--enable-strict],[enable strict compile mode @<:@disabled@:>@])],
 	,
 	[enable_strict="no"]
 )
 
 AC_ARG_ENABLE(
 	[pedantic],
-	[AC_HELP_STRING([--enable-pedantic], [enable pedantic compile mode @<:@disabled@:>@])],
+	[AS_HELP_STRING([--enable-pedantic],[enable pedantic compile mode @<:@disabled@:>@])],
 	,
 	[enable_pedantic="no"]
 )
 
 AC_ARG_ENABLE(
 	[doc],
-	[AC_HELP_STRING([--enable-doc], [enable installation of documents @<:@disabled@:>@])],
+	[AS_HELP_STRING([--enable-doc],[enable installation of documents @<:@disabled@:>@])],
 	,
 	[enable_doc="no"]
 )
 
 AC_ARG_ENABLE(
 	[api-doc],
-	[AC_HELP_STRING([--enable-api-doc], [enable generation and installation of api documents @<:@disabled@:>@])],
+	[AS_HELP_STRING([--enable-api-doc],[enable generation and installation of api documents @<:@disabled@:>@])],
 	,
 	[enable_api_doc="no"]
 )
 
 AC_ARG_WITH(
 	[apidocdir],
-	[AC_HELP_STRING([--with-apidocdir], [put API documents at this directory @<:@HTMLDIR/api@:>@])],
+	[AS_HELP_STRING([--with-apidocdir],[put API documents at this directory @<:@HTMLDIR/api@:>@])],
 	[apidocdir="${with_apidocdir}"],
 	[apidocdir="\$(htmldir)/api"]
 )
@@ -119,6 +120,8 @@ dnl Add libtool support.
 AC_LIBTOOL_WIN32_DLL
 AC_LIBTOOL_RC
 AC_PROG_LIBTOOL
+#LT_INIT([win32-dll])
+#LT_LANG([Windows Resource])
 
 dnl Checks for header files.
 AC_HEADER_STDC
@@ -233,7 +236,7 @@ if test "${enable_strict}" = "yes"; then
 	CFLAGS="${CFLAGS} -Wall -Wextra"
 fi
 
-AC_OUTPUT([
+AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
 	src/libp11.pc
@@ -242,6 +245,7 @@ AC_OUTPUT([
 	doc/doxygen.conf
 	doc/nonpersistent/Makefile
 ])
+AC_OUTPUT
 
 cat <<EOF
 
