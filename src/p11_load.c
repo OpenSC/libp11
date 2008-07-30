@@ -41,11 +41,21 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 }
 
 /*
+ * Set private init args for module
+ */
+void *PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
+{
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	priv->init_args = strdup(init_args);
+}
+
+/*
  * Load the shared library, and initialize it.
  */
 int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	CK_C_INITIALIZE_ARGS args = { .pReserved = priv->init_args, };
 	CK_INFO ck_info;
 	int rv;
 
@@ -60,7 +70,7 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	}
 
 	/* Tell the PKCS11 to initialize itself */
-	rv = priv->method->C_Initialize(NULL);
+	rv = priv->method->C_Initialize(&args);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CTX_LOAD, rv);
 
 	/* Get info on the library */

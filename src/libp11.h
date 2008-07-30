@@ -108,6 +108,13 @@ typedef struct PKCS11_ctx_st {
 extern PKCS11_CTX *PKCS11_CTX_new(void);
 
 /**
+ * Specify any private PKCS#11 module initializtion args, if necessary
+ *
+ * @return none
+ */
+extern void *PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
+
+/**
  * Load a PKCS#11 module
  *
  * @param ctx context allocated by PKCS11_CTX_new()
