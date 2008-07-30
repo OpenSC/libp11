@@ -28,26 +28,14 @@ int
 PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key)
 {
-
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
 	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
 	int sigsize;
-	CK_ULONG ck_sigsize;
 
 	if (key == NULL)
 		return 0;
-	ctx = KEY2CTX(key);
-	priv = PRIVKEY(key);
-	slot = TOKEN2SLOT(priv->parent);
-	session = PRIVSLOT(slot)->session;
-	
-	sigsize=PKCS11_get_key_size(key);
-	ck_sigsize=sigsize;
+
+	sigsize = PKCS11_get_key_size(key);
 
 	if (ssl) {
 		if((m_len != 36) /* SHA1 + MD5 */ ||
@@ -78,6 +66,54 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		}
 	}
 
+	rv = PKCS11_private_encrypt(m_len, m, sigret, key, RSA_PKCS1_PADDING);
+
+	if (rv <= 0)
+		rv = 0;
+	else {
+		*siglen = rv;
+		rv = 1;
+	}
+
+	if (encoded != NULL)  /* NULL on SSL case */
+		free(encoded);
+
+	return rv;
+}
+
+int
+PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
+		   const PKCS11_KEY * key, int padding)
+{
+	PKCS11_KEY_private *priv;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	CK_SESSION_HANDLE session;
+	CK_MECHANISM mechanism;
+	int rv;
+	int sigsize;
+	CK_ULONG ck_sigsize;
+
+	if (key == NULL)
+		return -1;
+
+	if (padding != RSA_PKCS1_PADDING) {
+		printf("pkcs11 engine: only RSA_PKCS1_PADDING allowed so far\n");
+		return -1;
+	}
+
+	ctx = KEY2CTX(key);
+	priv = PRIVKEY(key);
+	slot = TOKEN2SLOT(priv->parent);
+	session = PRIVSLOT(slot)->session;
+
+	sigsize=PKCS11_get_key_size(key);
+	ck_sigsize=sigsize;
+
+	if ((flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
+		return -1; /* the size is wrong */
+	}
+
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_RSA_PKCS;
 
@@ -87,27 +123,19 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	if((rv = CRYPTOKI_call(ctx, C_SignInit
 			       (session, &mechanism, priv->object))) == 0) {
 		rv = CRYPTOKI_call(ctx, C_Sign
-				   (session, (CK_BYTE *) m, m_len,
-				    sigret, &ck_sigsize));
+				   (session, (CK_BYTE *) from, flen,
+				    to, &ck_sigsize));
 	}
-	*siglen = ck_sigsize;
-	if (encoded != NULL)  /* NULL on SSL case */
-		free(encoded);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_SIGN, pkcs11_map_err(rv));
+		return -1;
 	}
-	return (rv) ? 0 : 1;
-}
 
+	if (sigsize != ck_sigsize)
+		return -1;
 
-int
-PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
-		   const PKCS11_KEY * rsa, int padding)
-{
-	/* PKCS11 calls go here */
-	PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, PKCS11_NOT_SUPPORTED);
-	return -1;
+	return sigsize;
 }
 
 int
