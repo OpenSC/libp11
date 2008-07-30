@@ -1,5 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.2.4; 2008-??-??
+* added PKCS11_CTX_init_args (David Smith).
+
 New in 0.2.3; 2007-07-11; Andreas Jellinghaus
 * update wiki export script (add images, fix links).
 * replaced rsa header files from rsalabs (official) with scute (open source).
