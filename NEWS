@@ -1,6 +1,6 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.2.4; 2008-??-??
+New in 0.2.4; 2008-07-31; Andreas Jellinghaus
 * Build system rewritten (NOTICE: configure options was modified). 
   The build system can produce outputs for *NIX, cygwin and native
   windows (using mingw).
