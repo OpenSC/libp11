@@ -55,7 +55,7 @@ void *PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
-	CK_C_INITIALIZE_ARGS args = { .pReserved = priv->init_args, };
+	CK_C_INITIALIZE_ARGS args;
 	CK_INFO ck_info;
 	int rv;
 
@@ -70,6 +70,8 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	}
 
 	/* Tell the PKCS11 to initialize itself */
+	memset(&args, 0, sizeof(args));
+	args.pReserved = priv->init_args;
 	rv = priv->method->C_Initialize(&args);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CTX_LOAD, rv);
 
