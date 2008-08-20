@@ -53,7 +53,7 @@ ERR_PUT_error(ERR_LIB_PKCS11,(f),(r),__FILE__,__LINE__)
 typedef struct PKCS11_key_st {
 	char *label;
 	unsigned char *id;
-	int id_len;
+	size_t id_len;
 	unsigned char isPrivate;	/**< private key present? */
 	unsigned char needLogin;	/**< login to read private key? */
 	EVP_PKEY *evp_key;		/**< initially NULL, need to call PKCS11_load_key */
@@ -64,7 +64,7 @@ typedef struct PKCS11_key_st {
 typedef struct PKCS11_cert_st {
 	char *label;
 	unsigned char *id;
-	int id_len;
+	size_t id_len;
 	X509 *x509;
 	void *_private;
 } PKCS11_CERT;
@@ -291,7 +291,7 @@ extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
  * @retval -1 error
  */
 
-extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits, char *label, unsigned char* id, unsigned int id_len);
+extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits, char *label, unsigned char* id, size_t id_len);
 
 /**
  * Store private key on a token
@@ -304,7 +304,7 @@ extern int PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
+extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
 
 /**
  * Store public key on a token
@@ -317,7 +317,7 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len);
+extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
 
 /**
  * Store certificate on a token
@@ -332,7 +332,7 @@ extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *la
  * @retval -1 error
  */
 extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
-		char *label, unsigned char *id, unsigned int id_len,
+		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert);
 
 /* rsa private key operations */

@@ -31,9 +31,9 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 			   CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o,
 			   CK_OBJECT_CLASS type, PKCS11_KEY **);
 static int pkcs11_store_private_key(PKCS11_TOKEN *, EVP_PKEY *, char *,
-				    unsigned char *, unsigned int, PKCS11_KEY **);
+				    unsigned char *, size_t, PKCS11_KEY **);
 static int pkcs11_store_public_key(PKCS11_TOKEN *, EVP_PKEY *, char *,
-				   unsigned char *, unsigned int, PKCS11_KEY **);
+				   unsigned char *, size_t, PKCS11_KEY **);
 
 static CK_OBJECT_CLASS key_search_class;
 static CK_ATTRIBUTE key_search_attrs[] = {
@@ -93,14 +93,14 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
 /*
  * Store a private key on the token
  */
-int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len)
+int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len)
 {
 	if (pkcs11_store_private_key(token, pk, label, id, id_len, NULL))
 		return -1;
 	return 0;
 }
 
-int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, unsigned int id_len)
+int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len)
 {
 	if (pkcs11_store_public_key(token, pk, label, id, id_len, NULL))
 		return -1;
@@ -114,7 +114,7 @@ int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, un
  */
 int
 PKCS11_generate_key(PKCS11_TOKEN * token,
-		    int algorithm, unsigned int bits, char *label, unsigned char* id, unsigned int id_len)
+		    int algorithm, unsigned int bits, char *label, unsigned char* id, size_t id_len)
 {
 	PKCS11_KEY *key_obj;
 	EVP_PKEY *pk;
@@ -283,7 +283,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
 		key->label = BUF_strdup(label);
 	key->id_len = sizeof(id);
-	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, (size_t *) & key->id_len)) {
+	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &key->id_len)) {
 		key->id = (unsigned char *) malloc(key->id_len);
 		memcpy(key->id, id, key->id_len);
 	}
@@ -329,7 +329,7 @@ void pkcs11_destroy_keys(PKCS11_TOKEN * token)
  * Store private key
  */
 static int pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
-		char *label, unsigned char *id, unsigned int id_len,
+		char *label, unsigned char *id, size_t id_len,
 		PKCS11_KEY ** ret_key)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
@@ -392,7 +392,7 @@ static int pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
  * Store public key
  */
 static int pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
-		char *label, unsigned char *id, unsigned int id_len,
+		char *label, unsigned char *id, size_t id_len,
 		PKCS11_KEY ** ret_key)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);

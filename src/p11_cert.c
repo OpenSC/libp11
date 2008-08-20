@@ -174,7 +174,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		cert->x509 = d2i_X509(NULL, &p, size);
 	}
 	cert->id_len = sizeof(id);
-	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, (size_t *) & cert->id_len)) {
+	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &cert->id_len)) {
 		cert->id = (unsigned char *) malloc(cert->id_len);
 		memcpy(cert->id, id, cert->id_len);
 	}
@@ -219,7 +219,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
  */
 int
 PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
-			 unsigned char *id, unsigned int id_len,
+			 unsigned char *id, size_t id_len,
 			 PKCS11_CERT ** ret_cert)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);

@@ -460,7 +460,7 @@ struct ck_attribute
 {
   ck_attribute_type_t type;
   void *value;
-  unsigned long value_len;
+  size_t value_len;
 };
 
 
