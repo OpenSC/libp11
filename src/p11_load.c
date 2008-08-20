@@ -43,7 +43,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 /*
  * Set private init args for module
  */
-void *PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
+void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 	priv->init_args = init_args ? strdup(init_args) : NULL;
