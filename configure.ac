@@ -51,7 +51,7 @@ dnl Check for some target-specific stuff
 test -z "${WIN32}" && WIN32="no"
 test -z "${CYGWIN}" && CYGWIN="no"
 case "${host}" in
-	*-mingw32*|*-winnt*)
+	*-mingw*|*-winnt*)
 		WIN32="yes"
 		CPPFLAGS="${CPPFLAGS} -DWIN32_LEAN_AND_MEAN"
 		WIN_LIBPREFIX="lib"
