@@ -160,6 +160,14 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /**
+ * Get the slot_id from a slot as it is stored in private
+ *
+ * @param slotp pointer on a slot
+ * @retval the slotid 
+ */
+extern unsigned long PKCS11_get_slotid_from_slot(PKCS11_SLOT *slotp);
+
+/**
  * Free the list of slots allocated by PKCS11_enumerate_slots()
  *
  * @param ctx context allocated by PKCS11_CTX_new()

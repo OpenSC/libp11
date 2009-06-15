@@ -26,6 +26,17 @@ static int pkcs11_check_token(PKCS11_CTX *, PKCS11_SLOT *);
 static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
 /*
+ * Get slotid from private
+ */
+unsigned long
+PKCS11_get_slotid_from_slot(PKCS11_SLOT *slot)
+{
+	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
+
+		return priv->id;
+}
+
+/*
  * Enumerate slots
  */
 int
