@@ -16,6 +16,7 @@ PKCS11_get_key_modulus
 PKCS11_get_key_exponent
 PKCS11_get_private_key
 PKCS11_get_public_key
+PKCS11_get_slotid_from_slot
 PKCS11_find_certificate
 PKCS11_find_key
 PKCS11_enumerate_certs
