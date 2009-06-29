@@ -12,7 +12,7 @@ MAINTAINERCLEANFILES = \
 	$(srcdir)/m4/ltversion.m4 $(srcdir)/m4/lt~obsolete.m4 \
 	$(srcdir)/m4/ltoptions.m4 \
 	$(srcdir)/packaged
-EXTRA_DIST = svnignore
+EXTRA_DIST = svnignore Makefile.mak winconfig.h
 
 dist_noinst_DATA = COPYING bootstrap \
 	$(srcdir)/examples/Makefile $(srcdir)/examples/*.c $(srcdir)/examples/README
