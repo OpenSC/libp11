@@ -1,6 +1,6 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.2.7; ???; ???
+New in 0.2.7; 2009-10-20; Andreas Jellinghaus
 * If CKR_CRYPTOKI_ALREADY_INITIALIZED is returned from C_Initialize(): ignore. 
   (Needed for unloaded/reloaded engines e.g. in wpa_supplicant.) By David Smith.
 
