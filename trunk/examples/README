@@ -1,0 +1,25 @@
+Libp11 example code
+===================
+
+This directory contains some example code how to use libp11.
+Feel free to use this code in any way, it is public domain,
+not copyrighted.
+
+auth.c		Example for authentication, i.e. get the first
+		token, get the first certificate, ask for pin,
+		login, sign some random data, and verify the
+		signature using the certificate/public key.
+
+For easy building see the Makefile in this directory. If you
+are using autoconf/automake/libtool, you might want to add
+to your configure.ac file:
+
+PKG_CHECK_MODULES([LIBP11], [libp11])
+
+and to your Makefile.am:
+
+bin_PROGRAMS = myapp
+
+myapp_CFLAGS = @LIBP11_CFLAGS@
+myapp_LIBADD = @LIBP11_LIBS@
+myapp_SOURCES = myapp.c

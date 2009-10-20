@@ -1,0 +1,29 @@
+NEWS for Libp11 -- History of user visible changes
+
+New in 0.2.7; 2009-10-20; Andreas Jellinghaus
+* If CKR_CRYPTOKI_ALREADY_INITIALIZED is returned from C_Initialize(): ignore. 
+  (Needed for unloaded/reloaded engines e.g. in wpa_supplicant.) By David Smith.
+
+New in 0.2.6; 2009-07-22; Andreas Jellinghaus
+* Fix new version: add new symbol to export file
+* fix building on MSVC plattform
+
+New in 0.2.5; 2009-06-15; Andreas Jellinghaus
+* Add function to export the slot id (Douglas E. Engert).
+* Increase library version because of the new function.
+
+New in 0.2.4; 2008-07-31; Andreas Jellinghaus
+* Build system rewritten (NOTICE: configure options was modified). 
+  The build system can produce outputs for *NIX, cygwin and native
+  windows (using mingw).
+* added PKCS11_CTX_init_args (David Smith).
+* fix segfault in init_args code.
+* implemented PKCS11_private_encrypt (with PKCS11_sign now based on it)
+  (Arnaud Ebalard)
+
+New in 0.2.3; 2007-07-11; Andreas Jellinghaus
+* update wiki export script (add images, fix links).
+* replaced rsa header files from rsalabs (official) with scute (open source).
+* allow CKR_USER_ALREADY_LOGGED_IN on C_Login.
+* mark internal functions as static.
+* add code to store public keys and generate keys.
