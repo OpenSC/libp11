@@ -1,7 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.2.7; ???; ???
-* ADD NEWS ENRIES HERE
+* If CKR_CRYPTOKI_ALREADY_INITIALIZED is returned from C_Initialize(): ignore. 
+  (Needed for unloaded/reloaded engines e.g. in wpa_supplicant.) By David Smith.
 
 New in 0.2.6; 2009-07-22; Andreas Jellinghaus
 * Fix new version: add new symbol to export file

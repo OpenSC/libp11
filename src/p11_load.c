@@ -73,7 +73,10 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	memset(&args, 0, sizeof(args));
 	args.pReserved = priv->init_args;
 	rv = priv->method->C_Initialize(&args);
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CTX_LOAD, rv);
+	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
+		return -1;
+	}
 
 	/* Get info on the library */
 	rv = priv->method->C_GetInfo(&ck_info);
