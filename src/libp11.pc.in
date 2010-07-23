@@ -7,5 +7,6 @@ Name: libp11
 Description: libp11
 Version: @VERSION@
 Libs: -L${libdir} -lp11
+Libs.private: -lcrypto
 Cflags: -I${includedir}
 
