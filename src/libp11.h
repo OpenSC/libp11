@@ -80,6 +80,15 @@ typedef struct PKCS11_token_st {
 	unsigned char secureLogin;
 	unsigned char userPinSet;
 	unsigned char readOnly;
+	unsigned char hasRng;
+	unsigned char userPinCountLow;
+	unsigned char userPinFinalTry;
+	unsigned char userPinLocked;
+	unsigned char userPinToBeChanged;
+	unsigned char soPinCountLow;
+	unsigned char soPinFinalTry;
+	unsigned char soPinLocked;
+	unsigned char soPinToBeChanged;
 	void *_private;
 } PKCS11_TOKEN;
 

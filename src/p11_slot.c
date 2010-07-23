@@ -388,6 +388,15 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	token->secureLogin = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
 	token->userPinSet = (info.flags & CKF_USER_PIN_INITIALIZED) ? 1 : 0;
 	token->readOnly = (info.flags & CKF_WRITE_PROTECTED) ? 1 : 0;
+	token->hasRng = (info.flags & CKF_RNG) ? 1 : 0;
+	token->userPinCountLow = (info.flags & CKF_USER_PIN_COUNT_LOW) ? 1 : 0;
+	token->userPinFinalTry = (info.flags & CKF_USER_PIN_FINAL_TRY) ? 1 : 0;
+	token->userPinLocked = (info.flags & CKF_USER_PIN_LOCKED) ? 1 : 0;
+	token->userPinToBeChanged = (info.flags & CKF_USER_PIN_TO_BE_CHANGED) ? 1 : 0;
+	token->soPinCountLow = (info.flags & CKF_SO_PIN_COUNT_LOW) ? 1 : 0;
+	token->soPinFinalTry = (info.flags & CKF_SO_PIN_FINAL_TRY) ? 1 : 0;
+	token->soPinLocked = (info.flags & CKF_SO_PIN_LOCKED) ? 1 : 0;
+	token->soPinToBeChanged = (info.flags & CKF_SO_PIN_TO_BE_CHANGED) ? 1 : 0;
 	token->_private = tpriv;
 
 	return 0;
