@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
 		rc = 2;
 		goto noslots;
 	}
+	printf("%d slots available\n", nslots);
 
 	/* get first slot with a token */
 	slot = PKCS11_find_token(ctx, slots, nslots);
