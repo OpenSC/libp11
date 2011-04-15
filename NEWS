@@ -1,6 +1,14 @@
 NEWS for Libp11 -- History of user visible changes
 
-new in 0.2.8; 200X-XX-XX; Name
+New in 0.2.8; 2011-04-15; Martin Paljak
+* Bumped soname for PKCS11_token struct size changes (Martin Paljak).
+* Display the number of available slots (Ludovic Rousseau).
+* Add openssl libcrypto to pkg-config private libs list (Kalev Lember).
+* Fix building examples with --no-add-needed which is the default in Fedora
+  (Kalev Lember).
+* Expose more token flags in PKCS11_token structure (Kalev Lember).
+* Check that private data is not NULL in pkcs11_release_slot (Robin Bryce,
+  ticket #137).
 
 New in 0.2.7; 2009-10-20; Andreas Jellinghaus
 * If CKR_CRYPTOKI_ALREADY_INITIALIZED is returned from C_Initialize(): ignore. 
