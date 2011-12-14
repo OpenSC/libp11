@@ -1,10 +1,7 @@
-LIBLTDL_INC =    # E.g. /IC:\libtool-1.5.8-lib\include
-LIBLTDL_LIB =     # E.g. C:\libtool-1.5.8-lib\lib\libltdl.lib
-
 OPENSSL_INC = /IC:\openssl\include
 OPENSSL_LIB = C:\openssl\out32dll\libeay32.lib
 
-COPTS = /Zi /MD /nologo /I..\ /I. $(OPENSSL_INC) $(LIBLTDL_INC) /D_WIN32_WINNT=0x0400 /DWIN32 /DWIN32_LEAN_AND_MEAN
+COPTS = /Zi /MD /nologo /I..\ /I. $(OPENSSL_INC) /D_WIN32_WINNT=0x0400 /DWIN32 /DWIN32_LEAN_AND_MEAN
 LINKFLAGS = /DEBUG /NOLOGO /INCREMENTAL:NO /MACHINE:IX86
 
 TARGET                  = libp11.dll
@@ -28,6 +25,6 @@ $(TARGET): $(OBJECTS) versioninfo.res
 	echo EXPORTS >> $*.def
 	type $*.exports >> $*.def
 	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$(TARGET) \
-		$(OBJECTS) $(OPENSSL_LIB) $(LIBLTDL_LIB) versioninfo.res
+		$(OBJECTS) $(OPENSSL_LIB) versioninfo.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
 

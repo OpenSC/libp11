@@ -16,8 +16,8 @@ libp11_la_SOURCES += versioninfo.rc
 else
 dist_noinst_DATA = versioninfo.rc
 endif
-libp11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_CFLAGS) $(LTLIB_CFLAGS)
-libp11_la_LIBADD = $(OPENSSL_LIBS) $(LTLIB_LIBS)
+libp11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_CFLAGS)
+libp11_la_LIBADD = $(OPENSSL_LIBS)
 libp11_la_LDFLAGS = $(AM_LDFLAGS) \
 	-version-info @LIBP11_LT_CURRENT@:@LIBP11_LT_REVISION@:@LIBP11_LT_AGE@ \
 	-export-symbols "$(srcdir)/libp11.exports" \

@@ -27,14 +27,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ltdl.h>
+#ifdef WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include "libp11-int.h"
 
 #define MAGIC			0xd00bed00
 
 struct sc_pkcs11_module {
 	unsigned int _magic;
-	lt_dlhandle handle;
+	void *handle;
 };
 typedef struct sc_pkcs11_module sc_pkcs11_module_t;
 
@@ -52,19 +56,40 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	if (mspec == NULL)
 		return NULL;
 
-	if (lt_dlinit() != 0)
-		return NULL;
-
 	mod = (sc_pkcs11_module_t *) calloc(1, sizeof(*mod));
 	mod->_magic = MAGIC;
 
-	mod->handle = lt_dlopen(mspec);
+#ifdef WIN32
+	mod->handle = LoadLibraryA(mspec);
+#else
+	mod->handle = dlopen(mspec, RTLD_NOW);
+#endif
+
 	if (mod->handle == NULL)
 		goto failed;
 
-	/* Get the list of function pointers */
-	c_get_function_list = (CK_RV (*)(CK_FUNCTION_LIST_PTR_PTR))
-				lt_dlsym(mod->handle, "C_GetFunctionList");
+#ifdef WIN32
+	c_get_function_list = (CK_C_GetFunctionList)GetProcAddress (
+		mod->handle,
+		"C_GetFunctionList"
+	);
+#else
+	{
+		/*
+		 * Make compiler happy!
+		 */
+		void *p = dlsym(
+			mod->handle,
+			"C_GetFunctionList"
+		);
+		memmove(
+			&c_get_function_list, 
+			&p,
+			sizeof(void *)
+		);
+	}
+#endif
+
 	if (!c_get_function_list)
 		goto failed;
 	rv = c_get_function_list(funcs);
@@ -89,13 +114,14 @@ C_UnloadModule(void *module)
 	if (!mod || mod->_magic != MAGIC)
 		return CKR_ARGUMENTS_BAD;
 
-	if (lt_dlclose(mod->handle) < 0)
-		return CKR_FUNCTION_FAILED;
+#ifdef WIN32
+	FreeLibrary(mod->handle);
+#else
+	dlclose(mod->handle);
+#endif
 
 	memset(mod, 0, sizeof(*mod));
 	free(mod);
-
-	lt_dlexit();
 
 	return CKR_OK;
 }

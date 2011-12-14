@@ -180,25 +180,14 @@ if test "${svn_checkout}" = "yes"; then
 	fi
 fi
 
-AC_ARG_VAR([LTLIB_CFLAGS], [C compiler flags for libltdl])
-AC_ARG_VAR([LTLIB_LIBS], [linker flags for libltdl])
-if test -z "${LTLIB_LIBS}"; then
+if test "${WIN32}" != "yes"; then
 	AC_CHECK_LIB(
-		[ltdl],
-		[lt_dlopen],
-		[LTLIB_LIBS="-lltdl"],
-		[AC_MSG_ERROR([ltdl not found, please install libltdl and/or libtool])]
+		[dl],
+		[dlopen],
+		,
+		[AC_MSG_ERROR([libdl required])]
 	)
-
 fi
-saved_CFLAGS="${CFLAGS}"
-CFLAGS="${CFLAGS} ${LTLIB_CFLAGS}"
-AC_CHECK_HEADER(
-	[ltdl.h],
-	,
-	[AC_MSG_ERROR([ltdl.h not found, please install libltdl and/or libtool])]
-)
-CFLAGS="${saved_CFLAGS}"
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
@@ -273,8 +262,6 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
-LTLIB_CFLAGS:            ${LTLIB_CFLAGS}
-LTLIB_LIBS:              ${LTLIB_LIBS}
 OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 
