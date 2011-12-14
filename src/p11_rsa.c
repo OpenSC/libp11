@@ -85,6 +85,9 @@ static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 
 static int pkcs11_get_rsa_public(PKCS11_KEY * key, EVP_PKEY * pk)
 {
+	(void)key;
+	(void)pk;
+
 	/* TBD */
 	return 0;
 /*	return pkcs11_get_rsa_private(key,pk);*/

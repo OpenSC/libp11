@@ -84,6 +84,8 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned 
 	PKCS11_TOKEN *tok;
 	unsigned int n;
 
+	(void)ctx;
+
 	if (! slots)
 		return NULL;
 

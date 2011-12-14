@@ -141,6 +141,9 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
 
+	(void)ctx;
+	(void)session;
+
 	size = sizeof(cert_type);
 	if (pkcs11_getattr_var(token, obj, CKA_CERTIFICATE_TYPE, &cert_type, &size))
 		return -1;

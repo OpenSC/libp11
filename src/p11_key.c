@@ -251,6 +251,9 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	PKCS11_KEY_ops *ops;
 	size_t size;
 
+	(void)ctx;
+	(void)session;
+
 	size = sizeof(key_type);
 	if (pkcs11_getattr_var(token, obj, CKA_KEY_TYPE, &key_type, &size))
 		return -1;

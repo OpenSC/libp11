@@ -124,7 +124,7 @@ void pkcs11_addattr_bool(CK_ATTRIBUTE_PTR ap, int type, int value)
 
 void pkcs11_addattr_s(CK_ATTRIBUTE_PTR ap, int type, const char *s)
 {
-	pkcs11_addattr(ap, type, s, s ? strlen(s) : 0); // RFC2279 string an unpadded string of CK_UTF8CHARs with no null-termination
+	pkcs11_addattr(ap, type, s, s ? strlen(s) : 0); /* RFC2279 string an unpadded string of CK_UTF8CHARs with no null-termination */
 }
 
 void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR ap, int type, const BIGNUM * bn)

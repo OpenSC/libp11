@@ -44,7 +44,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		}
 	} else {
 		ASN1_TYPE parameter = { V_ASN1_NULL, { NULL } };
- 		ASN1_STRING digest = { m_len, V_ASN1_OCTET_STRING, (unsigned char *)m };
+ 		ASN1_STRING digest = { m_len, V_ASN1_OCTET_STRING, (unsigned char *)m, 0 };
 		X509_ALGOR algor = { NULL, &parameter };
 		X509_SIG digest_info = { &algor, &digest };
 		int size;
@@ -183,6 +183,12 @@ int
 PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 		  unsigned char *signature, unsigned int siglen, PKCS11_KEY * key)
 {
+	(void)type;
+	(void)m;
+	(void)m_len;
+	(void)signature;
+	(void)siglen;
+	(void)key;
 
 	/* PKCS11 calls go here */
 	PKCS11err(PKCS11_F_PKCS11_RSA_VERIFY, PKCS11_NOT_SUPPORTED);
