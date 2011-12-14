@@ -121,7 +121,7 @@ static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
  */
 static int
 pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
-		  unsigned char *signature, unsigned int siglen, const RSA * rsa)
+		  const unsigned char *signature, unsigned int siglen, const RSA * rsa)
 {
 	RSA *r = (RSA *) rsa;	/* Ugly hack to get rid of compiler warning */
 	int res;
