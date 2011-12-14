@@ -89,7 +89,11 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 
 	if (pkcs11_getattr_var(token, object, type, binary, &size))
 		return -1;
-	if (size == -1) {
+	/*
+	 * @ALON: invalid object,
+	 * not sure it will survice the ulValueLen->size_t and keep sign at all platforms
+	 */
+	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
 			  pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
 		return -1;
