@@ -136,7 +136,7 @@ void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR ap, int type, const BIGNUM * bn)
 	unsigned char temp[1024];
 	unsigned int n;
 
-	assert(BN_num_bytes(bn) <= sizeof(temp));
+	assert((size_t)BN_num_bytes(bn) <= sizeof(temp));
 	n = BN_bn2bin(bn, temp);
 	pkcs11_addattr(ap, type, temp, n);
 }

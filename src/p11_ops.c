@@ -39,7 +39,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 
 	if (ssl) {
 		if((m_len != 36) /* SHA1 + MD5 */ ||
-		   ((m_len + RSA_PKCS1_PADDING_SIZE) > sigsize)) {
+		   ((m_len + RSA_PKCS1_PADDING_SIZE) > (unsigned)sigsize)) {
 			return(0); /* the size is wrong */
 		}
 	} else {
@@ -132,7 +132,7 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 		return -1;
 	}
 
-	if (sigsize != ck_sigsize)
+	if ((unsigned)sigsize != ck_sigsize)
 		return -1;
 
 	return sigsize;

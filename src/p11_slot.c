@@ -330,7 +330,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 
 void PKCS11_release_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned int nslots)
 {
-	int i;
+	unsigned int i;
 
 	for (i=0; i < nslots; i++)
 		pkcs11_release_slot(ctx, &slots[i]);
