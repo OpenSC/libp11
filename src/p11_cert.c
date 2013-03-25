@@ -136,8 +136,8 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	PKCS11_TOKEN_private *tpriv;
 	PKCS11_CERT_private *kpriv;
 	PKCS11_CERT *cert, *tmp;
-	char label[256], data[2048];
-	unsigned char id[256];
+	char label[512], data[4096];
+	unsigned char id[512];
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
 
