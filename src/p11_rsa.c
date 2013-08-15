@@ -57,6 +57,32 @@ static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 		return -1;
 	}
 
+	if (BN_is_zero(rsa->e)) {
+		PKCS11_TOKEN_private * token = PRIVTOKEN(KEY2TOKEN(key));
+		int ki;
+		BIGNUM* pubmod = NULL;
+		for(ki = token->nprkeys; ki < token->nkeys; ki++) {
+			PKCS11_KEY* pubkey = token->keys + ki;
+
+			if(key_getattr_bn(pubkey, CKA_MODULUS, &pubmod)) {
+				continue;
+			}
+			if(BN_cmp(rsa->n, pubmod)) { // Modulus not same -- this public from another key
+				continue;
+			}
+
+			// If modulus are same -- we found required key, extract public exponent from it
+			if(key_getattr_bn(pubkey, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+				continue;
+			}
+			if (BN_is_zero(rsa->e)) {
+				continue;
+			}
+			break;
+		}
+		if(pubmod!=NULL) BN_free(pubmod);
+	}
+
 	/* If the key is not extractable, create a key object
 	 * that will use the card's functions to sign & decrypt */
 	if (sensitive || !extractable) {
