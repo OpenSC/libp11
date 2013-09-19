@@ -143,6 +143,9 @@ extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 #define key_getattr_bn(key, t, bn) \
 	pkcs11_getattr_bn(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (bn))
 
+#define key_getattr_var(key, t, p, s) \
+	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
+
 typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
 extern void pkcs11_addattr(CK_ATTRIBUTE_PTR, int, const void *, size_t);
 extern void pkcs11_addattr_int(CK_ATTRIBUTE_PTR, int, unsigned long);
@@ -155,5 +158,6 @@ extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
 extern void *memdup(const void *, size_t);
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
+extern PKCS11_KEY_ops pkcs11_ec_ops;
 
 #endif

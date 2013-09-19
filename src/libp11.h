@@ -258,6 +258,9 @@ extern PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *);
 /* Find the corresponding key (if any) */
 extern PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *);
 
+/* Find the corresponding key (if any)  pub <-> priv base on ID */
+extern PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY *);
+
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
 
@@ -378,6 +381,8 @@ extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int 
 
 /* using with openssl method mechanism */
 RSA_METHOD *PKCS11_get_rsa_method(void);
+ECDSA_METHOD  *PKCS11_get_ecdsa_method(void);
+void PKCS11_ecdsa_method_free(void);
 
 /**
  * Load PKCS11 error strings
@@ -413,6 +418,8 @@ extern void ERR_load_PKCS11_strings(void);
 #define PKCS11_F_PKCS11_GENERATE_RANDOM		21
 #define PKCS11_F_PKCS11_CHANGE_PIN		22
 #define PKCS11_F_PKCS11_GETATTR			40
+#define PKCS11_F_PKCS11_EC_KEY_SIGN			41
+#define PKCS11_F_PKCS11_EC_KEY_VERIFY		42
 
 #define PKCS11_ERR_BASE				1024
 #define PKCS11_LOAD_MODULE_ERROR		(PKCS11_ERR_BASE+1)

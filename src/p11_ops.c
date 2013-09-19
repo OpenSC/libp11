@@ -25,6 +25,47 @@
 #include "libp11-int.h"
 
 int
+PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
+		unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key)
+{
+/* signature size is the issue, will assume caller has a big buffer ! */
+/* No padding or other stuff needed, we can cal PKCS11 from here */
+	int rv;
+	PKCS11_KEY_private *priv;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	CK_SESSION_HANDLE session;
+	CK_MECHANISM mechanism;
+	CK_ULONG ck_sigsize;
+
+	ctx = KEY2CTX(key);
+	priv = PRIVKEY(key);
+	slot = TOKEN2SLOT(priv->parent);
+	session = PRIVSLOT(slot)->session;
+
+	ck_sigsize = *siglen;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ECDSA;
+
+	if((rv = CRYPTOKI_call(ctx, C_SignInit
+			       (session, &mechanism, priv->object))) == 0) {
+		rv = CRYPTOKI_call(ctx, C_Sign
+				   (session, (CK_BYTE *) m, m_len,
+				    sigret, &ck_sigsize));
+	}
+
+	if (rv) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
+		return -1;
+	}
+	*siglen = ck_sigsize;
+
+	return ck_sigsize;
+}
+
+/* Following used for RSA */
+int
 PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key)
 {
