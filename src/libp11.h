@@ -386,6 +386,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void);
  * to get an textual version of the latest error code
  */
 extern void ERR_load_PKCS11_strings(void);
+extern void ERR_unload_PKCS11_strings(void);
 
 /*
  * Function and reason codes

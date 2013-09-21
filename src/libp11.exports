@@ -35,3 +35,4 @@ PKCS11_seed_random
 PKCS11_generate_random
 PKCS11_get_rsa_method
 ERR_load_PKCS11_strings
+ERR_unload_PKCS11_strings

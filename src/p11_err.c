@@ -145,16 +145,28 @@ static ERR_STRING_DATA PKCS11_str_reasons[] = {
 };
 #endif
 
+static int init = 0;
+
 void ERR_load_PKCS11_strings(void)
 {
-	static int init = 1;
-
-	if (init) {
-		init = 0;
+	if (init == 0) {
 #ifndef NO_ERR
 		ERR_load_strings(0, PKCS11_str_library);
 		ERR_load_strings(ERR_LIB_PKCS11, PKCS11_str_functs);
 		ERR_load_strings(ERR_LIB_PKCS11, PKCS11_str_reasons);
+#endif
+	}
+	init++;
+}
+
+void ERR_unload_PKCS11_strings(void)
+{
+	init--;
+	if (init==0) {
+#ifndef NO_ERR
+		ERR_unload_strings(0, PKCS11_str_library);
+		ERR_unload_strings(ERR_LIB_PKCS11, PKCS11_str_functs);
+		ERR_unload_strings(ERR_LIB_PKCS11, PKCS11_str_reasons);
 #endif
 	}
 }

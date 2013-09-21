@@ -118,6 +118,7 @@ void PKCS11_CTX_free(PKCS11_CTX * ctx)
 	ERR_free_strings();
 	ERR_remove_state(0);
 	*/
+	ERR_unload_PKCS11_strings();
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);
 	OPENSSL_free(ctx->_private);
