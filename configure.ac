@@ -29,7 +29,7 @@ LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"
 AC_CONFIG_SRCDIR([src/libp11.h])
 
 # silent build by default
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CANONICAL_HOST
 AC_PROG_CC
