@@ -259,3 +259,154 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 	/* Gobble the key object */
 	return pkcs11_init_cert(ctx, token, session, object, ret_cert);
 }
+
+#define MAX_VALUE_LEN	200
+
+/* prototype for OpenSSL ENGINE_load_cert */
+/* used by load_cert_ctrl via ENGINE_ctrl for now */
+
+X509 *PKCS11_load_cert(PKCS11_CTX *ctx, ENGINE * e, const char *s_slot_cert_id)
+{
+	int verbose = 0;
+	PKCS11_SLOT *slot_list, *slot;
+	PKCS11_SLOT *found_slot = NULL;
+	PKCS11_TOKEN *tok;
+	PKCS11_CERT *certs, *selected_cert = NULL;
+	X509 *x509;
+	unsigned int slot_count, cert_count, n, m;
+	unsigned char cert_id[MAX_VALUE_LEN / 2];
+	size_t cert_id_len = sizeof(cert_id);
+	char *cert_label = NULL;
+	int slot_nr = -1;
+	char flags[64];
+
+	if (s_slot_cert_id && *s_slot_cert_id) {
+		n = parse_slot_id_string(s_slot_cert_id, &slot_nr,
+					 cert_id, &cert_id_len, &cert_label);
+		if (!n) {
+			fprintf(stderr,
+				"supported formats: <id>, <slot>:<id>, id_<id>, slot_<slot>-id_<id>, label_<label>, slot_<slot>-label_<label>\n");
+			fprintf(stderr,
+				"where <slot> is the slot number as normal integer,\n");
+			fprintf(stderr,
+				"and <id> is the id number as hex string.\n");
+			fprintf(stderr,
+				"and <label> is the textual key label string.\n");
+			return NULL;
+		}
+		if (verbose) {
+			fprintf(stderr, "Looking in slot %d for certificate: ",
+				slot_nr);
+			if (cert_label == NULL) {
+				for (n = 0; n < cert_id_len; n++)
+					fprintf(stderr, "%02x", cert_id[n]);
+				fprintf(stderr, "\n");
+			} else
+				fprintf(stderr, "label: %s\n", cert_label);
+
+		}
+	}
+
+	if (PKCS11_enumerate_slots(ctx, &slot_list, &slot_count) < 0)
+		fail("failed to enumerate slots\n");
+
+	if (verbose) {
+		fprintf(stderr, "Found %u slot%s\n", slot_count,
+			(slot_count <= 1) ? "" : "s");
+	}
+	for (n = 0; n < slot_count; n++) {
+		slot = slot_list + n;
+		flags[0] = '\0';
+		if (slot->token) {
+			if (!slot->token->initialized)
+				strcat(flags, "uninitialized, ");
+			else if (!slot->token->userPinSet)
+				strcat(flags, "no pin, ");
+			if (slot->token->loginRequired)
+				strcat(flags, "login, ");
+			if (slot->token->readOnly)
+				strcat(flags, "ro, ");
+		} else {
+			strcpy(flags, "no token");
+		}
+		if ((m = strlen(flags)) != 0) {
+			flags[m - 2] = '\0';
+		}
+
+		if (slot_nr != -1 &&
+			slot_nr == PKCS11_get_slotid_from_slot(slot)) {
+			found_slot = slot;
+		}
+
+		if (verbose) {
+			fprintf(stderr, "[%lu] %-25.25s  %-16s",
+				PKCS11_get_slotid_from_slot(slot),
+				slot->description, flags);
+			if (slot->token) {
+				fprintf(stderr, "  (%s)",
+					slot->token->label[0] ?
+					slot->token->label : "no label");
+			}
+			fprintf(stderr, "\n");
+		}
+	}
+
+	if (slot_nr == -1) {
+		if (!(slot = PKCS11_find_token(ctx, slot_list, slot_count)))
+			fail("didn't find any tokens\n");
+	} else if (found_slot) {
+		slot = found_slot;
+	} else {
+		fprintf(stderr, "Invalid slot number: %d\n", slot_nr);
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+	tok = slot->token;
+
+	if (tok == NULL) {
+		fprintf(stderr, "Found empty token; \n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (verbose) {
+		fprintf(stderr, "Found slot:  %s\n", slot->description);
+		fprintf(stderr, "Found token: %s\n", slot->token->label);
+	}
+
+	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
+		fprintf(stderr, "unable to enumerate certificates\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (verbose) {
+		fprintf(stderr, "Found %u cert%s:\n", cert_count,
+			(cert_count <= 1) ? "" : "s");
+	}
+	if ((s_slot_cert_id && *s_slot_cert_id) && (cert_id_len != 0)) {
+		for (n = 0; n < cert_count; n++) {
+			PKCS11_CERT *k = certs + n;
+
+			if (cert_id_len != 0 && k->id_len == cert_id_len &&
+			    memcmp(k->id, cert_id, cert_id_len) == 0) {
+				selected_cert = k;
+			}
+		}
+	} else {
+		selected_cert = certs;	/* use first */
+	}
+
+	if (selected_cert == NULL) {
+		fprintf(stderr, "certificate not found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	x509 = X509_dup(selected_cert->x509);
+	PKCS11_release_all_slots(ctx, slot_list, slot_count);
+	if (cert_label != NULL)
+		free(cert_label);
+	return x509;
+}
+

@@ -156,4 +156,25 @@ extern void *memdup(const void *, size_t);
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
 
+extern int RSA_CRYPTO_EX_idx;
+struct PKCS11_RSA_CRYPTO_EX
+{
+	PKCS11_CTX *ctx;
+
+	struct {
+		PKCS11_SLOT *data;
+		int count;
+	} slots;
+
+	struct {
+		PKCS11_KEY *data;
+		int count;
+	} keys;
+
+	PKCS11_KEY *key;
+};
+
+struct PKCS11_RSA_CRYPTO_EX *PKCS11_RSA_CRYPTO_EX_create(PKCS11_CTX *ctx, PKCS11_SLOT *slots, int slotcount, PKCS11_KEY *keys, int keycount, PKCS11_KEY *key);
+void PKCS11_RSA_CRYPTO_EX_free(void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp);
+
 #endif
