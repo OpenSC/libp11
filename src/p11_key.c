@@ -472,111 +472,23 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 	return numbytes;
 }
 
-EVP_PKEY *PKCS11_load_key(ENGINE * e, const char *s_slot_key_id,
+EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN *p,
 				 UI_METHOD * ui_method, void *callback_data,
-				 int isPrivate)
+				 int isPrivate, int verbose)
 {
-	PKCS11_SLOT *slot_list, *slot;
+	PKCS11_SLOT *slot_list;
 	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *tok;
 	PKCS11_KEY *keys, *selected_key = NULL;
-	PKCS11_CERT *certs;
 	EVP_PKEY *pk;
-	unsigned int slot_count, cert_count, key_count, n, m;
+	unsigned int slot_count, key_count, n;
 	unsigned char key_id[MAX_VALUE_LEN / 2];
 	size_t key_id_len = sizeof(key_id);
 	char *key_label = NULL;
-	int slot_nr = -1;
-	char flags[64];
 
-	if (s_slot_key_id && *s_slot_key_id) {
-		n = parse_slot_id_string(s_slot_key_id, &slot_nr,
-					 key_id, &key_id_len, &key_label);
-
-		if (!n) {
-			fprintf(stderr,
-				"supported formats: <id>, <slot>:<id>, id_<id>, slot_<slot>-id_<id>, label_<label>, slot_<slot>-label_<label>\n");
-			fprintf(stderr,
-				"where <slot> is the slot number as normal integer,\n");
-			fprintf(stderr,
-				"and <id> is the id number as hex string.\n");
-			fprintf(stderr,
-				"and <label> is the textual key label string.\n");
-			return NULL;
-		}
-		if (verbose) {
-			fprintf(stderr, "Looking in slot %d for key: ",
-				slot_nr);
-			if (key_label == NULL) {
-				for (n = 0; n < key_id_len; n++)
-					fprintf(stderr, "%02x", key_id[n]);
-				fprintf(stderr, "\n");
-			} else
-				fprintf(stderr, "label: %s\n", key_label);
-		}
-	}
-
-	if (PKCS11_enumerate_slots(ctx, &slot_list, &slot_count) < 0)
-		fail("failed to enumerate slots\n");
-
-	if (verbose) {
-		fprintf(stderr, "Found %u slot%s\n", slot_count,
-			(slot_count <= 1) ? "" : "s");
-	}
-	for (n = 0; n < slot_count; n++) {
-		slot = slot_list + n;
-		flags[0] = '\0';
-		if (slot->token) {
-			if (!slot->token->initialized)
-				strcat(flags, "uninitialized, ");
-			else if (!slot->token->userPinSet)
-				strcat(flags, "no pin, ");
-			if (slot->token->loginRequired)
-				strcat(flags, "login, ");
-			if (slot->token->readOnly)
-				strcat(flags, "ro, ");
-		} else {
-			strcpy(flags, "no token");
-		}
-		if ((m = strlen(flags)) != 0) {
-			flags[m - 2] = '\0';
-		}
-
-		if (slot_nr != -1 &&
-			slot_nr == PKCS11_get_slotid_from_slot(slot)) {
-			found_slot = slot;
-		}
-
-		if (verbose) {
-			fprintf(stderr, "[%lu] %-25.25s  %-16s",
-				PKCS11_get_slotid_from_slot(slot),
-				slot->description, flags);
-			if (slot->token) {
-				fprintf(stderr, "  (%s)",
-					slot->token->label[0] ?
-					slot->token->label : "no label");
-			}
-			fprintf(stderr, "\n");
-		}
-	}
-
-	if (slot_nr == -1) {
-		if (!(slot = PKCS11_find_token(ctx, slot_list, slot_count)))
-			fail("didn't find any tokens\n");
-	} else if (found_slot) {
-		slot = found_slot;
-	} else {
-		fprintf(stderr, "Invalid slot number: %d\n", slot_nr);
-		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+	if( PKCS11_find_by_slot_id(ctx, s_slot_key_id, key_id, &key_id_len, &key_label, &slot_list, &slot_count, &found_slot, &tok, 1) == -1)
 		return NULL;
-	}
-	tok = slot->token;
 
-	if (tok == NULL) {
-		fprintf(stderr, "Found empty token; \n");
-		PKCS11_release_all_slots(ctx, slot_list, slot_count);
-		return NULL;
-	}
 /* Removed for interop with some other pkcs11 libs. */
 #if 0
 	if (!tok->initialized) {
@@ -591,30 +503,8 @@ EVP_PKEY *PKCS11_load_key(ENGINE * e, const char *s_slot_key_id,
 	}
 
 	if (verbose) {
-		fprintf(stderr, "Found slot:  %s\n", slot->description);
-		fprintf(stderr, "Found token: %s\n", slot->token->label);
-	}
-
-	if (PKCS11_enumerate_certs(tok, &certs, &cert_count))
-		fail("unable to enumerate certificates\n");
-
-	if (verbose) {
-		fprintf(stderr, "Found %u certificate%s:\n", cert_count,
-			(cert_count <= 1) ? "" : "s");
-		for (n = 0; n < cert_count; n++) {
-			PKCS11_CERT *c = certs + n;
-			char *dn = NULL;
-
-			fprintf(stderr, "  %2u    %s", n + 1, c->label);
-			if (c->x509)
-				dn = X509_NAME_oneline(X509_get_subject_name
-						       (c->x509), NULL, 0);
-			if (dn) {
-				fprintf(stderr, " (%s)", dn);
-				OPENSSL_free(dn);
-			}
-			fprintf(stderr, "\n");
-		}
+		fprintf(stderr, "Found slot:  %s\n", found_slot->description);
+		fprintf(stderr, "Found token: %s\n", found_slot->token->label);
 	}
 
 	/* Perform login to the token if required */
@@ -625,37 +515,24 @@ EVP_PKEY *PKCS11_load_key(ENGINE * e, const char *s_slot_key_id,
 		if (tok->secureLogin) {
 			/* Free the PIN if it has already been
 			   assigned (i.e, cached by get_pin) */
-			if (pin != NULL) {
-				OPENSSL_cleanse(pin, pin_length);
-				free(pin);
-				pin = NULL;
-				pin_length = 0;
-			}
-		} else if (pin == NULL) {
-			pin = (char *)calloc(MAX_PIN_LENGTH, sizeof(char));
-			pin_length = MAX_PIN_LENGTH;
-			if (pin == NULL) {
-				fail("Could not allocate memory for PIN");
-			}
-			if (!get_pin(ui_method, callback_data) ) {
-				OPENSSL_cleanse(pin, pin_length);
-				free(pin);
-				pin = NULL;
-				pin_length = 0;
-				fail("No pin code was entered");
+			PKCS11_PIN_clear(p);
+		} else if (p->pin.data == NULL) {
+			PKCS11_PIN_alloc(p);
+			if (!p->get_pin(ui_method, callback_data) ) {
+				PKCS11_PIN_clear(p);
+//				fail("No pin code was entered");
+				return NULL;
 			}
 		}
 
 		/* Now login in with the (possibly NULL) pin */
-		if (PKCS11_login(slot, 0, pin)) {
+		if (PKCS11_login(found_slot, 0, p->pin.data)) {
 			/* Login failed, so free the PIN if present */
-			if (pin != NULL) {
-				OPENSSL_cleanse(pin, pin_length);
-				free(pin);
-				pin = NULL;
-				pin_length = 0;
+			if (p->pin.data != NULL) {
+				PKCS11_PIN_clear(p);
 			}
-			fail("Login failed\n");
+//			fail("Login failed\n");
+			return NULL;
 		}
 		/* Login successful, PIN retained in case further logins are
 		   required. This will occur on subsequent calls to the
@@ -676,10 +553,12 @@ EVP_PKEY *PKCS11_load_key(ENGINE * e, const char *s_slot_key_id,
 
 	/* Make sure there is at least one private key on the token */
 	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
-		fail("unable to enumerate keys\n");
+//		fail("unable to enumerate keys\n");
+		return NULL;
 	}
 	if (key_count == 0) {
-		fail("No keys found.\n");
+//		fail("No keys found.\n");
+		return NULL;
 	}
 
 	if (verbose) {
@@ -729,7 +608,7 @@ EVP_PKEY *PKCS11_load_key(ENGINE * e, const char *s_slot_key_id,
 	case EVP_PKEY_RSA:
 		RSA_set_ex_data(EVP_PKEY_get0(pk),
 						RSA_CRYPTO_EX_idx,
-						PKCS11_RSA_CRYPTO_EX_create(ctx, slot_list, slot_count, keys, key_count, selected_key));
+						PKCS11_CRYPTO_EX_create(ctx, slot_list, slot_count, selected_key));
 		break;
 
 	default:

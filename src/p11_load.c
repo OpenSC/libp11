@@ -52,7 +52,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	 * once the engine gets unmapped, EVP_PKEY_free/RSA_free will
 	 * call the unmapped callback and this will die.
 	 */
-	RSA_CRYPTO_EX_idx = RSA_get_ex_new_index(0, "OpenSC PKCS11 RSA key handle", NULL, NULL, PKCS11_RSA_CRYPTO_EX_free);
+	RSA_CRYPTO_EX_idx = RSA_get_ex_new_index(0, "OpenSC PKCS11 RSA key handle", NULL, NULL, PKCS11_CRYPTO_EX_free);
 
 	priv = PKCS11_NEW(PKCS11_CTX_private);
 	ctx = PKCS11_NEW(PKCS11_CTX);
