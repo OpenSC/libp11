@@ -342,7 +342,7 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
 	if (priv)
-		CRYPTOKI_call(ctx, C_CloseAllSessions(priv->id));
+		CRYPTOKI_call(ctx, C_CloseSession(priv->id));
 	OPENSSL_free(slot->_private);
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);
