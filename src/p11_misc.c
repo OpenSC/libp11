@@ -237,9 +237,9 @@ static int parse_slot_id_string(const char *slot_id, int *slot,
 	return 0;
 }
 
-struct PKCS11_CRYPTO_EX *PKCS11_CRYPTO_EX_create(PKCS11_CTX *ctx, PKCS11_SLOT *slots, int slotcount, PKCS11_KEY *key)
+PKCS11_CRYPTO_EX *PKCS11_CRYPTO_EX_create(PKCS11_CTX *ctx, PKCS11_SLOT *slots, int slotcount, PKCS11_KEY *key)
 {
-	struct PKCS11_CRYPTO_EX *r = OPENSSL_malloc(sizeof(struct PKCS11_CRYPTO_EX));
+	PKCS11_CRYPTO_EX *r = OPENSSL_malloc(sizeof(PKCS11_CRYPTO_EX));
 	if (r == 0)
 		return NULL;
 	printf("slots %p cnt %i\n",slots, slotcount);
@@ -250,18 +250,23 @@ struct PKCS11_CRYPTO_EX *PKCS11_CRYPTO_EX_create(PKCS11_CTX *ctx, PKCS11_SLOT *s
 	return r;
 }
 
-static void PKCS11_RSA_CRYPTO_EX_destroy(struct PKCS11_CRYPTO_EX *data)
+static void PKCS11_RSA_CRYPTO_EX_destroy(PKCS11_CRYPTO_EX *data)
 {
 	printf("destroy\n");
-	/* avoid recursion */
-	data->key->evp_key = NULL;
-	PKCS11_release_all_slots(data->ctx, data->slots.data, data->slots.count);
+	if (data->ctx != NULL)
+	{
+		/* avoid recursion */
+		data->key->evp_key = NULL;
+		PKCS11_release_all_slots(data->ctx, data->slots.data, data->slots.count);
+	}
 	OPENSSL_free(data);
 }
 
 void PKCS11_CRYPTO_EX_free(void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp)
 {
 	(void)parent;
+	(void)argl;
+	(void)argp;
 	if (ptr == NULL || idx != RSA_CRYPTO_EX_idx)
 		return;
 	PKCS11_RSA_CRYPTO_EX_destroy(ptr);
@@ -418,4 +423,36 @@ int PKCS11_find_by_slot_id(PKCS11_CTX *ctx,
 	return 0;
 }
 
+int EVP_PKEY_set_ex_data(EVP_PKEY *pk, PKCS11_CRYPTO_EX *data)
+{
+	switch(EVP_PKEY_type(pk->type))
+	{
+	case EVP_PKEY_RSA:
+		RSA_set_ex_data(EVP_PKEY_get0(pk),
+						RSA_CRYPTO_EX_idx,
+						data);
+		break;
+
+	default:
+		return 1;
+		break;
+	}
+	return 0;
+}
+
+PKCS11_CRYPTO_EX *EVP_PKEY_get_ex_data(EVP_PKEY *pk)
+{
+	switch(EVP_PKEY_type(pk->type))
+	{
+	case EVP_PKEY_RSA:
+		return RSA_get_ex_data(EVP_PKEY_get0(pk),
+						RSA_CRYPTO_EX_idx);
+		break;
+
+	default:
+		return NULL;
+		break;
+	}
+	return NULL;
+}
 

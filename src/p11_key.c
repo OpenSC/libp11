@@ -603,17 +603,11 @@ EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN
 	}
 	if (key_label != NULL)
 		free(key_label);
-	switch(EVP_PKEY_type(pk->type))
-	{
-	case EVP_PKEY_RSA:
-		RSA_set_ex_data(EVP_PKEY_get0(pk),
-						RSA_CRYPTO_EX_idx,
-						PKCS11_CRYPTO_EX_create(ctx, slot_list, slot_count, selected_key));
-		break;
 
-	default:
-		break;
-	}
+	PKCS11_CRYPTO_EX *data = EVP_PKEY_get_ex_data(pk);
+	data->ctx = ctx;
+	data->slots.data = slot_list;
+	data->slots.count = slot_count;
 
 	return pk;
 }

@@ -62,8 +62,7 @@ static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	if (sensitive || !extractable) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 		rsa->flags |= RSA_FLAG_SIGN_VER;
-		RSA_set_app_data(rsa, key);
-
+		EVP_PKEY_set_ex_data(pk, PKCS11_CRYPTO_EX_create(NULL, NULL, 0, key));
 		RSA_free(rsa);
 		return 0;
 	}
@@ -72,7 +71,7 @@ static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	/* In the mean time let's use the card anyway */
 	RSA_set_method(rsa, PKCS11_get_rsa_method());
 	rsa->flags |= RSA_FLAG_SIGN_VER;
-	RSA_set_app_data(rsa, key);
+	EVP_PKEY_set_ex_data(pk, PKCS11_CRYPTO_EX_create(NULL, NULL, 0, key));
 
 	RSA_free(rsa);
 
@@ -98,20 +97,20 @@ static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
 
-	return PKCS11_private_decrypt(	flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_decrypt(	flen, from, to, ((PKCS11_CRYPTO_EX *)RSA_get_ex_data(rsa, RSA_CRYPTO_EX_idx))->key, padding);
 }
 
 static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
-	return PKCS11_private_encrypt(flen,from,to,(PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_encrypt(flen,from,to, ((PKCS11_CRYPTO_EX *)RSA_get_ex_data(rsa, RSA_CRYPTO_EX_idx))->key, padding);
 }
 
 static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
 {
 	
-	return PKCS11_sign(type,m,m_len,sigret,siglen,(PKCS11_KEY *) RSA_get_app_data(rsa));
+	return PKCS11_sign(type,m,m_len,sigret,siglen, ((PKCS11_CRYPTO_EX *)RSA_get_ex_data(rsa, RSA_CRYPTO_EX_idx))->key);
 }
 /* Lousy hack alert. If RSA_verify detects that the key has the
  * RSA_FLAG_SIGN_VER flags set, it will assume that verification
