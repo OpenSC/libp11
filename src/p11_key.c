@@ -521,6 +521,7 @@ EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN
 			if (!p->get_pin(ui_method, callback_data) ) {
 				PKCS11_PIN_clear(p);
 //				fail("No pin code was entered");
+				PKCS11_release_all_slots(ctx, slot_list, slot_count);
 				return NULL;
 			}
 		}
@@ -532,6 +533,7 @@ EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN
 				PKCS11_PIN_clear(p);
 			}
 //			fail("Login failed\n");
+			PKCS11_release_all_slots(ctx, slot_list, slot_count);
 			return NULL;
 		}
 		/* Login successful, PIN retained in case further logins are
@@ -554,10 +556,12 @@ EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN
 	/* Make sure there is at least one private key on the token */
 	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
 //		fail("unable to enumerate keys\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
 		return NULL;
 	}
 	if (key_count == 0) {
 //		fail("No keys found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
 		return NULL;
 	}
 
@@ -591,6 +595,7 @@ EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN
 
 	if (selected_key == NULL) {
 		fprintf(stderr, "key not found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
 		return NULL;
 	}
 
