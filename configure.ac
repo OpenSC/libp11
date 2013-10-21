@@ -5,13 +5,13 @@ AC_PREREQ(2.60)
 define([PACKAGE_VERSION_MAJOR], [0])
 define([PACKAGE_VERSION_MINOR], [2])
 define([PACKAGE_VERSION_FIX], [9])
-define([PACKAGE_SUFFIX], [-svn])
+define([PACKAGE_SUFFIX], [_git])
 
 AC_INIT([libp11],[PACKAGE_VERSION_MAJOR.PACKAGE_VERSION_MINOR.PACKAGE_VERSION_FIX[]PACKAGE_SUFFIX])
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([${PACKAGE_NAME}], [${PACKAGE_VERSION}])
+AM_INIT_AUTOMAKE
 
 LIBP11_VERSION_MAJOR="PACKAGE_VERSION_MAJOR"
 LIBP11_VERSION_MINOR="PACKAGE_VERSION_MINOR"
@@ -29,20 +29,12 @@ LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"
 AC_CONFIG_SRCDIR([src/libp11.h])
 
 # silent build by default
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CANONICAL_HOST
 AC_PROG_CC
 PKG_PROG_PKG_CONFIG
 AC_C_BIGENDIAN
-
-AC_MSG_CHECKING([svn checkout])
-if test -e "${srcdir}/packaged"; then
-	svn_checkout="no"
-else
-	svn_checkout="yes"
-fi
-AC_MSG_RESULT([${svn_checkout}])
 
 AC_ARG_WITH(
 	[cygwin-native],
@@ -92,13 +84,6 @@ AC_ARG_ENABLE(
 )
 
 AC_ARG_ENABLE(
-	[doc],
-	[AS_HELP_STRING([--enable-doc],[enable installation of documents @<:@disabled@:>@])],
-	,
-	[enable_doc="no"]
-)
-
-AC_ARG_ENABLE(
 	[api-doc],
 	[AS_HELP_STRING([--enable-api-doc],[enable generation and installation of api documents @<:@disabled@:>@])],
 	,
@@ -143,45 +128,9 @@ AC_CHECK_HEADERS([ \
 	unistd.h locale.h getopt.h dlfcn.h utmp.h \
 ])
 
+AC_ARG_VAR([DOXYGEN], [doxygen utility])
 AC_CHECK_PROGS([DOXYGEN],[doxygen])
 test "${enable_api_doc}" = "yes" -a -z "${DOXYGEN}" && AC_MSG_ERROR([doxygen is required for api doc])
-
-dnl These required for svn checkout
-AC_ARG_VAR([XSLTPROC], [xsltproc utility])
-AC_ARG_VAR([SVN], [subversion utility])
-AC_ARG_VAR([WGET], [wget utility])
-AC_ARG_VAR([WGET_OPTS], [wget options])
-AC_ARG_VAR([TR], [tr utility])
-AC_CHECK_PROGS([XSLTPROC],[xsltproc])
-AC_CHECK_PROGS([SVN],[svn])
-AC_CHECK_PROGS([WGET],[wget])
-AC_CHECK_PROGS([TR],[tr])
-test -z "${WGET_OPTS}" && WGET_OPTS="-nv"
-
-dnl svn checkout dependencies
-if test "${svn_checkout}" = "yes"; then
-	AC_MSG_CHECKING([XSLTPROC requirement])
-	if test -n "${XSLTPROC}"; then
-		AC_MSG_RESULT([ok])
-	else
-		if test "${enable_doc}" = "yes"; then
-			AC_MSG_ERROR([Missing XSLTPROC svn build with doc])
-		else
-			AC_MSG_WARN(["make dist" will not work])
-		fi
-	fi
-
-	AC_MSG_CHECKING([svn doc build dependencies])
-	if test -n "${SVN}" -a -n "${TR}" -a -n "${WGET}"; then
-		AC_MSG_RESULT([ok])
-	else
-		if test "${enable_doc}" = "yes"; then
-			AC_MSG_ERROR([Missing SVN, TR or WGET for svn doc build])
-		else
-			AC_MSG_WARN(["make dist" will not work])
-		fi
-	fi
-fi
 
 if test "${WIN32}" != "yes"; then
 	AC_CHECK_LIB(
@@ -222,10 +171,8 @@ AC_SUBST([LIBP11_LT_AGE])
 AC_SUBST([LIBP11_LT_OLDEST])
 AC_SUBST([WIN_LIBPREFIX])
 
-AM_CONDITIONAL([SVN_CHECKOUT], [test "${svn_checkout}" = "yes"])
 AM_CONDITIONAL([WIN32], [test "${WIN32}" = "yes"])
 AM_CONDITIONAL([CYGWIN], [test "${CYGWIN}" = "yes"])
-AM_CONDITIONAL([ENABLE_DOC], [test "${enable_doc}" = "yes"])
 AM_CONDITIONAL([ENABLE_API_DOC], [test "${enable_api_doc}" = "yes"])
 
 if test "${enable_pedantic}" = "yes"; then
@@ -243,7 +190,6 @@ AC_CONFIG_FILES([
 	src/versioninfo.rc
 	doc/Makefile
 	doc/doxygen.conf
-	doc/nonpersistent/Makefile
 ])
 AC_OUTPUT
 
@@ -255,7 +201,6 @@ libp11 has been configured with the following options:
 Version:                 ${PACKAGE_VERSION}
 Libraries:               $(eval eval eval echo "${libdir}")
 
-doc support:             ${enable_doc}
 api doc support:         ${enable_api_doc}
 
 Host:                    ${host}

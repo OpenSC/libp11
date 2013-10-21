@@ -1,10 +1,5 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 
-if ENABLE_DOC
-SUBDIRS = nonpersistent
-endif
-DIST_SUBDIRS = nonpersistent
-
 dist_doc_DATA = README
 dist_noinst_DATA = $(srcdir)/doxygen-footer.html $(srcdir)/*.gif
 
