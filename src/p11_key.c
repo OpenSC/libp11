@@ -107,6 +107,59 @@ int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, un
 	return 0;
 }
 
+int
+PKCS11_generate_key_on_board(PKCS11_TOKEN * token,
+		    int algorithm, unsigned int bits, char *label, unsigned char* id, size_t id_len)
+{
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
+	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	CK_SESSION_HANDLE session;
+	CK_OBJECT_HANDLE h_pubkey,h_privkey;
+	CK_ATTRIBUTE pubkey_attrs[32];
+	CK_ATTRIBUTE privkey_attrs[32];
+	CK_MECHANISM mechanism = {
+		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+	CK_BYTE public_exponent[] = {0x01,0x00,0x01}; /* 65537 */
+	unsigned int n,m;
+	int rc, rv;
+
+	if (algorithm != EVP_PKEY_RSA) {
+		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
+		return -1;
+	}
+	/* Make sure we have a session */
+	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 0))
+		return -1;
+
+	n = 0;
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_DECRYPT, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_VERIFY, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_WRAP, TRUE);
+	pkcs11_addattr_int (pubkey_attrs + n++, CKA_MODULUS_BITS, bits);
+	pkcs11_addattr     (pubkey_attrs + n++, CKA_PUBLIC_EXPONENT, &public_exponent, sizeof(public_exponent));
+
+	m = 0;
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_PRIVATE, TRUE);
+	pkcs11_addattr_s   (privkey_attrs + m++, CKA_LABEL, label);
+	pkcs11_addattr     (privkey_attrs + m++, CKA_ID, id, id_len);
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_SENSITIVE, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_DECRYPT, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_SIGN, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + m++, CKA_UNWRAP, TRUE);
+
+	session = PRIVSLOT(slot)->session;
+
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(session, &mechanism,
+						pubkey_attrs, n,
+						privkey_attrs, m,
+						&h_pubkey, &h_privkey));
+	pkcs11_zap_attrs(pubkey_attrs, n);
+	pkcs11_zap_attrs(privkey_attrs, m);
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GENERATE_KEY_PAIR, rv);
+}
+
 /*
  * Generate and store a private key on the token
  * FIXME: We should check first whether the token supports
@@ -121,6 +174,11 @@ PKCS11_generate_key(PKCS11_TOKEN * token,
 	RSA *rsa;
 	BIO *err;
 	int rc;
+
+	rc = PKCS11_generate_key_on_board(token,algorithm,bits,label,id,id_len);
+	if (rc == 0) {
+		return rc;
+	}
 
 	if (algorithm != EVP_PKEY_RSA) {
 		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
