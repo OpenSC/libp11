@@ -122,7 +122,7 @@ PKCS11_generate_key_on_board(PKCS11_TOKEN * token,
 	};
 	CK_BYTE public_exponent[] = {0x01,0x00,0x01}; /* 65537 */
 	unsigned int n,m;
-	int rc, rv;
+	int rv;
 
 	if (algorithm != EVP_PKEY_RSA) {
 		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
@@ -158,6 +158,8 @@ PKCS11_generate_key_on_board(PKCS11_TOKEN * token,
 	pkcs11_zap_attrs(pubkey_attrs, n);
 	pkcs11_zap_attrs(privkey_attrs, m);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GENERATE_KEY_PAIR, rv);
+
+	return 0;
 }
 
 /*
