@@ -107,27 +107,23 @@ int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, un
 	return 0;
 }
 
-int
-PKCS11_generate_key_on_board(PKCS11_TOKEN * token,
+static int
+pkcs11_generate_key_on_board_rsa(PKCS11_TOKEN * token,
 		    int algorithm, unsigned int bits, char *label, unsigned char* id, size_t id_len)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
 	CK_SESSION_HANDLE session;
-	CK_OBJECT_HANDLE h_pubkey,h_privkey;
-	CK_ATTRIBUTE pubkey_attrs[32];
-	CK_ATTRIBUTE privkey_attrs[32];
+	CK_OBJECT_HANDLE pubkey_obj, privkey_obj, new_obj;
+	CK_ATTRIBUTE pubkey_attrs[32], privkey_attrs[32];
 	CK_MECHANISM mechanism = {
 		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
 	};
 	CK_BYTE public_exponent[] = {0x01,0x00,0x01}; /* 65537 */
+	BIGNUM *modulus,*pe;
 	unsigned int n,m;
 	int rv;
 
-	if (algorithm != EVP_PKEY_RSA) {
-		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
-		return -1;
-	}
 	/* Make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 0))
 		return -1;
@@ -154,12 +150,58 @@ PKCS11_generate_key_on_board(PKCS11_TOKEN * token,
 	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(session, &mechanism,
 						pubkey_attrs, n,
 						privkey_attrs, m,
-						&h_pubkey, &h_privkey));
+						&pubkey_obj, &privkey_obj));
 	pkcs11_zap_attrs(pubkey_attrs, n);
 	pkcs11_zap_attrs(privkey_attrs, m);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GENERATE_KEY_PAIR, rv);
 
+	/* create public key object for some device */
+	modulus = pe = NULL;
+	if (pkcs11_getattr_bn(token, pubkey_obj, CKA_MODULUS, &modulus) ||
+	    pkcs11_getattr_bn(token, pubkey_obj, CKA_PUBLIC_EXPONENT, &pe)) {
+
+		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_KEYGEN_FAILED);
+		return -1;
+	}
+
+	n = 0;
+	pkcs11_addattr_int(pubkey_attrs + n++, CKA_CLASS, CKO_PUBLIC_KEY);
+	pkcs11_addattr_int(pubkey_attrs + n++, CKA_KEY_TYPE, CKK_RSA);
+
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_ENCRYPT, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_VERIFY, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n++, CKA_WRAP, TRUE);
+
+	pkcs11_addattr_bn(pubkey_attrs + n++, CKA_MODULUS, modulus);
+	pkcs11_addattr_bn(pubkey_attrs + n++, CKA_PUBLIC_EXPONENT, pe);
+	if (label)
+		pkcs11_addattr_s(pubkey_attrs + n++, CKA_LABEL, label);
+	if (id && id_len)
+		pkcs11_addattr(pubkey_attrs + n++, CKA_ID, id, id_len);
+
+	rv = CRYPTOKI_call(ctx, C_CreateObject(session, pubkey_attrs, n, &new_obj));
+
+	pkcs11_zap_attrs(pubkey_attrs, n);
+	BN_free(modulus);
+	BN_free(pe);
+
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_STORE_PUBLIC_KEY, rv);
 	return 0;
+}
+
+static int
+pkcs11_generate_key_on_board(PKCS11_TOKEN * token,
+		    int algorithm, unsigned int bits, char *label, unsigned char* id, size_t id_len)
+{
+	switch (algorithm) {
+	case EVP_PKEY_RSA:
+		return pkcs11_generate_key_on_board_rsa(token,algorithm,bits,label,id,id_len);
+		break;
+	default:
+		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
+		return -1;
+	}
 }
 
 /*
@@ -177,7 +219,7 @@ PKCS11_generate_key(PKCS11_TOKEN * token,
 	BIO *err;
 	int rc;
 
-	rc = PKCS11_generate_key_on_board(token,algorithm,bits,label,id,id_len);
+	rc = pkcs11_generate_key_on_board(token,algorithm,bits,label,id,id_len);
 	if (rc == 0) {
 		return rc;
 	}
