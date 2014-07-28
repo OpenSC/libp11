@@ -140,6 +140,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	unsigned char id[256];
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
+	int n;
 
 	(void)ctx;
 	(void)session;
@@ -153,8 +154,13 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		return 0;
 
 	tpriv = PRIVTOKEN(token);
+	if (tpriv->ncerts < 0) {
+		n = 1;
+	} else {
+		n = tpriv->ncerts + 1;
+	}
 	tmp = (PKCS11_CERT *) OPENSSL_realloc(tpriv->certs,
-				(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
+				n * sizeof(PKCS11_CERT));
 	if (!tmp) {
 		free(tpriv->certs);
 		tpriv->certs = NULL;
