@@ -268,8 +268,13 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	}
 
 	tpriv = PRIVTOKEN(token);
+	if (tpriv->nkeys < 0) {
+		tpriv->nkeys = 1;
+	} else {
+		tpriv->nkeys++;
+	}
 	tmp = (PKCS11_KEY *) OPENSSL_realloc(tpriv->keys,
-				(tpriv->nkeys + 1) * sizeof(PKCS11_KEY));
+				tpriv->nkeys * sizeof(PKCS11_KEY));
 	if (!tmp) {
 		free(tpriv->keys);
 		tpriv->keys = NULL;
@@ -277,7 +282,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	}
 	tpriv->keys = tmp;
 
-	key = tpriv->keys + tpriv->nkeys++;
+	key = tpriv->keys + tpriv->nkeys - 1;
 	memset(key, 0, sizeof(*key));
 	key->_private = kpriv = PKCS11_NEW(PKCS11_KEY_private);
 	kpriv->object = obj;
