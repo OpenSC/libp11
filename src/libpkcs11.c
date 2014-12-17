@@ -114,11 +114,13 @@ C_UnloadModule(void *module)
 	if (!mod || mod->_magic != MAGIC)
 		return CKR_ARGUMENTS_BAD;
 
+	if (mod->handle) {
 #ifdef WIN32
-	FreeLibrary(mod->handle);
+		FreeLibrary(mod->handle);
 #else
-	dlclose(mod->handle);
+		dlclose(mod->handle);
 #endif
+	}
 
 	memset(mod, 0, sizeof(*mod));
 	free(mod);
