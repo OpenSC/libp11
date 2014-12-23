@@ -7,7 +7,7 @@ LINKFLAGS = /DEBUG /NOLOGO /INCREMENTAL:NO /MACHINE:IX86
 TARGET                  = libp11.dll
 
 OBJECTS                 = libpkcs11.obj p11_attr.obj p11_cert.obj p11_err.obj \
-	p11_key.obj p11_load.obj p11_misc.obj p11_rsa.obj p11_slot.obj p11_ops.obj
+	p11_key.obj p11_load.obj p11_misc.obj p11_rsa.obj p11_ec.obj p11_slot.obj p11_ops.obj
 
 all: $(TARGET) versioninfo.res
 

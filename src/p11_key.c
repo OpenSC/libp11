@@ -91,6 +91,34 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
 }
 
 /*
+ * Find key matching a key of the other type pub vs priv
+ */
+PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
+{
+        PKCS11_TOKEN_private *tpriv;
+        PKCS11_KEY_private *kinpriv;
+        PKCS11_KEY_private *kpriv;
+        PKCS11_KEY *key;
+        int isprivate;
+        unsigned int n, count;
+
+        kinpriv = PRIVKEY(keyin);
+        tpriv = PRIVTOKEN(KEY2TOKEN(keyin));
+        PKCS11_enumerate_keys(KEY2TOKEN(keyin), &key, &count);
+        /* We want to use all the keys, the above only returns count for private */
+        count = tpriv->nkeys;
+        if (count < 2)  /* must be at least two key to have a match */
+            return;
+        for (n = 0; n < count; n++, key++) {
+                kpriv = PRIVKEY(key);
+            if (keyin->isPrivate != key->isPrivate
+                    && kinpriv->id_len == kpriv->id_len
+                    && !memcmp(kinpriv->id, kpriv->id, kinpriv->id_len))
+                return key;
+        }
+        return NULL;
+}
+/*
  * Store a private key on the token
  */
 int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len)
@@ -261,6 +289,9 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	switch (key_type) {
 	case CKK_RSA:
 		ops = &pkcs11_rsa_ops;
+		break;
+	case CKK_EC:
+		ops = &pkcs11_ec_ops;
 		break;
 	default:
 		/* Ignore any keys we don't understand */

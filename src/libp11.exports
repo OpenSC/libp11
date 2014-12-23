@@ -34,4 +34,6 @@ PKCS11_verify
 PKCS11_seed_random
 PKCS11_generate_random
 PKCS11_get_rsa_method
+PKCS11_get_ecdsa_method
+PKCS11_ecdsa_method_free
 ERR_load_PKCS11_strings
