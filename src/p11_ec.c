@@ -296,13 +296,17 @@ void PKCS11_ecdsa_method_free(void)
 }
 #endif
 
-PKCS11_KEY_ops pkcs11_ec_ops = {
+PKCS11_KEY_ops pkcs11_ec_ops_s = {
 	EVP_PKEY_EC,
 	pkcs11_get_ec_public,
 	pkcs11_get_ec_private
 };
+PKCS11_KEY_ops  *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
 #else /* LIBP11_BUILD_WITHOUT_ECDSA */
+
+void *pkcs11_ec_ops = {NULL};
+
 /* if not built with EC or OpenSSL does not support ECDSA
  * add these routines so engine_pkcs11 can be built now and not
  * require further changes */

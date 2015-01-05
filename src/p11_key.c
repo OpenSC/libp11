@@ -290,8 +290,11 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	case CKK_RSA:
 		ops = &pkcs11_rsa_ops;
 		break;
+
 	case CKK_EC:
-		ops = &pkcs11_ec_ops;
+		ops = pkcs11_ec_ops;
+		if (ops == NULL)
+		    return 0; /* not supported */
 		break;
 	default:
 		/* Ignore any keys we don't understand */

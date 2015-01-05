@@ -158,6 +158,6 @@ extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
 extern void *memdup(const void *, size_t);
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
-extern PKCS11_KEY_ops pkcs11_ec_ops;
+extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
 #endif
