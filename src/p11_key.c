@@ -108,7 +108,7 @@ PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
         /* We want to use all the keys, the above only returns count for private */
         count = tpriv->nkeys;
         if (count < 2)  /* must be at least two key to have a match */
-            return;
+            return NULL;
         for (n = 0; n < count; n++, key++) {
                 kpriv = PRIVKEY(key);
             if (keyin->isPrivate != key->isPrivate
