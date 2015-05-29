@@ -120,12 +120,13 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 		prkey = PKCS11_find_key_from_key(key);
 	}
 
-
-	if (!(ec = EVP_PKEY_get1_EC_KEY(pk))) {
-		ERR_clear_error();	/* the above flags an error */
+	if (pk->type == EVP_PKEY_EC) {
+		ec = EVP_PKEY_get1_EC_KEY(pk);
+	} else {
 		ec = EC_KEY_new();
 		EVP_PKEY_set1_EC_KEY(pk, ec);
 	}
+	/* After above ec has ref count incremented. */
 
 	if (prkey) {
 		if (key_getattr(prkey, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
@@ -191,9 +192,12 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 
 	if (sensitive || !extractable) {
 		ECDSA_set_ex_data(ec, 0, key);
+		EC_KEY_free(ec); /* drops our reference to it. */
 		return 0;
 	}
 
+	if (ec)
+	    EC_KEY_free(ec);
 	return -1;
 }
 
