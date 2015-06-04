@@ -160,4 +160,32 @@ extern void *memdup(const void *, size_t);
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
 extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
+extern int RSA_CRYPTO_EX_idx;
+typedef struct
+{
+	PKCS11_CTX *ctx;
+
+	struct {
+		PKCS11_SLOT *data;
+		int count;
+	} slots;
+
+	PKCS11_KEY *key;
+} PKCS11_CRYPTO_EX;
+
+PKCS11_CRYPTO_EX *PKCS11_CRYPTO_EX_create(PKCS11_CTX *ctx, PKCS11_SLOT *slots, int slotcount, PKCS11_KEY *key);
+void PKCS11_CRYPTO_EX_free(void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp);
+int PKCS11_find_by_slot_id(PKCS11_CTX *ctx,
+						   const char *s_slot_X_id,
+						   unsigned char *X_id, size_t *X_id_len, char **X_label,
+						   PKCS11_SLOT **slot_list, unsigned int *slot_count,
+						   PKCS11_SLOT **found_slot,
+						   PKCS11_TOKEN **tok,
+						   int verbose);
+
+
+PKCS11_CRYPTO_EX *EVP_PKEY_get_ex_data(EVP_PKEY *pk);
+int EVP_PKEY_set_ex_data(EVP_PKEY *pk, PKCS11_CRYPTO_EX *data);
+
+#define MAX_VALUE_LEN	200
 #endif

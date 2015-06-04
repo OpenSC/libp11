@@ -384,6 +384,28 @@ RSA_METHOD *PKCS11_get_rsa_method(void);
 ECDSA_METHOD  *PKCS11_get_ecdsa_method(void);
 void PKCS11_ecdsa_method_free(void);
 
+#define MAX_PIN_LENGTH 32
+typedef struct
+{
+	struct
+	{
+		char *data;
+		int len;
+	} pin;
+
+	int (*get_pin)(UI_METHOD * ui_method, void *callback_data);
+} PKCS11_PIN;
+
+void PKCS11_PIN_clear(PKCS11_PIN *p);
+int PKCS11_PIN_alloc(PKCS11_PIN *p);
+int PKCS11_PIN_dup(PKCS11_PIN *p, const char *pin);
+
+EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN *p,
+				 UI_METHOD * ui_method, void *callback_data,
+				 int isPrivate, int verbose);
+X509 *PKCS11_load_cert(PKCS11_CTX *ctx, const char *s_slot_cert_id, int verbose);
+
+
 /**
  * Load PKCS11 error strings
  *
@@ -391,6 +413,7 @@ void PKCS11_ecdsa_method_free(void);
  * to get an textual version of the latest error code
  */
 extern void ERR_load_PKCS11_strings(void);
+extern void ERR_unload_PKCS11_strings(void);
 
 /*
  * Function and reason codes

@@ -37,3 +37,9 @@ PKCS11_get_rsa_method
 PKCS11_get_ecdsa_method
 PKCS11_ecdsa_method_free
 ERR_load_PKCS11_strings
+ERR_unload_PKCS11_strings
+PKCS11_load_cert
+PKCS11_load_key
+PKCS11_PIN_alloc
+PKCS11_PIN_clear
+PKCS11_PIN_dup

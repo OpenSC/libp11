@@ -259,3 +259,57 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 	/* Gobble the key object */
 	return pkcs11_init_cert(ctx, token, session, object, ret_cert);
 }
+
+/* prototype for OpenSSL ENGINE_load_cert */
+/* used by load_cert_ctrl via ENGINE_ctrl for now */
+
+X509 *PKCS11_load_cert(PKCS11_CTX *ctx, const char *s_slot_cert_id, int verbose)
+{
+	PKCS11_SLOT *slot_list;
+	PKCS11_SLOT *found_slot = NULL;
+	PKCS11_TOKEN *tok;
+	PKCS11_CERT *certs, *selected_cert = NULL;
+	X509 *x509;
+	unsigned int slot_count, cert_count, n;
+	unsigned char cert_id[MAX_VALUE_LEN / 2];
+	size_t cert_id_len = sizeof(cert_id);
+	char *cert_label = NULL;
+
+	if( PKCS11_find_by_slot_id(ctx, s_slot_cert_id, cert_id, &cert_id_len, &cert_label,&slot_list, &slot_count, &found_slot, &tok, 1) == -1 )
+		return NULL;
+
+	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
+		fprintf(stderr, "unable to enumerate certificates\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (verbose) {
+		fprintf(stderr, "Found %u cert%s:\n", cert_count,
+			(cert_count <= 1) ? "" : "s");
+	}
+	if ((s_slot_cert_id && *s_slot_cert_id) && (cert_id_len != 0)) {
+		for (n = 0; n < cert_count; n++) {
+			PKCS11_CERT *k = certs + n;
+
+			if (cert_id_len != 0 && k->id_len == cert_id_len &&
+			    memcmp(k->id, cert_id, cert_id_len) == 0) {
+				selected_cert = k;
+			}
+		}
+	} else {
+		selected_cert = certs;	/* use first */
+	}
+
+	if (selected_cert == NULL) {
+		fprintf(stderr, "certificate not found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	x509 = X509_dup(selected_cert->x509);
+	PKCS11_release_all_slots(ctx, slot_list, slot_count);
+	if (cert_label != NULL)
+		free(cert_label);
+	return x509;
+}

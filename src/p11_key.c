@@ -505,3 +505,149 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 	BN_free(n);
 	return numbytes;
 }
+
+EVP_PKEY *PKCS11_load_key(PKCS11_CTX *ctx, const char *s_slot_key_id, PKCS11_PIN *p,
+				 UI_METHOD * ui_method, void *callback_data,
+				 int isPrivate, int verbose)
+{
+	PKCS11_SLOT *slot_list;
+	PKCS11_SLOT *found_slot = NULL;
+	PKCS11_TOKEN *tok;
+	PKCS11_KEY *keys, *selected_key = NULL;
+	EVP_PKEY *pk;
+	unsigned int slot_count, key_count, n;
+	unsigned char key_id[MAX_VALUE_LEN / 2];
+	size_t key_id_len = sizeof(key_id);
+	char *key_label = NULL;
+
+	if( PKCS11_find_by_slot_id(ctx, s_slot_key_id, key_id, &key_id_len, &key_label, &slot_list, &slot_count, &found_slot, &tok, 1) == -1)
+		return NULL;
+
+/* Removed for interop with some other pkcs11 libs. */
+#if 0
+	if (!tok->initialized) {
+		fprintf(stderr, "Found uninitialized token; \n");
+		return NULL;
+	}
+#endif
+	if (isPrivate && !tok->userPinSet && !tok->readOnly) {
+		fprintf(stderr, "Found slot without user PIN\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (verbose) {
+		fprintf(stderr, "Found slot:  %s\n", found_slot->description);
+		fprintf(stderr, "Found token: %s\n", found_slot->token->label);
+	}
+
+	/* Perform login to the token if required */
+	if (tok->loginRequired) {
+		/* If the token has a secure login (i.e., an external keypad),
+		   then use a NULL pin. Otherwise, check if a PIN exists. If
+		   not, allocate and obtain a new PIN. */
+		if (tok->secureLogin) {
+			/* Free the PIN if it has already been
+			   assigned (i.e, cached by get_pin) */
+			PKCS11_PIN_clear(p);
+		} else if (p->pin.data == NULL) {
+			PKCS11_PIN_alloc(p);
+			if (!p->get_pin(ui_method, callback_data) ) {
+				PKCS11_PIN_clear(p);
+//				fail("No pin code was entered");
+				PKCS11_release_all_slots(ctx, slot_list, slot_count);
+				return NULL;
+			}
+		}
+
+		/* Now login in with the (possibly NULL) pin */
+		if (PKCS11_login(found_slot, 0, p->pin.data)) {
+			/* Login failed, so free the PIN if present */
+			if (p->pin.data != NULL) {
+				PKCS11_PIN_clear(p);
+			}
+//			fail("Login failed\n");
+			PKCS11_release_all_slots(ctx, slot_list, slot_count);
+			return NULL;
+		}
+		/* Login successful, PIN retained in case further logins are
+		   required. This will occur on subsequent calls to the
+		   pkcs11_load_key function. Subsequent login calls should be
+		   relatively fast (the token should maintain its own login
+		   state), although there may still be a slight performance
+		   penalty. We could maintain state noting that successful
+		   login has been performed, but this state may not be updated
+		   if the token is removed and reinserted between calls. It
+		   seems safer to retain the PIN and peform a login on each
+		   call to pkcs11_load_key, even if this may not be strictly
+		   necessary. */
+		/* TODO when does PIN get freed after successful login? */
+		/* TODO confirm that multiple login attempts do not introduce
+		   significant performance penalties */
+
+	}
+
+	/* Make sure there is at least one private key on the token */
+	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
+//		fail("unable to enumerate keys\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+	if (key_count == 0) {
+//		fail("No keys found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (verbose) {
+		fprintf(stderr, "Found %u key%s:\n", key_count,
+			(key_count <= 1) ? "" : "s");
+	}
+	if (s_slot_key_id && *s_slot_key_id && (key_id_len != 0 || key_label != NULL)) {
+		for (n = 0; n < key_count; n++) {
+			PKCS11_KEY *k = keys + n;
+
+			if (verbose) {
+				fprintf(stderr, "  %2u %c%c %s\n", n + 1,
+					k->isPrivate ? 'P' : ' ',
+					k->needLogin ? 'L' : ' ', k->label);
+			}
+			if (key_label == NULL) {
+				if (key_id_len != 0 && k->id_len == key_id_len
+				    && memcmp(k->id, key_id, key_id_len) == 0) {
+					selected_key = k;
+				}
+			} else {
+				if (strcmp(k->label, key_label) == 0) {
+					selected_key = k;
+				}
+			}
+		}
+	} else {
+		selected_key = keys;	/* use first */
+	}
+
+	if (selected_key == NULL) {
+		fprintf(stderr, "key not found.\n");
+		PKCS11_release_all_slots(ctx, slot_list, slot_count);
+		return NULL;
+	}
+
+	if (isPrivate) {
+		pk = PKCS11_get_private_key(selected_key);
+	} else {
+		/*pk = PKCS11_get_public_key(&keys[0]);
+		   need a get_public_key? */
+		pk = PKCS11_get_private_key(selected_key);
+	}
+	if (key_label != NULL)
+		free(key_label);
+
+	PKCS11_CRYPTO_EX *data = EVP_PKEY_get_ex_data(pk);
+	data->ctx = ctx;
+	data->slots.data = slot_list;
+	data->slots.count = slot_count;
+
+	return pk;
+}
+
