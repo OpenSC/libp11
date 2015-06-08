@@ -42,7 +42,8 @@ typedef struct pkcs11_ctx_private {
 	CK_FUNCTION_LIST_PTR method;
 
 	CK_SESSION_HANDLE session;
-	char *init_args;
+	char *init_args;		/* CK_C_INITIALIZE_ARGS.pReserved */
+	int init_flags;			/* CK_C_INITIALIZE_ARGS.flags */
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) (ctx->_private))
 
