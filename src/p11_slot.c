@@ -33,7 +33,7 @@ PKCS11_get_slotid_from_slot(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
-		return priv->id;
+	return priv->id;
 }
 
 /*
@@ -42,12 +42,15 @@ PKCS11_get_slotid_from_slot(PKCS11_SLOT *slot)
 int
 PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *countp)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
-
+	PKCS11_CTX_private *priv;
 	CK_SLOT_ID *slotid;
 	CK_ULONG nslots, n;
 	PKCS11_SLOT *slots;
 	int rv;
+
+	CHECK_FORK(ctx);
+
+	priv = PRIVCTX(ctx);
 
 	rv = priv->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
@@ -111,6 +114,8 @@ int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	int rv;
 
+	CHECK_SLOT_FORK(slot);
+
 	if (priv->haveSession) {
 		CRYPTOKI_call(ctx, C_CloseSession(priv->session));
 		priv->haveSession = 0;
@@ -122,27 +127,51 @@ int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
 					 &priv->session));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_OPEN_SESSION, rv);
 	priv->haveSession = 1;
+	priv->prev_rw = rw;
+
+	return 0;
+}
+
+int PKCS11_reopen_session(PKCS11_SLOT * slot)
+{
+	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	int rv;
+
+	rv = CRYPTOKI_call(ctx,
+			   C_OpenSession(priv->id,
+					 CKF_SERIAL_SESSION | (priv->prev_rw ? CKF_RW_SESSION :
+							       0), NULL, NULL,
+					 &priv->session));
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_OPEN_SESSION, rv);
+	priv->haveSession = 1;
 
 	return 0;
 }
 
 /*
- * Authenticate with the card
+ * Authenticate with the card. relogin should be set if we automatically
+ * relogin after a fork.
  */
-int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin)
+static
+int PKCS11_login_int(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = priv->parent;
 	int rv;
 
-	/* Calling PKCS11_login invalidates all cached
-	 * keys we have */
-	if (slot->token)
-		pkcs11_destroy_keys(slot->token);
-	if (priv->loggedIn) {
-		/* already logged in, log out first */
-		if (PKCS11_logout(slot))
-			return -1;
+	if (relogin == 0) {
+		CHECK_SLOT_FORK(slot);
+
+		/* Calling PKCS11_login invalidates all cached
+		 * keys we have */
+		if (slot->token)
+			pkcs11_destroy_keys(slot->token);
+		if (priv->loggedIn) {
+			/* already logged in, log out first */
+			if (PKCS11_logout(slot))
+				return -1;
+		}
 	}
 	if (!priv->haveSession) {
 		/* SO gets a r/w session by default,
@@ -158,7 +187,28 @@ int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin)
 	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN)  /* logged in -> OK   */
 		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
 	priv->loggedIn = 1;
+
+	if (priv->prev_pin != pin)
+		snprintf(priv->prev_pin, sizeof(priv->prev_pin), "%s", pin);
+	priv->prev_so = so;
 	return 0;
+}
+
+/*
+ * Authenticate with the card
+ */
+int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin)
+{
+	return PKCS11_login_int(slot, so, pin, 0);
+}
+
+
+
+int PKCS11_relogin(PKCS11_SLOT * slot)
+{
+	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
+
+	return PKCS11_login_int(slot, priv->prev_so, priv->prev_pin, 1);
 }
 
 /*
@@ -169,6 +219,8 @@ int PKCS11_logout(PKCS11_SLOT * slot)
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = priv->parent;
 	int rv;
+
+	CHECK_SLOT_FORK(slot);
 
 	/* Calling PKCS11_logout invalidates all cached
 	 * keys we have */
@@ -193,6 +245,8 @@ int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 	PKCS11_SLOT_private *priv = PRIVSLOT(TOKEN2SLOT(token));
 	PKCS11_CTX *ctx = priv->parent;
 	int rv;
+
+	CHECK_FORK(ctx);
 
 	if (!label)
 		label = "PKCS#11 Token";
@@ -223,6 +277,8 @@ int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin)
 	PKCS11_CTX *ctx = priv->parent;
 	int len, rv;
 
+	CHECK_FORK(ctx);
+
 	if (!priv->haveSession) {
 		PKCS11err(PKCS11_F_PKCS11_INIT_PIN, PKCS11_NO_SESSION);
 		return -1;
@@ -244,6 +300,8 @@ int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = priv->parent;
 	int old_len, new_len, rv;
+
+	CHECK_SLOT_FORK(slot);
 
 	if (!priv->haveSession) {
 		PKCS11err(PKCS11_F_PKCS11_CHANGE_PIN, PKCS11_NO_SESSION);
@@ -269,6 +327,8 @@ int PKCS11_seed_random(PKCS11_SLOT *slot, const unsigned char *s,
 	PKCS11_CTX *ctx = priv->parent;
 	int rv;
 
+	CHECK_SLOT_FORK(slot);
+
 	if (!priv->haveSession && PKCS11_open_session(slot, 0)) {
 		PKCS11err(PKCS11_F_PKCS11_SEED_RANDOM, PKCS11_NO_SESSION);
 		return -1;
@@ -289,6 +349,8 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r,
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = priv->parent;
 	int rv;
+
+	CHECK_SLOT_FORK(slot);
 
 	if (!priv->haveSession && PKCS11_open_session(slot, 0)) {
 		PKCS11err(PKCS11_F_PKCS11_GENERATE_RANDOM, PKCS11_NO_SESSION);
@@ -316,6 +378,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	priv = PKCS11_NEW(PKCS11_SLOT_private);
 	priv->parent = ctx;
 	priv->id = id;
+	priv->forkid = PRIVCTX(ctx)->forkid;
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
@@ -341,8 +404,10 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
-	if (priv)
+	if (priv) {
+		OPENSSL_cleanse(priv->prev_pin, sizeof(priv->prev_pin));
 		CRYPTOKI_call(ctx, C_CloseAllSessions(priv->id));
+	}
 	OPENSSL_free(slot->_private);
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);

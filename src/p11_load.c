@@ -36,6 +36,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	priv = PKCS11_NEW(PKCS11_CTX_private);
 	ctx = PKCS11_NEW(PKCS11_CTX);
 	ctx->_private = priv;
+	priv->forkid = _P11_get_forkid();
 
 	return ctx;
 }
@@ -93,6 +94,32 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 }
 
 /*
+ * Reinitialize (e.g., after a fork).
+ */
+int PKCS11_CTX_reload(PKCS11_CTX * ctx)
+{
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	CK_C_INITIALIZE_ARGS _args;
+	CK_C_INITIALIZE_ARGS *args = NULL;
+	CK_INFO ck_info;
+	int rv;
+
+	/* Tell the PKCS11 to initialize itself */
+	if (priv->init_args != NULL) {
+		memset(&_args, 0, sizeof(_args));
+		args = &_args;
+		args->pReserved = priv->init_args;
+	}
+	rv = priv->method->C_Initialize(args);
+	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
  * Unload the shared library
  */
 void PKCS11_CTX_unload(PKCS11_CTX * ctx)
@@ -101,7 +128,8 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 	priv = PRIVCTX(ctx);
 
 	/* Tell the PKCS11 library to shut down */
-	priv->method->C_Finalize(NULL);
+	if (priv->forkid == _P11_get_forkid())
+		priv->method->C_Finalize(NULL);
 
 	/* Unload the module */
 	C_UnloadModule(handle);

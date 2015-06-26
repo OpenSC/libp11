@@ -141,6 +141,8 @@ if test "${WIN32}" != "yes"; then
 	)
 fi
 
+AC_CHECK_FUNCS([__register_atfork],,)
+
 PKG_CHECK_MODULES(
 	[OPENSSL],
 	[libcrypto >= 0.9.7],

@@ -377,6 +377,8 @@ static int pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	unsigned int n = 0;
 	int rv;
 
+	CHECK_SLOT_FORK(slot);
+
 	/* First, make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))
 		return -1;
@@ -439,6 +441,8 @@ static int pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
+
+	CHECK_SLOT_FORK(slot);
 
 	/* First, make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))

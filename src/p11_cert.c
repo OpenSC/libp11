@@ -233,6 +233,8 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 	unsigned int n = 0;
 	int rv;
 
+	CHECK_SLOT_FORK(slot);
+
 	/* First, make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))
 		return -1;
