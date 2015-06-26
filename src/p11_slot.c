@@ -109,7 +109,7 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned 
  * Open a session with this slot
  */
 static
-int PKCS11_open_session_int(PKCS11_SLOT * slot, int rw, int relogin)
+int pkcs11_open_session(PKCS11_SLOT * slot, int rw, int relogin)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -137,7 +137,7 @@ int PKCS11_open_session_int(PKCS11_SLOT * slot, int rw, int relogin)
 
 int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
 {
-	return PKCS11_open_session_int(slot, rw, 0);
+	return pkcs11_open_session(slot, rw, 0);
 }
 
 int PKCS11_reopen_session(PKCS11_SLOT * slot)
@@ -162,7 +162,7 @@ int PKCS11_reopen_session(PKCS11_SLOT * slot)
  * relogin after a fork.
  */
 static
-int PKCS11_login_int(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
+int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = priv->parent;
@@ -184,7 +184,7 @@ int PKCS11_login_int(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 	if (!priv->haveSession) {
 		/* SO gets a r/w session by default,
 		 * user gets a r/o session by default. */
-		if (PKCS11_open_session_int(slot, so, relogin))
+		if (pkcs11_open_session(slot, so, relogin))
 			return -1;
 	}
 
@@ -207,7 +207,7 @@ int PKCS11_login_int(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
  */
 int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin)
 {
-	return PKCS11_login_int(slot, so, pin, 0);
+	return pkcs11_login(slot, so, pin, 0);
 }
 
 
@@ -216,7 +216,7 @@ int PKCS11_relogin(PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
-	return PKCS11_login_int(slot, priv->prev_so, priv->prev_pin, 1);
+	return pkcs11_login(slot, priv->prev_so, priv->prev_pin, 1);
 }
 
 /*
