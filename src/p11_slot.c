@@ -108,17 +108,20 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned 
 /*
  * Open a session with this slot
  */
-int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
+static
+int PKCS11_open_session_int(PKCS11_SLOT * slot, int rw, int relogin)
 {
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	int rv;
 
-	CHECK_SLOT_FORK(slot);
+	if (relogin == 0) {
+		CHECK_SLOT_FORK(slot);
 
-	if (priv->haveSession) {
-		CRYPTOKI_call(ctx, C_CloseSession(priv->session));
-		priv->haveSession = 0;
+		if (priv->haveSession) {
+			CRYPTOKI_call(ctx, C_CloseSession(priv->session));
+			priv->haveSession = 0;
+		}
 	}
 	rv = CRYPTOKI_call(ctx,
 			   C_OpenSession(priv->id,
@@ -130,6 +133,11 @@ int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
 	priv->prev_rw = rw;
 
 	return 0;
+}
+
+int PKCS11_open_session(PKCS11_SLOT * slot, int rw)
+{
+	return PKCS11_open_session_int(slot, rw, 0);
 }
 
 int PKCS11_reopen_session(PKCS11_SLOT * slot)
@@ -176,7 +184,7 @@ int PKCS11_login_int(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 	if (!priv->haveSession) {
 		/* SO gets a r/w session by default,
 		 * user gets a r/o session by default. */
-		if (PKCS11_open_session(slot, so))
+		if (PKCS11_open_session_int(slot, so, relogin))
 			return -1;
 	}
 
