@@ -34,6 +34,17 @@ extern CK_RV C_UnloadModule(void *module);
 
 /* get private implementations of PKCS11 structures */
 
+#ifdef _WIN32
+/* we don't need thread safety here because we don't check for fork */
+# define LOCK(ctx)
+# define UNLOCK(ctx)
+#else
+# include <pthread.h>
+
+# define LOCK(ctx)   {if (pthread_mutex_lock(&ctx->mutex) < 0) abort();}
+# define UNLOCK(ctx) {if (pthread_mutex_unlock(&ctx->mutex) < 0) abort();}
+#endif
+
 /*
  * PKCS11_CTX: context for a PKCS11 implementation
  */
@@ -44,16 +55,24 @@ typedef struct pkcs11_ctx_private {
 
 	char *init_args;
 	unsigned int forkid;
+#ifndef _WIN32
+	pthread_mutex_t mutex; /* mutex for forkid check */
+#endif
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) (ctx->_private))
 
 #define CHECK_FORK(ctx) { \
 	PKCS11_CTX_private *__priv = PRIVCTX(ctx); \
+	LOCK(__priv); \
 	if (_P11_detect_fork(__priv->forkid)) { \
-		if (PKCS11_CTX_reload(ctx) < 0) \
+		if (PKCS11_CTX_reload(ctx) < 0) { \
+			UNLOCK(__priv); \
 			return -1; \
+		} \
 		__priv->forkid = _P11_get_forkid(); \
-	}}
+	} \
+	UNLOCK(__priv); \
+	}
 
 typedef struct pkcs11_slot_private {
 	PKCS11_CTX *parent;
@@ -66,6 +85,9 @@ typedef struct pkcs11_slot_private {
 	/* options used in last PKCS11_login */
 	char prev_pin[64];
 	int prev_so;
+#ifndef _WIN32
+	pthread_mutex_t mutex; /* mutex for forkid check */
+#endif
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) (slot->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)
@@ -75,22 +97,29 @@ typedef struct pkcs11_slot_private {
 	PKCS11_CTX *__ctx = SLOT2CTX(slot_ctx); \
 	PKCS11_CTX_private *__priv = PRIVCTX(__ctx); \
 	CHECK_FORK(SLOT2CTX(slot_ctx)); \
+	LOCK(__spriv); \
 	if (__spriv->forkid != __priv->forkid) { \
 		if (__spriv->loggedIn) { \
 			int __saved = __spriv->haveSession; \
 			__spriv->haveSession = 0; \
 			__spriv->loggedIn = 0; \
-			if (PKCS11_relogin(slot_ctx) < 0) \
+			if (PKCS11_relogin(slot_ctx) < 0) { \
+				UNLOCK(__spriv); \
 				return -1; \
+			} \
 			__spriv->haveSession = __saved; \
 		} \
 		if (__spriv->haveSession) { \
 			__spriv->haveSession = 0; \
-			if (PKCS11_reopen_session(slot_ctx) < 0) \
+			if (PKCS11_reopen_session(slot_ctx) < 0) { \
+				UNLOCK(__spriv); \
 				return -1; \
+			} \
 		} \
 		__spriv->forkid = __priv->forkid; \
-	}}
+	} \
+	UNLOCK(__spriv); \
+	}
 
 typedef struct pkcs11_token_private {
 	PKCS11_SLOT *parent;

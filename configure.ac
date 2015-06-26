@@ -141,7 +141,15 @@ if test "${WIN32}" != "yes"; then
 	)
 fi
 
-AC_CHECK_FUNCS([__register_atfork],,)
+if test "${WIN32}" != yes;then
+	AC_CHECK_FUNCS([__register_atfork pthread_mutex_lock],,)
+	if test "$ac_cv_func_pthread_mutex_lock" != "yes";then
+		OLDLIBS=$LIBS
+		AC_CHECK_LIB(pthread, pthread_mutex_lock, [], AC_ERROR([Cannot find pthread_mutex_lock() function]))
+		LIBS=$OLDLIBS
+		PTHREAD_FLAGS="-pthread"
+	fi
+fi
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
@@ -164,6 +172,7 @@ pkgconfigdir="\$(libdir)/pkgconfig"
 
 AC_SUBST([pkgconfigdir])
 AC_SUBST([apidocdir])
+AC_SUBST([PTHREAD_FLAGS])
 AC_SUBST([LIBP11_VERSION_MAJOR])
 AC_SUBST([LIBP11_VERSION_MINOR])
 AC_SUBST([LIBP11_VERSION_FIX])
@@ -212,6 +221,7 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
+PTHREAD_FLAGS:           ${PTHREAD_FLAGS}
 OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 

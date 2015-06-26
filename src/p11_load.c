@@ -38,6 +38,10 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	ctx->_private = priv;
 	priv->forkid = _P11_get_forkid();
 
+#ifndef _WIN32
+	pthread_mutex_init(&priv->mutex, NULL);
+#endif
+
 	return ctx;
 }
 
@@ -130,6 +134,10 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 	/* Tell the PKCS11 library to shut down */
 	if (priv->forkid == _P11_get_forkid())
 		priv->method->C_Finalize(NULL);
+
+#ifndef _WIN32
+	pthread_mutex_destroy(&priv->mutex);
+#endif
 
 	/* Unload the module */
 	C_UnloadModule(handle);
