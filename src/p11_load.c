@@ -27,22 +27,32 @@ static void *handle = NULL;
  */
 PKCS11_CTX *PKCS11_CTX_new(void)
 {
-	PKCS11_CTX_private *priv;
-	PKCS11_CTX *ctx;
+	PKCS11_CTX_private *priv = NULL;
+	PKCS11_CTX *ctx = NULL;
 
 	/* Load error strings */
 	ERR_load_PKCS11_strings();
 
 	priv = PKCS11_NEW(PKCS11_CTX_private);
+	if (priv == NULL)
+		goto fail;
 	ctx = PKCS11_NEW(PKCS11_CTX);
+	if (ctx == NULL)
+		goto fail;
 	ctx->_private = priv;
 	priv->forkid = _P11_get_forkid();
 
 #ifndef _WIN32
-	pthread_mutex_init(&priv->mutex, NULL);
+	if (pthread_mutex_init(&priv->mutex, NULL) != 0) {
+		goto fail;
+	}
 #endif
 
 	return ctx;
+ fail:
+	OPENSSL_free(priv);
+	OPENSSL_free(ctx);
+	return NULL;
 }
 
 /*
