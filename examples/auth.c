@@ -36,8 +36,8 @@ int main(int argc, char *argv[])
 	int rc = 0, fd;
 	unsigned int nslots, ncerts, siglen;
 
-	if (argc != 2) {
-		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so\n");
+	if (argc < 2) {
+		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so [PIN]\n");
 		return 1;
 	}
 
@@ -92,29 +92,33 @@ int main(int argc, char *argv[])
 		goto loggedin;
 
 	/* get password */
-	struct termios old, new;
+	if (argc > 2) {
+		strcpy(password, argv[2]);
+	} else {
+		struct termios old, new;
 
-	/* Turn echoing off and fail if we can't. */
-	if (tcgetattr(0, &old) != 0)
-		goto failed;
+		/* Turn echoing off and fail if we can't. */
+		if (tcgetattr(0, &old) != 0)
+			goto failed;
 
-	new = old;
-	new.c_lflag &= ~ECHO;
-	if (tcsetattr(0, TCSAFLUSH, &new) != 0)
-		goto failed;
+		new = old;
+		new.c_lflag &= ~ECHO;
+		if (tcsetattr(0, TCSAFLUSH, &new) != 0)
+			goto failed;
 
-	/* Read the password. */
-	printf("Password for token %.32s: ", slot->token->label);
-	fgets(password, sizeof(password), stdin);
+		/* Read the password. */
+		printf("Password for token %.32s: ", slot->token->label);
+		fgets(password, sizeof(password), stdin);
 
-	/* Restore terminal. */
-	(void)tcsetattr(0, TCSAFLUSH, &old);
+		/* Restore terminal. */
+		(void)tcsetattr(0, TCSAFLUSH, &old);
 
-	/* strip tailing \n from password */
-	rc = strlen(password);
-	if (rc <= 0)
-		goto failed;
-	password[rc-1]=0;
+		/* strip tailing \n from password */
+		rc = strlen(password);
+		if (rc <= 0)
+			goto failed;
+		password[rc-1]=0;
+	}
 
 	/* perform pkcs #11 login */
 	rc = PKCS11_login(slot, 0, password);
