@@ -14,11 +14,11 @@ MAINTAINERCLEANFILES = \
 	$(srcdir)/packaged
 EXTRA_DIST = .gitignore Makefile.mak winconfig.h
 
-dist_noinst_DATA = COPYING bootstrap \
-	$(srcdir)/examples/Makefile $(srcdir)/examples/*.c $(srcdir)/examples/README
+dist_noinst_DATA = COPYING bootstrap
+
 dist_doc_DATA = NEWS
 
-SUBDIRS = src doc
+SUBDIRS = src doc tests examples
 
 # Allow detection of packaged tarball
 dist-hook:
