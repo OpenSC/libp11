@@ -54,4 +54,12 @@ m4/ltsugar.m4
 m4/ltversion.m4
 m4/lt~obsolete.m4
 
+tests/auth
+tests/*.log
+tests/*.trs
+
+examples/auth
+examples/decrypt
+examples/getrandom
+
 doc/doxygen.conf
