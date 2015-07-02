@@ -74,20 +74,6 @@ int main(int argc, char *argv[])
 	printf("Slot token model.......: %s\n", slot->token->model);
 	printf("Slot token serialnr....: %s\n", slot->token->serialnr);
 
-	/* get all certs */
-	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
-	if (rc) {
-		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
-		goto failed;
-	}
-	if (ncerts <= 0) {
-		fprintf(stderr, "no certificates found\n");
-		goto failed;
-	}
-
-	/* use the first cert */
-	authcert=&certs[0];
-
 	if (!slot->token->loginRequired)
 		goto loggedin;
 
@@ -120,6 +106,7 @@ int main(int argc, char *argv[])
 		password[rc-1]=0;
 	}
 
+ loggedin:
 	/* perform pkcs #11 login */
 	rc = PKCS11_login(slot, 0, password);
 	memset(password, 0, strlen(password));
@@ -128,7 +115,20 @@ int main(int argc, char *argv[])
 		goto failed;
 	}
 
-      loggedin:
+	/* get all certs */
+	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
+	if (rc) {
+		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
+		goto failed;
+	}
+	if (ncerts <= 0) {
+		fprintf(stderr, "no certificates found\n");
+		goto failed;
+	}
+
+	/* use the first cert */
+	authcert=&certs[0];
+
 	/* get random bytes */
 	random = malloc(RANDOM_SIZE);
 	if (!random)
