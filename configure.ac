@@ -21,7 +21,7 @@ LIBP11_VERSION_FIX="PACKAGE_VERSION_FIX"
 #   (Code changed:                      REVISION++)
 #   (Oldest interface removed:          OLDEST++)
 #   (Interfaces added:                  CURRENT++, REVISION=0)
-LIBP11_LT_CURRENT="4"
+LIBP11_LT_CURRENT="5"
 LIBP11_LT_OLDEST="2"
 LIBP11_LT_REVISION="0"
 LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"

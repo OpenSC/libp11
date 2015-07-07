@@ -124,6 +124,13 @@ extern PKCS11_CTX *PKCS11_CTX_new(void);
 extern void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
 
 /**
+ * Specify any private PKCS#11 module initializtion flags, if necessary
+ *
+ * @return none
+ */
+extern void PKCS11_CTX_init_flags(PKCS11_CTX * ctx, int flags);
+
+/**
  * Load a PKCS#11 module
  *
  * @param ctx context allocated by PKCS11_CTX_new()

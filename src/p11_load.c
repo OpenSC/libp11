@@ -50,6 +50,15 @@ void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 }
 
 /*
+ * Set private init flags for module
+ */
+void PKCS11_CTX_init_flags(PKCS11_CTX * ctx, int flags)
+{
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	priv->init_flags = flags;
+}
+
+/*
  * Load the shared library, and initialize it.
  */
 int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
@@ -75,6 +84,7 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
 		args->pReserved = priv->init_args;
+		args->flags = priv->init_flags;
 	}
 	rv = priv->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
