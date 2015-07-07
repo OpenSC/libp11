@@ -263,7 +263,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
     if (ops == NULL) {
-	ops = ECDSA_METHOD_new(NULL);
+	ops = ECDSA_METHOD_new(ECDSA_OpenSSL());
 	ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
 	ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
     }
