@@ -26,6 +26,8 @@
 #include <string.h>
 #include "libp11-int.h"
 
+#define MAX_CERT_SIZE (32*1024)
+
 static int pkcs11_find_certs(PKCS11_TOKEN *);
 static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
@@ -136,7 +138,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	PKCS11_TOKEN_private *tpriv;
 	PKCS11_CERT_private *kpriv;
 	PKCS11_CERT *cert, *tmp;
-	char label[256], data[4096];
+	char label[256], *data;
 	unsigned char id[256];
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
@@ -170,12 +172,18 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
 		cert->label = BUF_strdup(label);
-	size = sizeof(data);
-	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
-		const unsigned char *p = (unsigned char *) data;
 
-		cert->x509 = d2i_X509(NULL, &p, size);
+	size = MAX_CERT_SIZE;
+	data = malloc(size);
+	if (data) {
+		if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
+			const unsigned char *p = (unsigned char *) data;
+
+			cert->x509 = d2i_X509(NULL, &p, size);
+		}
+		free(data);
 	}
+
 	cert->id_len = sizeof(id);
 	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &cert->id_len)) {
 		cert->id = (unsigned char *) malloc(cert->id_len);
