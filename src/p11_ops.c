@@ -41,6 +41,9 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	ctx = KEY2CTX(key);
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
+
+	CHECK_SLOT_FORK(slot);
+
 	session = PRIVSLOT(slot)->session;
 
 	ck_sigsize = *siglen;
@@ -72,9 +75,16 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
 	int sigsize;
+	PKCS11_KEY_private *priv;
+	PKCS11_SLOT *slot;
 
 	if (key == NULL)
 		return 0;
+
+	priv = PRIVKEY(key);
+	slot = TOKEN2SLOT(priv->parent);
+
+	CHECK_SLOT_FORK(slot);
 
 	sigsize = PKCS11_get_key_size(key);
 
@@ -146,6 +156,9 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	ctx = KEY2CTX(key);
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
+
+	CHECK_SLOT_FORK(slot);
+
 	session = PRIVSLOT(slot)->session;
 
 	sigsize=PKCS11_get_key_size(key);
@@ -203,9 +216,12 @@ PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 	ctx = KEY2CTX(key);
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
+	CHECK_SLOT_FORK(slot);
+
 	session = PRIVSLOT(slot)->session;
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_RSA_PKCS;
+
 
 	if( (rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, priv->object))) == 0) {
 		rv = CRYPTOKI_call(ctx, C_Decrypt
