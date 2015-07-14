@@ -136,7 +136,8 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	PKCS11_TOKEN_private *tpriv;
 	PKCS11_CERT_private *kpriv;
 	PKCS11_CERT *cert, *tmp;
-	char label[256], data[4096];
+	char label[256];
+	unsigned char *data;
 	unsigned char id[256];
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
@@ -170,11 +171,16 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
 		cert->label = BUF_strdup(label);
-	size = sizeof(data);
-	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
-		const unsigned char *p = (unsigned char *) data;
+	size = 0;
+	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, NULL, &size) && size > 0) {
+		data = (unsigned char *) malloc(size);
+		if (data && !pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
+			const unsigned char *p = data;
 
-		cert->x509 = d2i_X509(NULL, &p, size);
+			cert->x509 = d2i_X509(NULL, &p, size);
+		}
+		if (data)
+			free(data);
 	}
 	cert->id_len = sizeof(id);
 	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &cert->id_len)) {
