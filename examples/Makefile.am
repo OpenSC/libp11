@@ -6,4 +6,5 @@ EXTRA_DIST = README
 
 noinst_PROGRAMS = auth decrypt getrandom
 
-LDADD = ../src/libp11.la
+LDADD = ../src/libp11.la $(OPENSSL_LIBS)
+
