@@ -388,10 +388,6 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	priv->id = id;
 	priv->forkid = PRIVCTX(ctx)->forkid;
 
-#ifndef _WIN32
-	pthread_mutex_init(&priv->mutex, NULL);
-#endif
-
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
 	slot->removable = (info.flags & CKF_REMOVABLE_DEVICE) ? 1 : 0;
@@ -428,9 +424,6 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 		OPENSSL_free(slot->token);
 	}
 
-#ifndef _WIN32
-	pthread_mutex_destroy(&priv->mutex);
-#endif
 	memset(slot, 0, sizeof(*slot));
 }
 
