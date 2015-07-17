@@ -121,6 +121,17 @@ typedef struct pkcs11_slot_private {
 	UNLOCK(__spriv); \
 	}
 
+#define CHECK_KEY_FORK(key) { \
+	PKCS11_KEY_private *__priv = PRIVKEY(key); \
+	PKCS11_SLOT *__slot = TOKEN2SLOT(__priv->parent); \
+	PKCS11_SLOT_private *__spriv = PRIVSLOT(__slot); \
+	CHECK_SLOT_FORK(__slot); \
+	if (__spriv->forkid != __priv->forkid) { \
+		pkcs11_reload_keys(key); \
+		__priv->forkid = __spriv->forkid; \
+	} \
+	}
+
 typedef struct pkcs11_token_private {
 	PKCS11_SLOT *parent;
 	int nkeys, nprkeys;
@@ -144,6 +155,7 @@ typedef struct pkcs11_key_private {
 	unsigned char id[255];
 	size_t id_len;
 	PKCS11_KEY_ops *ops;
+	unsigned int forkid;
 } PKCS11_KEY_private;
 #define PRIVKEY(key)		((PKCS11_KEY_private *) key->_private)
 #define KEY2SLOT(key)		TOKEN2SLOT(KEY2TOKEN(key))
@@ -202,6 +214,8 @@ extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 			      unsigned int, void *, size_t *);
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 			     unsigned int, BIGNUM **);
+
+extern int pkcs11_reload_keys(PKCS11_KEY * keyin);
 
 #define key_getattr(key, t, p, s) \
 	pkcs11_getattr(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))

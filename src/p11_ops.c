@@ -26,7 +26,7 @@
 
 int
 PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key)
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
 {
 /* signature size is the issue, will assume caller has a big buffer ! */
 /* No padding or other stuff needed, we can cal PKCS11 from here */
@@ -42,7 +42,7 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
 
-	CHECK_SLOT_FORK(slot);
+	CHECK_KEY_FORK(key);
 
 	session = PRIVSLOT(slot)->session;
 
@@ -70,7 +70,7 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 /* Following used for RSA */
 int
 PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key)
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
 {
 	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
@@ -84,7 +84,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
 
-	CHECK_SLOT_FORK(slot);
+	CHECK_KEY_FORK(key);
 
 	sigsize = PKCS11_get_key_size(key);
 
@@ -134,7 +134,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 
 int
 PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
-		   const PKCS11_KEY * key, int padding)
+		   PKCS11_KEY * key, int padding)
 {
 	PKCS11_KEY_private *priv;
 	PKCS11_SLOT *slot;
@@ -157,7 +157,7 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
 
-	CHECK_SLOT_FORK(slot);
+	CHECK_KEY_FORK(key);
 
 	session = PRIVSLOT(slot)->session;
 
@@ -216,7 +216,7 @@ PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 	ctx = KEY2CTX(key);
 	priv = PRIVKEY(key);
 	slot = TOKEN2SLOT(priv->parent);
-	CHECK_SLOT_FORK(slot);
+	CHECK_KEY_FORK(key);
 
 	session = PRIVSLOT(slot)->session;
 	memset(&mechanism, 0, sizeof(mechanism));

@@ -366,9 +366,9 @@ extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 
 /* rsa private key operations */
 extern int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
-	unsigned char *sigret, unsigned int *siglen, const PKCS11_KEY * key);
+	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
 extern int PKCS11_private_encrypt(int flen, const unsigned char *from,
-	unsigned char *to, const PKCS11_KEY * rsa, int padding);
+	unsigned char *to, PKCS11_KEY * rsa, int padding);
 /**
  * Decrypts data using the private key
  * 
