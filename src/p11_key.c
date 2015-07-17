@@ -110,7 +110,7 @@ PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
         if (count < 2)  /* must be at least two key to have a match */
             return NULL;
         for (n = 0; n < count; n++, key++) {
-                kpriv = PRIVKEY(key);
+            kpriv = PRIVKEY(key);
             if (keyin->isPrivate != key->isPrivate
                     && kinpriv->id_len == kpriv->id_len
                     && !memcmp(kinpriv->id, kpriv->id, kinpriv->id_len))
@@ -118,6 +118,51 @@ PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
         }
         return NULL;
 }
+
+/* Reopens the object associated with the key
+ */
+int pkcs11_reload_keys(PKCS11_KEY * keyin)
+{
+        PKCS11_TOKEN_private *tpriv;
+        PKCS11_KEY_private *kinpriv;
+        PKCS11_KEY *key;
+        unsigned int n;
+        long int count;
+        CK_OBJECT_CLASS kclass = CKO_PRIVATE_KEY;;
+        CK_ATTRIBUTE attrs[2];
+        int rv;
+	PKCS11_CTX *ctx;
+	PKCS11_SLOT *slot;
+
+        kinpriv = PRIVKEY(keyin);
+        tpriv = PRIVTOKEN(KEY2TOKEN(keyin));
+        ctx = TOKEN2CTX(KEY2TOKEN(keyin));
+        slot = TOKEN2SLOT(KEY2TOKEN(keyin));
+
+        /* We want to use all the keys, the above only returns count for private */
+        count = tpriv->nkeys;
+
+        for (n = 0; n < count; n++, key++) {
+	    attrs[0].type = CKA_CLASS;
+	    attrs[0].pValue = &kclass;
+	    attrs[0].ulValueLen = sizeof(kclass);
+	    attrs[1].type = CKA_ID;
+	    attrs[1].pValue = kinpriv->id;
+	    attrs[1].ulValueLen = kinpriv->id_len;
+
+	    rv = CRYPTOKI_call(ctx, C_FindObjectsInit(PRIVSLOT(slot)->session, attrs, 2));
+	    CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+
+	    rv = CRYPTOKI_call(ctx, C_FindObjects(PRIVSLOT(slot)->session, &kinpriv->object, 1, &count));
+	    CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+
+	    CRYPTOKI_call(ctx, C_FindObjectsFinal(PRIVSLOT(slot)->session));
+
+	    kinpriv->forkid = _P11_get_forkid();
+        }
+        return 0;
+}
+
 /*
  * Store a private key on the token
  */
@@ -331,6 +376,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	if (pkcs11_getattr_var(token, obj, CKA_ID, kpriv->id, &kpriv->id_len))
 		kpriv->id_len = 0;
 	kpriv->ops = ops;
+	kpriv->forkid = _P11_get_forkid();
 
 	if (ret)
 		*ret = key;
