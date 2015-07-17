@@ -141,16 +141,6 @@ if test "${WIN32}" != "yes"; then
 	)
 fi
 
-if test "${WIN32}" != yes;then
-	AC_CHECK_FUNCS([__register_atfork pthread_mutex_lock],,)
-	if test "$ac_cv_func_pthread_mutex_lock" != "yes";then
-		OLDLIBS=$LIBS
-		AC_CHECK_LIB(pthread, pthread_mutex_lock, [], AC_ERROR([Cannot find pthread_mutex_lock() function]))
-		LIBS=$OLDLIBS
-		PTHREAD_FLAGS="-pthread"
-	fi
-fi
-
 PKG_CHECK_MODULES(
 	[OPENSSL],
 	[libcrypto >= 0.9.7],
