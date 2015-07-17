@@ -1,10 +1,9 @@
 #!/bin/sh
 
 # Copyright (C) 2013 Nikos Mavrogiannopoulos
+# Copyright (C) 2015 Red Hat, Inc.
 #
-# This file is part of GnuTLS.
-#
-# GnuTLS is free software; you can redistribute it and/or modify it
+# This is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation; either version 3 of the License, or (at
 # your option) any later version.
@@ -23,7 +22,7 @@ file_dir="${srcdir:-./}"
 
 . ${srcdir}/common.sh
 
-./auth $ADDITIONAL_PARAM $PIN
+./fork-test $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
 	exit 1;
 fi

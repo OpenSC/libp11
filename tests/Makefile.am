@@ -1,4 +1,4 @@
-EXTRA_DIST = cert.der key.der
+EXTRA_DIST = cert.der key.der common.sh
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
@@ -10,8 +10,8 @@ LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
 auth_SOURCES = ../examples/auth.c
 
-check_PROGRAMS = auth
-dist_check_SCRIPTS = testpkcs11.softhsm
+check_PROGRAMS = auth fork-test
+dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm
 
 TESTS = $(dist_check_SCRIPTS)
 
