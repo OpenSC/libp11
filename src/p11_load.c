@@ -89,6 +89,8 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	if (priv->init_args != NULL) {
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
+		/* Unconditionally say using OS locking primitives is OK */
+		args->flags |= CKF_OS_LOCKING_OK;
 		args->pReserved = priv->init_args;
 	}
 	rv = priv->method->C_Initialize(args);
