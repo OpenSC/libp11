@@ -139,6 +139,7 @@ if test "${WIN32}" != "yes"; then
 		,
 		[AC_MSG_ERROR([libdl required])]
 	)
+	AC_CHECK_FUNCS([__register_atfork],,)
 fi
 
 PKG_CHECK_MODULES(
