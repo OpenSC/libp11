@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 
-dist_doc_DATA = README
+dist_doc_DATA = 
 dist_noinst_DATA = $(srcdir)/doxygen-footer.html $(srcdir)/*.gif
 
 if ENABLE_API_DOC

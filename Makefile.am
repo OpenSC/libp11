@@ -12,7 +12,7 @@ MAINTAINERCLEANFILES = \
 	$(srcdir)/m4/ltversion.m4 $(srcdir)/m4/lt~obsolete.m4 \
 	$(srcdir)/m4/ltoptions.m4 \
 	$(srcdir)/packaged
-EXTRA_DIST = .gitignore Makefile.mak winconfig.h
+EXTRA_DIST = .gitignore Makefile.mak winconfig.h README.md
 
 dist_noinst_DATA = COPYING bootstrap
 
