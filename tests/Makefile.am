@@ -9,8 +9,9 @@ AM_LDFLAGS = -no-install
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
 auth_SOURCES = ../examples/auth.c
+rawrsasign_SOURCES = ../examples/rawrsasign.c
 
-check_PROGRAMS = auth fork-test
+check_PROGRAMS = auth fork-test rawrsasign
 dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm
 
 TESTS = $(dist_check_SCRIPTS)

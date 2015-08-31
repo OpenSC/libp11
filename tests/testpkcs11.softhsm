@@ -28,6 +28,11 @@ if test $? != 0;then
 	exit 1;
 fi
 
+./rawrsasign $ADDITIONAL_PARAM $PIN
+if test $? != 0;then
+	exit 1;
+fi
+
 rm -rf "$outdir"
 
 exit 0
