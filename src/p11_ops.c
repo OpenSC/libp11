@@ -148,9 +148,27 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	if (key == NULL)
 		return -1;
 
-	if (padding != RSA_PKCS1_PADDING) {
-		printf("pkcs11 engine: only RSA_PKCS1_PADDING allowed so far\n");
-		return -1;
+	sigsize=PKCS11_get_key_size(key);
+	ck_sigsize=sigsize;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+
+	switch (padding) {
+
+		case RSA_NO_PADDING:
+			mechanism.mechanism = CKM_RSA_X_509;
+			break;
+
+		case RSA_PKCS1_PADDING:
+			if ((flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
+				return -1; /* the size is wrong */
+			}
+			mechanism.mechanism = CKM_RSA_PKCS;
+			break;
+
+		default:
+			printf("pkcs11 engine: only RSA_NO_PADDING or RSA_PKCS1_PADDING allowed so far\n");
+			return -1;
 	}
 
 	ctx = KEY2CTX(key);
@@ -160,16 +178,6 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	CHECK_KEY_FORK(key);
 
 	session = PRIVSLOT(slot)->session;
-
-	sigsize=PKCS11_get_key_size(key);
-	ck_sigsize=sigsize;
-
-	if ((flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
-		return -1; /* the size is wrong */
-	}
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_RSA_PKCS;
 
 	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
 	 * by OpenSSL). The library assumes that the memory passed
