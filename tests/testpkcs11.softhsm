@@ -25,11 +25,13 @@ file_dir="${srcdir:-./}"
 
 ./auth $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
+	echo "Basic PKCS #11 test test failed"
 	exit 1;
 fi
 
 ./rawrsasign $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
+	echo "Raw RSA signature test failed"
 	exit 1;
 fi
 
