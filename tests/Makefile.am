@@ -3,6 +3,7 @@ EXTRA_DIST = cert.der key.der common.sh
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/ \
+	-I$(top_srcdir)/src \
 	-I$(top_builddir)/
 
 AM_LDFLAGS = -no-install
