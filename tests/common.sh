@@ -25,7 +25,11 @@ else
 	if test -f /usr/lib/softhsm/libsofthsm.so; then
 		ADDITIONAL_PARAM="/usr/lib/softhsm/libsofthsm.so"
 	else
-		ADDITIONAL_PARAM="/usr/lib64/softhsm/libsofthsm.so"
+		if test -f /usr/lib/libsofthsm.so; then
+			ADDITIONAL_PARAM="/usr/lib/libsofthsm.so"
+		else
+			ADDITIONAL_PARAM="/usr/lib64/softhsm/libsofthsm.so"
+		fi
 	fi
 fi
 
