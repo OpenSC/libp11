@@ -19,19 +19,17 @@
 
 mkdir -p $outdir
 
-if test -f /usr/lib64/pkcs11/libsofthsm2.so; then
-	ADDITIONAL_PARAM="/usr/lib64/pkcs11/libsofthsm2.so"
-else
-	if test -f /usr/lib/softhsm/libsofthsm.so; then
-		ADDITIONAL_PARAM="/usr/lib/softhsm/libsofthsm.so"
+for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
+	if test -f "$i/libsofthsm2.so"; then
+		ADDITIONAL_PARAM="$i/libsofthsm2.so"
+		break
 	else
-		if test -f /usr/lib/libsofthsm.so; then
-			ADDITIONAL_PARAM="/usr/lib/libsofthsm.so"
-		else
-			ADDITIONAL_PARAM="/usr/lib64/softhsm/libsofthsm.so"
+		if test -f "$i/libsofthsm.so";then
+			ADDITIONAL_PARAM="$i/libsofthsm.so"
+			break
 		fi
 	fi
-fi
+done
 
 if ! test -x /usr/bin/pkcs11-tool;then
 	exit 77
