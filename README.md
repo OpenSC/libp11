@@ -1,3 +1,9 @@
+Build state
+===========
+
+[![Build Status](https://travis-ci.org/OpenSC/libp11.png)](https://travis-ci.org/OpenSC/libp11)
+
+
 libp11 README -- Information for developers
 ===========================================
 

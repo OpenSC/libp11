@@ -1,0 +1,11 @@
+language: c
+compiler:
+  - gcc
+  - clang
+before_script:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y softhsm libsofthsm-dev opensc
+  - touch config.rpath && autoreconf -fvi && ./configure
+
+script: make && make check && make dist
+
