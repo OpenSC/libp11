@@ -40,7 +40,6 @@ static CK_ATTRIBUTE key_search_attrs[] = {
 	{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
 };
 #define numof(arr)	(sizeof(arr)/sizeof((arr)[0]))
-#define MAX_VALUE_LEN     200
 
 /*
  * Enumerate all keys on the card
