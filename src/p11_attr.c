@@ -31,9 +31,6 @@
 
 #include "libp11-int.h"
 
-static int pkcs11_getattr_int(PKCS11_CTX *, CK_SESSION_HANDLE,
-			      CK_OBJECT_HANDLE, CK_ATTRIBUTE_TYPE, void *, size_t *);
-
 /*
  * Query pkcs11 attributes
  */
@@ -86,11 +83,23 @@ int
 pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 		  unsigned int type, BIGNUM ** bn)
 {
-	CK_BYTE binary[4196 / 8];
-	size_t size = sizeof(binary);
+	CK_BYTE *binary;
+	size_t size;
+	int ret;
 
-	if (pkcs11_getattr_var(token, object, type, binary, &size))
+	size = 0;
+	if (pkcs11_getattr_var(token, object, type, NULL, &size) || size == 0)
 		return -1;
+
+	binary = calloc(1, size);
+	if (binary == NULL)
+		return -1;
+
+	if (pkcs11_getattr_var(token, object, type, binary, &size)) {
+		ret = -1;
+		goto cleanup;
+	}
+
 	/*
 	 * @ALON: invalid object,
 	 * not sure it will survice the ulValueLen->size_t and keep sign at all platforms
@@ -98,10 +107,15 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
 			  pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
-		return -1;
+		ret = -1;
+		goto cleanup;
 	}
 	*bn = BN_bin2bn(binary, size, *bn);
-	return *bn ? 0 : -1;
+	ret = *bn ? 0 : -1;
+
+ cleanup:
+ 	free(binary);
+ 	return ret;
 }
 
 /*
