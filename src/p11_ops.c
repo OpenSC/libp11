@@ -75,14 +75,9 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
 	int sigsize;
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
 
 	if (key == NULL)
 		return 0;
-
-	priv = PRIVKEY(key);
-	slot = TOKEN2SLOT(priv->parent);
 
 	CHECK_KEY_FORK(key);
 

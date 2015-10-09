@@ -115,7 +115,6 @@ int PKCS11_CTX_reload(PKCS11_CTX * ctx)
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
 	CK_C_INITIALIZE_ARGS *args = NULL;
-	CK_INFO ck_info;
 	int rv;
 
 	/* Tell the PKCS11 to initialize itself */

@@ -225,7 +225,6 @@ static int pkcs11_ecdsa_sign_setup(EC_KEY *ec, BN_CTX *ctx_in,
 static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 			const BIGNUM *inv, const BIGNUM *r, EC_KEY * ec)
 {
-	int type;
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;

@@ -98,7 +98,6 @@ PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
         PKCS11_KEY_private *kinpriv;
         PKCS11_KEY_private *kpriv;
         PKCS11_KEY *key;
-        int isprivate;
         unsigned int n, count;
 
         kinpriv = PRIVKEY(keyin);
