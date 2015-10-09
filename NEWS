@@ -1,6 +1,6 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.3.0; 2015-xx-xx; Nikos Mavrogiannopoulos
+New in 0.3.0; 2015-10-09; Nikos Mavrogiannopoulos
 * Added small test suite based on softhsm (run on make check)
 * Memory leak fixes (Christian Heimes)
 * On module initialization tell the module to that the OS locking
