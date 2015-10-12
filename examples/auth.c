@@ -206,7 +206,6 @@ int main(int argc, char *argv[])
 
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
-	ERR_remove_state(0);
 
 	printf("authentication successfull.\n");
 	return 0;
