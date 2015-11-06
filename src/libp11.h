@@ -208,6 +208,17 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
 /**
+ * Check if user is already authenticated to a card
+ *
+ * @param slot slot returned by PKCS11_find_token()
+ * @param so kind of login to check: CKU_SO if != 0, otherwise CKU_USER
+ * @param res pointer to return value: 1 if logged in, 0 if not logged in
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
+
+/**
  * Authenticate to the card
  *
  * @param slot slot returned by PKCS11_find_token()
@@ -429,6 +440,7 @@ extern void ERR_load_PKCS11_strings(void);
 #define PKCS11_F_PKCS11_GETATTR			40
 #define PKCS11_F_PKCS11_EC_KEY_SIGN			41
 #define PKCS11_F_PKCS11_EC_KEY_VERIFY		42
+#define PKCS11_F_PKCS11_GETSESSIONINFO		43
 
 #define PKCS11_ERR_BASE				1024
 #define PKCS11_LOAD_MODULE_ERROR		(PKCS11_ERR_BASE+1)
