@@ -158,6 +158,38 @@ int PKCS11_reopen_session(PKCS11_SLOT * slot)
 }
 
 /*
+ * Determines if user is authenticated with token
+ */
+int PKCS11_is_logged_in(PKCS11_SLOT * slot, int so, int * res)
+{
+	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
+	PKCS11_CTX *ctx = priv->parent;
+	CK_SESSION_INFO session_info;
+	int rv;
+
+	if (priv->loggedIn) {
+		*res = 1;
+		return 0;
+	}
+	if (!priv->haveSession) {
+		/* SO gets a r/w session by default,
+		 * user gets a r/o session by default. */
+		if (PKCS11_open_session(slot, so))
+			return -1;
+	}
+
+	rv = CRYPTOKI_call(ctx, C_GetSessionInfo(priv->session,
+									&session_info));
+    CRYPTOKI_checkerr(PKCS11_F_PKCS11_GETSESSIONINFO, rv);
+	if (so) {
+		*res = session_info.state == CKS_RW_SO_FUNCTIONS;
+	} else {
+		*res = session_info.state == CKS_RO_USER_FUNCTIONS || session_info.state == CKS_RW_USER_FUNCTIONS;
+	}
+	return 0;
+}
+
+/*
  * Authenticate with the card. relogin should be set if we automatically
  * relogin after a fork.
  */

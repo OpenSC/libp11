@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 	unsigned char *random = NULL, *signature = NULL;
 
 	char password[20];
-	int rc = 0, fd;
+	int rc = 0, fd, logged_in;
 	unsigned int nslots, ncerts, siglen;
 
 	if (argc < 2) {
@@ -107,11 +107,33 @@ int main(int argc, char *argv[])
 	}
 
  loggedin:
+	/* check if user is logged in */
+	rc = PKCS11_is_logged_in(slot, 0, &logged_in);
+	if (rc != 0) {
+		fprintf(stderr, "PKCS11_is_logged_in failed\n");
+		goto failed;
+	}
+	if (logged_in) {
+		fprintf(stderr, "PKCS11_is_logged_in says user is logged in, expected to be not logged in\n");
+		goto failed;
+	}
+
 	/* perform pkcs #11 login */
 	rc = PKCS11_login(slot, 0, password);
 	memset(password, 0, strlen(password));
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_login failed\n");
+		goto failed;
+	}
+
+	/* check if user is logged in */
+	rc = PKCS11_is_logged_in(slot, 0, &logged_in);
+	if (rc != 0) {
+		fprintf(stderr, "PKCS11_is_logged_in failed\n");
+		goto failed;
+	}
+	if (!logged_in) {
+		fprintf(stderr, "PKCS11_is_logged_in says user is not logged in, expected to be logged in\n");
 		goto failed;
 	}
 

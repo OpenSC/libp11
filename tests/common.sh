@@ -19,7 +19,7 @@
 
 mkdir -p $outdir
 
-for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
+for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/local/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
 	if test -f "$i/libsofthsm2.so"; then
 		ADDITIONAL_PARAM="$i/libsofthsm2.so"
 		break
@@ -31,13 +31,18 @@ for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /u
 	fi
 done
 
-if ! test -x /usr/bin/pkcs11-tool;then
+if (! test -x /usr/bin/pkcs11-tool && ! test -x /usr/local/bin/pkcs11-tool);then
 	exit 77
 fi
 
 init_card () {
 	PIN="$1"
 	PUK="$2"
+
+	if test -x "/usr/local/bin/softhsm2-util"; then
+		export SOFTHSM2_CONF="$outdir/softhsm-testpkcs11.config"
+		SOFTHSM_TOOL="/usr/local/bin/softhsm2-util"
+	fi
 
 	if test -x "/usr/bin/softhsm2-util"; then
 		export SOFTHSM2_CONF="$outdir/softhsm-testpkcs11.config"
