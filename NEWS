@@ -1,5 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.3.1; unreleased;
+* Added PKCS11_is_logged_in to API (Mikhail Denisenko)
+
 New in 0.3.0; 2015-10-09; Nikos Mavrogiannopoulos
 * Added small test suite based on softhsm (run on make check)
 * Memory leak fixes (Christian Heimes)
