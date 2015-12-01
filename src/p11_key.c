@@ -126,7 +126,7 @@ int pkcs11_reload_keys(PKCS11_KEY * keyin)
         PKCS11_KEY *key;
         unsigned int n;
         long int count;
-        CK_OBJECT_CLASS kclass = CKO_PRIVATE_KEY;;
+        CK_OBJECT_CLASS kclass = CKO_PRIVATE_KEY;
         CK_ATTRIBUTE attrs[2];
         int rv;
 	PKCS11_CTX *ctx;
