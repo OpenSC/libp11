@@ -66,7 +66,7 @@ typedef struct pkcs11_slot_private {
 	int prev_rw; /* the rw status the session was open */
 
 	/* options used in last PKCS11_login */
-	char prev_pin[64];
+	char *prev_pin;
 	int prev_so;
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) (slot->_private))
