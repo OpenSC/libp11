@@ -23,13 +23,13 @@
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 256
 
+static void do_fork();
+
 int main(int argc, char *argv[])
 {
 	PKCS11_CTX *ctx;
 	PKCS11_SLOT *slots, *slot;
 	PKCS11_CERT *certs;
-	pid_t pid;
-	int status = 0;
 	
 	PKCS11_KEY *authkey;
 	PKCS11_CERT *authcert;
@@ -46,9 +46,11 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	do_fork();
 	ctx = PKCS11_CTX_new();
 
 	/* load pkcs #11 module */
+	do_fork();
 	rc = PKCS11_CTX_load(ctx, argv[1]);
 	if (rc) {
 		fprintf(stderr, "loading pkcs11 engine failed: %s\n",
@@ -58,6 +60,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* get information on all slots */
+	do_fork();
 	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
 	if (rc < 0) {
 		fprintf(stderr, "no slots available\n");
@@ -66,6 +69,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* get first slot with a token */
+	do_fork();
 	slot = PKCS11_find_token(ctx, slots, nslots);
 	if (!slot || !slot->token) {
 		fprintf(stderr, "no token available\n");
@@ -89,8 +93,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
- loggedin:
+loggedin:
 	/* perform pkcs #11 login */
+	do_fork();
 	rc = PKCS11_login(slot, 0, password);
 	memset(password, 0, strlen(password));
 	if (rc != 0) {
@@ -99,6 +104,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* get all certs */
+	do_fork();
 	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
 	if (rc) {
 		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
@@ -134,13 +140,14 @@ int main(int argc, char *argv[])
 
 	if (rc < RANDOM_SIZE) {
 		fprintf(stderr, "fatal: read returned less than %d<%d bytes\n",
-		       rc, RANDOM_SIZE);
+			rc, RANDOM_SIZE);
 		close(fd);
 		goto failed;
 	}
 
 	close(fd);
 
+	do_fork();
 	authkey = PKCS11_find_key(authcert);
 	if (!authkey) {
 		fprintf(stderr, "no key matching certificate available\n");
@@ -153,21 +160,10 @@ int main(int argc, char *argv[])
 	if (!signature)
 		goto failed;
 
-	/* Do the operation after a fork */
-	pid = fork();
-	if (pid == -1)
-		exit(5);
-
-	if (pid) {
-		waitpid(pid, &status, 0);
-		if (WIFEXITED(status))
-			return WEXITSTATUS(status);
-		return 2;
-	}
-
 	/* do the operations in child */
+	do_fork();
 	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE, signature, &siglen,
-			 authkey);
+			authkey);
 	if (rc != 1) {
 		fprintf(stderr, "fatal: pkcs11_sign failed\n");
 		goto failed;
@@ -196,8 +192,11 @@ int main(int argc, char *argv[])
 	if (signature != NULL)
 		free(signature);
 
+	do_fork();
 	PKCS11_release_all_slots(ctx, slots, nslots);
+	do_fork();
 	PKCS11_CTX_unload(ctx);
+	do_fork();
 	PKCS11_CTX_free(ctx);
 
 	CRYPTO_cleanup_all_ex_data();
@@ -206,19 +205,38 @@ int main(int argc, char *argv[])
 	printf("authentication successfull.\n");
 	return 0;
 
-
-      failed:
+failed:
 	ERR_print_errors_fp(stderr);
-      notoken:
+
+notoken:
+	do_fork();
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
-      noslots:
+noslots:
+	do_fork();
 	PKCS11_CTX_unload(ctx);
 
-      nolib:
+nolib:
+	do_fork();
 	PKCS11_CTX_free(ctx);
-	
 
 	printf("authentication failed.\n");
 	return 1;
+}
+
+static void do_fork()
+{
+	int status = 0;
+	pid_t pid = fork();
+	switch (pid) {
+	case -1: /* failed */
+		exit(5);
+	case 0: /* child */
+		return;
+	default: /* parent */
+		waitpid(pid, &status, 0);
+		if (WIFEXITED(status))
+			exit(WEXITSTATUS(status));
+		exit(2);
+	}
 }
