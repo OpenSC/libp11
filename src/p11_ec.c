@@ -229,7 +229,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;
 	int siglen;
-	int nLen = 48; /* HACK */;
+	int nLen = 48; /* HACK */
 	int rv;
 
 	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, 0);
