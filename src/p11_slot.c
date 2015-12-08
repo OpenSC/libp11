@@ -228,8 +228,13 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
 	priv->loggedIn = 1;
 
-	if (priv->prev_pin != pin)
-		snprintf(priv->prev_pin, sizeof(priv->prev_pin), "%s", pin);
+	if (priv->prev_pin != pin) {
+		if (priv->prev_pin) {
+			OPENSSL_cleanse(priv->prev_pin, strlen(priv->prev_pin));
+			OPENSSL_free(priv->prev_pin);
+		}
+		priv->prev_pin = BUF_strdup(pin);
+	}
 	priv->prev_so = so;
 	return 0;
 }
@@ -419,6 +424,9 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	priv->parent = ctx;
 	priv->id = id;
 	priv->forkid = PRIVCTX(ctx)->forkid;
+	priv->prev_rw = 0;
+	priv->prev_pin = NULL;
+	priv->prev_so = 0;
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
@@ -445,7 +453,10 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 
 	if (priv) {
-		OPENSSL_cleanse(priv->prev_pin, sizeof(priv->prev_pin));
+		if (priv->prev_pin) {
+			OPENSSL_cleanse(priv->prev_pin, strlen(priv->prev_pin));
+			OPENSSL_free(priv->prev_pin);
+		}
 		CRYPTOKI_call(ctx, C_CloseAllSessions(priv->id));
 	}
 	OPENSSL_free(slot->_private);
