@@ -162,10 +162,13 @@ typedef struct pkcs11_cert_private {
  * Internal functions
  */
 #define CRYPTOKI_checkerr(f, rv) \
-	do { if (rv) { \
-		PKCS11err(f, pkcs11_map_err(rv)); \
-		return -1; \
-	} } while (0)
+	do { \
+		if (rv) { \
+			PKCS11err(f, pkcs11_map_err(rv)); \
+			return -1; \
+		} \
+		ERR_clear_error(); \
+	} while (0)
 #define CRYPTOKI_call(ctx, func_and_args) \
 	PRIVCTX(ctx)->method->func_and_args
 
