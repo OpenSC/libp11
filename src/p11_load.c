@@ -129,7 +129,8 @@ int PKCS11_CTX_reload(PKCS11_CTX * ctx)
 		return -1;
 	}
 
-	return 0;
+	/* Reinitialize the PKCS11 internal slot table */
+	return pkcs11_enumerate_slots(ctx, NULL, NULL);
 }
 
 /*
