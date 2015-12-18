@@ -24,6 +24,7 @@
 #define MAX_SIGSIZE 256
 
 static void do_fork();
+static void error_queue(const char *name);
 
 int main(int argc, char *argv[])
 {
@@ -42,16 +43,20 @@ int main(int argc, char *argv[])
 	unsigned int nslots, ncerts, siglen;
 
 	if (argc < 2) {
-		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so [PIN]\n");
+		fprintf(stderr,
+			"usage: %s /usr/lib/opensc-pkcs11.so [PIN]\n",
+			argv[0]);
 		return 1;
 	}
 
 	do_fork();
 	ctx = PKCS11_CTX_new();
+	error_queue("PKCS11_CTX_new");
 
 	/* load pkcs #11 module */
 	do_fork();
 	rc = PKCS11_CTX_load(ctx, argv[1]);
+	error_queue("PKCS11_CTX_load");
 	if (rc) {
 		fprintf(stderr, "loading pkcs11 engine failed: %s\n",
 			ERR_reason_error_string(ERR_get_error()));
@@ -62,6 +67,7 @@ int main(int argc, char *argv[])
 	/* get information on all slots */
 	do_fork();
 	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
+	error_queue("PKCS11_enumerate_slots");
 	if (rc < 0) {
 		fprintf(stderr, "no slots available\n");
 		rc = 2;
@@ -71,6 +77,7 @@ int main(int argc, char *argv[])
 	/* get first slot with a token */
 	do_fork();
 	slot = PKCS11_find_token(ctx, slots, nslots);
+	error_queue("PKCS11_find_token");
 	if (!slot || !slot->token) {
 		fprintf(stderr, "no token available\n");
 		rc = 3;
@@ -97,6 +104,7 @@ loggedin:
 	/* perform pkcs #11 login */
 	do_fork();
 	rc = PKCS11_login(slot, 0, password);
+	error_queue("PKCS11_login");
 	memset(password, 0, strlen(password));
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_login failed\n");
@@ -106,6 +114,7 @@ loggedin:
 	/* get all certs */
 	do_fork();
 	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
+	error_queue("PKCS11_enumerate_certs");
 	if (rc) {
 		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
 		goto failed;
@@ -149,6 +158,7 @@ loggedin:
 
 	do_fork();
 	authkey = PKCS11_find_key(authcert);
+	error_queue("PKCS11_find_key");
 	if (!authkey) {
 		fprintf(stderr, "no key matching certificate available\n");
 		goto failed;
@@ -164,6 +174,7 @@ loggedin:
 	do_fork();
 	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE, signature, &siglen,
 			authkey);
+	error_queue("PKCS11_sign");
 	if (rc != 1) {
 		fprintf(stderr, "fatal: pkcs11_sign failed\n");
 		goto failed;
@@ -192,11 +203,8 @@ loggedin:
 	if (signature != NULL)
 		free(signature);
 
-	do_fork();
 	PKCS11_release_all_slots(ctx, slots, nslots);
-	do_fork();
 	PKCS11_CTX_unload(ctx);
-	do_fork();
 	PKCS11_CTX_free(ctx);
 
 	CRYPTO_cleanup_all_ex_data();
@@ -206,18 +214,14 @@ loggedin:
 	return 0;
 
 failed:
-	ERR_print_errors_fp(stderr);
 
 notoken:
-	do_fork();
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
 noslots:
-	do_fork();
 	PKCS11_CTX_unload(ctx);
 
 nolib:
-	do_fork();
 	PKCS11_CTX_free(ctx);
 
 	printf("authentication failed.\n");
@@ -238,5 +242,13 @@ static void do_fork()
 		if (WIFEXITED(status))
 			exit(WEXITSTATUS(status));
 		exit(2);
+	}
+}
+
+static void error_queue(const char *name)
+{
+	if (ERR_peek_last_error()) {
+		fprintf(stderr, "%s generated errors:\n", name);
+		ERR_print_errors_fp(stderr);
 	}
 }
