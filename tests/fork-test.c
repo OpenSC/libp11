@@ -234,6 +234,7 @@ static void do_fork()
 	pid_t pid = fork();
 	switch (pid) {
 	case -1: /* failed */
+		perror("fork");
 		exit(5);
 	case 0: /* child */
 		return;
@@ -241,6 +242,11 @@ static void do_fork()
 		waitpid(pid, &status, 0);
 		if (WIFEXITED(status))
 			exit(WEXITSTATUS(status));
+		if (WIFSIGNALED(status))
+			fprintf(stderr, "Child terminated by signal #%d\n",
+				WTERMSIG(status));
+		else
+			perror("waitpid");
 		exit(2);
 	}
 }
