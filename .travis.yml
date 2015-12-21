@@ -3,6 +3,7 @@ compiler:
   - gcc
   - clang
 before_script:
+  - sudo apt-add-repository -y ppa:pkg-opendnssec/ppa
   - sudo apt-get update -qq
   - sudo apt-get install -y softhsm libsofthsm-dev opensc
   - touch config.rpath && autoreconf -fvi && ./configure
