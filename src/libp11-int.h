@@ -62,6 +62,9 @@ typedef struct pkcs11_slot_private {
 	/* options used in last PKCS11_login */
 	char *prev_pin;
 	int prev_so;
+
+	/* per-slot lock */
+	int lockid;
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) (slot->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)

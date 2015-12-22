@@ -7,9 +7,15 @@ Build state
 libp11 README -- Information for developers
 ===========================================
 
-This is a higher than PKCS #11 library to access PKCS #11 objects.
-It is designed to integrate with applications that use openssl. Note, however,
-that the libp11 library is not thread safe.
+This library provides a higher-level (compared to the PKCS#11 library)
+interface to access PKCS#11 objects.  It is designed to integrate with
+applications that use OpenSSL.
+
+Thread-safety requires dynamic callbacks to be registered by the calling
+application with the following OpenSSL functions:
+* CRYPTO_set_dynlock_create_callback
+* CRYPTO_set_dynlock_destroy_callback
+* CRYPTO_set_dynlock_lock_callback
 
 The wiki page for this project is at https://github.com/OpenSC/libp11/wiki
 and includes a bug tracker and source browser.
