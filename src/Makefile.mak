@@ -1,8 +1,6 @@
-OPENSSL_INC = /IC:\openssl\include
-OPENSSL_LIB = C:\openssl\out32dll\libeay32.lib
+TOPDIR = ..
 
-COPTS = /Zi /MD /nologo /I..\ /I. $(OPENSSL_INC) /D_WIN32_WINNT=0x0400 /DWIN32 /DWIN32_LEAN_AND_MEAN
-LINKFLAGS = /DEBUG /NOLOGO /INCREMENTAL:NO /MACHINE:IX86
+!INCLUDE $(TOPDIR)\Make.rules.mak
 
 TARGET                  = libp11.dll
 
@@ -16,6 +14,8 @@ RSC_PROJ=/l 0x809 /r /fo"versioninfo.res"
 versioninfo.res: versioninfo.rc
 	rc $(RSC_PROJ) versioninfo.rc
  
+versioninfo.rc: versioninfo.rc.in
+    @copy /y versioninfo.rc.in versioninfo.rc
 
 .c.obj::
 	cl $(COPTS) /c $<
