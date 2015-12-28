@@ -42,8 +42,6 @@ pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
 	CK_ATTRIBUTE templ;
 	int rv;
 
-	CHECK_FORK(ctx);
-
 	templ.type = type;
 	templ.pValue = value;
 	templ.ulValueLen = *size;
