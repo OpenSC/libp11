@@ -2,6 +2,8 @@ NEWS for Libp11 -- History of user visible changes
 
 New in 0.3.1; unreleased;
 * Added PKCS11_is_logged_in to API (Mikhail Denisenko)
+* Fixes in reinitialization after fork; addresses #39
+  (Michał Trojnara)
 * MSVC build improvements (Michał Trojnara)
 
 New in 0.3.0; 2015-10-09; Nikos Mavrogiannopoulos
