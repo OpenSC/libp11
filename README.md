@@ -2,7 +2,7 @@ Build state
 ===========
 
 [![Build Status](https://travis-ci.org/OpenSC/libp11.png)](https://travis-ci.org/OpenSC/libp11)
-
+[![Build status](https://ci.appveyor.com/api/projects/status/kmbu8nex5ogecoiq?svg=true)](https://ci.appveyor.com/project/LudovicRousseau/libp11)
 
 libp11 README -- Information for developers
 ===========================================
