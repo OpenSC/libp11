@@ -42,13 +42,18 @@ PKCS11_get_slotid_from_slot(PKCS11_SLOT *slot)
 int
 PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *countp)
 {
+	CHECK_FORK(ctx);
+	return pkcs11_enumerate_slots(ctx, slotp, countp);
+}
+
+int
+pkcs11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *countp)
+{
 	PKCS11_CTX_private *priv;
 	CK_SLOT_ID *slotid;
 	CK_ULONG nslots, n;
 	PKCS11_SLOT *slots;
 	int rv;
-
-	CHECK_FORK(ctx);
 
 	priv = PRIVCTX(ctx);
 
@@ -72,8 +77,12 @@ PKCS11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 		}
 	}
 
-	*slotp = slots;
-	*countp = nslots;
+	if (slotp)
+		*slotp = slots;
+	else
+		OPENSSL_free(slots);
+	if (countp)
+		*countp = nslots;
 	OPENSSL_free(slotid);
 	return 0;
 }
