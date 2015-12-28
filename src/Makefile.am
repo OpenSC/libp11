@@ -1,7 +1,9 @@
+include $(top_srcdir)/ltrc.inc
+
 MAINTAINERCLEANFILES = \
 	$(srcdir)/Makefile.in $(srcdir)/versioninfo.rc
 CLEANFILES = libp11.pc
-EXTRA_DIST = Makefile.mak
+EXTRA_DIST = Makefile.mak versioninfo.rc.in
 
 noinst_HEADERS= libp11-int.h pkcs11.h
 include_HEADERS= libp11.h
