@@ -375,6 +375,10 @@ extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert);
 
+/* ec private key operations */
+extern int PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
+
 /* rsa private key operations */
 extern int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);

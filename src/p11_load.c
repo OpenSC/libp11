@@ -57,9 +57,9 @@ void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 	/* Free previously duplicated string */
 	if (priv->init_args) {
-		free(priv->init_args);
+		OPENSSL_free(priv->init_args);
 	}
-	priv->init_args = init_args ? strdup(init_args) : NULL;
+	priv->init_args = init_args ? BUF_strdup(init_args) : NULL;
 }
 
 /*
@@ -162,7 +162,7 @@ void PKCS11_CTX_free(PKCS11_CTX * ctx)
 	ERR_remove_state(0);
 	*/
 	if (priv->init_args) {
-		free(priv->init_args);
+		OPENSSL_free(priv->init_args);
 	}
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);

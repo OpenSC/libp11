@@ -123,9 +123,7 @@ int pkcs11_reload_keys(PKCS11_KEY * keyin)
 {
         PKCS11_TOKEN_private *tpriv;
         PKCS11_KEY_private *kinpriv;
-        PKCS11_KEY *key;
-        unsigned int n;
-        long int count;
+        unsigned long count, n;
         CK_OBJECT_CLASS kclass = CKO_PRIVATE_KEY;
         CK_ATTRIBUTE attrs[2];
         int rv;
@@ -140,7 +138,7 @@ int pkcs11_reload_keys(PKCS11_KEY * keyin)
         /* We want to use all the keys, the above only returns count for private */
         count = tpriv->nkeys;
 
-        for (n = 0; n < count; n++, key++) {
+        for (n = 0; n < count; n++) {
 	    attrs[0].type = CKA_CLASS;
 	    attrs[0].pValue = &kclass;
 	    attrs[0].ulValueLen = sizeof(kclass);

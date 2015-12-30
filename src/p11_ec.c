@@ -103,7 +103,6 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	CK_BBOOL sensitive, extractable;
 	EC_KEY * ec = NULL;
 	CK_RV ckrv;
-	int rv;
 	size_t ec_paramslen = 0;
 	CK_BYTE * ec_params = NULL;
 	size_t ec_pointlen = 0;
@@ -228,7 +227,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;
-	int siglen;
+	unsigned int siglen;
 	int nLen = 48; /* HACK */
 	int rv;
 
@@ -238,7 +237,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 
 	siglen = sizeof(sigret);
 
-	rv = PKCS11_ecdsa_sign(dgst,dlen,sigret,&siglen, key);
+	rv = PKCS11_ecdsa_sign(dgst, dlen, sigret, &siglen, key);
 	nLen = siglen / 2;
 	if (rv > 0) {
 		sig = ECDSA_SIG_new();
@@ -262,7 +261,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
     if (ops == NULL) {
-	ops = ECDSA_METHOD_new(ECDSA_OpenSSL());
+	ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
 	ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
 	ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
     }

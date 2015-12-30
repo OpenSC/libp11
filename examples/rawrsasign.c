@@ -123,7 +123,8 @@ int main(int argc, char *argv[])
 
         /* Read the password. */
         printf("Password for token %.32s: ", slot->token->label);
-        fgets(password, sizeof(password), stdin);
+        if (!fgets(password, sizeof(password), stdin))
+            END(1);
 
         /* Restore terminal. */
         (void)tcsetattr(0, TCSAFLUSH, &old);
