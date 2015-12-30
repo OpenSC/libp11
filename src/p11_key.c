@@ -24,6 +24,8 @@
 #define strncasecmp strnicmp
 #endif
 
+static int verbose = 0;
+
 static int pkcs11_find_keys(PKCS11_TOKEN *, unsigned int);
 static int pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 			   CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
@@ -63,8 +65,27 @@ PKCS11_enumerate_keys(PKCS11_TOKEN * token, PKCS11_KEY ** keyp, unsigned int *co
 		}
 	}
 	*keyp = priv->keys;
-	*countp = priv->nprkeys;
+	*countp = priv->nkeys;
 	return 0;
+}
+
+int
+PKCS11_enumerate_pubkeys(PKCS11_TOKEN * token, PKCS11_KEY ** keyp, unsigned int *countp)
+{
+        PKCS11_TOKEN_private *priv = PRIVTOKEN(token);
+        
+	priv->nkeys = 0;
+	        
+	if (pkcs11_find_keys(token, CKO_PUBLIC_KEY)) {
+	  pkcs11_destroy_keys(token);
+	  if (verbose) {
+	    fprintf(stderr, "pkcs11_find_keys(CKO_PUBLIC_KEYS) returned error\n");
+	  }
+	  return -1;
+	}
+	*keyp = priv->keys;
+        *countp = priv->nkeys;
+        return 0;
 }
 
 /*

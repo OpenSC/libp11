@@ -11,6 +11,7 @@ PKCS11_is_logged_in
 PKCS11_login
 PKCS11_logout
 PKCS11_enumerate_keys
+PKCS11_enumerate_pubkeys
 PKCS11_get_key_type
 PKCS11_get_key_size
 PKCS11_get_key_modulus

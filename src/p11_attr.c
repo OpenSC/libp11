@@ -29,7 +29,11 @@
 #include <assert.h>
 #include <string.h>
 
+#include <stdio.h>
+
 #include "libp11-int.h"
+
+static int verbose = 0;
 
 /*
  * Query pkcs11 attributes
@@ -45,6 +49,10 @@ pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
 	templ.type = type;
 	templ.pValue = value;
 	templ.ulValueLen = *size;
+
+	if (verbose) {
+	  fprintf(stderr, "libp11:pkcs11_getattr_int() type=%x\n", type);
+	}
 
 	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, o, &templ, 1));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GETATTR, rv);
