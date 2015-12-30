@@ -41,6 +41,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 		goto fail;
 	ctx->_private = priv;
 	priv->forkid = _P11_get_forkid();
+	priv->lockid = CRYPTO_get_new_dynlockid();
 
 	return ctx;
  fail:
@@ -164,6 +165,7 @@ void PKCS11_CTX_free(PKCS11_CTX * ctx)
 	if (priv->init_args) {
 		OPENSSL_free(priv->init_args);
 	}
+	CRYPTO_destroy_dynlockid(priv->lockid);
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);
 	OPENSSL_free(ctx->_private);

@@ -1,5 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
+ * Copyright (C) 2015 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -60,4 +61,115 @@ void *memdup(const void *src, size_t size)
 		return NULL;
 	memcpy(dst, src, size);
 	return dst;
+}
+
+/*
+ * PKCS#11 reinitialization after fork
+ * It wipes out the internal state of the PKCS#11 library
+ * Any libp11 references to this state are no longer valid
+ */
+static int check_fork_int(PKCS11_CTX *ctx)
+{
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+
+	if (_P11_detect_fork(priv->forkid)) {
+		if (PKCS11_CTX_reload(ctx) < 0)
+			return -1;
+		priv->forkid = _P11_get_forkid();
+	}
+	return 0;
+}
+
+/*
+ * PKCS#11 reinitialization after fork
+ * Also relogins and reopens the session if needed
+ */
+static int check_slot_fork_int(PKCS11_SLOT *slot)
+{
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+
+	if (check_fork_int(SLOT2CTX(slot)) < 0)
+		return -1;
+	if (spriv->forkid != priv->forkid) {
+		if (spriv->loggedIn) {
+			int saved = spriv->haveSession;
+			spriv->haveSession = 0;
+			spriv->loggedIn = 0;
+			if (PKCS11_relogin(slot) < 0)
+				return -1;
+			spriv->haveSession = saved;
+		}
+		if (spriv->haveSession) {
+			spriv->haveSession = 0;
+			if (PKCS11_reopen_session(slot) < 0)
+				return -1;
+		}
+		spriv->forkid = priv->forkid;
+	}
+	return 0;
+}
+
+/*
+ * PKCS#11 reinitialization after fork
+ * Also reloads the key
+ */
+static int check_key_fork_int(PKCS11_KEY *key)
+{
+	PKCS11_KEY_private *priv = PRIVKEY(key);
+	PKCS11_SLOT *slot = TOKEN2SLOT(priv->parent);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+
+	if (check_slot_fork_int(slot) < 0)
+		return -1;
+	if (spriv->forkid != priv->forkid) {
+		pkcs11_reload_keys(key);
+		priv->forkid = spriv->forkid;
+	}
+	return 0;
+}
+
+/*
+ * Locking interface to check_fork_int()
+ */
+int check_fork(PKCS11_CTX *ctx)
+{
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	int rv;
+
+	CRYPTO_w_lock(priv->lockid);
+	rv = check_fork_int(ctx);
+	CRYPTO_w_unlock(priv->lockid);
+	return rv;
+}
+
+/*
+ * Locking interface to check_slot_fork_int()
+ */
+int check_slot_fork(PKCS11_SLOT *slot)
+{
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	int rv;
+
+	CRYPTO_w_lock(priv->lockid);
+	rv = check_slot_fork_int(slot);
+	CRYPTO_w_unlock(priv->lockid);
+	return rv;
+}
+
+/*
+ * Locking interface to check_key_fork_int()
+ */
+int check_key_fork(PKCS11_KEY *key)
+{
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	int rv;
+
+	CRYPTO_w_lock(priv->lockid);
+	rv = check_key_fork_int(key);
+	CRYPTO_w_unlock(priv->lockid);
+	return rv;
 }
