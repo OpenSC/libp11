@@ -65,7 +65,6 @@ PKCS11_enumerate_keys(PKCS11_TOKEN * token, PKCS11_KEY ** keyp, unsigned int *co
 		}
 	}
 	*keyp = priv->keys;
-	//        *countp = priv->nprkeys;
 	*countp = priv->nkeys;
 	return 0;
 }
