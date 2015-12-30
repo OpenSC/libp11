@@ -37,6 +37,8 @@
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
 
+static int verbose = 0;  /* printing debugging information */
+
 /* To build this mode,
  * OpenSSL has ECDSA_METHOD defined in internal header file ecs_locl.h
  * Until this is resolved use something like:
@@ -95,7 +97,7 @@ static ECDSA_METHOD *ops = NULL;
  * We need to get the EC_PARAMS and EC_POINT into both,
  * as lib11 dates from RSA only where all the pub key components
  * were also part of the privite key.  With EC the point
- * is not in the privite key, and the params may or may not be.
+ * is not in the private key, and the params may or may not be.
  *
  */
 static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
@@ -103,6 +105,7 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	CK_BBOOL sensitive, extractable;
 	EC_KEY * ec = NULL;
 	CK_RV ckrv;
+	int rv;
 	size_t ec_paramslen = 0;
 	CK_BYTE * ec_params = NULL;
 	size_t ec_pointlen = 0;
@@ -173,7 +176,7 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 				    a = os->data;
 				    o2i_ECPublicKey(&ec, &a, os->length);
 				}
-/* EC_KEY_print_fp(stderr, ec, 5); */
+				if (verbose) EC_KEY_print_fp(stderr, ec, 5);
 			    }
 			}
 		}
@@ -202,8 +205,123 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 
 static int pkcs11_get_ec_public(PKCS11_KEY * key, EVP_PKEY * pk)
 {
+        CK_BBOOL sensitive, extractable;
+        EC_KEY * ec = NULL;
+        CK_RV ckrv;
+        int rv;
+        size_t ec_paramslen = 0;
+        CK_BYTE * ec_params = NULL;
+        size_t ec_pointlen = 0;
+        CK_BYTE * ec_point = NULL;
+        PKCS11_KEY * prkey;
+        PKCS11_KEY * pubkey;
+        ASN1_OCTET_STRING *os=NULL;
 	/* TBD */
-	return pkcs11_get_ec_private(key, pk);
+	
+	if (key->isPrivate)
+		return pkcs11_get_ec_private(key, pk);
+	
+	pubkey = key;
+
+	if (pk->type == EVP_PKEY_EC) {
+		ec = EVP_PKEY_get1_EC_KEY(pk);
+		if (verbose)
+		  fprintf(stderr, "pkcs11_get_ec_public(): pk->type == EVP_PKEY_EC\n");
+	} else {
+		ec = EC_KEY_new();
+		EVP_PKEY_set1_EC_KEY(pk, ec);
+		if (verbose)
+		  fprintf(stderr, "pkcs11_get_ec_public(): pk->type is not EVP_PKEY_EC, called EVP_PKEY_set1_EC_KEY()\n");
+	}
+        
+        if (key_getattr(pubkey, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
+            || key_getattr(pubkey, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+                if (verbose)
+                        fprintf(stderr, "   ERROR! checking SENSITIVE and EXTRACTABLE attrs failed!\n");
+                EC_KEY_free(ec);
+                return -1;
+        }
+        
+        if (key_getattr_var(pubkey, CKA_EC_PARAMS, NULL, &ec_paramslen) == CKR_OK &&
+            ec_paramslen > 0) {
+                ec_params = OPENSSL_malloc(ec_paramslen);
+                if (ec_params) {
+                        ckrv = key_getattr_var(pubkey, CKA_EC_PARAMS, ec_params, &ec_paramslen);
+                        if (ckrv == CKR_OK) {
+                                const unsigned char * a = ec_params;
+                                /* convert to OpenSSL parmas */
+                                d2i_ECParameters(&ec, &a, ec_paramslen);
+                        } else {
+                                if (verbose)
+                                        fprintf(stderr, "   key_getattr_var(...CKA_EC_PARAMS...) returned %d\n", ckrv);
+                        }
+                } else {
+                        if (verbose)
+                                fprintf(stderr, "   OPENSSL_malloc(%1d) failed!\n", ec_paramslen);
+                }
+        } else {
+                if (verbose)
+                        fprintf(stderr, "   ERROR! Could not retrieve ec_paramslen\n");
+        }
+
+	if (verbose)
+	  fprintf(stderr, "   about to call key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen)\n");
+
+	ckrv = key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen);
+	if (ckrv == CKR_OK && ec_pointlen > 0) {
+	  if (verbose)
+	    fprintf(stderr, "  ckrv=%d  ec_pointlen=%d\n", ckrv, ec_pointlen);
+	  ec_point = OPENSSL_malloc(ec_pointlen);
+	  if (ec_point) {
+	    ckrv = key_getattr_var(pubkey, CKA_EC_POINT, ec_point, &ec_pointlen);
+	    if (verbose)
+	      fprintf(stderr, "key_getattr_var(pubkey,CKA_EC_POINT, ec_point,...) == %d\n", ckrv);
+
+	    if (ckrv == CKR_OK) {
+	      if (verbose)
+		fprintf(stderr, "key_getattr_var() returned CKR_OK\n");
+
+	      /* PKCS#11 returns ASN1 octstring*/
+	      const unsigned char * a;
+	      /*  we have asn1 octet string, need to strip off 04 len */
+	      
+	      a = ec_point;
+	      os = d2i_ASN1_OCTET_STRING(NULL, &a, ec_pointlen);
+	      if (os) {
+		a = os->data;
+		o2i_ECPublicKey(&ec, &a, os->length);
+	      }
+	      if (verbose)
+		EC_KEY_print_fp(stderr, ec, 5);
+	    }
+	  }
+	} else {
+	  if (verbose)
+	    fprintf("  ERROR: ckrv=%d  ec_pointlen=%d\n", ckrv, ec_pointlen);
+	}
+
+        if (os)
+                M_ASN1_OCTET_STRING_free(os);
+        if (ec_point)
+                OPENSSL_free(ec_point);
+        if (ec_params)
+                OPENSSL_free(ec_params);
+        
+	if (verbose)
+	  fprintf(stderr, "pkcs11_get_ec_public(): freed os, ec_point, ec_params\n");
+
+	if (sensitive || !extractable) {
+		ECDSA_set_ex_data(ec, 0, key);
+		EC_KEY_free(ec); /* drops our reference to it. */
+		return 0;
+	}
+
+	if (ec)
+	    EC_KEY_free(ec);
+	if (verbose)
+	  fprintf(stderr, "pkcs11_get_ec_public(): about to return -1\n");
+	return -1;
+	
 }
 
 /* TODO Looks like this is never called */
@@ -227,7 +345,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;
-	unsigned int siglen;
+	int siglen;
 	int nLen = 48; /* HACK */
 	int rv;
 
@@ -237,7 +355,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 
 	siglen = sizeof(sigret);
 
-	rv = PKCS11_ecdsa_sign(dgst, dlen, sigret, &siglen, key);
+	rv = PKCS11_ecdsa_sign(dgst,dlen,sigret,&siglen, key);
 	nLen = siglen / 2;
 	if (rv > 0) {
 		sig = ECDSA_SIG_new();
@@ -261,7 +379,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
     if (ops == NULL) {
-	ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
+	ops = ECDSA_METHOD_new(ECDSA_OpenSSL());
 	ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
 	ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
     }
