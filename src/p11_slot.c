@@ -214,8 +214,10 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 
 		/* Calling PKCS11_login invalidates all cached
 		 * keys we have */
-		if (slot->token)
-			pkcs11_destroy_keys(slot->token);
+		if (slot->token) {
+			pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
+			pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
+		}
 		if (priv->loggedIn) {
 			/* already logged in, log out first */
 			if (PKCS11_logout(slot))
@@ -278,8 +280,10 @@ int PKCS11_logout(PKCS11_SLOT * slot)
 
 	/* Calling PKCS11_logout invalidates all cached
 	 * keys we have */
-	if (slot->token)
-		pkcs11_destroy_keys(slot->token);
+	if (slot->token) {
+		pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
+		pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
+	}
 	if (!priv->haveSession) {
 		PKCS11err(PKCS11_F_PKCS11_LOGOUT, PKCS11_NO_SESSION);
 		return -1;
@@ -506,7 +510,10 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	/* We have a token */
 	tpriv = PKCS11_NEW(PKCS11_TOKEN_private);
 	tpriv->parent = slot;
-	tpriv->nkeys = -1;
+	tpriv->prv.keys = NULL;
+	tpriv->prv.num = -1;
+	tpriv->pub.keys = NULL;
+	tpriv->pub.num = -1;
 	tpriv->ncerts = -1;
 
 	token->label = PKCS11_DUP(info.label);
@@ -534,7 +541,8 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 
 static void pkcs11_destroy_token(PKCS11_TOKEN * token)
 {
-	pkcs11_destroy_keys(token);
+	pkcs11_destroy_keys(token, CKO_PRIVATE_KEY);
+	pkcs11_destroy_keys(token, CKO_PUBLIC_KEY);
 	pkcs11_destroy_certs(token);
 
 	OPENSSL_free(token->label);

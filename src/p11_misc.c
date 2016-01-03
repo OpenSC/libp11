@@ -124,7 +124,7 @@ static int check_key_fork_int(PKCS11_KEY *key)
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
 	if (spriv->forkid != priv->forkid) {
-		pkcs11_reload_keys(key);
+		pkcs11_reload_key(key);
 		priv->forkid = spriv->forkid;
 	}
 	return 0;

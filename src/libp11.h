@@ -238,8 +238,13 @@ extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
  */
 extern int PKCS11_logout(PKCS11_SLOT * slot);
 
-/* Get a list of all keys associated with this token */
-extern int PKCS11_enumerate_keys(PKCS11_TOKEN *, PKCS11_KEY **, unsigned int *);
+/* Get a list of private keys associated with this token */
+extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
+	PKCS11_KEY **, unsigned int *);
+
+/* Get a list of public keys associated with this token */
+extern int PKCS11_enumerate_public_keys(PKCS11_TOKEN *,
+	PKCS11_KEY **, unsigned int *);
 
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int PKCS11_get_key_type(PKCS11_KEY *);

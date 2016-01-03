@@ -1,5 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
+ * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -27,42 +28,46 @@
 #include <openssl/rsa.h>
 #include "libp11-int.h"
 
-static int pkcs11_get_rsa_public(PKCS11_KEY *, EVP_PKEY *);
-static int pkcs11_get_rsa_private(PKCS11_KEY *, EVP_PKEY *);
-
-
 /*
  * Get RSA key material
  */
-static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
+static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 {
+	EVP_PKEY *pk;
 	CK_BBOOL sensitive, extractable;
 	RSA *rsa;
 
-	if (!(rsa = EVP_PKEY_get1_RSA(pk))) {
-		ERR_clear_error();	/* the above flags an error */
-		rsa = RSA_new();
-		EVP_PKEY_set1_RSA(pk, rsa);
+	pk = EVP_PKEY_new();
+	if (pk == NULL)
+		return NULL;
+
+	rsa = RSA_new();
+	if (rsa == NULL) {
+		EVP_PKEY_free(pk);
+		return NULL;
 	}
+	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 
 	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
 	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+		EVP_PKEY_free(pk);
 		RSA_free(rsa);
-		return -1;
+		return NULL;
 	}
 
 	if (key_getattr_bn(key, CKA_MODULUS, &rsa->n) ||
 	    key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+		EVP_PKEY_free(pk);
 		RSA_free(rsa);
-		return -1;
+		return NULL;
 	}
 
 	if (BN_is_zero(rsa->e)) {
-		PKCS11_TOKEN_private * token = PRIVTOKEN(KEY2TOKEN(key));
+		PKCS11_TOKEN_private * tpriv = PRIVTOKEN(KEY2TOKEN(key));
 		int ki;
 		BIGNUM* pubmod = NULL;
-		for(ki = token->nprkeys; ki < token->nkeys; ki++) {
-			PKCS11_KEY* pubkey = token->keys + ki;
+		for(ki = 0; ki < tpriv->pub.num; ki++) {
+			PKCS11_KEY* pubkey = &tpriv->pub.keys[ki];
 
 			if(key_getattr_bn(pubkey, CKA_MODULUS, &pubmod)) {
 				continue;
@@ -87,38 +92,17 @@ static int pkcs11_get_rsa_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	 * that will use the card's functions to sign & decrypt */
 	if (sensitive || !extractable) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
-		rsa->flags |= RSA_FLAG_SIGN_VER;
-		RSA_set_app_data(rsa, key);
-
-		RSA_free(rsa);
-		return 0;
+	} else if (key->isPrivate) {
+		/* TODO: Extract the RSA private key */
+		/* In the meantime lets use the card anyway */
+		RSA_set_method(rsa, PKCS11_get_rsa_method());
 	}
 
-	/* TBD - extract RSA private key. */
-	/* In the mean time let's use the card anyway */
-	RSA_set_method(rsa, PKCS11_get_rsa_method());
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_app_data(rsa, key);
-
-	RSA_free(rsa);
-
-	return 0;
-	/*
-	PKCS11err(PKCS11_F_PKCS11_GET_KEY, PKCS11_NOT_SUPPORTED);
-	return -1;
-	*/
+	RSA_free(rsa); /* drops our reference to it */
+	return pk;
 }
-
-static int pkcs11_get_rsa_public(PKCS11_KEY * key, EVP_PKEY * pk)
-{
-	(void)key;
-	(void)pk;
-
-	/* TBD */
-	return 0;
-/*	return pkcs11_get_rsa_private(key,pk);*/
-}
-
 
 static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
@@ -182,6 +166,5 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 
 PKCS11_KEY_ops pkcs11_rsa_ops = {
 	EVP_PKEY_RSA,
-	pkcs11_get_rsa_public,
-	pkcs11_get_rsa_private
+	pkcs11_get_evp_key_rsa
 };

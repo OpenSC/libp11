@@ -46,7 +46,7 @@ typedef struct pkcs11_ctx_private {
 	unsigned int forkid;
 	int lockid;
 } PKCS11_CTX_private;
-#define PRIVCTX(ctx)		((PKCS11_CTX_private *) (ctx->_private))
+#define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
 int check_fork(PKCS11_CTX *);
 #define CHECK_FORK(ctx) if (check_fork(ctx) < 0) return -1
@@ -66,7 +66,7 @@ typedef struct pkcs11_slot_private {
 	/* per-slot lock */
 	int lockid;
 } PKCS11_SLOT_private;
-#define PRIVSLOT(slot)		((PKCS11_SLOT_private *) (slot->_private))
+#define PRIVSLOT(slot)		((PKCS11_SLOT_private *) ((slot)->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)
 
 int check_slot_fork(PKCS11_SLOT *);
@@ -75,21 +75,24 @@ int check_slot_fork(PKCS11_SLOT *);
 int check_key_fork(PKCS11_KEY *);
 #define CHECK_KEY_FORK(key) if (check_key_fork(key) < 0) return -1
 
+typedef struct pkcs11_keys {
+	int num;
+	PKCS11_KEY *keys;
+} PKCS11_keys;
+
 typedef struct pkcs11_token_private {
 	PKCS11_SLOT *parent;
-	int nkeys, nprkeys;
-	PKCS11_KEY *keys;
+	PKCS11_keys prv, pub;
 	int ncerts;
 	PKCS11_CERT *certs;
 } PKCS11_TOKEN_private;
-#define PRIVTOKEN(token)	((PKCS11_TOKEN_private *) (token->_private))
+#define PRIVTOKEN(token)	((PKCS11_TOKEN_private *) ((token)->_private))
 #define TOKEN2SLOT(token)	(PRIVTOKEN(token)->parent)
 #define TOKEN2CTX(token)	SLOT2CTX(TOKEN2SLOT(token))
 
 typedef struct pkcs11_key_ops {
 	int type;               /* EVP_PKEY_xxx */
-	int (*get_public) (PKCS11_KEY *, EVP_PKEY *);
-	int (*get_private) (PKCS11_KEY *, EVP_PKEY *);
+	EVP_PKEY *(*get_evp_key) (PKCS11_KEY *);
 } PKCS11_KEY_ops;
 
 typedef struct pkcs11_key_private {
@@ -100,7 +103,7 @@ typedef struct pkcs11_key_private {
 	PKCS11_KEY_ops *ops;
 	unsigned int forkid;
 } PKCS11_KEY_private;
-#define PRIVKEY(key)		((PKCS11_KEY_private *) key->_private)
+#define PRIVKEY(key)		((PKCS11_KEY_private *) (key)->_private)
 #define KEY2SLOT(key)		TOKEN2SLOT(KEY2TOKEN(key))
 #define KEY2TOKEN(key)		(PRIVKEY(key)->parent)
 #define KEY2CTX(key)		TOKEN2CTX(KEY2TOKEN(key))
@@ -111,7 +114,7 @@ typedef struct pkcs11_cert_private {
 	unsigned char id[255];
 	size_t id_len;
 } PKCS11_CERT_private;
-#define PRIVCERT(cert)		((PKCS11_CERT_private *) cert->_private)
+#define PRIVCERT(cert)		((PKCS11_CERT_private *) (cert)->_private)
 #define CERT2SLOT(cert)		TOKEN2SLOT(CERT2TOKEN(cert))
 #define CERT2TOKEN(cert)	(PRIVCERT(cert)->parent)
 #define CERT2CTX(cert)		TOKEN2CTX(CERT2TOKEN(cert))
@@ -148,7 +151,7 @@ typedef struct pkcs11_cert_private {
 extern int pkcs11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
 extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
-extern void pkcs11_destroy_keys(PKCS11_TOKEN *);
+extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern void *pkcs11_malloc(size_t);
 extern char *pkcs11_strdup(char *, size_t);
@@ -162,7 +165,7 @@ extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 			     unsigned int, BIGNUM **);
 
-extern int pkcs11_reload_keys(PKCS11_KEY * keyin);
+extern int pkcs11_reload_key(PKCS11_KEY *);
 
 #define key_getattr(key, t, p, s) \
 	pkcs11_getattr(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))

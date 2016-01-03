@@ -2,7 +2,7 @@
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2011, 2013 Douglas E. Engert <deengert@anl.gov>
  * Copyright (C) 2014 Douglas E. Engert <deengert@gmail.com>
-
+ * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -84,22 +84,20 @@
 
 #include "libp11-int.h"
 
-static int pkcs11_get_ec_public(PKCS11_KEY *, EVP_PKEY *);
-static int pkcs11_get_ec_private(PKCS11_KEY *, EVP_PKEY *);
-
 static ECDSA_METHOD *ops = NULL;
 
 /*
- * Get EC key material and stach pointer in ex_data
+ * Get EC key material and stash pointer in ex_data
  * Note we get called twice, once for private key, and once for public
  * We need to get the EC_PARAMS and EC_POINT into both,
  * as lib11 dates from RSA only where all the pub key components
- * were also part of the privite key.  With EC the point
- * is not in the privite key, and the params may or may not be.
+ * were also part of the private key.  With EC the point
+ * is not in the private key, and the params may or may not be.
  *
  */
-static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
+static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 {
+	EVP_PKEY *pk;
 	CK_BBOOL sensitive, extractable;
 	EC_KEY * ec = NULL;
 	CK_RV ckrv;
@@ -107,58 +105,51 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	CK_BYTE * ec_params = NULL;
 	size_t ec_pointlen = 0;
 	CK_BYTE * ec_point = NULL;
-	PKCS11_KEY * prkey;
 	PKCS11_KEY * pubkey;
 	ASN1_OCTET_STRING *os=NULL;
 
-	if (key->isPrivate) {  /* Are we being called for the prive or pub key */
-		prkey = key;
-		pubkey = PKCS11_find_key_from_key(key);
-	} else {
-		pubkey = key;
-		prkey = PKCS11_find_key_from_key(key);
+	pk = EVP_PKEY_new();
+	if (pk == NULL)
+		return NULL;
+
+	ec = EC_KEY_new();
+	if (ec == NULL) {
+		EVP_PKEY_free(pk);
+		return NULL;
+	}
+	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
+
+	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
+	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+		EVP_PKEY_free(pk);
+		EC_KEY_free(ec);
+		return NULL;
 	}
 
-	if (pk->type == EVP_PKEY_EC) {
-		ec = EVP_PKEY_get1_EC_KEY(pk);
-	} else {
-		ec = EC_KEY_new();
-		EVP_PKEY_set1_EC_KEY(pk, ec);
-	}
-	/* After above ec has ref count incremented. */
+	/* For Openssl req we need at least the
+	 * EC_KEY_get0_group(ec_key)) to return the group.
+	 * Even if it fails will continue as a sign only does not need
+	 * need this if the pkcs11 or card can figure this out.
+	 */
 
-	if (prkey) {
-		if (key_getattr(prkey, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-		    || key_getattr(prkey, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
-			EC_KEY_free(ec);
-			return -1;
-		}
-
-		/* For Openssl req we need at least the 
-		 * EC_KEY_get0_group(ec_key)) to return the group. 
-		 * Even if it fails will continue as a sign only does not need
-		 * need this if the pkcs11 or card can figure this out.  
-		 */
-
-		if (key_getattr_var(prkey, CKA_EC_PARAMS, NULL, &ec_paramslen) == CKR_OK &&
-				ec_paramslen > 0) {
-			ec_params = OPENSSL_malloc(ec_paramslen);
-			if (ec_params) {
-			    ckrv = key_getattr_var(prkey, CKA_EC_PARAMS, ec_params, &ec_paramslen);
-			    if (ckrv == CKR_OK) {
-				const unsigned char * a = ec_params;
-				    /* convert to OpenSSL parmas */
-				    d2i_ECParameters(&ec, &a, ec_paramslen);
-			    }
-			}
+	if (key_getattr_var(key, CKA_EC_PARAMS, NULL, &ec_paramslen) == CKR_OK &&
+			ec_paramslen > 0) {
+		ec_params = OPENSSL_malloc(ec_paramslen);
+		if (ec_params) {
+		    ckrv = key_getattr_var(key, CKA_EC_PARAMS, ec_params, &ec_paramslen);
+		    if (ckrv == CKR_OK) {
+			const unsigned char * a = ec_params;
+			    /* convert to OpenSSL parmas */
+			    d2i_ECParameters(&ec, &a, ec_paramslen);
+		    }
 		}
 	}
 
 	/* Now get the ec_point */
-
+	pubkey = key->isPrivate ? PKCS11_find_key_from_key(key) : key;
 	if (pubkey) {
-		if (key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen) == CKR_OK &&
-					ec_pointlen > 0) {
+		ckrv = key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen);
+		if (ckrv == CKR_OK && ec_pointlen > 0) {
 			ec_point = OPENSSL_malloc(ec_pointlen);
 			if (ec_point) {
 			    ckrv = key_getattr_var(pubkey, CKA_EC_POINT, ec_point, &ec_pointlen);
@@ -183,33 +174,28 @@ static int pkcs11_get_ec_private(PKCS11_KEY * key, EVP_PKEY * pk)
 	 * that will use the card's functions to sign & decrypt
 	 */
 	if (os)
-	    M_ASN1_OCTET_STRING_free(os);
+		M_ASN1_OCTET_STRING_free(os);
 	if (ec_point)
 		OPENSSL_free(ec_point);
 	if (ec_params)
 		OPENSSL_free(ec_params);
 
 	if (sensitive || !extractable) {
-		ECDSA_set_ex_data(ec, 0, key);
-		EC_KEY_free(ec); /* drops our reference to it. */
-		return 0;
+		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
+	} else if (key->isPrivate) {
+		/* TODO: Extract the ECDSA private key */
+		/* In the meantime lets use the card anyway */
+		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
 	}
 
-	if (ec)
-	    EC_KEY_free(ec);
-	return -1;
-}
-
-static int pkcs11_get_ec_public(PKCS11_KEY * key, EVP_PKEY * pk)
-{
-	/* TBD */
-	return pkcs11_get_ec_private(key, pk);
+	ECDSA_set_ex_data(ec, 0, key);
+	EC_KEY_free(ec); /* drops our reference to it */
+	return pk;
 }
 
 /* TODO Looks like this is never called */
 static int pkcs11_ecdsa_sign_setup(EC_KEY *ec, BN_CTX *ctx_in,
 	BIGNUM **kinvp, BIGNUM **rp) {
-
 
 	if (*kinvp != NULL)
 		BN_clear_free(*kinvp);
@@ -256,7 +242,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
  */
 #if !defined(LIBP11_BUILD_WITH_ECS_LOCL_H)
 
-/* New  way to allocate  a ECDSA_METOD... */
+/* New way to allocate an ECDSA_METOD object */
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
@@ -276,9 +262,9 @@ void PKCS11_ecdsa_method_free(void)
 	}
 }
 
-#else
+#else /* LIBP11_BUILD_WITH_ECS_LOCL_H */
 
-/* old way using ecs_locl.h */
+/* Old way using ecs_locl.h */
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 	static struct ecdsa_method sops;
@@ -294,14 +280,14 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 
 void PKCS11_ecdsa_method_free(void)
 {
-    /* in old method it is static */
+    /* It is static in the old method */
 }
-#endif
+
+#endif /* LIBP11_BUILD_WITH_ECS_LOCL_H */
 
 PKCS11_KEY_ops pkcs11_ec_ops_s = {
 	EVP_PKEY_EC,
-	pkcs11_get_ec_public,
-	pkcs11_get_ec_private
+	pkcs11_get_evp_key_ec
 };
 PKCS11_KEY_ops  *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
@@ -313,12 +299,15 @@ void *pkcs11_ec_ops = {NULL};
  * add these routines so engine_pkcs11 can be built now and not
  * require further changes */
 #warning  "ECDSA support not built with libp11"
+
 void * PKCS11_get_ecdsa_method(void)
 {
 	return NULL;
 }
+
 void PKCS11_ecdsa_method_free(void)
 {
- /* no op, as it is static in old code. */
+	/* no op, as it is static in the old code */
 }
-#endif /* OPENSSL_NO_EC */
+
+#endif /* LIBP11_BUILD_WITHOUT_ECDSA */

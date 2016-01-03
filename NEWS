@@ -1,8 +1,10 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.3.1; unreleased;
+* Fixed EVP_PKEY handling of public keys (Michał Trojnara)
+* Added PKCS11_enumerate_public_keys to the API (Michał Trojnara)
 * Added thread safety based on OpenSSL dynamic locks (Michał Trojnara)
-* Added PKCS11_is_logged_in to API (Mikhail Denisenko)
+* Added PKCS11_is_logged_in to the API (Mikhail Denisenko)
 * Fixes in reinitialization after fork; addresses #39
   (Michał Trojnara)
 * MSVC build fixes (Michał Trojnara)
