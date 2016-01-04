@@ -44,6 +44,11 @@ init_card () {
 		SOFTHSM_TOOL="/usr/local/bin/softhsm2-util"
 	fi
 
+	if test -x "/opt/local/bin/softhsm2-util"; then
+		export SOFTHSM2_CONF="$outdir/softhsm-testpkcs11.config"
+		SOFTHSM_TOOL="/opt/local/bin/softhsm2-util"
+	fi
+
 	if test -x "/usr/bin/softhsm2-util"; then
 		export SOFTHSM2_CONF="$outdir/softhsm-testpkcs11.config"
 		SOFTHSM_TOOL="/usr/bin/softhsm2-util"
