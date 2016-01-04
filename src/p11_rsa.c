@@ -49,14 +49,14 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 
 	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
 		EVP_PKEY_free(pk);
 		RSA_free(rsa);
 		return NULL;
 	}
 
 	if (key_getattr_bn(key, CKA_MODULUS, &rsa->n) ||
-	    key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+			key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
 		EVP_PKEY_free(pk);
 		RSA_free(rsa);
 		return NULL;
@@ -104,25 +104,53 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	return pk;
 }
 
+int PKCS11_get_key_modulus(PKCS11_KEY * key, BIGNUM **bn)
+{
+	if (pkcs11_getattr_bn(KEY2TOKEN(key), PRIVKEY(key)->object,
+			CKA_MODULUS, bn))
+		return 0;
+	return 1;
+}
+
+int PKCS11_get_key_exponent(PKCS11_KEY * key, BIGNUM **bn)
+{
+	if (pkcs11_getattr_bn(KEY2TOKEN(key), PRIVKEY(key)->object,
+			CKA_PUBLIC_EXPONENT, bn))
+		return 0;
+	return 1;
+}
+
+int PKCS11_get_key_size(const PKCS11_KEY * key)
+{
+	BIGNUM *n = NULL;
+	int numbytes = 0;
+	if(key_getattr_bn(key, CKA_MODULUS, &n))
+		return 0;
+	numbytes = BN_num_bytes(n);
+	BN_free(n);
+	return numbytes;
+}
+
 static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
 
-	return PKCS11_private_decrypt(	flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_decrypt(flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
 }
 
 static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
-	return PKCS11_private_encrypt(flen,from,to,(PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_encrypt(flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
 }
 
 static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
 {
 	
-	return PKCS11_sign(type,m,m_len,sigret,siglen,(PKCS11_KEY *) RSA_get_app_data(rsa));
+	return PKCS11_sign(type, m, m_len, sigret, siglen, (PKCS11_KEY *) RSA_get_app_data(rsa));
 }
+
 /* Lousy hack alert. If RSA_verify detects that the key has the
  * RSA_FLAG_SIGN_VER flags set, it will assume that verification
  * is implemented externally as well.
@@ -131,7 +159,7 @@ static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
  */
 static int
 pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
-		  const unsigned char *signature, unsigned int siglen, const RSA * rsa)
+		const unsigned char *signature, unsigned int siglen, const RSA * rsa)
 {
 	RSA *r = (RSA *) rsa;	/* Ugly hack to get rid of compiler warning */
 	int res;
