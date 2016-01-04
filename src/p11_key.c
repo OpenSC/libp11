@@ -47,7 +47,7 @@ PKCS11_enumerate_keys(PKCS11_TOKEN * token,
 }
 
 /*
- * Enumerate private keys on the card
+ * Enumerate public keys on the card
  */
 int
 PKCS11_enumerate_public_keys(PKCS11_TOKEN * token,
