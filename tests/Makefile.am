@@ -11,9 +11,10 @@ LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
 auth_SOURCES = ../examples/auth.c
 rawrsasign_SOURCES = ../examples/rawrsasign.c
+listkeys_SOURCES = ../examples/listkeys.c
 
-check_PROGRAMS = auth fork-test rawrsasign
-dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm
+check_PROGRAMS = auth fork-test rawrsasign listkeys
+dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm testlistkeys.softhsm
 
 TESTS = $(dist_check_SCRIPTS)
 
