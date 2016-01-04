@@ -143,8 +143,6 @@ typedef struct pkcs11_cert_private {
 	PRIVCTX(ctx)->method->func_and_args
 
 /* Memory allocation */
-#define PKCS11_NEW(type) \
-	((type *) pkcs11_malloc(sizeof(type)))
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 
@@ -153,7 +151,6 @@ extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
-extern void *pkcs11_malloc(size_t);
 extern char *pkcs11_strdup(char *, size_t);
 
 extern int pkcs11_getattr(PKCS11_TOKEN *, CK_OBJECT_HANDLE,

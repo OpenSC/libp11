@@ -29,8 +29,7 @@
 static int pkcs11_find_certs(PKCS11_TOKEN *);
 static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
-			    CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o,
-			    PKCS11_CERT **);
+	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o, PKCS11_CERT **);
 
 static CK_OBJECT_CLASS cert_search_class;
 static CK_ATTRIBUTE cert_search_attrs[] = {
@@ -43,7 +42,7 @@ static CK_ATTRIBUTE cert_search_attrs[] = {
  */
 int
 PKCS11_enumerate_certs(PKCS11_TOKEN * token,
-		       PKCS11_CERT ** certp, unsigned int *countp)
+		PKCS11_CERT ** certp, unsigned int *countp)
 {
 	PKCS11_TOKEN_private *priv = PRIVTOKEN(token);
 
@@ -75,7 +74,7 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY * key)
 	for (n = 0; n < count; n++, cert++) {
 		cpriv = PRIVCERT(cert);
 		if (cpriv->id_len == kpriv->id_len
-		    && !memcmp(cpriv->id, kpriv->id, kpriv->id_len))
+				&& !memcmp(cpriv->id, kpriv->id, kpriv->id_len))
 			return cert;
 	}
 	return NULL;
@@ -99,7 +98,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN * token)
 	/* Tell the PKCS11 lib to enumerate all matching objects */
 	cert_search_class = CKO_CERTIFICATE;
 	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, cert_search_attrs,
-						  numof(cert_search_attrs)));
+		numof(cert_search_attrs)));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
 
 	do {
@@ -131,10 +130,10 @@ static int pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 }
 
 static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
-	 CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
+		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
 {
 	PKCS11_TOKEN_private *tpriv;
-	PKCS11_CERT_private *kpriv;
+	PKCS11_CERT_private *cpriv;
 	PKCS11_CERT *cert, *tmp;
 	char label[256];
 	unsigned char *data;
@@ -154,10 +153,10 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		return 0;
 
 	tpriv = PRIVTOKEN(token);
-	tmp = (PKCS11_CERT *) OPENSSL_realloc(tpriv->certs,
-				(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
-	if (!tmp) {
-		free(tpriv->certs);
+	tmp = OPENSSL_realloc(tpriv->certs,
+		(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
+	if (tmp == NULL) {
+		OPENSSL_free(tpriv->certs);
 		tpriv->certs = NULL;
 		return -1;
 	}
@@ -165,33 +164,40 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 
 	cert = tpriv->certs + tpriv->ncerts++;
 	memset(cert, 0, sizeof(*cert));
-	cert->_private = kpriv = PKCS11_NEW(PKCS11_CERT_private);
-	kpriv->object = obj;
-	kpriv->parent = token;
+	cpriv = OPENSSL_malloc(sizeof(PKCS11_CERT_private));
+	if (cpriv == NULL)
+		return -1;
+	memset(cpriv, 0, sizeof(PKCS11_CERT_private));
+	cert->_private = cpriv;
+	cpriv->object = obj;
+	cpriv->parent = token;
 
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
 		cert->label = BUF_strdup(label);
 	size = 0;
 	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, NULL, &size) && size > 0) {
-		data = (unsigned char *) malloc(size);
-		if (data && !pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
-			const unsigned char *p = data;
+		data = OPENSSL_malloc(size);
+		if (data) {
+			if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
+				const unsigned char *p = data;
 
-			cert->x509 = d2i_X509(NULL, &p, size);
+				cert->x509 = d2i_X509(NULL, &p, size);
+			}
+			OPENSSL_free(data);
 		}
-		if (data)
-			free(data);
 	}
 	cert->id_len = sizeof(id);
 	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &cert->id_len)) {
-		cert->id = (unsigned char *) malloc(cert->id_len);
+		cert->id = OPENSSL_malloc(cert->id_len);
+		if (cert->id == NULL)
+			return -1;
 		memcpy(cert->id, id, cert->id_len);
 	}
 
 	/* Initialize internal information */
-	kpriv->id_len = sizeof(kpriv->id);
-	if (pkcs11_getattr_var(token, obj, CKA_ID, kpriv->id, &kpriv->id_len))
-		kpriv->id_len = 0;
+	cpriv->id_len = sizeof(cpriv->id);
+	if (pkcs11_getattr_var(token, obj, CKA_ID, cpriv->id, &cpriv->id_len))
+		cpriv->id_len = 0;
 
 	if (ret)
 		*ret = cert;
@@ -213,7 +219,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
 			X509_free(cert->x509);
 		OPENSSL_free(cert->label);
 		if (cert->id)
-			free(cert->id);
+			OPENSSL_free(cert->id);
 		if (cert->_private != NULL)
 			OPENSSL_free(cert->_private);
 	}
@@ -228,8 +234,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
  */
 int
 PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
-			 unsigned char *id, size_t id_len,
-			 PKCS11_CERT ** ret_cert)
+		unsigned char *id, size_t id_len, PKCS11_CERT ** ret_cert)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);

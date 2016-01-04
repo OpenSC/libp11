@@ -33,12 +33,14 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	/* Load error strings */
 	ERR_load_PKCS11_strings();
 
-	priv = PKCS11_NEW(PKCS11_CTX_private);
+	priv = OPENSSL_malloc(sizeof(PKCS11_CTX_private));
 	if (priv == NULL)
 		goto fail;
-	ctx = PKCS11_NEW(PKCS11_CTX);
+	memset(priv, 0, sizeof(PKCS11_CTX_private));
+	ctx = OPENSSL_malloc(sizeof(PKCS11_CTX));
 	if (ctx == NULL)
 		goto fail;
+	memset(ctx, 0, sizeof(PKCS11_CTX));
 	ctx->_private = priv;
 	priv->forkid = _P11_get_forkid();
 	priv->lockid = CRYPTO_get_new_dynlockid();
@@ -79,7 +81,7 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 		return -1;
 	}
 	handle = C_LoadModule(name, &priv->method);
-	if (!handle) {
+	if (handle == NULL) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_LOAD_MODULE_ERROR);
 		return -1;
 	}

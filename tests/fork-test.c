@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 	do_fork();
 	slot = PKCS11_find_token(ctx, slots, nslots);
 	error_queue("PKCS11_find_token");
-	if (!slot || !slot->token) {
+	if (slot == NULL || slot->token == NULL) {
 		fprintf(stderr, "no token available\n");
 		rc = 3;
 		goto notoken;
@@ -128,8 +128,8 @@ loggedin:
 	authcert=&certs[0];
 
 	/* get random bytes */
-	random = malloc(RANDOM_SIZE);
-	if (!random)
+	random = OPENSSL_malloc(RANDOM_SIZE);
+	if (random == NULL)
 		goto failed;
 
 	fd = open(RANDOM_SOURCE, O_RDONLY);
@@ -159,15 +159,15 @@ loggedin:
 	do_fork();
 	authkey = PKCS11_find_key(authcert);
 	error_queue("PKCS11_find_key");
-	if (!authkey) {
+	if (authkey == NULL) {
 		fprintf(stderr, "no key matching certificate available\n");
 		goto failed;
 	}
 
 	/* ask for a sha1 hash of the random data, signed by the key */
 	siglen = MAX_SIGSIZE;
-	signature = malloc(MAX_SIGSIZE);
-	if (!signature)
+	signature = OPENSSL_malloc(MAX_SIGSIZE);
+	if (signature == NULL)
 		goto failed;
 
 	/* do the operations in child */
@@ -199,9 +199,9 @@ loggedin:
 		EVP_PKEY_free(pubkey);
 
 	if (random != NULL)
-		free(random);
+		OPENSSL_free(random);
 	if (signature != NULL)
-		free(signature);
+		OPENSSL_free(signature);
 
 	PKCS11_release_all_slots(ctx, slots, nslots);
 	PKCS11_CTX_unload(ctx);

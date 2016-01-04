@@ -103,7 +103,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		   (size = i2d_X509_SIG(&digest_info, NULL)) &&
 		   /* Check that size is compatible with PKCS#11 padding */
 		   (size + RSA_PKCS1_PADDING_SIZE <= sigsize) &&
-		   (encoded = (unsigned char *) malloc(sigsize))) {
+		   (encoded = OPENSSL_malloc(sigsize))) {
 			unsigned char *tmp = encoded;
 			/* Actually do the encoding */
 			i2d_X509_SIG(&digest_info,&tmp);
@@ -124,7 +124,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	}
 
 	if (encoded != NULL)  /* NULL on SSL case */
-		free(encoded);
+		OPENSSL_free(encoded);
 
 	return rv;
 }

@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 
 	/* get first slot with a token */
 	slot = PKCS11_find_token(ctx, slots, nslots);
-	if (!slot || !slot->token) {
+	if (slot == NULL || slot->token == NULL) {
 		fprintf(stderr, "no token available\n");
 		rc = 3;
 		goto notoken;
@@ -89,8 +89,8 @@ int main(int argc, char *argv[])
 	authcert=&certs[0];
 
 	/* get random bytes */
-	random = malloc(RANDOM_SIZE);
-	if (!random)
+	random = OPENSSL_malloc(RANDOM_SIZE);
+	if (random == NULL)
 		goto failed;
 
 	fd = open(RANDOM_SOURCE, O_RDONLY);
@@ -125,8 +125,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* allocate destination buffer */
-	encrypted = malloc(RSA_size(pubkey->pkey.rsa));
-	if (!encrypted) {
+	encrypted = OPENSSL_malloc(RSA_size(pubkey->pkey.rsa));
+	if (encrypted == NULL) {
 		fprintf(stderr,"out of memory for encrypted data");
 		goto failed;
 	}
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 
 	/* Read the password. */
 	printf("Password for token %.32s: ", slot->token->label);
-	if (!fgets(password, sizeof(password), stdin))
+	if (fgets(password, sizeof(password), stdin) == NULL)
 		goto failed;
 
 	/* Restore terminal. */
@@ -180,14 +180,14 @@ int main(int argc, char *argv[])
       loggedin:
 
 	authkey = PKCS11_find_key(authcert);
-	if (!authkey) {
+	if (authkey == NULL) {
 		fprintf(stderr, "no key matching certificate available\n");
 		goto failed;
 	}
 
 	/* allocate space for decrypted data */
-	decrypted = malloc(RSA_size(pubkey->pkey.rsa));
-	if (!decrypted)
+	decrypted = OPENSSL_malloc(RSA_size(pubkey->pkey.rsa));
+	if (decrypted == NULL)
 		goto failed;
 
 	rc = PKCS11_private_decrypt(len, encrypted,
@@ -210,11 +210,11 @@ int main(int argc, char *argv[])
 	if (pubkey != NULL)
 		EVP_PKEY_free(pubkey);
 	if (random != NULL)
-		free(random);
+		OPENSSL_free(random);
 	if (encrypted != NULL)
-		free(encrypted);
+		OPENSSL_free(encrypted);
 	if (decrypted != NULL)
-		free(decrypted);
+		OPENSSL_free(decrypted);
 
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();

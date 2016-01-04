@@ -438,18 +438,20 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		return 0;
 	}
 
-	tmp = (PKCS11_KEY *) OPENSSL_realloc(keys->keys,
-				(keys->num + 1) * sizeof(PKCS11_KEY));
-	if (!tmp) {
-		free(keys->keys);
+	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
+	if (tmp == NULL) {
+		OPENSSL_free(keys->keys);
 		keys->keys = NULL;
 		return -1;
 	}
 	keys->keys = tmp;
 
 	key = keys->keys + keys->num++;
-	memset(key, 0, sizeof(*key));
-	key->_private = kpriv = PKCS11_NEW(PKCS11_KEY_private);
+	memset(key, 0, sizeof(PKCS11_KEY));
+	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
+	if(kpriv)
+		memset(kpriv, 0, sizeof(PKCS11_KEY_private));
+	key->_private = kpriv;
 	kpriv->object = obj;
 	kpriv->parent = token;
 
@@ -457,7 +459,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 		key->label = BUF_strdup(label);
 	key->id_len = sizeof(id);
 	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &key->id_len)) {
-		key->id = (unsigned char *) malloc(key->id_len);
+		key->id = OPENSSL_malloc(key->id_len);
 		memcpy(key->id, id, key->id_len);
 	}
 	key->isPrivate = (type == CKO_PRIVATE_KEY);
@@ -489,7 +491,7 @@ void pkcs11_destroy_keys(PKCS11_TOKEN * token, unsigned int type)
 			EVP_PKEY_free(key->evp_key);
 		OPENSSL_free(key->label);
 		if (key->id)
-			free(key->id);
+			OPENSSL_free(key->id);
 		if (key->_private != NULL)
 			OPENSSL_free(key->_private);
 	}

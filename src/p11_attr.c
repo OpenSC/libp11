@@ -89,9 +89,10 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 	if (pkcs11_getattr_var(token, object, type, NULL, &size) || size == 0)
 		return -1;
 
-	binary = calloc(1, size);
+	binary = OPENSSL_malloc(size);
 	if (binary == NULL)
 		return -1;
+	memset(binary, 0, size);
 
 	if (pkcs11_getattr_var(token, object, type, binary, &size)) {
 		ret = -1;
@@ -112,8 +113,8 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 	ret = *bn ? 0 : -1;
 
  cleanup:
- 	free(binary);
- 	return ret;
+	OPENSSL_free(binary);
+	return ret;
 }
 
 /*
@@ -122,7 +123,9 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 void pkcs11_addattr(CK_ATTRIBUTE_PTR ap, int type, const void *data, size_t size)
 {
 	ap->type = type;
-	ap->pValue = malloc(size);
+	ap->pValue = OPENSSL_malloc(size);
+	if (ap->pValue == NULL)
+		return;
 	memcpy(ap->pValue, data, size);
 	ap->ulValueLen = size;
 }
@@ -161,7 +164,10 @@ void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR ap, int type, pkcs11_i2d_fn enc, void *
 
 	ap->type = type;
 	ap->ulValueLen = enc(obj, NULL);
-	ap->pValue = p = (unsigned char *) malloc(ap->ulValueLen);
+	ap->pValue = OPENSSL_malloc(ap->ulValueLen);
+	if (ap->pValue == NULL)
+		return;
+	p = ap->pValue;
 	enc(obj, &p);
 }
 
@@ -169,6 +175,6 @@ void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR ap, unsigned int n)
 {
 	while (n--) {
 		if (ap[n].pValue)
-			free(ap[n].pValue);
+			OPENSSL_free(ap[n].pValue);
 	}
 }

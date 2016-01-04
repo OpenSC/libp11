@@ -60,13 +60,16 @@ pkcs11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *cou
 	rv = priv->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
 
-	slotid = (CK_SLOT_ID *)OPENSSL_malloc(nslots * sizeof(CK_SLOT_ID));
+	slotid = OPENSSL_malloc(nslots * sizeof(CK_SLOT_ID));
 	if (slotid == NULL) return (-1);
 
 	rv = priv->method->C_GetSlotList(FALSE, slotid, &nslots);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
 
-	slots = (PKCS11_SLOT *) pkcs11_malloc(nslots * sizeof(PKCS11_SLOT));
+	slots = OPENSSL_malloc(nslots * sizeof(PKCS11_SLOT));
+	if (slots == NULL)
+		return -1;
+	memset(slots, 0, nslots * sizeof(PKCS11_SLOT));
 	for (n = 0; n < nslots; n++) {
 		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
 			while (n--)
@@ -98,7 +101,7 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned 
 
 	(void)ctx;
 
-	if (! slots)
+	if (slots == NULL)
 		return NULL;
 
 	best = NULL;
@@ -306,7 +309,7 @@ int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 
 	CHECK_FORK(ctx);
 
-	if (!label)
+	if (label == NULL)
 		label = "PKCS#11 Token";
 	rv = CRYPTOKI_call(ctx, C_InitToken(priv->id,
 					    (CK_UTF8CHAR *) pin, strlen(pin),
@@ -433,7 +436,11 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	rv = CRYPTOKI_call(ctx, C_GetSlotInfo(id, &info));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
 
-	priv = PKCS11_NEW(PKCS11_SLOT_private);
+	priv = OPENSSL_malloc(sizeof(PKCS11_SLOT_private));
+	if (priv == NULL)
+		return -1;
+	memset(priv, 0, sizeof(PKCS11_SLOT_private));
+
 	priv->parent = ctx;
 	priv->id = id;
 	priv->forkid = PRIVCTX(ctx)->forkid;
@@ -490,25 +497,30 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	PKCS11_SLOT_private *priv = PRIVSLOT(slot);
 	PKCS11_TOKEN_private *tpriv;
 	CK_TOKEN_INFO info;
-	PKCS11_TOKEN *token;
 	int rv;
 
-	if (slot->token)
+	if (slot->token) {
 		pkcs11_destroy_token(slot->token);
-	else
-		slot->token = PKCS11_NEW(PKCS11_TOKEN);
-	token = slot->token;
+	} else {
+		slot->token = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
+		if (slot->token == NULL)
+			return -1;
+		memset(slot->token, 0, sizeof(PKCS11_TOKEN));
+	}
 
 	rv = CRYPTOKI_call(ctx, C_GetTokenInfo(priv->id, &info));
 	if (rv == CKR_TOKEN_NOT_PRESENT || rv == CKR_TOKEN_NOT_RECOGNIZED) {
-		OPENSSL_free(token);
+		OPENSSL_free(slot->token);
 		slot->token = NULL;
 		return 0;
 	}
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CHECK_TOKEN, rv);
 
 	/* We have a token */
-	tpriv = PKCS11_NEW(PKCS11_TOKEN_private);
+	tpriv = OPENSSL_malloc(sizeof(PKCS11_TOKEN_private));
+	if (tpriv == NULL)
+		return -1;
+	memset(tpriv, 0, sizeof(PKCS11_TOKEN_private));
 	tpriv->parent = slot;
 	tpriv->prv.keys = NULL;
 	tpriv->prv.num = -1;
@@ -516,25 +528,25 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	tpriv->pub.num = -1;
 	tpriv->ncerts = -1;
 
-	token->label = PKCS11_DUP(info.label);
-	token->manufacturer = PKCS11_DUP(info.manufacturerID);
-	token->model = PKCS11_DUP(info.model);
-	token->serialnr = PKCS11_DUP(info.serialNumber);
-	token->initialized = (info.flags & CKF_TOKEN_INITIALIZED) ? 1 : 0;
-	token->loginRequired = (info.flags & CKF_LOGIN_REQUIRED) ? 1 : 0;
-	token->secureLogin = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
-	token->userPinSet = (info.flags & CKF_USER_PIN_INITIALIZED) ? 1 : 0;
-	token->readOnly = (info.flags & CKF_WRITE_PROTECTED) ? 1 : 0;
-	token->hasRng = (info.flags & CKF_RNG) ? 1 : 0;
-	token->userPinCountLow = (info.flags & CKF_USER_PIN_COUNT_LOW) ? 1 : 0;
-	token->userPinFinalTry = (info.flags & CKF_USER_PIN_FINAL_TRY) ? 1 : 0;
-	token->userPinLocked = (info.flags & CKF_USER_PIN_LOCKED) ? 1 : 0;
-	token->userPinToBeChanged = (info.flags & CKF_USER_PIN_TO_BE_CHANGED) ? 1 : 0;
-	token->soPinCountLow = (info.flags & CKF_SO_PIN_COUNT_LOW) ? 1 : 0;
-	token->soPinFinalTry = (info.flags & CKF_SO_PIN_FINAL_TRY) ? 1 : 0;
-	token->soPinLocked = (info.flags & CKF_SO_PIN_LOCKED) ? 1 : 0;
-	token->soPinToBeChanged = (info.flags & CKF_SO_PIN_TO_BE_CHANGED) ? 1 : 0;
-	token->_private = tpriv;
+	slot->token->label = PKCS11_DUP(info.label);
+	slot->token->manufacturer = PKCS11_DUP(info.manufacturerID);
+	slot->token->model = PKCS11_DUP(info.model);
+	slot->token->serialnr = PKCS11_DUP(info.serialNumber);
+	slot->token->initialized = (info.flags & CKF_TOKEN_INITIALIZED) ? 1 : 0;
+	slot->token->loginRequired = (info.flags & CKF_LOGIN_REQUIRED) ? 1 : 0;
+	slot->token->secureLogin = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
+	slot->token->userPinSet = (info.flags & CKF_USER_PIN_INITIALIZED) ? 1 : 0;
+	slot->token->readOnly = (info.flags & CKF_WRITE_PROTECTED) ? 1 : 0;
+	slot->token->hasRng = (info.flags & CKF_RNG) ? 1 : 0;
+	slot->token->userPinCountLow = (info.flags & CKF_USER_PIN_COUNT_LOW) ? 1 : 0;
+	slot->token->userPinFinalTry = (info.flags & CKF_USER_PIN_FINAL_TRY) ? 1 : 0;
+	slot->token->userPinLocked = (info.flags & CKF_USER_PIN_LOCKED) ? 1 : 0;
+	slot->token->userPinToBeChanged = (info.flags & CKF_USER_PIN_TO_BE_CHANGED) ? 1 : 0;
+	slot->token->soPinCountLow = (info.flags & CKF_SO_PIN_COUNT_LOW) ? 1 : 0;
+	slot->token->soPinFinalTry = (info.flags & CKF_SO_PIN_FINAL_TRY) ? 1 : 0;
+	slot->token->soPinLocked = (info.flags & CKF_SO_PIN_LOCKED) ? 1 : 0;
+	slot->token->soPinToBeChanged = (info.flags & CKF_SO_PIN_TO_BE_CHANGED) ? 1 : 0;
+	slot->token->_private = tpriv;
 
 	return 0;
 }

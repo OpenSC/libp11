@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 
 	/* get first slot with a token */
 	slot = PKCS11_find_token(ctx, slots, nslots);
-	if (!slot || !slot->token) {
+	if (slot == NULL || slot->token == NULL) {
 		fprintf(stderr, "no token available\n");
 		rc = 3;
 		goto notoken;
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 
 		/* Read the password. */
 		printf("Password for token %.32s: ", slot->token->label);
-		if (!fgets(password, sizeof(password), stdin))
+		if (fgets(password, sizeof(password), stdin) == NULL)
 			goto failed;
 
 		/* Restore terminal. */
@@ -153,8 +153,8 @@ int main(int argc, char *argv[])
 	authcert=&certs[0];
 
 	/* get random bytes */
-	random = malloc(RANDOM_SIZE);
-	if (!random)
+	random = OPENSSL_malloc(RANDOM_SIZE);
+	if (random == NULL)
 		goto failed;
 
 	fd = open(RANDOM_SOURCE, O_RDONLY);
@@ -182,15 +182,15 @@ int main(int argc, char *argv[])
 	close(fd);
 
 	authkey = PKCS11_find_key(authcert);
-	if (!authkey) {
+	if (authkey == NULL) {
 		fprintf(stderr, "no key matching certificate available\n");
 		goto failed;
 	}
 
 	/* ask for a sha1 hash of the random data, signed by the key */
 	siglen = MAX_SIGSIZE;
-	signature = malloc(MAX_SIGSIZE);
-	if (!signature)
+	signature = OPENSSL_malloc(MAX_SIGSIZE);
+	if (signature == NULL)
 		goto failed;
 
 	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE, signature, &siglen,
@@ -219,9 +219,9 @@ int main(int argc, char *argv[])
 		EVP_PKEY_free(pubkey);
 
 	if (random != NULL)
-		free(random);
+		OPENSSL_free(random);
 	if (signature != NULL)
-		free(signature);
+		OPENSSL_free(signature);
 
 	PKCS11_release_all_slots(ctx, slots, nslots);
 	PKCS11_CTX_unload(ctx);

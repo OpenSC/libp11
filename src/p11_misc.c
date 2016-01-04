@@ -22,15 +22,6 @@
 #include <openssl/crypto.h>
 #include "libp11-int.h"
 
-void *pkcs11_malloc(size_t size)
-{
-	void *p = OPENSSL_malloc(size);
-	if (p == NULL)
-		return NULL;
-	memset(p, 0, size);
-	return p;
-}
-
 /* PKCS11 strings are fixed size blank padded,
  * so when strduping them we must make sure
  * we stop at the end of the buffer, and while we're
@@ -41,7 +32,7 @@ char *pkcs11_strdup(char *mem, size_t size)
 
 	while (size && mem[size - 1] == ' ')
 		size--;
-	res = (char *) OPENSSL_malloc(size + 1);
+	res = OPENSSL_malloc(size + 1);
 	if (res == NULL)
 		return NULL;
 	memcpy(res, mem, size);
@@ -56,7 +47,7 @@ void *memdup(const void *src, size_t size)
 {
 	void *dst;
 
-	dst = malloc(size);
+	dst = OPENSSL_malloc(size);
 	if (dst == NULL)
 		return NULL;
 	memcpy(dst, src, size);

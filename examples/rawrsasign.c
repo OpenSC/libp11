@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 
     /* get first slot with a token */
     slot = PKCS11_find_token(ctx, slots, nslots);
-    if (!slot || !slot->token) {
+    if (slot == NULL || slot->token == NULL) {
         fprintf(stderr, "no token available\n");
         END(1);
     }
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 
         /* Read the password. */
         printf("Password for token %.32s: ", slot->token->label);
-        if (!fgets(password, sizeof(password), stdin))
+        if (fgets(password, sizeof(password), stdin) == NULL)
             END(1);
 
         /* Restore terminal. */
@@ -160,8 +160,8 @@ loggedin:
     authcert=&certs[0];
 
     /* get random bytes */
-    random = malloc(RANDOM_SIZE);
-    if (!random)
+    random = OPENSSL_malloc(RANDOM_SIZE);
+    if (random == NULL)
         END(1);
 
     fd = open(RANDOM_SOURCE, O_RDONLY);
@@ -189,7 +189,7 @@ loggedin:
     close(fd);
 
     authkey = PKCS11_find_key(authcert);
-    if (!authkey) {
+    if (authkey == NULL) {
         fprintf(stderr, "no key matching certificate available\n");
         END(1);
     }
@@ -229,8 +229,8 @@ loggedin:
     }
 
     siglen = MAX_SIGSIZE;
-    signature = malloc(MAX_SIGSIZE);
-    if (!signature)
+    signature = OPENSSL_malloc(MAX_SIGSIZE);
+    if (signature == NULL)
         END(1);
 
     /* Do a raw RSA sign operation with the smart card */
@@ -282,9 +282,9 @@ end:
     if (pubkey != NULL)
         EVP_PKEY_free(pubkey);
     if (random != NULL)
-        free(random);
+        OPENSSL_free(random);
     if (signature != NULL)
-        free(signature);
+        OPENSSL_free(signature);
 
     if (slots != NULL)
         PKCS11_release_all_slots(ctx, slots, nslots);

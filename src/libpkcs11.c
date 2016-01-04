@@ -56,7 +56,10 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	if (mspec == NULL)
 		return NULL;
 
-	mod = (sc_pkcs11_module_t *) calloc(1, sizeof(*mod));
+	mod = OPENSSL_malloc(sizeof(sc_pkcs11_module_t));
+	if (mod == NULL)
+		return NULL;
+	memset(mod, 0, sizeof(sc_pkcs11_module_t));
 	mod->_magic = MAGIC;
 
 #ifdef WIN32
@@ -69,10 +72,8 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 		goto failed;
 
 #ifdef WIN32
-	c_get_function_list = (CK_C_GetFunctionList)GetProcAddress (
-		mod->handle,
-		"C_GetFunctionList"
-	);
+	c_get_function_list = (CK_C_GetFunctionList)
+		GetProcAddress(mod->handle, "C_GetFunctionList");
 #else
 	{
 		/*
@@ -90,7 +91,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	}
 #endif
 
-	if (!c_get_function_list)
+	if (c_get_function_list == NULL)
 		goto failed;
 	rv = c_get_function_list(funcs);
 	if (rv == CKR_OK)
@@ -111,7 +112,7 @@ C_UnloadModule(void *module)
 {
 	sc_pkcs11_module_t *mod = (sc_pkcs11_module_t *) module;
 
-	if (!mod || mod->_magic != MAGIC)
+	if (mod == NULL || mod->_magic != MAGIC)
 		return CKR_ARGUMENTS_BAD;
 
 	if (mod->handle) {
@@ -122,8 +123,8 @@ C_UnloadModule(void *module)
 #endif
 	}
 
-	memset(mod, 0, sizeof(*mod));
-	free(mod);
+	memset(mod, 0, sizeof(sc_pkcs11_module_t));
+	OPENSSL_free(mod);
 
 	return CKR_OK;
 }

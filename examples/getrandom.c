@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 
 	/* get first slot with a token */
 	slot = PKCS11_find_token(ctx, slots, nslots);
-	if (!slot || !slot->token) {
+	if (slot == NULL || slot->token == NULL) {
 		fprintf(stderr, "no token available\n");
 		rc = 3;
 		goto notoken;
