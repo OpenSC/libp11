@@ -19,7 +19,7 @@
 
 mkdir -p $outdir
 
-for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/local/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
+for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
 	if test -f "$i/libsofthsm2.so"; then
 		ADDITIONAL_PARAM="$i/libsofthsm2.so"
 		break
