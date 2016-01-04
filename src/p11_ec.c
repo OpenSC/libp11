@@ -51,34 +51,34 @@
  */
 
 #if defined(ECDSA_F_ECDSA_METHOD_NEW) && defined(BUILD_WITH_ECS_LOCL_H)
-     #warning "Both BUILD_WITH_ECS_LOCL_H and ECDSA_F_ECDSA_METHOD_NEW defined"
-     #warning "Consider not using BUILD_WITH_ECS_LOCL_H"
+	#warning "Both BUILD_WITH_ECS_LOCL_H and ECDSA_F_ECDSA_METHOD_NEW defined"
+	#warning "Consider not using BUILD_WITH_ECS_LOCL_H"
 #endif
 
 #if defined(BUILD_WITH_ECS_LOCL_H)
-    #warning "Consider not using BUILD_WITH_ECS_LOCL_H"
-    #warning "newer version of OpenSSL >-1.0.2 does not need BUILD_WITH_ECS_LOCL_H"
-    #include "ecs_locl.h"
+	#warning "Consider not using BUILD_WITH_ECS_LOCL_H"
+	#warning "newer version of OpenSSL >-1.0.2 does not need BUILD_WITH_ECS_LOCL_H"
+	#include "ecs_locl.h"
 
-    #if !defined(HEADER_ECS_LOCL_H)
-        #warning "Unable to find OpenSSL src/crypto/ecs_locl.h"
-        #warning "add to CPPFLAGS: -I/path/to/source/openssl-n.n.n/src/crypto/ecdsa"
-        #warning "or copy ecs_locl.h  or create symlink to it"
-        #if defined(ECDSA_F_ECDSA_METHOD_NEW)
-            #warning "Will build instead using ECDSA_F_ECDSA_METHOD_NEW"
+	#if !defined(HEADER_ECS_LOCL_H)
+		#warning "Unable to find OpenSSL src/crypto/ecs_locl.h"
+		#warning "add to CPPFLAGS: -I/path/to/source/openssl-n.n.n/src/crypto/ecdsa"
+		#warning "or copy ecs_locl.h or create symlink to it"
+		#if defined(ECDSA_F_ECDSA_METHOD_NEW)
+			#warning "Will build instead using ECDSA_F_ECDSA_METHOD_NEW"
+		#else
+			#error "Unable to build with ECDSA support"
+		#endif
 	#else
-	    #error " Unable to build with ECDSA support"
-        #endif
-    #else
-        #define LIBP11_BUILD_WITH_ECS_LOCL_H
-    #endif
+		#define LIBP11_BUILD_WITH_ECS_LOCL_H
+	#endif
 #else
-    #if !defined(ECDSA_F_ECDSA_METHOD_NEW)
-        #define LIBP11_BUILD_WITHOUT_ECDSA
-    #endif
+	#if !defined(ECDSA_F_ECDSA_METHOD_NEW)
+		#define LIBP11_BUILD_WITHOUT_ECDSA
+	#endif
 #endif
 
-#endif /* OpenSSL EC tests and version */  
+#endif /* OpenSSL EC tests and version */
 
 #if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
 
@@ -120,7 +120,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
 
 	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-	    || key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
+			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
 		EVP_PKEY_free(pk);
 		EC_KEY_free(ec);
 		return NULL;
@@ -136,12 +136,12 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 			ec_paramslen > 0) {
 		ec_params = OPENSSL_malloc(ec_paramslen);
 		if (ec_params) {
-		    ckrv = key_getattr_var(key, CKA_EC_PARAMS, ec_params, &ec_paramslen);
-		    if (ckrv == CKR_OK) {
-			const unsigned char * a = ec_params;
-			    /* convert to OpenSSL parmas */
-			    d2i_ECParameters(&ec, &a, ec_paramslen);
-		    }
+			ckrv = key_getattr_var(key, CKA_EC_PARAMS, ec_params, &ec_paramslen);
+			if (ckrv == CKR_OK) {
+				const unsigned char * a = ec_params;
+				/* convert to OpenSSL parmas */
+				d2i_ECParameters(&ec, &a, ec_paramslen);
+			}
 		}
 	}
 
@@ -152,20 +152,20 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 		if (ckrv == CKR_OK && ec_pointlen > 0) {
 			ec_point = OPENSSL_malloc(ec_pointlen);
 			if (ec_point) {
-			    ckrv = key_getattr_var(pubkey, CKA_EC_POINT, ec_point, &ec_pointlen);
-			    if (ckrv == CKR_OK) {
-				/* PKCS#11 returns ASN1 octstring*/
-				const unsigned char * a;
-				/*  we have asn1 octet string, need to strip off 04 len */
+				ckrv = key_getattr_var(pubkey, CKA_EC_POINT, ec_point, &ec_pointlen);
+				if (ckrv == CKR_OK) {
+					/* PKCS#11 returns ASN1 octstring*/
+					const unsigned char * a;
+					/* we have asn1 octet string, need to strip off 04 len */
 
-				a = ec_point;
-				os = d2i_ASN1_OCTET_STRING(NULL, &a, ec_pointlen);
-				if (os) {
-				    a = os->data;
-				    o2i_ECPublicKey(&ec, &a, os->length);
-				}
+					a = ec_point;
+					os = d2i_ASN1_OCTET_STRING(NULL, &a, ec_pointlen);
+					if (os) {
+						a = os->data;
+						o2i_ECPublicKey(&ec, &a, os->length);
+					}
 /* EC_KEY_print_fp(stderr, ec, 5); */
-			    }
+				}
 			}
 		}
 	}
@@ -218,7 +218,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	int rv;
 
 	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, 0);
-	if  (key == NULL)
+	if (key == NULL)
 		return NULL;
 
 	siglen = sizeof(sigret);
@@ -246,19 +246,19 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
-    if (ops == NULL) {
-	ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
-	ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
-	ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
-    }
-    return ops;
+	if (ops == NULL) {
+		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
+		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
+		ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
+	}
+	return ops;
 }
 
 void PKCS11_ecdsa_method_free(void)
 {
 	if (ops) {
-	ECDSA_METHOD_free(ops);
-	ops = NULL;
+		ECDSA_METHOD_free(ops);
+		ops = NULL;
 	}
 }
 
@@ -270,7 +270,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 	static struct ecdsa_method sops;
 
 	if (!sops.ecdsa_do_sign) {
-/* question if compiler is copying each  member of struct or not */
+/* question if compiler is copying each member of struct or not */
 		sops = *ECDSA_get_default_method();
 		sops.ecdsa_do_sign = pkcs11_ecdsa_do_sign;
 		sops.ecdsa_sign_setup = pkcs11_ecdsa_sign_setup;
@@ -280,7 +280,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 
 void PKCS11_ecdsa_method_free(void)
 {
-    /* It is static in the old method */
+	/* It is static in the old method */
 }
 
 #endif /* LIBP11_BUILD_WITH_ECS_LOCL_H */
@@ -289,7 +289,7 @@ PKCS11_KEY_ops pkcs11_ec_ops_s = {
 	EVP_PKEY_EC,
 	pkcs11_get_evp_key_ec
 };
-PKCS11_KEY_ops  *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
+PKCS11_KEY_ops *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
 #else /* LIBP11_BUILD_WITHOUT_ECDSA */
 
@@ -298,7 +298,7 @@ void *pkcs11_ec_ops = {NULL};
 /* if not built with EC or OpenSSL does not support ECDSA
  * add these routines so engine_pkcs11 can be built now and not
  * require further changes */
-#warning  "ECDSA support not built with libp11"
+#warning "ECDSA support not built with libp11"
 
 void * PKCS11_get_ecdsa_method(void)
 {

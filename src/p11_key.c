@@ -339,9 +339,9 @@ static int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
 			return -1;
 		}
 	}
-	if(keyp)
+	if (keyp)
 		*keyp = keys->keys;
-	if(countp)
+	if (countp)
 		*countp = keys->num;
 	return 0;
 }
@@ -449,7 +449,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	key = keys->keys + keys->num++;
 	memset(key, 0, sizeof(PKCS11_KEY));
 	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
-	if(kpriv)
+	if (kpriv)
 		memset(kpriv, 0, sizeof(PKCS11_KEY_private));
 	key->_private = kpriv;
 	kpriv->object = obj;

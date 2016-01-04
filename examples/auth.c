@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 
 	if (rc < RANDOM_SIZE) {
 		fprintf(stderr, "fatal: read returned less than %d<%d bytes\n",
-		       rc, RANDOM_SIZE);
+			rc, RANDOM_SIZE);
 		close(fd);
 		goto failed;
 	}
@@ -193,8 +193,8 @@ int main(int argc, char *argv[])
 	if (signature == NULL)
 		goto failed;
 
-	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE, signature, &siglen,
-			 authkey);
+	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE,
+		signature, &siglen, authkey);
 	if (rc != 1) {
 		fprintf(stderr, "fatal: pkcs11_sign failed\n");
 		goto failed;
@@ -234,15 +234,15 @@ int main(int argc, char *argv[])
 	return 0;
 
 
-      failed:
+failed:
 	ERR_print_errors_fp(stderr);
-      notoken:
+notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
-      noslots:
+noslots:
 	PKCS11_CTX_unload(ctx);
 
-      nolib:
+nolib:
 	PKCS11_CTX_free(ctx);
 	
 

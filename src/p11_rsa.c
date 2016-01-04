@@ -69,15 +69,15 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 		for(ki = 0; ki < tpriv->pub.num; ki++) {
 			PKCS11_KEY* pubkey = &tpriv->pub.keys[ki];
 
-			if(key_getattr_bn(pubkey, CKA_MODULUS, &pubmod)) {
+			if (key_getattr_bn(pubkey, CKA_MODULUS, &pubmod)) {
 				continue;
 			}
-			if(BN_cmp(rsa->n, pubmod)) { // Modulus not same -- this public from another key
+			if (BN_cmp(rsa->n, pubmod)) { // Modulus not same -- this public from another key
 				continue;
 			}
 
 			// If modulus are same -- we found required key, extract public exponent from it
-			if(key_getattr_bn(pubkey, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+			if (key_getattr_bn(pubkey, CKA_PUBLIC_EXPONENT, &rsa->e)) {
 				continue;
 			}
 			if (BN_is_zero(rsa->e)) {
@@ -85,7 +85,8 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 			}
 			break;
 		}
-		if(pubmod!=NULL) BN_free(pubmod);
+		if (pubmod!=NULL)
+			BN_free(pubmod);
 	}
 
 	/* If the key is not extractable, create a key object
@@ -124,7 +125,7 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 {
 	BIGNUM *n = NULL;
 	int numbytes = 0;
-	if(key_getattr_bn(key, CKA_MODULUS, &n))
+	if (key_getattr_bn(key, CKA_MODULUS, &n))
 		return 0;
 	numbytes = BN_num_bytes(n);
 	BN_free(n);

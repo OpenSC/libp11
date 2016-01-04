@@ -52,12 +52,9 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	mechanism.mechanism = CKM_ECDSA;
 
 	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
-	if((rv = CRYPTOKI_call(ctx, C_SignInit
-			       (session, &mechanism, priv->object))) == 0) {
-		rv = CRYPTOKI_call(ctx, C_Sign
-				   (session, (CK_BYTE *) m, m_len,
-				    sigret, &ck_sigsize));
-	}
+	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
+		CRYPTOKI_call(ctx,
+			C_Sign(session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
 	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
@@ -86,9 +83,9 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	sigsize = PKCS11_get_key_size(key);
 
 	if (ssl) {
-		if((m_len != 36) /* SHA1 + MD5 */ ||
-		   ((m_len + RSA_PKCS1_PADDING_SIZE) > (unsigned)sigsize)) {
-			return(0); /* the size is wrong */
+		if ((m_len != 36) /* SHA1 + MD5 */ ||
+				((m_len + RSA_PKCS1_PADDING_SIZE) > (unsigned)sigsize)) {
+			return 0; /* the size is wrong */
 		}
 	} else {
 		ASN1_TYPE parameter = { V_ASN1_NULL, { NULL } };
@@ -97,20 +94,20 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		X509_SIG digest_info = { &algor, &digest };
 		int size;
 		/* Fetch the OID of the algorithm used */
-		if((algor.algorithm = OBJ_nid2obj(type)) && 
-		   (algor.algorithm->length) &&
-		   /* Get the size of the encoded DigestInfo */
-		   (size = i2d_X509_SIG(&digest_info, NULL)) &&
-		   /* Check that size is compatible with PKCS#11 padding */
-		   (size + RSA_PKCS1_PADDING_SIZE <= sigsize) &&
-		   (encoded = OPENSSL_malloc(sigsize))) {
+		if ((algor.algorithm = OBJ_nid2obj(type)) &&
+				(algor.algorithm->length) &&
+				/* Get the size of the encoded DigestInfo */
+				(size = i2d_X509_SIG(&digest_info, NULL)) &&
+				/* Check that size is compatible with PKCS#11 padding */
+				(size + RSA_PKCS1_PADDING_SIZE <= sigsize) &&
+				(encoded = OPENSSL_malloc(sigsize))) {
 			unsigned char *tmp = encoded;
 			/* Actually do the encoding */
 			i2d_X509_SIG(&digest_info,&tmp);
 			m = encoded;
 			m_len = size;
 		} else {
-			return(0);
+			return 0;
 		}
 	}
 
@@ -131,7 +128,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 
 int
 PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
-		   PKCS11_KEY * key, int padding)
+		PKCS11_KEY * key, int padding)
 {
 	PKCS11_KEY_private *priv;
 	PKCS11_SLOT *slot;
@@ -180,12 +177,9 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
 	 * by OpenSSL). The library assumes that the memory passed
 	 * by the caller is always big enough */
-	if((rv = CRYPTOKI_call(ctx, C_SignInit
-			       (session, &mechanism, priv->object))) == 0) {
-		rv = CRYPTOKI_call(ctx, C_Sign
-				   (session, (CK_BYTE *) from, flen,
-				    to, &ck_sigsize));
-	}
+	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
+		CRYPTOKI_call(ctx,
+			C_Sign(session, (CK_BYTE *) from, flen, to, &ck_sigsize));
 	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
@@ -201,7 +195,7 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 
 int
 PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
-		   PKCS11_KEY * key, int padding)
+		PKCS11_KEY * key, int padding)
 {
 	CK_RV rv;
 	PKCS11_KEY_private *priv;
@@ -231,23 +225,22 @@ PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 
 
 	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
-	if( (rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, priv->object))) == 0) {
-		rv = CRYPTOKI_call(ctx, C_Decrypt
-			   (session, (CK_BYTE *) from, (CK_ULONG)flen,
-	   		    (CK_BYTE_PTR)to, &size));
-	}
+	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, priv->object)) ||
+		CRYPTOKI_call(ctx,
+			C_Decrypt(session, (CK_BYTE *) from, (CK_ULONG)flen,
+				(CK_BYTE_PTR)to, &size));
 	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));
 	}
 
-	return (rv) ? 0 : size;
+	return rv ? 0 : size;
 }
 
 int
 PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
-		  unsigned char *signature, unsigned int siglen, PKCS11_KEY * key)
+		unsigned char *signature, unsigned int siglen, PKCS11_KEY * key)
 {
 	(void)type;
 	(void)m;

@@ -75,14 +75,14 @@ int main(int argc, char *argv[])
 
 	rc = 0;
 
-      norandom:
-      notoken:
+norandom:
+notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
-      noslots:
+noslots:
 	PKCS11_CTX_unload(ctx);
 
-      nolib:
+nolib:
 	PKCS11_CTX_free(ctx);
 	return rc;
 }

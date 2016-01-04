@@ -36,8 +36,8 @@
  */
 static int
 pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
-		   CK_OBJECT_HANDLE o, CK_ATTRIBUTE_TYPE type, void *value,
-		   size_t * size)
+		CK_OBJECT_HANDLE o, CK_ATTRIBUTE_TYPE type, void *value,
+		size_t * size)
 {
 	CK_ATTRIBUTE templ;
 	int rv;
@@ -55,23 +55,23 @@ pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
 
 int
 pkcs11_getattr_var(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		   unsigned int type, void *value, size_t * size)
+		unsigned int type, void *value, size_t * size)
 {
 	return pkcs11_getattr_int(TOKEN2CTX(token),
-				  PRIVSLOT(TOKEN2SLOT(token))->session,
-				  object, type, value, size);
+		PRIVSLOT(TOKEN2SLOT(token))->session,
+		object, type, value, size);
 }
 
 int
 pkcs11_getattr(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-	       unsigned int type, void *value, size_t size)
+		unsigned int type, void *value, size_t size)
 {
 	return pkcs11_getattr_var(token, object, type, value, &size);
 }
 
 int
 pkcs11_getattr_s(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		 unsigned int type, void *value, size_t size)
+		unsigned int type, void *value, size_t size)
 {
 	memset(value, 0, size);
 	return pkcs11_getattr_var(token, object, type, value, &size);
@@ -79,7 +79,7 @@ pkcs11_getattr_s(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 
 int
 pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		  unsigned int type, BIGNUM ** bn)
+		unsigned int type, BIGNUM ** bn)
 {
 	CK_BYTE *binary;
 	size_t size;
@@ -105,7 +105,7 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 	 */
 	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
-			  pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
+			pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
 		ret = -1;
 		goto cleanup;
 	}

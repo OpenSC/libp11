@@ -91,7 +91,7 @@ typedef struct pkcs11_token_private {
 #define TOKEN2CTX(token)	SLOT2CTX(TOKEN2SLOT(token))
 
 typedef struct pkcs11_key_ops {
-	int type;               /* EVP_PKEY_xxx */
+	int type; /* EVP_PKEY_xxx */
 	EVP_PKEY *(*get_evp_key) (PKCS11_KEY *);
 } PKCS11_KEY_ops;
 
@@ -154,13 +154,13 @@ extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern char *pkcs11_strdup(char *, size_t);
 
 extern int pkcs11_getattr(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-			  unsigned int, void *, size_t);
+	unsigned int, void *, size_t);
 extern int pkcs11_getattr_s(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-			    unsigned int, void *, size_t);
+	unsigned int, void *, size_t);
 extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-			      unsigned int, void *, size_t *);
+	unsigned int, void *, size_t *);
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-			     unsigned int, BIGNUM **);
+	unsigned int, BIGNUM **);
 
 extern int pkcs11_reload_key(PKCS11_KEY *);
 

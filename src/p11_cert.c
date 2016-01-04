@@ -31,12 +31,6 @@ static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o, PKCS11_CERT **);
 
-static CK_OBJECT_CLASS cert_search_class;
-static CK_ATTRIBUTE cert_search_attrs[] = {
-	{CKA_CLASS, &cert_search_class, sizeof(cert_search_class)},
-};
-#define numof(arr)	(sizeof(arr)/sizeof((arr)[0]))
-
 /*
  * Enumerate all certs on the card
  */
@@ -85,6 +79,11 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY * key)
  */
 static int pkcs11_find_certs(PKCS11_TOKEN * token)
 {
+	CK_OBJECT_CLASS cert_search_class;
+	CK_ATTRIBUTE cert_search_attrs[] = {
+		{CKA_CLASS, &cert_search_class, sizeof(cert_search_class)},
+	};
+
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
 	CK_SESSION_HANDLE session;
@@ -97,8 +96,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN * token)
 
 	/* Tell the PKCS11 lib to enumerate all matching objects */
 	cert_search_class = CKO_CERTIFICATE;
-	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, cert_search_attrs,
-		numof(cert_search_attrs)));
+	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, cert_search_attrs, 1));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
 
 	do {

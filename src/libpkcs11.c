@@ -79,15 +79,8 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 		/*
 		 * Make compiler happy!
 		 */
-		void *p = dlsym(
-			mod->handle,
-			"C_GetFunctionList"
-		);
-		memmove(
-			&c_get_function_list, 
-			&p,
-			sizeof(void *)
-		);
+		void *p = dlsym(mod->handle, "C_GetFunctionList");
+		memmove(&c_get_function_list, &p, sizeof(void *));
 	}
 #endif
 
@@ -95,7 +88,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 		goto failed;
 	rv = c_get_function_list(funcs);
 	if (rv == CKR_OK)
-		return (void *) mod;
+		return mod;
 
 failed:
 	C_UnloadModule((void *) mod);

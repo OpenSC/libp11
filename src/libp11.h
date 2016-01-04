@@ -181,7 +181,7 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
  * Get the slot_id from a slot as it is stored in private
  *
  * @param slotp pointer on a slot
- * @retval the slotid 
+ * @retval the slotid
  */
 extern unsigned long PKCS11_get_slotid_from_slot(PKCS11_SLOT *slotp);
 
@@ -204,7 +204,7 @@ extern void PKCS11_release_all_slots(PKCS11_CTX * ctx,
  * @retval !=NULL pointer on a slot structure
  * @retval NULL error
  */
-PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx, 
+PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
 /**
@@ -261,7 +261,7 @@ extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
  *
  * @param   key  PKCS11_KEY object
  * @retval !=NULL reference to EVP_PKEY object.
- *         The returned EVP_PKEY object should be treated as const 
+ *         The returned EVP_PKEY object should be treated as const
  *         and must not be freed.
  * @retval NULL error
  */
@@ -323,7 +323,7 @@ extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
 extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 	const char *new_pin);
 
-/** 
+/**
  * Generate and store a private key on the token
  *
  * @param token token returned by PKCS11_find_token()
@@ -391,11 +391,11 @@ extern int PKCS11_private_encrypt(int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * rsa, int padding);
 /**
  * Decrypts data using the private key
- * 
+ *
  * @param  flen     length of the encrypted data
  * @param  from     encrypted data
  * @param  to       output buffer (MUST be a least flen bytes long)
- * @param  key      private key object 
+ * @param  key      private key object
  * @param  padding  padding algorithm to be used
  * @return the length of the decrypted data or 0 if an error occurred
  */
