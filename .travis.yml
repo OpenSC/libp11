@@ -1,12 +1,13 @@
+sudo: true
+
 language: c
+
 compiler:
-  - gcc
   - clang
+  - gcc
+
 before_script:
-  - sudo apt-add-repository -y ppa:pkg-opendnssec/ppa
-  - sudo apt-get update -qq
-  - sudo apt-get install -y softhsm libsofthsm-dev opensc
+  - ./.travis.sh
   - touch config.rpath && autoreconf -fvi && ./configure --enable-strict --enable-pedantic
 
 script: make && make check && make dist
-
