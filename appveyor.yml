@@ -1,4 +1,4 @@
-version: 0.3.0.{build}
+version: 0.3.1.{build}
 
 platform:
   - x86
@@ -7,7 +7,6 @@ platform:
 configuration:
   - Release
   - Debug
-
 
 environment:
   matrix:
