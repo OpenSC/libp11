@@ -133,11 +133,11 @@ AC_CHECK_PROGS([DOXYGEN],[doxygen])
 test "${enable_api_doc}" = "yes" -a -z "${DOXYGEN}" && AC_MSG_ERROR([doxygen is required for api doc])
 
 if test "${WIN32}" != "yes"; then
-	AC_CHECK_LIB(
-		[dl],
+	AC_SEARCH_LIBS(
 		[dlopen],
+		[dl],
 		,
-		[AC_MSG_ERROR([libdl required])]
+		[AC_MSG_ERROR([dlopen required])]
 	)
 	AC_CHECK_FUNCS([__register_atfork],,)
 fi
