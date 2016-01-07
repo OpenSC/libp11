@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.3.1; unreleased;
+* A private index is allocated for ex_data access (RSA and ECDSA classes)
+  instead of using the reserved index zero (app_data) (Michał Trojnara)
 * Improved searching for dlopen() (Christoph Moench-Tegeder)
 * Fixed EVP_PKEY handling of public keys (Michał Trojnara)
 * Added PKCS11_enumerate_public_keys to the API (Michał Trojnara)

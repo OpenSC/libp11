@@ -28,6 +28,8 @@
 #include <openssl/rsa.h>
 #include "libp11-int.h"
 
+static int rsa_ex_index = 0;
+
 /*
  * Get RSA key material
  */
@@ -100,7 +102,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	}
 
 	rsa->flags |= RSA_FLAG_SIGN_VER;
-	RSA_set_app_data(rsa, key);
+	RSA_set_ex_data(rsa, rsa_ex_index, key);
 	RSA_free(rsa); /* drops our reference to it */
 	return pk;
 }
@@ -136,20 +138,23 @@ static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
 
-	return PKCS11_private_decrypt(flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_decrypt(flen, from, to,
+		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index), padding);
 }
 
 static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
-	return PKCS11_private_encrypt(flen, from, to, (PKCS11_KEY *) RSA_get_app_data(rsa), padding);
+	return PKCS11_private_encrypt(flen, from, to,
+		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index), padding);
 }
 
 static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
 {
 	
-	return PKCS11_sign(type, m, m_len, sigret, siglen, (PKCS11_KEY *) RSA_get_app_data(rsa));
+	return PKCS11_sign(type, m, m_len, sigret, siglen,
+		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index));
 }
 
 /* Lousy hack alert. If RSA_verify detects that the key has the
@@ -176,6 +181,26 @@ pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
 	return res;
 }
 
+static void alloc_rsa_ex_index() {
+	if (rsa_ex_index == 0) {
+		while (rsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+			rsa_ex_index = RSA_get_ex_new_index(0, "libp11 rsa",
+				NULL, NULL, NULL);
+		if (rsa_ex_index < 0)
+			rsa_ex_index = 0; /* Fallback to app_data */
+	}
+}
+
+static void free_rsa_ex_index() {
+	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
+#if OPENSSL_VERSION_NUMBER >= 0x10100001L
+	if (rsa_ex_index > 0) {
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_RSA, rsa_ex_index);
+		rsa_ex_index = 0;
+	}
+#endif
+}
+
 /*
  * Overload the default OpenSSL methods for RSA
  */
@@ -183,6 +208,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 {
 	static RSA_METHOD ops;
 
+	alloc_rsa_ex_index();
 	if (!ops.rsa_priv_enc) {
 		ops = *RSA_get_default_method();
 		ops.rsa_priv_enc = pkcs11_rsa_encrypt;
@@ -191,6 +217,12 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		ops.rsa_verify = pkcs11_rsa_verify;
 	}
 	return &ops;
+}
+
+/* This function is *not* currently exported */
+void PKCS11_rsa_method_free(void)
+{
+    free_rsa_ex_index();
 }
 
 PKCS11_KEY_ops pkcs11_rsa_ops = {
