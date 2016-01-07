@@ -19,3 +19,5 @@ endif
 
 clean-local:
 	-rm -fr api.out
+
+# vim: set noexpandtab:

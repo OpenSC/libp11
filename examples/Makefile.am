@@ -8,3 +8,4 @@ noinst_PROGRAMS = auth decrypt getrandom listkeys
 
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
+# vim: set noexpandtab:

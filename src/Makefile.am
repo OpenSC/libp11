@@ -42,3 +42,4 @@ LTRCCOMPILE = $(LIBTOOL) --mode=compile --tag=RC $(RCCOMPILE)
 .rc.o:
 	$(RCCOMPILE) -i "$<" -o "$@"
 
+# vim: set noexpandtab:
