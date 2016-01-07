@@ -219,3 +219,5 @@ OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 
 EOF
+
+# vim: set noexpandtab:

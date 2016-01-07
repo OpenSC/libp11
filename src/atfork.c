@@ -86,3 +86,5 @@ int _P11_register_fork_handler(void)
 # endif
 
 #endif /* !_WIN32 */
+
+/* vim: set noexpandtab: */

@@ -239,3 +239,5 @@ nolib:
 	printf("decryption failed.\n");
 	return 1;
 }
+
+/* vim: set noexpandtab: */

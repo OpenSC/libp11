@@ -121,3 +121,5 @@ C_UnloadModule(void *module)
 
 	return CKR_OK;
 }
+
+/* vim: set noexpandtab: */

@@ -134,3 +134,5 @@ static void error_queue(const char *name)
 		ERR_print_errors_fp(stderr);
 	}
 }
+
+/* vim: set noexpandtab: */

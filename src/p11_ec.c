@@ -335,3 +335,5 @@ void PKCS11_ecdsa_method_free(void)
 }
 
 #endif /* LIBP11_BUILD_WITHOUT_ECDSA */
+
+/* vim: set noexpandtab: */

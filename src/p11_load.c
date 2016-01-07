@@ -173,3 +173,5 @@ void PKCS11_CTX_free(PKCS11_CTX * ctx)
 	OPENSSL_free(ctx->_private);
 	OPENSSL_free(ctx);
 }
+
+/* vim: set noexpandtab: */

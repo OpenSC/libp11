@@ -24,3 +24,5 @@ SUBDIRS = src doc tests examples
 dist-hook:
 	$(MKDIR_P) "$(distdir)/m4"
 	echo > "$(distdir)/packaged"
+
+# vim: set noexpandtab:

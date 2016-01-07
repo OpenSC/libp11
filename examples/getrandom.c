@@ -86,3 +86,5 @@ nolib:
 	PKCS11_CTX_free(ctx);
 	return rc;
 }
+
+/* vim: set noexpandtab: */

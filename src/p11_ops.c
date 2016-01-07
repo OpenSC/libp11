@@ -254,3 +254,4 @@ PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 	return -1;
 }
 
+/* vim: set noexpandtab: */

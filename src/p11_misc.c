@@ -164,3 +164,5 @@ int check_key_fork(PKCS11_KEY *key)
 	CRYPTO_w_unlock(priv->lockid);
 	return rv;
 }
+
+/* vim: set noexpandtab: */

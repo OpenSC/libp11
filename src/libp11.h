@@ -463,3 +463,5 @@ extern void ERR_load_PKCS11_strings(void);
 }
 #endif
 #endif
+
+/* vim: set noexpandtab: */

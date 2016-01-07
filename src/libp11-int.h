@@ -191,3 +191,5 @@ extern PKCS11_KEY_ops pkcs11_rsa_ops;
 extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
 #endif
+
+/* vim: set noexpandtab: */

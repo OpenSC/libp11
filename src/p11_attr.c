@@ -178,3 +178,5 @@ void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR ap, unsigned int n)
 			OPENSSL_free(ap[n].pValue);
 	}
 }
+
+/* vim: set noexpandtab: */

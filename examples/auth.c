@@ -249,3 +249,5 @@ nolib:
 	printf("authentication failed.\n");
 	return 1;
 }
+
+/* vim: set noexpandtab: */

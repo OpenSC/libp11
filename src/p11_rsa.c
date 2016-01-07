@@ -229,3 +229,5 @@ PKCS11_KEY_ops pkcs11_rsa_ops = {
 	EVP_PKEY_RSA,
 	pkcs11_get_evp_key_rsa
 };
+
+/* vim: set noexpandtab: */

@@ -61,3 +61,5 @@ unsigned int _P11_get_forkid(void);
 #endif
 
 #endif
+
+/* vim: set noexpandtab: */

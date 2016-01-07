@@ -270,3 +270,5 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 	/* Gobble the key object */
 	return pkcs11_init_cert(ctx, token, session, object, ret_cert);
 }
+
+/* vim: set noexpandtab: */

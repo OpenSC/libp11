@@ -500,3 +500,5 @@ void pkcs11_destroy_keys(PKCS11_TOKEN * token, unsigned int type)
 	keys->keys = NULL;
 	keys->num = -1;
 }
+
+/* vim: set noexpandtab: */

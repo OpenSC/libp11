@@ -158,3 +158,5 @@ void ERR_load_PKCS11_strings(void)
 #endif
 	}
 }
+
+/* vim: set noexpandtab: */

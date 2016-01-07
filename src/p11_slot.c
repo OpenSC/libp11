@@ -564,3 +564,5 @@ static void pkcs11_destroy_token(PKCS11_TOKEN * token)
 	OPENSSL_free(token->_private);
 	memset(token, 0, sizeof(*token));
 }
+
+/* vim: set noexpandtab: */
