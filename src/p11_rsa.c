@@ -33,63 +33,76 @@ static int rsa_ex_index = 0;
 /*
  * Get RSA key material
  */
+static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
+{
+	RSA *rsa;
+	PKCS11_KEY *keys = NULL;
+	unsigned int i, count = 0;
+
+	rsa = RSA_new();
+	if (rsa == NULL)
+		return NULL;
+
+	/* Retrieve the modulus and the public exponent */
+	if (key_getattr_bn(key, CKA_MODULUS, &rsa->n) ||
+			key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
+		RSA_free(rsa);
+		return NULL;
+	}
+
+	if(!BN_is_zero(rsa->e)) /* The public exponent was retrieved */
+		return rsa;
+
+	/* The public exponent was not found in the private key:
+	 * retrieve it from the corresponding public key */
+	if (!PKCS11_enumerate_public_keys(KEY2TOKEN(key), &keys, &count)) {
+		for(i = 0; i < count; i++) {
+			BIGNUM *pubmod;
+
+			if (key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod))
+				continue; /* Failed to retrieve the modulus */
+			if (BN_cmp(rsa->n, pubmod) == 0) { /* The key was found */
+				BN_free(pubmod);
+				if (key_getattr_bn(&keys[i], CKA_PUBLIC_EXPONENT, &rsa->e))
+					continue; /* Failed to retrieve the public exponent */
+				return rsa;
+			} else {
+				BN_free(pubmod);
+			}
+		}
+	}
+
+	/* Last resort: use the most common default */
+	rsa->e = BN_new();
+	if(rsa->e && BN_set_word(rsa->e, RSA_F4))
+		return rsa;
+
+	RSA_free(rsa);
+	return NULL;
+}
+
+/*
+ * Build an EVP_PKEY object
+ */
 static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 {
 	EVP_PKEY *pk;
 	CK_BBOOL sensitive, extractable;
 	RSA *rsa;
 
-	pk = EVP_PKEY_new();
-	if (pk == NULL)
+	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
+			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable)))
 		return NULL;
 
-	rsa = RSA_new();
-	if (rsa == NULL) {
-		EVP_PKEY_free(pk);
+	rsa = pkcs11_get_rsa(key);
+	if (rsa == NULL)
+		return NULL;
+	pk = EVP_PKEY_new();
+	if (pk == NULL) {
+		RSA_free(rsa);
 		return NULL;
 	}
 	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
-
-	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
-		EVP_PKEY_free(pk);
-		RSA_free(rsa);
-		return NULL;
-	}
-
-	if (key_getattr_bn(key, CKA_MODULUS, &rsa->n) ||
-			key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa->e)) {
-		EVP_PKEY_free(pk);
-		RSA_free(rsa);
-		return NULL;
-	}
-
-	if (BN_is_zero(rsa->e)) {
-		PKCS11_TOKEN_private * tpriv = PRIVTOKEN(KEY2TOKEN(key));
-		int ki;
-		BIGNUM* pubmod = NULL;
-		for(ki = 0; ki < tpriv->pub.num; ki++) {
-			PKCS11_KEY* pubkey = &tpriv->pub.keys[ki];
-
-			if (key_getattr_bn(pubkey, CKA_MODULUS, &pubmod)) {
-				continue;
-			}
-			if (BN_cmp(rsa->n, pubmod)) { // Modulus not same -- this public from another key
-				continue;
-			}
-
-			// If modulus are same -- we found required key, extract public exponent from it
-			if (key_getattr_bn(pubkey, CKA_PUBLIC_EXPONENT, &rsa->e)) {
-				continue;
-			}
-			if (BN_is_zero(rsa->e)) {
-				continue;
-			}
-			break;
-		}
-		if (pubmod!=NULL)
-			BN_free(pubmod);
-	}
 
 	/* If the key is not extractable, create a key object
 	 * that will use the card's functions to sign & decrypt */
@@ -103,7 +116,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
-	RSA_free(rsa); /* drops our reference to it */
+	RSA_free(rsa); /* Drops our reference to it */
 	return pk;
 }
 

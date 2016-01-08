@@ -153,7 +153,7 @@ PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
 	}
 
 	err = BIO_new_fp(stderr, BIO_NOCLOSE);
-	rsa = RSA_generate_key(bits, 0x10001, NULL, err);
+	rsa = RSA_generate_key(bits, RSA_F4, NULL, err);
 	BIO_free(err);
 	if (rsa == NULL) {
 		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_KEYGEN_FAILED);

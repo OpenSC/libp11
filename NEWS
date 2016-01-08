@@ -1,6 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.3.1; unreleased;
+* Fixed a memory leak in pkcs11_get_evp_key_rsa() (Michał Trojnara)
 * A private index is allocated for ex_data access (RSA and ECDSA classes)
   instead of using the reserved index zero (app_data) (Michał Trojnara)
 * Improved searching for dlopen() (Christoph Moench-Tegeder)
