@@ -44,6 +44,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 	ctx->_private = priv;
 	priv->forkid = _P11_get_forkid();
 	priv->lockid = CRYPTO_get_new_dynlockid();
+	ERR_clear_error(); /* Dynamic locks are optional */
 
 	return ctx;
  fail:

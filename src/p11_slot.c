@@ -448,6 +448,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	priv->prev_pin = NULL;
 	priv->prev_so = 0;
 	priv->lockid = CRYPTO_get_new_dynlockid();
+	ERR_clear_error(); /* Dynamic locks are optional */
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
