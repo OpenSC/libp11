@@ -235,7 +235,7 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 	rv = CRYPTOKI_call(ctx,
 		C_Login(priv->session, so ? CKU_SO : CKU_USER,
 			(CK_UTF8CHAR *) pin, pin ? strlen(pin) : 0));
-	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN)  /* logged in -> OK   */
+	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
 		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
 	priv->loggedIn = 1;
 

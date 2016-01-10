@@ -49,9 +49,12 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
 		RSA_free(rsa);
 		return NULL;
 	}
-
 	if(!BN_is_zero(rsa->e)) /* The public exponent was retrieved */
 		return rsa;
+	BN_clear_free(rsa->e);
+	/* In case someone modifies this function to execute RSA_free()
+	 * before a valid BN value is assigned to rsa->e */
+	rsa->e = NULL;
 
 	/* The public exponent was not found in the private key:
 	 * retrieve it from the corresponding public key */
@@ -235,7 +238,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 /* This function is *not* currently exported */
 void PKCS11_rsa_method_free(void)
 {
-    free_rsa_ex_index();
+	free_rsa_ex_index();
 }
 
 PKCS11_KEY_ops pkcs11_rsa_ops = {
