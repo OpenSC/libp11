@@ -62,12 +62,12 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
 			if (key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod))
 				continue; /* Failed to retrieve the modulus */
 			if (BN_cmp(rsa->n, pubmod) == 0) { /* The key was found */
-				BN_free(pubmod);
+				BN_clear_free(pubmod);
 				if (key_getattr_bn(&keys[i], CKA_PUBLIC_EXPONENT, &rsa->e))
 					continue; /* Failed to retrieve the public exponent */
 				return rsa;
 			} else {
-				BN_free(pubmod);
+				BN_clear_free(pubmod);
 			}
 		}
 	}
@@ -143,7 +143,7 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 	if (key_getattr_bn(key, CKA_MODULUS, &n))
 		return 0;
 	numbytes = BN_num_bytes(n);
-	BN_free(n);
+	BN_clear_free(n);
 	return numbytes;
 }
 
