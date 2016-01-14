@@ -24,8 +24,11 @@
 #ifndef _LIB11_H
 #define _LIB11_H
 
+#include <openssl/opensslv.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/bn.h>
+#include <openssl/rsa.h>
 #include <openssl/x509.h>
 
 #ifdef __cplusplus
@@ -410,8 +413,14 @@ extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int 
 
 /* using with openssl method mechanism */
 RSA_METHOD *PKCS11_get_rsa_method(void);
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+EC_KEY_METHOD *PKCS11_get_ec_key_method(void);
+void PKCS11_ec_key_method_free(void);
+#else
 ECDSA_METHOD  *PKCS11_get_ecdsa_method(void);
 void PKCS11_ecdsa_method_free(void);
+#endif
 
 /**
  * Load PKCS11 error strings

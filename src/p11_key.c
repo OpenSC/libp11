@@ -19,6 +19,7 @@
 
 #include "libp11-int.h"
 #include <string.h>
+#include <openssl/bn.h>
 
 #ifdef _WIN32
 #define strncasecmp strnicmp
@@ -144,6 +145,10 @@ PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
 	EVP_PKEY *pk;
 	RSA *rsa;
 	BIO *err;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	BIGNUM *exp = NULL;
+	BN_GENCB *gencb = NULL;
+#endif
 	int rc;
 
 	if (algorithm != EVP_PKEY_RSA) {
@@ -152,7 +157,24 @@ PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
 	}
 
 	err = BIO_new_fp(stderr, BIO_NOCLOSE);
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	exp = BN_new();
+	rsa = RSA_new();
+	gencb = BN_GENCB_new();
+	if (gencb)
+	    BN_GENCB_set(gencb, NULL, err);
+
+	if ( rsa == NULL  || exp == NULL || gencb == NULL
+	    || !BN_set_word(exp, RSA_F4) || !RSA_generate_key_ex(rsa, bits, exp, gencb)) {
+		RSA_free(rsa);
+	}
+	BN_GENCB_free(gencb);
+	BN_free(exp);
+
+#else
 	rsa = RSA_generate_key(bits, RSA_F4, NULL, err);
+#endif
 	BIO_free(err);
 	if (rsa == NULL) {
 		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_KEYGEN_FAILED);

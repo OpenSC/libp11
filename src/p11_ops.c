@@ -22,6 +22,8 @@
 
 #include "libp11-int.h"
 #include <string.h>
+#include <openssl/ossl_typ.h>
+#include <openssl/asn1.h>
 
 int
 PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
@@ -94,7 +96,7 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		int size;
 		/* Fetch the OID of the algorithm used */
 		if ((algor.algorithm = OBJ_nid2obj(type)) &&
-				(algor.algorithm->length) &&
+				(algor.algorithm) &&
 				/* Get the size of the encoded DigestInfo */
 				(size = i2d_X509_SIG(&digest_info, NULL)) &&
 				/* Check that size is compatible with PKCS#11 padding */

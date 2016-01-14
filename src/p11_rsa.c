@@ -106,7 +106,11 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	/* TODO: Retrieve the RSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
+	
+#if OPENSSL_VERSION_NUMBER < 0x01010000L
+	/* RSA_FLAG_SIGN_VER no longer  in OpenSSL 1.1 */
 	rsa->flags |= RSA_FLAG_SIGN_VER;
+#endif
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 	RSA_free(rsa); /* Drops our reference to it */
 	return pk;
@@ -167,6 +171,7 @@ static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
  * is implemented externally as well.
  * We work around this by temporarily cleaning the flag, and
  * calling RSA_verify once more.
+ * OpenSSL-1.1 does not define or use the RSA_FLAG_SIGN_VER. No need for hack
  */
 static int
 pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
@@ -175,6 +180,9 @@ pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
 	RSA *r = (RSA *) rsa;	/* Ugly hack to get rid of compiler warning */
 	int res;
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	res = RSA_verify(type, m, m_len, signature, siglen, r);
+#else
 	if (r->flags & RSA_FLAG_SIGN_VER) {
 		r->flags &= ~RSA_FLAG_SIGN_VER;
 		res = RSA_verify(type, m, m_len, signature, siglen, r);
@@ -183,6 +191,7 @@ pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
 		PKCS11err(PKCS11_F_PKCS11_RSA_VERIFY, PKCS11_NOT_SUPPORTED);
 		res = 0;
 	}
+#endif
 	return res;
 }
 

@@ -30,60 +30,28 @@
 #include <openssl/opensslconf.h>
 
 #define LIBP11_BUILD_WITHOUT_ECDSA
-#if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_ECDSA)
+#if OPENSSL_VERSION_NUMBER >= 0x1000200fL && !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_ECDSA)
 #undef LIBP11_BUILD_WITHOUT_ECDSA
-
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
-
-/* To build this mode,
- * OpenSSL has ECDSA_METHOD defined in internal header file ecs_locl.h
- * Until this is resolved use something like:
- * CPPFLAGS="-DBUILD_WITH_ECS_LOCL_H -I/path.to.openssl-1.0.1e/src/crypto/ecdsa"
- * See OpenSSL bug report #2459 02/23/2011
- * Once OpenSSL addresses the issues this code will be changed.
- *
- * OpenSSL mods were submitted 09/2013 that will set ECDSA_F_ECDSA_METHOD_NEW
- * and define the ECDSA_METHOD_new and friends functions
- * These mods are in OpenSSL-1.0.2-beta
- * We will try both methods.
- */
-
-#if defined(ECDSA_F_ECDSA_METHOD_NEW) && defined(BUILD_WITH_ECS_LOCL_H)
-	#warning "Both BUILD_WITH_ECS_LOCL_H and ECDSA_F_ECDSA_METHOD_NEW defined"
-	#warning "Consider not using BUILD_WITH_ECS_LOCL_H"
+#include <openssl/bn.h>
 #endif
 
 #if defined(BUILD_WITH_ECS_LOCL_H)
-	#warning "Consider not using BUILD_WITH_ECS_LOCL_H"
-	#warning "newer version of OpenSSL >-1.0.2 does not need BUILD_WITH_ECS_LOCL_H"
-	#include "ecs_locl.h"
-
-	#if !defined(HEADER_ECS_LOCL_H)
-		#warning "Unable to find OpenSSL src/crypto/ecs_locl.h"
-		#warning "add to CPPFLAGS: -I/path/to/source/openssl-n.n.n/src/crypto/ecdsa"
-		#warning "or copy ecs_locl.h or create symlink to it"
-		#if defined(ECDSA_F_ECDSA_METHOD_NEW)
-			#warning "Will build instead using ECDSA_F_ECDSA_METHOD_NEW"
-		#else
-			#error "Unable to build with ECDSA support"
-		#endif
-	#else
-		#define LIBP11_BUILD_WITH_ECS_LOCL_H
-	#endif
-#else
-	#if !defined(ECDSA_F_ECDSA_METHOD_NEW)
-		#define LIBP11_BUILD_WITHOUT_ECDSA
-	#endif
+	#error  "BUILD_WITH_ECS_LOCL_H is no longer supported"
 #endif
-
-#endif /* OpenSSL EC tests and version */
 
 #if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
 
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+static EC_KEY_METHOD *ops = NULL;
+static int ec_key_ex_index = 0;
+#else
 static ECDSA_METHOD *ops = NULL;
 static int ecdsa_ex_index = 0;
+#endif
 
 /*
  * Get EC key material and stash pointer in ex_data
@@ -165,18 +133,36 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	 * that will use the card's functions to sign & decrypt
 	 */
 	if (os)
-		M_ASN1_OCTET_STRING_free(os);
+		ASN1_STRING_free(os);
 	if (ec_point)
 		OPENSSL_free(ec_point);
 	if (ec_params)
 		OPENSSL_free(ec_params);
 
-	if (key->isPrivate)
+	if (sensitive || !extractable) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
+#else
+		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
+#endif
+	} else if (key->isPrivate) {
+		/* TODO: Extract the ECDSA private key */
+		/* In the meantime lets use the card anyway */
+		/* TODO we should do this early after EC_KEY_new */
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
+#else
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
+#endif
+	}
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+	EC_KEY_set_ex_data(ec,ec_key_ex_index, key);
+#else
 	ECDSA_set_ex_data(ec, ecdsa_ex_index, key);
+#endif
 	EC_KEY_free(ec); /* drops our reference to it */
 	return pk;
 }
@@ -198,6 +184,7 @@ static int pkcs11_ecdsa_sign_setup(EC_KEY *ec, BN_CTX *ctx_in,
 static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 			const BIGNUM *inv, const BIGNUM *r, EC_KEY * ec)
 {
+
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;
@@ -205,7 +192,11 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	int nLen = 48; /* HACK */
 	int rv;
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ec, ec_key_ex_index);
+#else
 	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, ecdsa_ex_index);
+#endif
 	if (key == NULL)
 		return NULL;
 
@@ -216,13 +207,55 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	if (rv > 0) {
 		sig = ECDSA_SIG_new();
 		if (sig) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		/*
+		 * OpenSSL 1.1 does not have a way to alloc r and s 
+		 * the BN in ECDSA_SIG as it is now hidden. 
+		 * Will us dummy ASN1 seq to set it, then
+		 * ECDSA_SIG_get0 to get access to r and s 
+		 */
+			const unsigned char *a;
+			unsigned char dasn1[8] =
+				{0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00};
+			BIGNUM *r;
+			BIGNUM *s;
+			a = dasn1;
+			d2i_ECDSA_SIG(&sig, &a, 8);
+			ECDSA_SIG_get0(&r, &s, sig);
+			BN_bin2bn(&sigret[0], nLen, r);
+			BN_bin2bn(&sigret[nLen], nLen, s);
+#else
 			BN_bin2bn(&sigret[0], nLen, sig->r);
 			BN_bin2bn(&sigret[nLen], nLen, sig->s);
+#if 0
+/* TODO remove this gdb debugging  */
+	{
+	    int ilen = 0;
+	    unsigned char tmpsigbuff[512];
+	    unsigned char **tmpsig = &tmpsigbuff;
+
+	    ilen = i2d_ECDSA_SIG(sig,NULL);
+	    ilen = i2d_ECDSA_SIG(sig, tmpsig);
+	    printf("ilen=&d\n",ilen);
+	}
+#endif
+#endif
 		}
 	}
 	return sig;
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+static void alloc_ec_key_ex_index() {
+	if (ec_key_ex_index == 0) {
+		while (ec_key_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+			ec_key_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
+				NULL, NULL, NULL);
+		if (ec_key_ex_index < 0)
+			ec_key_ex_index = 0; /* Fallback to app_data */
+	}
+}
+#else
 static void alloc_ecdsa_ex_index() {
 	if (ecdsa_ex_index == 0) {
 		while (ecdsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
@@ -232,7 +265,17 @@ static void alloc_ecdsa_ex_index() {
 			ecdsa_ex_index = 0; /* Fallback to app_data */
 	}
 }
+#endif
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+static void free_ec_key_ex_index() {
+	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
+	if (ec_key_ex_index > 0) {
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_key_ex_index);
+		ec_key_ex_index = 0;
+	}
+}
+#else
 static void free_ecdsa_ex_index() {
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100001L
@@ -242,19 +285,63 @@ static void free_ecdsa_ex_index() {
 	}
 #endif
 }
+#endif
 
 /*
  * Overload the default OpenSSL methods for ECDSA
  * If OpenSSL supports ECDSA_METHOD_new we will use it.
- * Otherwise we expect the ecs_locl.h to be present.
+ * First introduced in 1.0.2, changed in 1.1-pre
  */
-#if !defined(LIBP11_BUILD_WITH_ECS_LOCL_H)
 
 /* New way to allocate an ECDSA_METOD object */
+/* OpenSSL 1.1 has single method  EC_KEY_METHOD for ECDSA and ECDH */
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
+{
+	int (*orig_sign)(int type, const unsigned char *dgst,
+		int dlen, unsigned char *sig,
+		unsigned int *siglen,
+		const BIGNUM *kinv, const BIGNUM *r,
+		EC_KEY *eckey) = NULL;
+	int (*orig_sign_setup)(EC_KEY *eckey, BN_CTX *ctx_in,
+		BIGNUM **kinvp, BIGNUM **rp) = NULL;
+	ECDSA_SIG *(*orig_sign_sig)(const unsigned char *dgst,
+		int dgst_len,
+		const BIGNUM *in_kinv,
+		const BIGNUM *in_r,
+		EC_KEY *eckey) = NULL;
+
+	alloc_ec_key_ex_index();
+	if (ops == NULL) {
+		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
+
+		EC_KEY_METHOD_get_sign(ops, &orig_sign,
+			&orig_sign_setup, &orig_sign_sig);
+
+/* TODO look at which routines to use */
+		EC_KEY_METHOD_set_sign(ops, orig_sign,
+			pkcs11_ecdsa_sign_setup,
+			pkcs11_ecdsa_do_sign);
+	}
+	return ops;
+}
+
+void PKCS11_EC_KEY_METHOD_free(void)
+{
+	if (ops) {
+		EC_KEY_METHOD_free(ops);
+		ops = NULL;
+	}
+	free_ec_key_ex_index();
+}
+
+#else /* OPENSSL_VERSION_NUMBER >= 0x1000200fL */
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
-	alloc_ecdsa_ex_index();
+
 	if (ops == NULL) {
+		alloc_ecdsa_ex_index();
 		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
 		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
 		ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
@@ -264,37 +351,15 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 
 void PKCS11_ecdsa_method_free(void)
 {
+	/* It is static in the old method */
+	free_ecdsa_ex_index();
 	if (ops) {
 		ECDSA_METHOD_free(ops);
 		ops = NULL;
 	}
-	free_ecdsa_ex_index();
 }
 
-#else /* LIBP11_BUILD_WITH_ECS_LOCL_H */
-
-/* Old way using ecs_locl.h */
-ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
-{
-	static struct ecdsa_method sops;
-
-	alloc_ecdsa_ex_index();
-	if (!sops.ecdsa_do_sign) {
-/* question if compiler is copying each member of struct or not */
-		sops = *ECDSA_get_default_method();
-		sops.ecdsa_do_sign = pkcs11_ecdsa_do_sign;
-		sops.ecdsa_sign_setup = pkcs11_ecdsa_sign_setup;
-	}
-	return &sops;
-}
-
-void PKCS11_ecdsa_method_free(void)
-{
-	/* It is static in the old method */
-	free_ecdsa_ex_index();
-}
-
-#endif /* LIBP11_BUILD_WITH_ECS_LOCL_H */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x1000200fL */
 
 PKCS11_KEY_ops pkcs11_ec_ops_s = {
 	EVP_PKEY_EC,
