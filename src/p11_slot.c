@@ -447,8 +447,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	priv->prev_rw = 0;
 	priv->prev_pin = NULL;
 	priv->prev_so = 0;
-	priv->lockid = CRYPTO_get_new_dynlockid();
-	ERR_clear_error(); /* Dynamic locks are optional */
+	priv->lockid = pkcs11_get_new_dynlockid();
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
@@ -479,7 +478,7 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 			OPENSSL_cleanse(priv->prev_pin, strlen(priv->prev_pin));
 			OPENSSL_free(priv->prev_pin);
 		}
-		CRYPTO_destroy_dynlockid(priv->lockid);
+		pkcs11_destroy_dynlockid(priv->lockid);
 		CRYPTOKI_call(ctx, C_CloseAllSessions(priv->id));
 	}
 	OPENSSL_free(slot->_private);

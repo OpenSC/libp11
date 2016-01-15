@@ -51,11 +51,11 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_ECDSA;
 
-	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
 		CRYPTOKI_call(ctx,
 			C_Sign(session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
-	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
@@ -173,14 +173,14 @@ PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 
 	session = PRIVSLOT(slot)->session;
 
-	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
 	 * by OpenSSL). The library assumes that the memory passed
 	 * by the caller is always big enough */
 	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
 		CRYPTOKI_call(ctx,
 			C_Sign(session, (CK_BYTE *) from, flen, to, &ck_sigsize));
-	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_SIGN, pkcs11_map_err(rv));
@@ -224,12 +224,12 @@ PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 	mechanism.mechanism = CKM_RSA_PKCS;
 
 
-	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, priv->object)) ||
 		CRYPTOKI_call(ctx,
 			C_Decrypt(session, (CK_BYTE *) from, (CK_ULONG)flen,
 				(CK_BYTE_PTR)to, &size));
-	CRYPTO_w_unlock(PRIVSLOT(slot)->lockid);
+	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));

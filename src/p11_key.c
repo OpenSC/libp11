@@ -331,9 +331,9 @@ static int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
 	int rv;
 
 	if (keys->num < 0) { /* No cache was built for the specified type */
-		CRYPTO_w_lock(cpriv->lockid);
+		pkcs11_w_lock(cpriv->lockid);
 		rv = pkcs11_find_keys(token, type);
-		CRYPTO_w_unlock(cpriv->lockid);
+		pkcs11_w_unlock(cpriv->lockid);
 		if (rv < 0) {
 			pkcs11_destroy_keys(token, type);
 			return -1;

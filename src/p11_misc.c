@@ -129,9 +129,9 @@ int check_fork(PKCS11_CTX *ctx)
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 	int rv;
 
-	CRYPTO_w_lock(priv->lockid);
+	pkcs11_w_lock(priv->lockid);
 	rv = check_fork_int(ctx);
-	CRYPTO_w_unlock(priv->lockid);
+	pkcs11_w_unlock(priv->lockid);
 	return rv;
 }
 
@@ -144,9 +144,9 @@ int check_slot_fork(PKCS11_SLOT *slot)
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
 	int rv;
 
-	CRYPTO_w_lock(priv->lockid);
+	pkcs11_w_lock(priv->lockid);
 	rv = check_slot_fork_int(slot);
-	CRYPTO_w_unlock(priv->lockid);
+	pkcs11_w_unlock(priv->lockid);
 	return rv;
 }
 
@@ -163,6 +163,29 @@ int check_key_fork(PKCS11_KEY *key)
 	rv = check_key_fork_int(key);
 	CRYPTO_w_unlock(priv->lockid);
 	return rv;
+}
+
+/*
+ * CRYPTO dynlock wrappers: 0 is an invalid dynamic lock ID
+ */
+int pkcs11_get_new_dynlockid()
+{
+	int i;
+
+	if (CRYPTO_get_dynlock_create_callback() == NULL ||
+			CRYPTO_get_dynlock_lock_callback() == NULL ||
+			CRYPTO_get_dynlock_destroy_callback() == NULL)
+		return 0; /* Dynamic callbacks not set */
+	i = CRYPTO_get_new_dynlockid();
+	if (i == 0)
+		ERR_clear_error(); /* Dynamic locks are optional -> ignore */
+	return i;
+}
+
+void pkcs11_destroy_dynlockid(int i)
+{
+	if(i)
+		CRYPTO_destroy_dynlockid(i);
 }
 
 /* vim: set noexpandtab: */

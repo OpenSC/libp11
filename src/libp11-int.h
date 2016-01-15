@@ -146,6 +146,18 @@ typedef struct pkcs11_cert_private {
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 
+int pkcs11_get_new_dynlockid();
+void pkcs11_destroy_dynlockid(int);
+
+#define pkcs11_w_lock(type)    \
+	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
+#define pkcs11_w_unlock(type)  \
+	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
+#define pkcs11_r_lock(type)    \
+	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_READ,type,__FILE__,__LINE__)
+#define pkcs11_r_unlock(type)  \
+	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_READ,type,__FILE__,__LINE__)
+
 extern int pkcs11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
 extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
