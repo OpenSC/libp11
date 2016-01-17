@@ -353,14 +353,13 @@ static int pkcs11_find_keys(PKCS11_TOKEN * token, unsigned int type)
 {
 	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_CTX *ctx = TOKEN2CTX(token);
 	CK_OBJECT_CLASS key_search_class;
 	CK_ATTRIBUTE key_search_attrs[1] = {
 		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
 	};
-
-	PKCS11_SLOT *slot = TOKEN2SLOT(token);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	PKCS11_CTX *ctx = TOKEN2CTX(token);
 	int rv, res = -1;
 
 	/* Make sure we have a session */

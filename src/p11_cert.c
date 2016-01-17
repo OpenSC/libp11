@@ -38,17 +38,24 @@ int
 PKCS11_enumerate_certs(PKCS11_TOKEN * token,
 		PKCS11_CERT ** certp, unsigned int *countp)
 {
-	PKCS11_TOKEN_private *priv = PRIVTOKEN(token);
+	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
+	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	int rv;
 
-	if (priv->ncerts < 0) {
-		priv->ncerts = 0;
-		if (pkcs11_find_certs(token)) {
+	if (tpriv->ncerts < 0) {
+		pkcs11_w_lock(cpriv->lockid);
+		rv = pkcs11_find_certs(token);
+		pkcs11_w_unlock(cpriv->lockid);
+		if (rv < 0) {
 			pkcs11_destroy_certs(token);
 			return -1;
 		}
 	}
-	*certp = priv->certs;
-	*countp = priv->ncerts;
+	if (certp)
+		*certp = tpriv->certs;
+	if (countp)
+		*countp = tpriv->ncerts;
 	return 0;
 }
 
@@ -79,14 +86,14 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY * key)
  */
 static int pkcs11_find_certs(PKCS11_TOKEN * token)
 {
+	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
+	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	CK_SESSION_HANDLE session;
 	CK_OBJECT_CLASS cert_search_class;
 	CK_ATTRIBUTE cert_search_attrs[] = {
 		{CKA_CLASS, &cert_search_class, sizeof(cert_search_class)},
 	};
-
-	PKCS11_SLOT *slot = TOKEN2SLOT(token);
-	PKCS11_CTX *ctx = TOKEN2CTX(token);
-	CK_SESSION_HANDLE session;
 	int rv, res = -1;
 
 	/* Make sure we have a session */
@@ -99,11 +106,13 @@ static int pkcs11_find_certs(PKCS11_TOKEN * token)
 	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, cert_search_attrs, 1));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
 
+	tpriv->ncerts = 0;
 	do {
 		res = pkcs11_next_cert(ctx, token, session);
 	} while (res == 0);
 
 	CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
+
 	return (res < 0) ? -1 : 0;
 }
 
@@ -199,7 +208,6 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 
 	if (ret)
 		*ret = cert;
-
 	return 0;
 }
 
@@ -223,8 +231,8 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
 	}
 	if (priv->certs)
 		OPENSSL_free(priv->certs);
-	priv->ncerts = -1;
 	priv->certs = NULL;
+	priv->ncerts = -1;
 }
 
 /*
