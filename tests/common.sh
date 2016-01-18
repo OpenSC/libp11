@@ -17,6 +17,10 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
+echo "Current directory: $(pwd)"
+echo "Source directory: ${srcdir}"
+echo "Output directory: ${outdir}"
+
 mkdir -p $outdir
 
 for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
@@ -90,17 +94,17 @@ PUK=1234
 init_card $PIN $PUK
 
 # generate key in token
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${file_dir}/key.der -y privkey >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/key.der -y privkey >/dev/null
 if test $? != 0;then
 	exit 1;
 fi
 
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${file_dir}/pubkey.der -y pubkey >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/pubkey.der -y pubkey >/dev/null
 if test $? != 0;then
 	exit 1;
 fi
 
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${file_dir}/cert.der -y cert >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/cert.der -y cert >/dev/null
 if test $? != 0;then
 	exit 1;
 fi

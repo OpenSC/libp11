@@ -1,7 +1,6 @@
 include $(top_srcdir)/ltrc.inc
 
-MAINTAINERCLEANFILES = \
-	$(srcdir)/Makefile.in $(srcdir)/versioninfo.rc
+MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak versioninfo.rc.in
 

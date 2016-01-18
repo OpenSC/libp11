@@ -18,7 +18,8 @@ dist_noinst_DATA = COPYING bootstrap
 
 dist_doc_DATA = NEWS
 
-SUBDIRS = src doc tests examples
+# Prerequisites must be first on the list
+SUBDIRS = src doc examples tests
 
 # Allow detection of packaged tarball
 dist-hook:

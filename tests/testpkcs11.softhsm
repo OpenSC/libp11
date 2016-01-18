@@ -18,18 +18,17 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
-outdir="${srcdir}/output.$$"
-file_dir="${srcdir:-./}"
+outdir="output.$$"
 
 . ${srcdir}/common.sh
 
-./auth $ADDITIONAL_PARAM $PIN
+../examples/auth $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
 	echo "Basic PKCS #11 test test failed"
 	exit 1;
 fi
 
-./rawrsasign $ADDITIONAL_PARAM $PIN
+../examples/rawrsasign $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
 	echo "Raw RSA signature test failed"
 	exit 1;

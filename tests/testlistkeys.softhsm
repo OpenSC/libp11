@@ -17,12 +17,11 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
-outdir="${srcdir}/output.$$"
-file_dir="${srcdir:-./}"
+outdir="output.$$"
 
 . ${srcdir}/common.sh
 
-./listkeys $ADDITIONAL_PARAM $PIN
+../examples/listkeys $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
 	exit 1;
 fi

@@ -42,7 +42,7 @@ stamp-h*
 *.pdb
 *.rej
 *.u
-*.rc
+*.res
 *.pc
 *~
 *.gz
@@ -54,12 +54,16 @@ m4/ltsugar.m4
 m4/ltversion.m4
 m4/lt~obsolete.m4
 
-tests/auth
-tests/*.log
-tests/*.trs
-
 examples/auth
 examples/decrypt
 examples/getrandom
+examples/rawrsasign
+examples/listkeys
+
+test-driver
+tests/fork-test
+tests/*.log
+tests/*.trs
+tests/output.*
 
 doc/doxygen.conf
