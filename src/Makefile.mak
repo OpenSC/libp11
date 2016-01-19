@@ -16,7 +16,7 @@ versioninfo.res: versioninfo.rc
 	rc $(RSC_PROJ) versioninfo.rc
  
 .c.obj::
-	cl $(CFLAGS) /c $<
+	cl $(CLFLAGS) /c $<
 
 $(TARGET): $(OBJECTS) versioninfo.res
 	echo LIBRARY $* > $*.def
@@ -25,4 +25,3 @@ $(TARGET): $(OBJECTS) versioninfo.res
 	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$(TARGET) \
 		$(OBJECTS) $(LIBS) versioninfo.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
-
