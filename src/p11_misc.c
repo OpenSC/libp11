@@ -17,10 +17,9 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <string.h>
 #include <openssl/crypto.h>
-#include "libp11-int.h"
 
 /* PKCS11 strings are fixed size blank padded,
  * so when strduping them we must make sure

@@ -1,10 +1,10 @@
 TOPDIR = ..
 
-!INCLUDE $(TOPDIR)\Make.rules.mak
+!INCLUDE $(TOPDIR)\make.rules.mak
 
-TARGET                  = libp11.dll
+TARGET = libp11.dll
 
-OBJECTS                 = libpkcs11.obj p11_attr.obj p11_cert.obj \
+OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
 	p11_err.obj p11_key.obj p11_load.obj p11_misc.obj p11_rsa.obj \
 	p11_ec.obj p11_slot.obj p11_ops.obj
 
@@ -15,17 +15,14 @@ RSC_PROJ=/l 0x809 /r /fo"versioninfo.res"
 versioninfo.res: versioninfo.rc
 	rc $(RSC_PROJ) versioninfo.rc
  
-versioninfo.rc: versioninfo.rc.in
-    @copy /y versioninfo.rc.in versioninfo.rc
-
 .c.obj::
-	cl $(COPTS) /c $<
+	cl $(CFLAGS) /c $<
 
 $(TARGET): $(OBJECTS) versioninfo.res
 	echo LIBRARY $* > $*.def
 	echo EXPORTS >> $*.def
 	type $*.exports >> $*.def
 	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$(TARGET) \
-		$(OBJECTS) $(OPENSSL_LIB) versioninfo.res
+		$(OBJECTS) $(LIBS) versioninfo.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
 

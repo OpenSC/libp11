@@ -19,8 +19,7 @@
  *
  */
 
-#include <config.h>
-
+#include "libp11-int.h"
 #include <sys/socket.h>
 #include <errno.h>
 #include <sys/stat.h>

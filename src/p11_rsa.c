@@ -22,11 +22,10 @@
  * PKCS11 token
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
-#include "libp11-int.h"
 
 static int rsa_ex_index = 0;
 

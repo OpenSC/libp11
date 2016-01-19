@@ -24,7 +24,7 @@
  * PKCS11 token
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <string.h>
 #include <openssl/opensslv.h>
 #include <openssl/opensslconf.h>
@@ -81,8 +81,6 @@
 #endif /* OpenSSL EC tests and version */
 
 #if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
-
-#include "libp11-int.h"
 
 static ECDSA_METHOD *ops = NULL;
 static int ecdsa_ex_index = 0;
@@ -317,14 +315,14 @@ PKCS11_KEY_ops *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
 #else /* LIBP11_BUILD_WITHOUT_ECDSA */
 
-void *pkcs11_ec_ops = {NULL};
+PKCS11_KEY_ops *pkcs11_ec_ops = {NULL};
 
 /* if not built with EC or OpenSSL does not support ECDSA
  * add these routines so engine_pkcs11 can be built now and not
  * require further changes */
 #warning "ECDSA support not built with libp11"
 
-void * PKCS11_get_ecdsa_method(void)
+ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 	return NULL;
 }

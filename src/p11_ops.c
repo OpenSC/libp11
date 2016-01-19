@@ -20,9 +20,8 @@
 
 /* this file does certain cryptographic operations via the pkcs11 library */
 
-#include <config.h>
-#include <string.h>
 #include "libp11-int.h"
+#include <string.h>
 
 int
 PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,

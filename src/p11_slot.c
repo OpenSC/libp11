@@ -16,10 +16,9 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <string.h>
 #include <openssl/buffer.h>
-#include "libp11-int.h"
 
 static int pkcs11_init_slot(PKCS11_CTX *, PKCS11_SLOT *, CK_SLOT_ID);
 static int pkcs11_check_token(PKCS11_CTX *, PKCS11_SLOT *);

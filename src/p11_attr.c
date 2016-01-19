@@ -25,11 +25,9 @@
  * Copyright (C) 2002, Olaf Kirch <okir@lst.de>
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <assert.h>
 #include <string.h>
-
-#include "libp11-int.h"
 
 /*
  * Query pkcs11 attributes

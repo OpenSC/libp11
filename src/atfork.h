@@ -23,8 +23,6 @@
 #ifndef ATFORK_H
 # define ATFORK_H
 
-#include <config.h>
-
 extern unsigned int P11_forkid;
 
 #if defined(HAVE___REGISTER_ATFORK)

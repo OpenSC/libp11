@@ -23,7 +23,7 @@
  * Copyright (C) 2002  Olaf Kirch <okir@lst.de>
  */
 
-#include <config.h>
+#include "libp11-int.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +32,6 @@
 #else
 #include <dlfcn.h>
 #endif
-#include "libp11-int.h"
 
 #define MAGIC			0xd00bed00
 

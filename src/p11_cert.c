@@ -22,9 +22,8 @@
  * Copyright (C) 2002, Olaf Kirch <okir@lst.de>
  */
 
-#include <config.h>
-#include <string.h>
 #include "libp11-int.h"
+#include <string.h>
 
 static int pkcs11_find_certs(PKCS11_TOKEN *);
 static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);

@@ -19,7 +19,6 @@ install:
         Where-Object pullRequestId -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)[0].buildNumber) { `
         throw "There are newer queued builds for this pull request, failing early." }
   - date /T & time /T
-  - set PATH=C:\cygwin\bin;%PATH%
   - set OPENSSL_VER=1_0_2e
   - ps: >-
       If ($env:Platform -Match "x86") {
@@ -40,18 +39,13 @@ install:
       }
   - ps: >-
       If ($env:Configuration -Like "*Debug*") {
-        $env:NMAKE_EXTRA="DEBUG_DEF=/DDEBUG ${env:NMAKE_EXTRA}"
+        $env:NMAKE_EXTRA="DEBUG=yes ${env:NMAKE_EXTRA}"
       }
   - ps: $env:VSCOMNTOOLS=(Get-Content ("env:VS" + "$env:VSVER" + "0COMNTOOLS"))
   - echo "Using Visual Studio %VSVER%.0 at %VSCOMNTOOLS%"
   - call "%VSCOMNTOOLS%\..\..\VC\vcvarsall.bat" %VCVARS_PLATFORM%
-  - uname -a
 
 build_script:
-  - bash -c "exec 0</dev/null && ./bootstrap"
-  # disable features to speed up the script
-  - bash -c "exec 0</dev/null && ./configure OPENSSL_CFLAGS=\"-IC:\OpenSSL-Win32\include -IC:\OpenSSL-Win64\include\" OPENSSL_LIBS=\"-LC:\OpenSSL-Win32 -LC:\OpenSSL-Win64 -leay\"  || cat config.log"
-  - cp winconfig.h config.h
   - nmake /f Makefile.mak %NMAKE_ARCH% %NMAKE_EXTRA%
   - appveyor PushArtifact src\libp11.dll
   - appveyor PushArtifact src\libp11.lib

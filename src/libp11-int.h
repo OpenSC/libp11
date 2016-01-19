@@ -19,12 +19,16 @@
 #ifndef _LIBP11_INT_H
 #define _LIBP11_INT_H
 
+#ifndef _WIN32
+#include "config.h"
+#endif
+
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/x509.h>
 
 #define CRYPTOKI_EXPORTS
-#include <pkcs11.h>
+#include "pkcs11.h"
 
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
