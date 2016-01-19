@@ -233,7 +233,7 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 
 	rv = CRYPTOKI_call(ctx,
 		C_Login(priv->session, so ? CKU_SO : CKU_USER,
-			(CK_UTF8CHAR *) pin, pin ? strlen(pin) : 0));
+			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
 	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
 		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
 	priv->loggedIn = 1;
@@ -309,7 +309,8 @@ int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 		label = "PKCS#11 Token";
 	rv = CRYPTOKI_call(ctx,
 		C_InitToken(priv->id,
-			(CK_UTF8CHAR *) pin, strlen(pin), (CK_UTF8CHAR *) label));
+			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
+			(CK_UTF8CHAR *) label));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
@@ -341,7 +342,7 @@ int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin)
 		return -1;
 	}
 
-	len = pin ? strlen(pin) : 0;
+	len = pin ? (int) strlen(pin) : 0;
 	rv = CRYPTOKI_call(ctx, C_InitPIN(priv->session, (CK_UTF8CHAR *) pin, len));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_PIN, rv);
 
@@ -365,8 +366,8 @@ int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
 		return -1;
 	}
 
-	old_len = old_pin ? strlen(old_pin) : 0;
-	new_len = new_pin ? strlen(new_pin) : 0;
+	old_len = old_pin ? (int) strlen(old_pin) : 0;
+	new_len = new_pin ? (int) strlen(new_pin) : 0;
 	rv = CRYPTOKI_call(ctx,
 		C_SetPIN(priv->session, (CK_UTF8CHAR *) old_pin, old_len,
 			(CK_UTF8CHAR *) new_pin, new_len));

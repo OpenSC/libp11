@@ -139,7 +139,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 			if (ckrv == CKR_OK) {
 				const unsigned char * a = ec_params;
 				/* convert to OpenSSL parmas */
-				d2i_ECParameters(&ec, &a, ec_paramslen);
+				d2i_ECParameters(&ec, &a, (long) ec_paramslen);
 			}
 		}
 	}
@@ -158,7 +158,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 					/* we have asn1 octet string, need to strip off 04 len */
 
 					a = ec_point;
-					os = d2i_ASN1_OCTET_STRING(NULL, &a, ec_pointlen);
+					os = d2i_ASN1_OCTET_STRING(NULL, &a, (long) ec_pointlen);
 					if (os) {
 						a = os->data;
 						o2i_ECPublicKey(&ec, &a, os->length);

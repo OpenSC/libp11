@@ -187,7 +187,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 			if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
 				const unsigned char *p = data;
 
-				cert->x509 = d2i_X509(NULL, &p, size);
+				cert->x509 = d2i_X509(NULL, &p, (long) size);
 			}
 			OPENSSL_free(data);
 		}

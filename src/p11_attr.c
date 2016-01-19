@@ -99,7 +99,7 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 
 	/*
 	 * @ALON: invalid object,
-	 * not sure it will survice the ulValueLen->size_t and keep sign at all platforms
+	 * not sure it will survive the ulValueLen->size_t and keep sign at all platforms
 	 */
 	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
@@ -107,7 +107,7 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 		ret = -1;
 		goto cleanup;
 	}
-	*bn = BN_bin2bn(binary, size, *bn);
+	*bn = BN_bin2bn(binary, (int) size, *bn);
 	ret = *bn ? 0 : -1;
 
  cleanup:
