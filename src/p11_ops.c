@@ -25,6 +25,96 @@
 #include <openssl/ossl_typ.h>
 #include <openssl/asn1.h>
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+/* initial code will only support what what is needed for engine
+ * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
+ * and CK_EC_KDF_TYPE  supported by token
+  */
+extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
+		const unsigned long ecdh_mechanism,
+		const void * ec_params,
+		CK_OBJECT_HANDLE *outnewkey,
+		PKCS11_KEY * key)
+{
+	int rv;
+	PKCS11_KEY_private *priv;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	PKCS11_TOKEN *token;
+	CK_SESSION_HANDLE session;
+	CK_MECHANISM mechanism;
+
+	CK_BBOOL true = TRUE;
+	CK_BBOOL false = FALSE;
+	CK_OBJECT_HANDLE newkey;
+	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_ENCRYPT, &true, sizeof(true)},
+		{CKA_DECRYPT, &true, sizeof(true)}
+	};
+
+	ctx = KEY2CTX(key);
+	priv = PRIVKEY(key);
+	token = KEY2TOKEN(key);
+	slot = KEY2SLOT(key);
+
+	CHECK_KEY_FORK(key);
+
+	session = PRIVSLOT(slot)->session;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism  = ecdh_mechanism;
+	mechanism.pParameter =  (void*)ec_params;
+	switch (ecdh_mechanism) {
+		case CKM_ECDH1_DERIVE:
+		case CKM_ECDH1_COFACTOR_DERIVE:
+			mechanism.ulParameterLen  = sizeof(CK_ECDH1_DERIVE_PARAMS);
+			break;
+//		case CK_ECMQV_DERIVE_PARAMS:
+//			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
+//			break;
+		default:
+		    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
+		    return -1;
+	}
+
+	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, priv->object, newkey_template, 5, &newkey));
+	if (rv) {
+	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
+	    return -1;
+	}
+
+	/* if requested copy new secret key value */
+	/* TODO for now engine only we will assume caller provided big enough out buffer */
+	/* for libp11, we could return the secret key object, slot and session somehow. */
+	/* that would require keeping track of secret key objects too. */
+	/* we need to handle the secret object so we can free it. */
+
+	if (out && outlen) {
+		if (*out == NULL
+			&& !pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, outlen)
+			&& *outlen > 0) {
+			*out = OPENSSL_malloc(*outlen);
+		}
+
+		if (*out) {
+		 pkcs11_getattr_var(token, newkey, CKA_VALUE, *out, outlen);
+		}
+	}
+
+	if (outnewkey) {
+	    *outnewkey = newkey;
+	}   /* TODO else free newkey */
+	
+	return 1;
+}
+#endif
+
 int
 PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)

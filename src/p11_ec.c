@@ -1,7 +1,7 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2011, 2013 Douglas E. Engert <deengert@anl.gov>
- * Copyright (C) 2014 Douglas E. Engert <deengert@gmail.com>
+ * Copyright (C) 2014, 2016 Douglas E. Engert <deengert@gmail.com>
  * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
@@ -209,10 +209,11 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 		if (sig) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		/*
-		 * OpenSSL 1.1 does not have a way to alloc r and s 
-		 * the BN in ECDSA_SIG as it is now hidden. 
-		 * Will us dummy ASN1 seq to set it, then
-		 * ECDSA_SIG_get0 to get access to r and s 
+		 * OpenSSL 1.1 does not have a way to allocate r and s 
+		 * in ECDSA_SIG as it is now hidden. 
+		 * Will us dummy ASN1 so r and s are allocated then
+		 * use ECDSA_SIG_get0 to get access to r and s 
+		 * can then update r annd s
 		 */
 			const unsigned char *a;
 			unsigned char dasn1[8] =
@@ -227,23 +228,90 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 #else
 			BN_bin2bn(&sigret[0], nLen, sig->r);
 			BN_bin2bn(&sigret[nLen], nLen, sig->s);
-#if 0
-/* TODO remove this gdb debugging  */
-	{
-	    int ilen = 0;
-	    unsigned char tmpsigbuff[512];
-	    unsigned char **tmpsig = &tmpsigbuff;
-
-	    ilen = i2d_ECDSA_SIG(sig,NULL);
-	    ilen = i2d_ECDSA_SIG(sig, tmpsig);
-	    printf("ilen=&d\n",ilen);
-	}
-#endif
 #endif
 		}
 	}
 	return sig;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+/* Our version of the ossl_ecdh_compute_key replaced in the EC_KEY_METHOD */
+static int pkcs11_ec_ckey(void *out,
+		size_t outlen,
+		const EC_POINT *ecpointpeer,
+		const EC_KEY *ecdh,
+		void *(*KDF) (const void *in,
+			size_t inlen,
+			void *out,
+			size_t *outlen))
+{
+	int ret = -1;
+	size_t buflen;
+	unsigned char *buf = NULL;
+	size_t peerbuflen;
+	unsigned char *peerbuf = NULL;
+	const EC_GROUP *ecgroup = NULL;
+	const EC_POINT *ecpoint = NULL;
+	CK_ECDH1_DERIVE_PARAMS ecdh_parms;
+	PKCS11_KEY * key = NULL;
+
+	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_key_ex_index);
+
+	if (key == NULL) {
+	    ret -1;
+	    goto err;
+	}
+
+	/* assume both peer and ecdh are same group */
+	ecgroup = EC_KEY_get0_group(ecdh);
+	buflen = (EC_GROUP_get_degree(ecgroup) + 7) / 8;
+
+	buf = OPENSSL_malloc(buflen);
+	if (buf == NULL) {
+		ret = -1;
+		goto err;
+	}
+
+	peerbuflen = 2*buflen + 1;
+	peerbuf = OPENSSL_malloc(peerbuflen);
+	if (peerbuf == NULL) {
+		ret = -1;
+		goto err;
+	}
+
+	ecdh_parms.kdf = CKD_NULL;
+	ecdh_parms.ulSharedDataLen = 0;
+	ecdh_parms.pSharedData = NULL;
+	ecdh_parms.ulPublicDataLen = peerbuflen;
+	ret = EC_POINT_point2oct(ecgroup,
+			ecpointpeer,
+			POINT_CONVERSION_UNCOMPRESSED,
+			peerbuf, peerbuflen,NULL);
+	ecdh_parms.ulPublicDataLen = peerbuflen;
+	ecdh_parms.pPublicData = peerbuf;
+
+
+	ret = PKCS11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
+		(const void *)&ecdh_parms, NULL, key);
+
+	if (KDF != 0) {
+		if (KDF(buf, buflen, out, &outlen) == NULL) {
+			ret -1;
+			goto err;
+		}
+		ret = outlen;
+	} else {
+		if (outlen > buflen)
+		    outlen = buflen;
+		memcpy(out, buf, outlen);
+		ret = outlen;
+	}
+err:
+	OPENSSL_free(buf);
+	return (ret);
+}
+#endif
+
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 static void alloc_ec_key_ex_index() {
@@ -319,10 +387,11 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 		EC_KEY_METHOD_get_sign(ops, &orig_sign,
 			&orig_sign_setup, &orig_sign_sig);
 
-/* TODO look at which routines to use */
 		EC_KEY_METHOD_set_sign(ops, orig_sign,
 			pkcs11_ecdsa_sign_setup,
 			pkcs11_ecdsa_do_sign);
+
+		EC_KEY_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
 	return ops;
 }

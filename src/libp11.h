@@ -30,6 +30,7 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
+#include <pkcs11.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -387,6 +388,23 @@ extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 extern int PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+/**
+ * @param out returned secret
+ * @param outlen length of returned secret
+ * @param ecdh_mechanism CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE or others in future
+ * @param ec_params ptr to CK_ECDH1_DERIVE_PARAMS or in future CK_ECMQV_DERIVE_PARAMS
+ * @param outnewkey ptr to CK_OBJECT_HANDLE
+ * @param key private key object
+ */
+
+extern int PKCS11_ecdh_derive(unsigned char **out, size_t *out_len,
+		const unsigned long ecdh_mechanism,
+		const void * ec_params,
+		CK_OBJECT_HANDLE * outnewkey,
+		PKCS11_KEY * key);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
+
 /* rsa private key operations */
 extern int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
@@ -459,6 +477,7 @@ extern void ERR_load_PKCS11_strings(void);
 #define PKCS11_F_PKCS11_EC_KEY_SIGN			41
 #define PKCS11_F_PKCS11_EC_KEY_VERIFY		42
 #define PKCS11_F_PKCS11_GETSESSIONINFO		43
+#define PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY	44
 
 #define PKCS11_ERR_BASE				1024
 #define PKCS11_LOAD_MODULE_ERROR		(PKCS11_ERR_BASE+1)
