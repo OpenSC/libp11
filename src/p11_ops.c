@@ -33,7 +33,7 @@
 extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
 		const void * ec_params,
-		CK_OBJECT_HANDLE *outnewkey,
+		void *outnewkey, /* CK_OBJECT_HANDLE */
 		PKCS11_KEY * key)
 {
 	int rv;
@@ -49,6 +49,7 @@ extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
 	CK_OBJECT_HANDLE newkey;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
 	CK_ATTRIBUTE newkey_template[] = {
 		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
@@ -107,8 +108,8 @@ extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
 		}
 	}
 
-	if (outnewkey) {
-	    *outnewkey = newkey;
+	if (tmpnewkey) {
+	    *tmpnewkey = newkey;
 	}   /* TODO else free newkey */
 	
 	return 1;

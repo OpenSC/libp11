@@ -400,7 +400,7 @@ extern int PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 extern int PKCS11_ecdh_derive(unsigned char **out, size_t *out_len,
 		const unsigned long ecdh_mechanism,
 		const void * ec_params,
-		CK_OBJECT_HANDLE * outnewkey,
+		void * outnewkey, /* CK_OBJECT_HANDLE */
 		PKCS11_KEY * key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
 
