@@ -139,16 +139,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	if (ec_params)
 		OPENSSL_free(ec_params);
 
-	if (sensitive || !extractable) {
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
-#else
-		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
-#endif
-	} else if (key->isPrivate) {
-		/* TODO: Extract the ECDSA private key */
-		/* In the meantime lets use the card anyway */
-		/* TODO we should do this early after EC_KEY_new */
+	if (key->isPrivate) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
 #else
@@ -157,6 +148,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	 * unless the key has the "sensitive" attribute set */
 #endif
 	}
+	/* TODO: Extract the ECDSA private key instead, if the key
+	 * is marked as extractable (and not private?) */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 	EC_KEY_set_ex_data(ec,ec_key_ex_index, key);
