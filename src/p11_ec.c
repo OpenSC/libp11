@@ -262,15 +262,9 @@ static int pkcs11_ec_ckey(void *out,
 	    goto err;
 	}
 
-	/* assume both peer and ecdh are same group */
+	/* both peer and ecdh use same group parameters */
 	ecgroup = EC_KEY_get0_group(ecdh);
 	buflen = (EC_GROUP_get_degree(ecgroup) + 7) / 8;
-
-	buf = OPENSSL_malloc(buflen);
-	if (buf == NULL) {
-		ret = -1;
-		goto err;
-	}
 
 	peerbuflen = 2*buflen + 1;
 	peerbuf = OPENSSL_malloc(peerbuflen);
@@ -291,7 +285,7 @@ static int pkcs11_ec_ckey(void *out,
 	ecdh_parms.pPublicData = peerbuf;
 
 
-	ret = PKCS11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
+	ret = pkcs11_ecdh_derive_internal(&buf, &buflen, CKM_ECDH1_DERIVE,
 		(const void *)&ecdh_parms, NULL, key);
 
 	if (KDF != 0) {

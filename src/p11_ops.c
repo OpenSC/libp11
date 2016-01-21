@@ -26,17 +26,24 @@
 #include <openssl/asn1.h>
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
-/* initial code will only support what what is needed for engine
+/* initial code will only support what is needed for pkcs11_ec_ckey
  * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
  * and CK_EC_KDF_TYPE  supported by token
-  */
-extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
+ * The secret key object is deleted
+ *
+ * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
+ * could also be supported, and the secret key object could be returned. 
+ */
+int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
 		const void * ec_params,
-		void *outnewkey, /* CK_OBJECT_HANDLE */
+		void *outnewkey,
 		PKCS11_KEY * key)
 {
 	int rv;
+	int ret = -1;
+	unsigned char * buf = NULL;
+	size_t buflen;
 	PKCS11_KEY_private *priv;
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
@@ -46,7 +53,7 @@ extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
 
 	CK_BBOOL true = TRUE;
 	CK_BBOOL false = FALSE;
-	CK_OBJECT_HANDLE newkey;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
 	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
@@ -80,39 +87,56 @@ extern int PKCS11_ecdh_derive(unsigned char **out, size_t *outlen,
 //			break;
 		default:
 		    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
-		    return -1;
+		    goto err;
 	}
 
 	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
 	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, priv->object, newkey_template, 5, &newkey));
 	if (rv) {
 	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
-	    return -1;
+	    goto err;
 	}
 
-	/* if requested copy new secret key value */
-	/* TODO for now engine only we will assume caller provided big enough out buffer */
-	/* for libp11, we could return the secret key object, slot and session somehow. */
-	/* that would require keeping track of secret key objects too. */
-	/* we need to handle the secret object so we can free it. */
+	/* Return the value of the secret key and/or the object handle of the secret key */
+	
+	/* pkcs11_ec_ckey only asks for the value */
 
 	if (out && outlen) {
-		if (*out == NULL
-			&& !pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, outlen)
-			&& *outlen > 0) {
-			*out = OPENSSL_malloc(*outlen);
+		/* get size of secret key value */
+		if (!pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, &buflen)
+			&& buflen > 0) {
+			buf = OPENSSL_malloc(buflen);
+			if (buf == NULL) {
+				PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+					pkcs11_map_err(CKR_HOST_MEMORY));
+				goto err;
+			}
+		} else {
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
+			goto err;
 		}
 
-		if (*out) {
-		 pkcs11_getattr_var(token, newkey, CKA_VALUE, *out, outlen);
-		}
+		pkcs11_getattr_var(token, newkey, CKA_VALUE, buf, &buflen);
+		*out = buf;
+		*outlen = buflen;
+		buf = NULL;
 	}
 
+	/* not used by pkcs11_ec_ckey for future use */
 	if (tmpnewkey) {
 	    *tmpnewkey = newkey;
-	}   /* TODO else free newkey */
+	    newkey = CK_INVALID_HANDLE;
+	}
+
+	ret = 1;
+err:
+	if (buf)
+	    OPENSSL_free(buf);
+	if (newkey != CK_INVALID_HANDLE && session != CK_INVALID_HANDLE);
+		rv = CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 	
-	return 1;
+	return ret;
 }
 #endif
 

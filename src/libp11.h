@@ -387,23 +387,6 @@ extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 extern int PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-/**
- * @param out returned secret
- * @param outlen length of returned secret
- * @param ecdh_mechanism CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE or others in future
- * @param ec_params ptr to CK_ECDH1_DERIVE_PARAMS or in future CK_ECMQV_DERIVE_PARAMS
- * @param outnewkey ptr to CK_OBJECT_HANDLE
- * @param key private key object
- */
-
-extern int PKCS11_ecdh_derive(unsigned char **out, size_t *out_len,
-		const unsigned long ecdh_mechanism,
-		const void * ec_params,
-		void * outnewkey, /* CK_OBJECT_HANDLE */
-		PKCS11_KEY * key);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
-
 /* rsa private key operations */
 extern int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);

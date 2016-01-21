@@ -40,4 +40,3 @@ PKCS11_get_ecdsa_method
 PKCS11_ecdsa_method_free
 ERR_load_PKCS11_strings
 PKCS11_get_ec_key_method
-PKCS11_ecdh_derive
