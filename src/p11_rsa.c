@@ -89,12 +89,7 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
 static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 {
 	EVP_PKEY *pk;
-	CK_BBOOL sensitive, extractable;
 	RSA *rsa;
-
-	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable)))
-		return NULL;
 
 	rsa = pkcs11_get_rsa(key);
 	if (rsa == NULL)
@@ -106,15 +101,10 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	}
 	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 
-	/* If the key is not extractable, create a key object
-	 * that will use the card's functions to sign & decrypt */
-	if (sensitive || !extractable) {
+	if (key->isPrivate)
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
-	} else if (key->isPrivate) {
-		/* TODO: Extract the RSA private key */
-		/* In the meantime lets use the card anyway */
-		RSA_set_method(rsa, PKCS11_get_rsa_method());
-	}
+	/* TODO: Extract the RSA private key instead, if the key
+	 * is marked as extractable (and not private?) */
 
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_ex_data(rsa, rsa_ex_index, key);

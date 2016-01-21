@@ -97,7 +97,6 @@ static int ecdsa_ex_index = 0;
 static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 {
 	EVP_PKEY *pk;
-	CK_BBOOL sensitive, extractable;
 	EC_KEY * ec = NULL;
 	CK_RV ckrv;
 	size_t ec_paramslen = 0;
@@ -117,13 +116,6 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 		return NULL;
 	}
 	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
-
-	if (key_getattr(key, CKA_SENSITIVE, &sensitive, sizeof(sensitive))
-			|| key_getattr(key, CKA_EXTRACTABLE, &extractable, sizeof(extractable))) {
-		EVP_PKEY_free(pk);
-		EC_KEY_free(ec);
-		return NULL;
-	}
 
 	/* For Openssl req we need at least the
 	 * EC_KEY_get0_group(ec_key)) to return the group.
@@ -179,13 +171,10 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	if (ec_params)
 		OPENSSL_free(ec_params);
 
-	if (sensitive || !extractable) {
+	if (key->isPrivate)
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
-	} else if (key->isPrivate) {
-		/* TODO: Extract the ECDSA private key */
-		/* In the meantime lets use the card anyway */
-		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
-	}
+	/* TODO: Extract the ECDSA private key instead, if the key
+	 * is marked as extractable (and not private?) */
 
 	ECDSA_set_ex_data(ec, ecdsa_ex_index, key);
 	EC_KEY_free(ec); /* drops our reference to it */
