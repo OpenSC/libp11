@@ -103,8 +103,8 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 
 	if (key->isPrivate)
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
-	/* TODO: Extract the RSA private key instead, if the key
-	 * is marked as extractable (and not private?) */
+	/* TODO: Retrieve the RSA private key object attributes instead,
+	 * unless the key has the "sensitive" attribute set */
 
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 	RSA_set_ex_data(rsa, rsa_ex_index, key);

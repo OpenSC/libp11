@@ -173,8 +173,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 
 	if (key->isPrivate)
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
-	/* TODO: Extract the ECDSA private key instead, if the key
-	 * is marked as extractable (and not private?) */
+	/* TODO: Retrieve the ECDSA private key object attributes instead,
+	 * unless the key has the "sensitive" attribute set */
 
 	ECDSA_set_ex_data(ec, ecdsa_ex_index, key);
 	EC_KEY_free(ec); /* drops our reference to it */
