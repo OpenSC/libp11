@@ -277,9 +277,7 @@ int PKCS11_get_key_type(PKCS11_KEY * key)
 
 /*
  * Create an EVP_PKEY OpenSSL object for a given key
- * Returns either private or public key object depending on the isPrivate
- * value for compatibility with a bug in engine_pkcs11 <= 0.2.0
- * TODO: Fix this when the affected engine_pkcs11 is phased out
+ * Always returns the private key object
  */
 EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY * key)
 {
@@ -287,6 +285,11 @@ EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY * key)
 
 	if (key == NULL)
 		return NULL;
+	if (!key->isPrivate) {
+		key = PKCS11_find_key_from_key(key);
+		if (key == NULL)
+			return NULL;
+	}
 	if (key->evp_key == NULL) {
 		kpriv = PRIVKEY(key);
 		key->evp_key = kpriv->ops->get_evp_key(key);
