@@ -85,7 +85,7 @@ AC_ARG_ENABLE(
 
 AC_ARG_ENABLE(
 	[api-doc],
-	[AS_HELP_STRING([--enable-api-doc],[enable generation and installation of api documents @<:@disabled@:>@])],
+	[AS_HELP_STRING([--enable-api-doc],[enable generation and installation of API documents @<:@disabled@:>@])],
 	,
 	[enable_api_doc="no"]
 )
@@ -130,7 +130,7 @@ AC_CHECK_HEADERS([ \
 
 AC_ARG_VAR([DOXYGEN], [doxygen utility])
 AC_CHECK_PROGS([DOXYGEN],[doxygen])
-test "${enable_api_doc}" = "yes" -a -z "${DOXYGEN}" && AC_MSG_ERROR([doxygen is required for api doc])
+test "${enable_api_doc}" = "yes" -a -z "${DOXYGEN}" && AC_MSG_ERROR([doxygen is required for API doc])
 
 if test "${WIN32}" != "yes"; then
 	AC_SEARCH_LIBS(
@@ -163,7 +163,6 @@ pkgconfigdir="\$(libdir)/pkgconfig"
 
 AC_SUBST([pkgconfigdir])
 AC_SUBST([apidocdir])
-AC_SUBST([PTHREAD_FLAGS])
 AC_SUBST([LIBP11_VERSION_MAJOR])
 AC_SUBST([LIBP11_VERSION_MINOR])
 AC_SUBST([LIBP11_VERSION_FIX])
@@ -201,11 +200,9 @@ cat <<EOF
 
 libp11 has been configured with the following options:
 
-
 Version:                 ${PACKAGE_VERSION}
 Libraries:               $(eval eval eval echo "${libdir}")
-
-api doc support:         ${enable_api_doc}
+API doc support:         ${enable_api_doc}
 
 Host:                    ${host}
 Compiler:                ${CC}
@@ -214,7 +211,6 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
-PTHREAD_FLAGS:           ${PTHREAD_FLAGS}
 OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 
