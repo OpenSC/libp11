@@ -218,7 +218,8 @@ loggedin:
 
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
-	ERR_remove_state(0);
+/* TODO fix this */
+//	ERR_remove_state(0);
 
 	printf("decryption successfull.\n");
 	return 0;

@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	PKCS11_KEY *authkey = NULL;
 	PKCS11_CERT *authcert = NULL;
 	EVP_PKEY *pubkey = NULL;
-	EVP_MD_CTX mctx;
+	EVP_MD_CTX *mctx = NULL;
 	EVP_PKEY_CTX *pkeyctx = NULL;
 
 	unsigned char *random = NULL, *signature = NULL;
@@ -195,19 +195,25 @@ loggedin:
 	}
 
 	/* Compute the SHA1 hash of the random bytes */
-	EVP_MD_CTX_init(&mctx);
-	if (EVP_DigestInit(&mctx, EVP_sha1()) != 1) {
+	mctx = EVP_MD_CTX_new();
+	if (mctx == NULL) {
+	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+		END(1);
+	}
+	if (EVP_DigestInit(mctx, EVP_sha1()) != 1) {
 		fprintf(stderr, "fatal: EVP_DigestInit failed\n");
 		END(1);
 	}
-	if (EVP_DigestUpdate(&mctx, random, RANDOM_SIZE) != 1) {
+	if (EVP_DigestUpdate(mctx, random, RANDOM_SIZE) != 1) {
 		fprintf(stderr, "fatal: EVP_DigestUpdate failed\n");
 		END(1);
 	}
-	if (EVP_DigestFinal(&mctx, hash, &hlen) != 1) {
+	if (EVP_DigestFinal(mctx, hash, &hlen) != 1) {
 		fprintf(stderr, "fatal: EVP_DigestFinal failed\n");
 		END(1);
 	}
+	EVP_MD_CTX_free(mctx);
+	mctx = NULL;
 
 	/* Compute a PKCS #1 "block type 01" encryption-block */
 	sig.algor = &algorithm;
@@ -250,8 +256,12 @@ loggedin:
 		END(1);
 	}
 
-	EVP_MD_CTX_init(&mctx);
-	if (EVP_DigestVerifyInit(&mctx, &pkeyctx, EVP_sha1(), NULL, pubkey) != 1) {
+	mctx = EVP_MD_CTX_new();
+	if (mctx == NULL) {
+	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+		END(1);
+	}
+	if (EVP_DigestVerifyInit(mctx, &pkeyctx, EVP_sha1(), NULL, pubkey) != 1) {
 		fprintf(stderr, "fatal: EVP_DigestVerifyInit failed\n");
 		END(1);
 	}
@@ -261,14 +271,16 @@ loggedin:
 		END(1);
 	}
 
-	if (EVP_DigestVerifyUpdate(&mctx, (const void*)random, RANDOM_SIZE) <= 0) {
+	if (EVP_DigestVerifyUpdate(mctx, (const void*)random, RANDOM_SIZE) <= 0) {
 		fprintf(stderr, "fatal: EVP_DigestVerifyUpdate failed\n");
 		END(1);
 	}
-	if ((rc = EVP_DigestVerifyFinal(&mctx, signature, siglen)) != 1) {
+	if ((rc = EVP_DigestVerifyFinal(mctx, signature, siglen)) != 1) {
 		fprintf(stderr, "fatal: EVP_DigestVerifyFinal failed : %d\n", rc);
 		END(1);
 	}
+	EVP_MD_CTX_free(mctx);
+	mctx = NULL;
 
 	printf("raw signing operation and signature verification successfull.\n");
 	ret = 0;
@@ -278,7 +290,8 @@ end:
 		ERR_print_errors_fp(stderr);
 		printf("raw signing operation failed.\n");
 	}
-
+	if (mctx)
+		EVP_MD_CTX_free(mctx);
 	if (pubkey != NULL)
 		EVP_PKEY_free(pubkey);
 	if (random != NULL)

@@ -47,6 +47,7 @@ static ERR_STRING_DATA PKCS11_str_functs[] = {
 	{ERR_PACK(0, PKCS11_F_PKCS11_STORE_PUBLIC_KEY, 0), "PKCS11_store_public_key"},
 	{ERR_PACK(0, PKCS11_F_PKCS11_STORE_CERTIFICATE, 0), "PKCS11_store_certificate"},
 	{ERR_PACK(0, PKCS11_F_PKCS11_CHANGE_PIN, 0), "PKCS11_change_pin"},
+	{ERR_PACK(0, PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, 0), "PKCS11_ecdh_derive"},
 	{0, NULL}
 };
 
