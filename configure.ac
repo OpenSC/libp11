@@ -144,19 +144,9 @@ fi
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
-	[libcrypto >= 0.9.7],
+	[libcrypto >= 0.9.8],
 	,
-	[PKG_CHECK_MODULES(
-		[OPENSSL],
-		[openssl >= 0.9.7],
-		,
-		[AC_CHECK_LIB(
-			[crypto],
-			[RSA_version],
-			[OPENSSL_LIBS="-lcrypto"],
-			[AC_MSG_ERROR([Cannot find OpenSSL])]
-		)]
-	)]
+	[AC_MSG_ERROR([libcrypto >= 0.9.8 is required])]
 )
 
 pkgconfigdir="\$(libdir)/pkgconfig"
