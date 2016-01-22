@@ -195,9 +195,9 @@ loggedin:
 	}
 
 	/* Compute the SHA1 hash of the random bytes */
-	mctx = EVP_MD_CTX_new();
+	mctx = EVP_MD_CTX_create();
 	if (mctx == NULL) {
-	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+	    fprintf(stderr, "fatal: EVP_MD_CTX_create failed\n");
 		END(1);
 	}
 	if (EVP_DigestInit(mctx, EVP_sha1()) != 1) {
@@ -212,7 +212,7 @@ loggedin:
 		fprintf(stderr, "fatal: EVP_DigestFinal failed\n");
 		END(1);
 	}
-	EVP_MD_CTX_free(mctx);
+	EVP_MD_CTX_destroy(mctx);
 	mctx = NULL;
 
 	/* Compute a PKCS #1 "block type 01" encryption-block */
@@ -256,9 +256,9 @@ loggedin:
 		END(1);
 	}
 
-	mctx = EVP_MD_CTX_new();
+	mctx = EVP_MD_CTX_create();
 	if (mctx == NULL) {
-	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+	    fprintf(stderr, "fatal: EVP_MD_CTX_create failed\n");
 		END(1);
 	}
 	if (EVP_DigestVerifyInit(mctx, &pkeyctx, EVP_sha1(), NULL, pubkey) != 1) {
@@ -279,7 +279,7 @@ loggedin:
 		fprintf(stderr, "fatal: EVP_DigestVerifyFinal failed : %d\n", rc);
 		END(1);
 	}
-	EVP_MD_CTX_free(mctx);
+	EVP_MD_CTX_destroy(mctx);
 	mctx = NULL;
 
 	printf("raw signing operation and signature verification successfull.\n");
@@ -291,7 +291,7 @@ end:
 		printf("raw signing operation failed.\n");
 	}
 	if (mctx)
-		EVP_MD_CTX_free(mctx);
+		EVP_MD_CTX_destroy(mctx);
 	if (pubkey != NULL)
 		EVP_PKEY_free(pubkey);
 	if (random != NULL)
