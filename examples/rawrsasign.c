@@ -35,24 +35,6 @@
 
 #define END(x) do { ret = (x); goto end; } while (0)
 
-/* Missing functions for OpenSSL older than 1.1.0 */
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-
-static EVP_MD_CTX *EVP_MD_CTX_new(void) {
-	EVP_MD_CTX *mctx;
-
-	mctx = OPENSSL_malloc(sizeof(EVP_MD_CTX));
-	if (mctx)
-		EVP_MD_CTX_init(mctx);
-	return mctx;
-}
-
-static void EVP_MD_CTX_free(EVP_MD_CTX *mctx) {
-	OPENSSL_free(mctx);
-}
-
-#endif
-
 int main(int argc, char *argv[])
 {
 	PKCS11_CTX *ctx = NULL;
@@ -215,9 +197,9 @@ loggedin:
 	}
 
 	/* Compute the SHA1 hash of the random bytes */
-	mctx = EVP_MD_CTX_new();
+	mctx = EVP_MD_CTX_create();
 	if (mctx == NULL) {
-	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+	    fprintf(stderr, "fatal: EVP_MD_CTX_create failed\n");
 		END(1);
 	}
 	if (EVP_DigestInit(mctx, EVP_sha1()) != 1) {
@@ -232,7 +214,7 @@ loggedin:
 		fprintf(stderr, "fatal: EVP_DigestFinal failed\n");
 		END(1);
 	}
-	EVP_MD_CTX_free(mctx);
+	EVP_MD_CTX_destroy(mctx);
 	mctx = NULL;
 
 	/* Compute a PKCS #1 "block type 01" encryption-block */
@@ -278,9 +260,9 @@ loggedin:
 		END(1);
 	}
 
-	mctx = EVP_MD_CTX_new();
+	mctx = EVP_MD_CTX_create();
 	if (mctx == NULL) {
-	    fprintf(stderr, "fatal: EVP_MD_CTX_new failed\n");
+	    fprintf(stderr, "fatal: EVP_MD_CTX_create failed\n");
 		END(1);
 	}
 	if (EVP_DigestVerifyInit(mctx, &pkeyctx, EVP_sha1(), NULL, pubkey) != 1) {
@@ -301,7 +283,7 @@ loggedin:
 		fprintf(stderr, "fatal: EVP_DigestVerifyFinal failed : %d\n", rc);
 		END(1);
 	}
-	EVP_MD_CTX_free(mctx);
+	EVP_MD_CTX_destroy(mctx);
 	mctx = NULL;
 
 	printf("Signature verification successfull.\n");
@@ -319,7 +301,7 @@ end:
 	}
 
 	if (mctx)
-		EVP_MD_CTX_free(mctx);
+		EVP_MD_CTX_destroy(mctx);
 
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
 	if (pubkey != NULL)
