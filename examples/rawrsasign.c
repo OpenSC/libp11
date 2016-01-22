@@ -35,6 +35,24 @@
 
 #define END(x) do { ret = (x); goto end; } while (0)
 
+/* Missing functions for OpenSSL older than 1.1.0 */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+static EVP_MD_CTX *EVP_MD_CTX_new(void) {
+	EVP_MD_CTX *mctx;
+
+	mctx = OPENSSL_malloc(sizeof(EVP_MD_CTX));
+	if (mctx)
+		EVP_MD_CTX_init(mctx);
+	return mctx;
+}
+
+static void EVP_MD_CTX_free(EVP_MD_CTX *mctx) {
+	OPENSSL_free(mctx);
+}
+
+#endif
+
 int main(int argc, char *argv[])
 {
 	PKCS11_CTX *ctx = NULL;
@@ -43,9 +61,11 @@ int main(int argc, char *argv[])
 
 	PKCS11_KEY *authkey = NULL;
 	PKCS11_CERT *authcert = NULL;
-	EVP_PKEY *pubkey = NULL;
 	EVP_MD_CTX *mctx = NULL;
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L
+	EVP_PKEY *pubkey = NULL;
 	EVP_PKEY_CTX *pkeyctx = NULL;
+#endif
 
 	unsigned char *random = NULL, *signature = NULL;
 
@@ -245,8 +265,10 @@ loggedin:
 		fprintf(stderr, "PKCS11_private_encrypt failed\n");
 		END(1);
 	}
+	printf("Raw signing operation successfull.\n");
 
 	/* Verify the signature */
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L
 	/* As we have done a PKCS#1 complient padding, we can verify the signature
 	 * with "standard code", using openssl EVP interface.
 	 */
@@ -282,20 +304,31 @@ loggedin:
 	EVP_MD_CTX_free(mctx);
 	mctx = NULL;
 
-	printf("raw signing operation and signature verification successfull.\n");
+	printf("Signature verification successfull.\n");
+#else
+	printf("Signature verification could not be performed "
+		"with the installed version of OpenSSL.\n");
+#endif
+
 	ret = 0;
 
 end:
 	if (ret != 0) {
 		ERR_print_errors_fp(stderr);
-		printf("raw signing operation failed.\n");
+		printf("Raw signing operation failed.\n");
 	}
+
 	if (mctx)
 		EVP_MD_CTX_free(mctx);
+
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L
 	if (pubkey != NULL)
 		EVP_PKEY_free(pubkey);
+#endif
+
 	if (random != NULL)
 		OPENSSL_free(random);
+
 	if (signature != NULL)
 		OPENSSL_free(signature);
 
