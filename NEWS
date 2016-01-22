@@ -1,17 +1,17 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.3.1; unreleased;
-* Fixed a memory leak in pkcs11_get_evp_key_rsa() (Michał Trojnara)
+New in 0.3.1; 2016-01-22; Michał Trojnara
+* Added PKCS11_is_logged_in to the API (Mikhail Denisenko)
+* Added PKCS11_enumerate_public_keys to the API (Michał Trojnara)
+* Fixed EVP_PKEY handling of public keys (Michał Trojnara)
+* Added thread safety based on OpenSSL dynamic locks (Michał Trojnara)
 * A private index is allocated for ex_data access (RSA and ECDSA classes)
   instead of using the reserved index zero (app_data) (Michał Trojnara)
-* Improved searching for dlopen() (Christoph Moench-Tegeder)
-* Fixed EVP_PKEY handling of public keys (Michał Trojnara)
-* Added PKCS11_enumerate_public_keys to the API (Michał Trojnara)
-* Added thread safety based on OpenSSL dynamic locks (Michał Trojnara)
-* Added PKCS11_is_logged_in to the API (Mikhail Denisenko)
 * Fixes in reinitialization after fork; addresses #39
   (Michał Trojnara)
+* Improved searching for dlopen() (Christoph Moench-Tegeder)
 * MSVC build fixes (Michał Trojnara)
+* Fixed memory leaks in pkcs11_get_evp_key_rsa() (Michał Trojnara)
 
 New in 0.3.0; 2015-10-09; Nikos Mavrogiannopoulos
 * Added small test suite based on softhsm (run on make check)
