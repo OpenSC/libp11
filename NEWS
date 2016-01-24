@@ -1,6 +1,10 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.0; unreleased;
+* Added support for building against OpenSSL 1.1.0-dev (Doug Engert)
+* Added support for ECDH key derivation (Doug Engert)
+* Fixed building against OpenSSL 0.9.8 (Michał Trojnara)
+* Removed support for OpenSSL 0.9.7 (Michał Trojnara)
 
 New in 0.3.1; 2016-01-22; Michał Trojnara
 * Added PKCS11_is_logged_in to the API (Mikhail Denisenko)
