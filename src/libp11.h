@@ -414,6 +414,7 @@ extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int 
 /* using with openssl method mechanism */
 RSA_METHOD *PKCS11_get_rsa_method(void);
 
+/* define old an new to keep mix match of engine from failinig to load. */
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void);
 void PKCS11_ec_key_method_free(void);

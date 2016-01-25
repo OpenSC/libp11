@@ -352,6 +352,12 @@ static void free_ecdsa_ex_index() {
 /* OpenSSL 1.1 has single method  EC_KEY_METHOD for ECDSA and ECDH */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
+/* define old way to keep  old engines working with out ECDSA */
+void *PKCS11_get_ecdsa_method(void)
+{
+    return NULL;
+}
+
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
 	int (*orig_sign)(int type, const unsigned char *dgst,
@@ -393,6 +399,12 @@ void PKCS11_EC_KEY_METHOD_free(void)
 }
 
 #else /* OPENSSL_VERSION_NUMBER >= 0x1000200fL */
+/* define new way to keep new engines from crashing  with older libp11 */
+void *PKCS11_get_ec_key_method(void)
+{
+    return NULL;
+}
+
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 
