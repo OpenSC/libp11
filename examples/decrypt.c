@@ -125,7 +125,11 @@ int main(int argc, char *argv[])
 	}
 
 	/* allocate destination buffer */
+#if OPENSSL_VERSION_NUMBER >= 0x10100003L
+	encrypted = OPENSSL_malloc(RSA_size(EVP_PKEY_get0_RSA(pubkey)));
+#else
 	encrypted = OPENSSL_malloc(RSA_size(pubkey->pkey.rsa));
+#endif
 	if (encrypted == NULL) {
 		fprintf(stderr,"out of memory for encrypted data");
 		goto failed;
@@ -133,7 +137,12 @@ int main(int argc, char *argv[])
 
 	/* use public key for encryption */
 	len = RSA_public_encrypt(RANDOM_SIZE, random, encrypted,
-			pubkey->pkey.rsa, RSA_PKCS1_PADDING);
+#if OPENSSL_VERSION_NUMBER >= 0x10100003L
+			EVP_PKEY_get0_RSA(pubkey),
+#else
+			pubkey->pkey.rsa,
+#endif
+			RSA_PKCS1_PADDING);
 	if (len < 0) {
 		fprintf(stderr, "fatal: RSA_public_encrypt failed\n");
 		goto failed;
@@ -186,7 +195,11 @@ loggedin:
 	}
 
 	/* allocate space for decrypted data */
+#if OPENSSL_VERSION_NUMBER >= 0x10100003L
+	decrypted = OPENSSL_malloc(RSA_size(EVP_PKEY_get0_RSA(pubkey)));
+#else
 	decrypted = OPENSSL_malloc(RSA_size(pubkey->pkey.rsa));
+#endif
 	if (decrypted == NULL)
 		goto failed;
 

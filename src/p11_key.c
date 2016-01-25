@@ -256,8 +256,13 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 		pkcs11_addattr_bool(attrs + n++, CKA_VERIFY, TRUE);
 		pkcs11_addattr_bool(attrs + n++, CKA_WRAP, TRUE);
 	}
-	if (pk->type == EVP_PKEY_RSA) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100003L
+	if (EVP_PKEY_base_id(pk) == EVP_PKEY_RSA) {
 		RSA *rsa = EVP_PKEY_get1_RSA(pk);
+#else
+	if (pk->type == EVP_PKEY_RSA) {
+		RSA *rsa = pk->pkey.rsa;
+#endif
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
 		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa->n);
 		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa->e);
