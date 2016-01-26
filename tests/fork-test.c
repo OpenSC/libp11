@@ -23,6 +23,10 @@
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 256
 
+#if OPENSSL_VERSION_NUMBER < 0x10100003L
+#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
+#endif
+
 static void do_fork();
 static void error_queue(const char *name);
 
@@ -189,7 +193,7 @@ loggedin:
 
 	/* now verify the result */
 	rc = RSA_verify(NID_sha1, random, RANDOM_SIZE,
-			signature, siglen, pubkey->pkey.rsa);
+			signature, siglen, EVP_PKEY_get0_RSA(pubkey));
 	if (rc != 1) {
 		fprintf(stderr, "fatal: RSA_verify failed\n");
 		goto failed;
