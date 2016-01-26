@@ -133,8 +133,8 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 err:
 	if (buf)
 	    OPENSSL_free(buf);
-	if (newkey != CK_INVALID_HANDLE && session != CK_INVALID_HANDLE);
-		rv = CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
+	if (newkey != CK_INVALID_HANDLE && session != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 	
 	return ret;
 }
