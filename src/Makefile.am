@@ -1,26 +1,41 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 	$(srcdir)/config.h.in $(srcdir)/config.h.in~
 CLEANFILES = libp11.pc
-EXTRA_DIST = Makefile.mak versioninfo.rc.in
+EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
 noinst_HEADERS= libp11-int.h pkcs11.h atfork.h
 include_HEADERS= libp11.h
 lib_LTLIBRARIES = libp11.la
+engines_LTLIBRARIES = libpkcs11.la
 pkgconfig_DATA = libp11.pc
 
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_key.c \
 	p11_load.c p11_misc.c p11_ops.c p11_rsa.c p11_ec.c p11_slot.c \
 	libp11.exports atfork.c
 if WIN32
-libp11_la_SOURCES += versioninfo.rc
+libp11_la_SOURCES += libp11.rc
 else
-dist_noinst_DATA = versioninfo.rc
+dist_noinst_DATA = libp11.rc
 endif
 libp11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_CFLAGS)
 libp11_la_LIBADD = $(OPENSSL_LIBS)
 libp11_la_LDFLAGS = $(AM_LDFLAGS) \
 	-version-info @LIBP11_LT_CURRENT@:@LIBP11_LT_REVISION@:@LIBP11_LT_AGE@ \
 	-export-symbols "$(srcdir)/libp11.exports" \
+	-no-undefined
+
+libpkcs11_la_SOURCES = eng_front.c eng_back.c engine.h pkcs11.exports
+if WIN32
+libpkcs11_la_SOURCES += pkcs11.rc
+else
+dist_noinst_DATA += pkcs11.rc
+endif
+libpkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS) \
+	$(LIBP11_CFLAGS)
+libpkcs11_la_LIBADD = $(OPENSSL_LIBS) $(LIBP11_LIBS)
+libpkcs11_la_LDFLAGS = $(AM_LDFLAGS) \
+	-module -shared -avoid-version \
+	-export-symbols "$(srcdir)/pkcs11.exports" \
 	-no-undefined
 
 if WIN32

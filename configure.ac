@@ -97,6 +97,41 @@ AC_ARG_WITH(
 	[apidocdir="\$(htmldir)/api"]
 )
 
+AC_ARG_WITH(
+	[enginesdir],
+	[AS_HELP_STRING([--with-enginesdir], [OpenSSL engines directory])],
+	[enginesdir="${withval}"],
+	[
+		libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
+			$PKG_CONFIG --variable=libdir openssl`"
+		case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
+			$PKG_CONFIG --modversion openssl`" in
+		1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
+			debian_ssl_prefix="openssl-1.1.0";;
+		1.0.*) # Engines directory prefix for OpenSSL 1.0.x
+			debian_ssl_prefix="openssl-1.0.0";;
+		*) # Engines directory prefix for OpenSSL 0.9.x
+			debian_ssl_prefix="ssl";;
+		esac
+		if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
+			# Debian-based OpenSSL package (for example Ubuntu)
+			enginesdir="$libcryptodir/$debian_ssl_prefix/engines"
+		else # Default OpenSSL engines directory
+			enginesdir="$libcryptodir/engines"
+		fi
+		if test "${prefix}" != "NONE" -o "${exec_prefix}" != "NONE"; then
+			# Override the autodetected value with the default
+			enginesdir="${libdir}"
+		fi
+	]
+)
+
+AC_ARG_WITH(
+	[pkcs11-module],
+	[AS_HELP_STRING([--with-pkcs11-module], [default PKCS11 module])],
+	[pkcs11_module="${withval}"],
+	[pkcs11_module="`$PKG_CONFIG --variable=proxy_module --silence-errors p11-kit-1`"])
+
 dnl Checks for programs.
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -149,10 +184,18 @@ PKG_CHECK_MODULES(
 	[AC_MSG_ERROR([libcrypto >= 0.9.8 is required])]
 )
 
+if test -n "${pkcs11_module}"; then
+	AC_DEFINE_UNQUOTED(
+		[DEFAULT_PKCS11_MODULE],
+		"${pkcs11_module}",
+		[Default PKCS#11 module.])
+fi
+
 pkgconfigdir="\$(libdir)/pkgconfig"
 
 AC_SUBST([pkgconfigdir])
 AC_SUBST([apidocdir])
+AC_SUBST([enginesdir])
 AC_SUBST([LIBP11_VERSION_MAJOR])
 AC_SUBST([LIBP11_VERSION_MINOR])
 AC_SUBST([LIBP11_VERSION_FIX])
@@ -178,7 +221,8 @@ AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
 	src/libp11.pc
-	src/versioninfo.rc
+	src/libp11.rc
+	src/pkcs11.rc
 	doc/Makefile
 	doc/doxygen.conf
 	examples/Makefile
@@ -191,8 +235,10 @@ cat <<EOF
 libp11 has been configured with the following options:
 
 Version:                 ${PACKAGE_VERSION}
-Libraries:               $(eval eval eval echo "${libdir}")
+libp11 directory:        $(eval eval eval echo "${libdir}")
+Engine directory:        ${enginesdir}
 API doc support:         ${enable_api_doc}
+Default PKCS11 module:   ${pkcs11_module}
 
 Host:                    ${host}
 Compiler:                ${CC}
@@ -201,6 +247,8 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
+LIBP11_CFLAGS:           ${LIBP11_CFLAGS}
+LIBP11_LIBS:             ${LIBP11_LIBS}
 OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 
