@@ -157,11 +157,11 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 void PKCS11_CTX_free(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *priv = PRIVCTX(ctx);
-	/* Do not remove the strings since OpenSSL strings may still be used by
-	 * the application and we can't know
 
-	ERR_free_strings();
-	ERR_remove_state(0);
+	/* TODO: move the global methods and ex_data indexes into
+	 * the ctx structure, so they can be safely deallocated here:
+	PKCS11_rsa_method_free(ctx);
+	PKCS11_ecdsa_method_free(ctx);
 	*/
 	if (priv->init_args) {
 		OPENSSL_free(priv->init_args);
