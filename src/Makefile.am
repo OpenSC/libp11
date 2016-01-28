@@ -30,9 +30,8 @@ libpkcs11_la_SOURCES += pkcs11.rc
 else
 dist_noinst_DATA += pkcs11.rc
 endif
-libpkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS) \
-	$(LIBP11_CFLAGS)
-libpkcs11_la_LIBADD = $(OPENSSL_LIBS) $(LIBP11_LIBS)
+libpkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
+libpkcs11_la_LIBADD = libp11.la $(OPENSSL_LIBS)
 libpkcs11_la_LDFLAGS = $(AM_LDFLAGS) \
 	-module -shared -avoid-version \
 	-export-symbols "$(srcdir)/pkcs11.exports" \

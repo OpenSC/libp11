@@ -237,8 +237,8 @@ libp11 has been configured with the following options:
 Version:                 ${PACKAGE_VERSION}
 libp11 directory:        $(eval eval eval echo "${libdir}")
 Engine directory:        ${enginesdir}
-API doc support:         ${enable_api_doc}
 Default PKCS11 module:   ${pkcs11_module}
+API doc support:         ${enable_api_doc}
 
 Host:                    ${host}
 Compiler:                ${CC}
@@ -247,8 +247,6 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
-LIBP11_CFLAGS:           ${LIBP11_CFLAGS}
-LIBP11_LIBS:             ${LIBP11_LIBS}
 OPENSSL_CFLAGS:          ${OPENSSL_CFLAGS}
 OPENSSL_LIBS:            ${OPENSSL_LIBS}
 
