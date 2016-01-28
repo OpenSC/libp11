@@ -189,6 +189,8 @@ int pkcs11_init(ENGINE * engine)
 	 */
 	(void)engine;
 
+	if (mod == NULL)
+		mod = getenv("PKCS11_MODULE_PATH");
 #ifdef DEFAULT_PKCS11_MODULE
 	if (mod == NULL)
 		mod = DEFAULT_PKCS11_MODULE;
