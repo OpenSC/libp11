@@ -9,9 +9,10 @@ AM_CPPFLAGS = \
 AM_LDFLAGS = -no-install
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
-check_PROGRAMS = fork-test
-dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm testlistkeys.softhsm
-dist_check_DATA = cert.der key.der pubkey.der
+check_PROGRAMS = fork-test evp-sign
+dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm testlistkeys.softhsm \
+	evp-sign.softhsm
+dist_check_DATA = engines.cnf.in cert.der key.der pubkey.der
 
 TESTS = $(dist_check_SCRIPTS)
 

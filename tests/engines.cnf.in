@@ -1,0 +1,16 @@
+HOME			= .
+RANDFILE		= $ENV::HOME/.rnd
+
+openssl_conf = openssl_def
+
+[openssl_def]
+engines = engine_section
+
+[engine_section]
+pkcs11 = pkcs11_section
+
+[pkcs11_section]
+engine_id = pkcs11
+dynamic_path = @ENGINE_PATH@
+MODULE_PATH = @MODULE_PATH@
+init = 0

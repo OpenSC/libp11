@@ -64,6 +64,7 @@ examples/listkeys
 
 test-driver
 tests/fork-test
+tests/evp-sign
 tests/*.log
 tests/*.trs
 tests/output.*
