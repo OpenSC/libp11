@@ -1,7 +1,8 @@
 /*
- * Copyright (c) 2002 Juha Yrjölä.  All rights reserved.
- * Copyright (c) 2001 Markus Friedl.
+ * Copyright (c) 2001 Markus Friedl
+ * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2003 Kevin Stefanik
+ * Copyright (c) 2016 Michał Trojnara
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,33 +32,47 @@
 #include "config.h"
 #endif
 
+#include "libp11.h"
 #include <stdio.h>
 #include <string.h>
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
 
-int set_module(const char *modulename);
+#define CMD_SO_PATH		ENGINE_CMD_BASE
+#define CMD_MODULE_PATH 	(ENGINE_CMD_BASE+1)
+#define CMD_PIN		(ENGINE_CMD_BASE+2)
+#define CMD_VERBOSE		(ENGINE_CMD_BASE+3)
+#define CMD_QUIET		(ENGINE_CMD_BASE+4)
+#define CMD_LOAD_CERT_CTRL	(ENGINE_CMD_BASE+5)
+#define CMD_INIT_ARGS	(ENGINE_CMD_BASE+6)
 
-int set_pin(const char *pin);
+typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
-int set_init_args(const char *init_args_orig);
+/* defined in eng_back.c */
 
-int load_cert_ctrl(ENGINE * e, void *p);
+ENGINE_CTX *pkcs11_new();
 
-int inc_verbose(void);
+int pkcs11_init(ENGINE_CTX *ctx);
 
-int pkcs11_finish(ENGINE * engine);
+int pkcs11_finish(ENGINE_CTX *ctx);
 
-int pkcs11_init(ENGINE * engine);
+int pkcs11_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
 
-int pkcs11_rsa_finish(RSA * rsa);
-
-EVP_PKEY *pkcs11_load_public_key(ENGINE * e, const char *s_key_id,
+EVP_PKEY *pkcs11_load_public_key(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
 
-EVP_PKEY *pkcs11_load_private_key(ENGINE * e, const char *s_key_id,
+EVP_PKEY *pkcs11_load_private_key(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
+
+/* defined in eng_parse.c */
+
+int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
+	unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
+	char **label);
+
+int parse_slot_id_string(const char *slot_id, int *slot,
+	unsigned char *id, size_t * id_len, char **label);
 
 #endif
 
