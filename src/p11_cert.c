@@ -38,11 +38,14 @@ PKCS11_enumerate_certs(PKCS11_TOKEN * token,
 		PKCS11_CERT ** certp, unsigned int *countp)
 {
 	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	int rv;
 
 	if (tpriv->ncerts < 0) {
+		if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 0))
+			return -1;
 		pkcs11_w_lock(cpriv->lockid);
 		rv = pkcs11_find_certs(token);
 		pkcs11_w_unlock(cpriv->lockid);
