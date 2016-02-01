@@ -166,38 +166,6 @@ static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index));
 }
 
-/* Lousy hack alert. If RSA_verify detects that the key has the
- * RSA_FLAG_SIGN_VER flags set, it will assume that verification
- * is implemented externally as well.
- * We work around this by temporarily cleaning the flag, and
- * calling RSA_verify once more.
- * OpenSSL-1.1 does not define or use the RSA_FLAG_SIGN_VER. No need for hack
- */
-static int
-pkcs11_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L
-		const
-#endif
-		unsigned char *signature, unsigned int siglen, const RSA * rsa)
-{
-	RSA *r = (RSA *) rsa;	/* Ugly hack to get rid of compiler warning */
-	int res;
-
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	res = RSA_verify(type, m, m_len, signature, siglen, r);
-#else
-	if (r->flags & RSA_FLAG_SIGN_VER) {
-		r->flags &= ~RSA_FLAG_SIGN_VER;
-		res = RSA_verify(type, m, m_len, signature, siglen, r);
-		r->flags |= RSA_FLAG_SIGN_VER;
-	} else {
-		PKCS11err(PKCS11_F_PKCS11_RSA_VERIFY, PKCS11_NOT_SUPPORTED);
-		res = 0;
-	}
-#endif
-	return res;
-}
-
 static void alloc_rsa_ex_index() {
 	if (rsa_ex_index == 0) {
 		while (rsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
@@ -231,7 +199,6 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		ops.rsa_priv_enc = pkcs11_rsa_encrypt;
 		ops.rsa_priv_dec = pkcs11_rsa_decrypt;
 		ops.rsa_sign = pkcs11_rsa_sign;
-		ops.rsa_verify = pkcs11_rsa_verify;
 	}
 	return &ops;
 }
