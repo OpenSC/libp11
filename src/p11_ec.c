@@ -251,7 +251,7 @@ static int pkcs11_ec_ckey(void *out,
 	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_key_ex_index);
 
 	if (key == NULL) {
-	    ret -1;
+	    ret = -1;
 	    goto err;
 	}
 
@@ -283,7 +283,7 @@ static int pkcs11_ec_ckey(void *out,
 
 	if (KDF != 0) {
 		if (KDF(buf, buflen, out, &outlen) == NULL) {
-			ret -1;
+			ret = -1;
 			goto err;
 		}
 		ret = outlen;

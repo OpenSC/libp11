@@ -83,7 +83,6 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		    goto err;
 	}
 
-	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
 	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
 	if (rv) {
 	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
