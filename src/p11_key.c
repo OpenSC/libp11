@@ -353,13 +353,18 @@ EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY * key)
 static int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
 		PKCS11_KEY ** keyp, unsigned int * countp)
 {
-	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 	int rv;
 
 	if (keys->num < 0) { /* No cache was built for the specified type */
+		/* Make sure we have a session */
+		if (!spriv->haveSession && PKCS11_open_session(slot, 0))
+			return -1;
 		pkcs11_w_lock(cpriv->lockid);
 		rv = pkcs11_find_keys(token, type);
 		pkcs11_w_unlock(cpriv->lockid);
@@ -380,20 +385,16 @@ static int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
  */
 static int pkcs11_find_keys(PKCS11_TOKEN * token, unsigned int type)
 {
-	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 	CK_OBJECT_CLASS key_search_class;
 	CK_ATTRIBUTE key_search_attrs[1] = {
 		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
 	};
 	int rv, res = -1;
-
-	/* Make sure we have a session */
-	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 0))
-		return -1;
 
 	/* Tell the PKCS11 lib to enumerate all matching objects */
 	key_search_class = type;

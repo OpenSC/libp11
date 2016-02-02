@@ -1,6 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.0; unreleased;
+* Fixed deadlocks in keys and certificates listing (Brian Hinz)
 * Use PKCS11_MODULE_PATH environment variable (Doug Engert)
 * Added support for building against OpenSSL 1.1.0-dev (Doug Engert)
 * Added support for ECDH key derivation (Doug Engert)
