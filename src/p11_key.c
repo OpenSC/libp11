@@ -79,7 +79,7 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
 }
 
 /*
- * Find key matching a key of the other type pub vs priv
+ * Find key matching a key of the other type (public vs private)
  */
 PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
 {
@@ -225,7 +225,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
-	CK_SESSION_HANDLE session;
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_OBJECT_HANDLE object;
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
@@ -234,9 +234,8 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CHECK_SLOT_FORK(slot);
 
 	/* First, make sure we have a session */
-	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))
+	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
 		return -1;
-	session = PRIVSLOT(slot)->session;
 
 	/* Now build the key attrs */
 	pkcs11_addattr_int(attrs + n++, CKA_CLASS, type);
@@ -281,7 +280,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	}
 
 	/* Now call the pkcs11 module to create the object */
-	rv = CRYPTOKI_call(ctx, C_CreateObject(session, attrs, n, &object));
+	rv = CRYPTOKI_call(ctx, C_CreateObject(spriv->session, attrs, n, &object));
 
 	/* Zap all memory allocated when building the template */
 	pkcs11_zap_attrs(attrs, n);
@@ -289,7 +288,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_STORE_PRIVATE_KEY, rv);
 
 	/* Gobble the key object */
-	return pkcs11_init_key(ctx, token, session, object, type, ret_key);
+	return pkcs11_init_key(ctx, token, spriv->session, object, type, ret_key);
 }
 
 /*

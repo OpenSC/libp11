@@ -301,7 +301,8 @@ err:
 
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
-static void alloc_ec_key_ex_index() {
+static void alloc_ec_key_ex_index()
+{
 	if (ec_key_ex_index == 0) {
 		while (ec_key_ex_index == 0) /* Workaround for OpenSSL RT3710 */
 			ec_key_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
@@ -311,7 +312,8 @@ static void alloc_ec_key_ex_index() {
 	}
 }
 #else
-static void alloc_ecdsa_ex_index() {
+static void alloc_ecdsa_ex_index()
+{
 	if (ecdsa_ex_index == 0) {
 		while (ecdsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
 			ecdsa_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
@@ -323,7 +325,8 @@ static void alloc_ecdsa_ex_index() {
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
-static void free_ec_key_ex_index() {
+static void free_ec_key_ex_index()
+{
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
 	if (ec_key_ex_index > 0) {
 		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_key_ex_index);
@@ -331,7 +334,8 @@ static void free_ec_key_ex_index() {
 	}
 }
 #else
-static void free_ecdsa_ex_index() {
+static void free_ecdsa_ex_index()
+{
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100001L
 	if (ecdsa_ex_index > 0) {

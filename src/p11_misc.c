@@ -60,12 +60,12 @@ void *memdup(const void *src, size_t size)
  */
 static int check_fork_int(PKCS11_CTX *ctx)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	if (_P11_detect_fork(priv->forkid)) {
+	if (_P11_detect_fork(cpriv->forkid)) {
 		if (PKCS11_CTX_reload(ctx) < 0)
 			return -1;
-		priv->forkid = _P11_get_forkid();
+		cpriv->forkid = _P11_get_forkid();
 	}
 	return 0;
 }
@@ -78,11 +78,11 @@ static int check_slot_fork_int(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
 	if (check_fork_int(SLOT2CTX(slot)) < 0)
 		return -1;
-	if (spriv->forkid != priv->forkid) {
+	if (spriv->forkid != cpriv->forkid) {
 		if (spriv->loggedIn) {
 			int saved = spriv->haveSession;
 			spriv->haveSession = 0;
@@ -96,7 +96,7 @@ static int check_slot_fork_int(PKCS11_SLOT *slot)
 			if (PKCS11_reopen_session(slot) < 0)
 				return -1;
 		}
-		spriv->forkid = priv->forkid;
+		spriv->forkid = cpriv->forkid;
 	}
 	return 0;
 }
@@ -107,15 +107,15 @@ static int check_slot_fork_int(PKCS11_SLOT *slot)
  */
 static int check_key_fork_int(PKCS11_KEY *key)
 {
-	PKCS11_KEY_private *priv = PRIVKEY(key);
-	PKCS11_SLOT *slot = TOKEN2SLOT(priv->parent);
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
-	if (spriv->forkid != priv->forkid) {
+	if (spriv->forkid != kpriv->forkid) {
 		pkcs11_reload_key(key);
-		priv->forkid = spriv->forkid;
+		kpriv->forkid = spriv->forkid;
 	}
 	return 0;
 }
@@ -125,12 +125,12 @@ static int check_key_fork_int(PKCS11_KEY *key)
  */
 int check_fork(PKCS11_CTX *ctx)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	int rv;
 
-	pkcs11_w_lock(priv->lockid);
+	pkcs11_w_lock(cpriv->lockid);
 	rv = check_fork_int(ctx);
-	pkcs11_w_unlock(priv->lockid);
+	pkcs11_w_unlock(cpriv->lockid);
 	return rv;
 }
 
@@ -140,12 +140,12 @@ int check_fork(PKCS11_CTX *ctx)
 int check_slot_fork(PKCS11_SLOT *slot)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	int rv;
 
-	pkcs11_w_lock(priv->lockid);
+	pkcs11_w_lock(cpriv->lockid);
 	rv = check_slot_fork_int(slot);
-	pkcs11_w_unlock(priv->lockid);
+	pkcs11_w_unlock(cpriv->lockid);
 	return rv;
 }
 
@@ -155,12 +155,12 @@ int check_slot_fork(PKCS11_SLOT *slot)
 int check_key_fork(PKCS11_KEY *key)
 {
 	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	int rv;
 
-	CRYPTO_w_lock(priv->lockid);
+	CRYPTO_w_lock(cpriv->lockid);
 	rv = check_key_fork_int(key);
-	CRYPTO_w_unlock(priv->lockid);
+	CRYPTO_w_unlock(cpriv->lockid);
 	return rv;
 }
 

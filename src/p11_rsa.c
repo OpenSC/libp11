@@ -106,7 +106,6 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	/* TODO: Retrieve the RSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
-	
 #if OPENSSL_VERSION_NUMBER < 0x01010000L
 	/* RSA_FLAG_SIGN_VER no longer  in OpenSSL 1.1 */
 	rsa->flags |= RSA_FLAG_SIGN_VER;
@@ -146,7 +145,6 @@ int PKCS11_get_key_size(const PKCS11_KEY * key)
 static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
 		unsigned char *to, RSA * rsa, int padding)
 {
-
 	return PKCS11_private_decrypt(flen, from, to,
 		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index), padding);
 }
@@ -161,12 +159,12 @@ static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
 static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
 {
-	
 	return PKCS11_sign(type, m, m_len, sigret, siglen,
 		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index));
 }
 
-static void alloc_rsa_ex_index() {
+static void alloc_rsa_ex_index()
+{
 	if (rsa_ex_index == 0) {
 		while (rsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
 			rsa_ex_index = RSA_get_ex_new_index(0, "libp11 rsa",
@@ -176,7 +174,8 @@ static void alloc_rsa_ex_index() {
 	}
 }
 
-static void free_rsa_ex_index() {
+static void free_rsa_ex_index()
+{
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100001L
 	if (rsa_ex_index > 0) {

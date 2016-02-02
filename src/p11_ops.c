@@ -32,7 +32,7 @@
  * The secret key object is deleted
  *
  * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
- * could also be supported, and the secret key object could be returned. 
+ * could also be supported, and the secret key object could be returned.
  */
 int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
@@ -40,16 +40,16 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		void *outnewkey,
 		PKCS11_KEY * key)
 {
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_TOKEN *token = KEY2TOKEN(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_MECHANISM mechanism;
 	int rv;
 	int ret = -1;
 	unsigned char * buf = NULL;
 	size_t buflen;
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	PKCS11_TOKEN *token;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
 
 	CK_BBOOL true = TRUE;
 	CK_BBOOL false = FALSE;
@@ -65,14 +65,7 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		{CKA_DECRYPT, &true, sizeof(true)}
 	};
 
-	ctx = KEY2CTX(key);
-	priv = PRIVKEY(key);
-	token = KEY2TOKEN(key);
-	slot = KEY2SLOT(key);
-
 	CHECK_KEY_FORK(key);
-
-	session = PRIVSLOT(slot)->session;
 
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism  = ecdh_mechanism;
@@ -91,14 +84,14 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 	}
 
 	CRYPTO_w_lock(PRIVSLOT(slot)->lockid);
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, priv->object, newkey_template, 5, &newkey));
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
 	if (rv) {
 	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
 	    goto err;
 	}
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
-	
+
 	/* pkcs11_ec_ckey only asks for the value */
 
 	if (out && outlen) {
@@ -133,34 +126,28 @@ int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 err:
 	if (buf)
 	    OPENSSL_free(buf);
-	if (newkey != CK_INVALID_HANDLE && session != CK_INVALID_HANDLE)
-		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
-	
+	if (newkey != CK_INVALID_HANDLE && spriv->session != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
+
 	return ret;
 }
 #endif
 
+/* Signature size is the issue, will assume the caller has a big buffer! */
+/* No padding or other stuff needed.  We can call PKCS11 from here */
 int
 PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
 {
-/* signature size is the issue, will assume caller has a big buffer ! */
-/* No padding or other stuff needed, we can cal PKCS11 from here */
 	int rv;
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	CK_SESSION_HANDLE session;
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_MECHANISM mechanism;
 	CK_ULONG ck_sigsize;
 
-	ctx = KEY2CTX(key);
-	priv = PRIVKEY(key);
-	slot = TOKEN2SLOT(priv->parent);
-
 	CHECK_KEY_FORK(key);
-
-	session = PRIVSLOT(slot)->session;
 
 	ck_sigsize = *siglen;
 
@@ -168,9 +155,9 @@ PKCS11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	mechanism.mechanism = CKM_ECDSA;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
-	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
+	rv = CRYPTOKI_call(ctx, C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
 		CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
+			C_Sign(spriv->session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
@@ -190,9 +177,6 @@ PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
 	int sigsize;
-
-	if (key == NULL)
-		return 0;
 
 	CHECK_KEY_FORK(key);
 
@@ -246,56 +230,44 @@ int
 PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY * key, int padding)
 {
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	CK_SESSION_HANDLE session;
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_MECHANISM mechanism;
 	int rv;
 	int sigsize;
 	CK_ULONG ck_sigsize;
 
-	if (key == NULL)
-		return -1;
-
-	sigsize=PKCS11_get_key_size(key);
-	ck_sigsize=sigsize;
+	sigsize = PKCS11_get_key_size(key);
+	ck_sigsize = sigsize;
 
 	memset(&mechanism, 0, sizeof(mechanism));
 
 	switch (padding) {
-
 		case RSA_NO_PADDING:
 			mechanism.mechanism = CKM_RSA_X_509;
 			break;
-
 		case RSA_PKCS1_PADDING:
 			if ((flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
 				return -1; /* the size is wrong */
 			}
 			mechanism.mechanism = CKM_RSA_PKCS;
 			break;
-
 		default:
 			printf("pkcs11 engine: only RSA_NO_PADDING or RSA_PKCS1_PADDING allowed so far\n");
 			return -1;
 	}
 
-	ctx = KEY2CTX(key);
-	priv = PRIVKEY(key);
-	slot = TOKEN2SLOT(priv->parent);
-
 	CHECK_KEY_FORK(key);
-
-	session = PRIVSLOT(slot)->session;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
 	 * by OpenSSL). The library assumes that the memory passed
 	 * by the caller is always big enough */
-	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, priv->object)) ||
+	rv = CRYPTOKI_call(ctx, C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
 		CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE *) from, flen, to, &ck_sigsize));
+			C_Sign(spriv->session, (CK_BYTE *) from, flen, to, &ck_sigsize));
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
@@ -313,43 +285,33 @@ int
 PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY * key, int padding)
 {
-	CK_RV rv;
-	PKCS11_KEY_private *priv;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	CK_SESSION_HANDLE session;
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_MECHANISM mechanism;
 	CK_ULONG size = flen;
-								
+	CK_RV rv;
+
 	if (padding != RSA_PKCS1_PADDING) {
 			printf("pkcs11 engine: only RSA_PKCS1_PADDING allowed so far\n");
 			return -1;
 	}
-	if (key == NULL)
-			return -1;
 
-	/* PKCS11 calls go here */
-										
-	ctx = KEY2CTX(key);
-	priv = PRIVKEY(key);
-	slot = TOKEN2SLOT(priv->parent);
 	CHECK_KEY_FORK(key);
 
-	session = PRIVSLOT(slot)->session;
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_RSA_PKCS;
 
-
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
-	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, priv->object)) ||
+	rv = CRYPTOKI_call(ctx, C_DecryptInit(spriv->session, &mechanism, kpriv->object)) ||
 		CRYPTOKI_call(ctx,
-			C_Decrypt(session, (CK_BYTE *) from, (CK_ULONG)flen,
+			C_Decrypt(spriv->session, (CK_BYTE *) from, (CK_ULONG)flen,
 				(CK_BYTE_PTR)to, &size));
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
-	if (rv) {
+	if (rv)
 		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));
-	}
 
 	return rv ? 0 : size;
 }

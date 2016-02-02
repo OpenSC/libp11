@@ -26,27 +26,27 @@ static void *handle = NULL;
  */
 PKCS11_CTX *PKCS11_CTX_new(void)
 {
-	PKCS11_CTX_private *priv = NULL;
+	PKCS11_CTX_private *cpriv = NULL;
 	PKCS11_CTX *ctx = NULL;
 
 	/* Load error strings */
 	ERR_load_PKCS11_strings();
 
-	priv = OPENSSL_malloc(sizeof(PKCS11_CTX_private));
-	if (priv == NULL)
+	cpriv = OPENSSL_malloc(sizeof(PKCS11_CTX_private));
+	if (cpriv == NULL)
 		goto fail;
-	memset(priv, 0, sizeof(PKCS11_CTX_private));
+	memset(cpriv, 0, sizeof(PKCS11_CTX_private));
 	ctx = OPENSSL_malloc(sizeof(PKCS11_CTX));
 	if (ctx == NULL)
 		goto fail;
 	memset(ctx, 0, sizeof(PKCS11_CTX));
-	ctx->_private = priv;
-	priv->forkid = _P11_get_forkid();
-	priv->lockid = pkcs11_get_new_dynlockid();
+	ctx->_private = cpriv;
+	cpriv->forkid = _P11_get_forkid();
+	cpriv->lockid = pkcs11_get_new_dynlockid();
 
 	return ctx;
  fail:
-	OPENSSL_free(priv);
+	OPENSSL_free(cpriv);
 	OPENSSL_free(ctx);
 	return NULL;
 }
@@ -56,12 +56,12 @@ PKCS11_CTX *PKCS11_CTX_new(void)
  */
 void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	/* Free previously duplicated string */
-	if (priv->init_args) {
-		OPENSSL_free(priv->init_args);
+	if (cpriv->init_args) {
+		OPENSSL_free(cpriv->init_args);
 	}
-	priv->init_args = init_args ? BUF_strdup(init_args) : NULL;
+	cpriv->init_args = init_args ? BUF_strdup(init_args) : NULL;
 }
 
 /*
@@ -69,38 +69,38 @@ void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
  */
 int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
 	CK_C_INITIALIZE_ARGS *args = NULL;
 	CK_INFO ck_info;
 	int rv;
 
-	if (priv->libinfo != NULL) {
+	if (cpriv->libinfo != NULL) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_MODULE_LOADED_ERROR);
 		return -1;
 	}
-	handle = C_LoadModule(name, &priv->method);
+	handle = C_LoadModule(name, &cpriv->method);
 	if (handle == NULL) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_LOAD_MODULE_ERROR);
 		return -1;
 	}
 
 	/* Tell the PKCS11 to initialize itself */
-	if (priv->init_args != NULL) {
+	if (cpriv->init_args != NULL) {
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
 		/* Unconditionally say using OS locking primitives is OK */
 		args->flags |= CKF_OS_LOCKING_OK;
-		args->pReserved = priv->init_args;
+		args->pReserved = cpriv->init_args;
 	}
-	rv = priv->method->C_Initialize(args);
+	rv = cpriv->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
 	/* Get info on the library */
-	rv = priv->method->C_GetInfo(&ck_info);
+	rv = cpriv->method->C_GetInfo(&ck_info);
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CTX_LOAD, rv);
 
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
@@ -114,18 +114,18 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
  */
 int PKCS11_CTX_reload(PKCS11_CTX * ctx)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
 	CK_C_INITIALIZE_ARGS *args = NULL;
 	int rv;
 
 	/* Tell the PKCS11 to initialize itself */
-	if (priv->init_args != NULL) {
+	if (cpriv->init_args != NULL) {
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
-		args->pReserved = priv->init_args;
+		args->pReserved = cpriv->init_args;
 	}
-	rv = priv->method->C_Initialize(args);
+	rv = cpriv->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
@@ -140,12 +140,12 @@ int PKCS11_CTX_reload(PKCS11_CTX * ctx)
  */
 void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 {
-	PKCS11_CTX_private *priv;
-	priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv;
+	cpriv = PRIVCTX(ctx);
 
 	/* Tell the PKCS11 library to shut down */
-	if (priv->forkid == _P11_get_forkid())
-		priv->method->C_Finalize(NULL);
+	if (cpriv->forkid == _P11_get_forkid())
+		cpriv->method->C_Finalize(NULL);
 
 	/* Unload the module */
 	C_UnloadModule(handle);
@@ -156,17 +156,17 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
  */
 void PKCS11_CTX_free(PKCS11_CTX * ctx)
 {
-	PKCS11_CTX_private *priv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
 	/* TODO: move the global methods and ex_data indexes into
 	 * the ctx structure, so they can be safely deallocated here:
 	PKCS11_rsa_method_free(ctx);
 	PKCS11_ecdsa_method_free(ctx);
 	*/
-	if (priv->init_args) {
-		OPENSSL_free(priv->init_args);
+	if (cpriv->init_args) {
+		OPENSSL_free(cpriv->init_args);
 	}
-	pkcs11_destroy_dynlockid(priv->lockid);
+	pkcs11_destroy_dynlockid(cpriv->lockid);
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);
 	OPENSSL_free(ctx->_private);
