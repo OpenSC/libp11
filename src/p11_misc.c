@@ -40,20 +40,6 @@ char *pkcs11_strdup(char *mem, size_t size)
 }
 
 /*
- * Dup memory
- */
-void *memdup(const void *src, size_t size)
-{
-	void *dst;
-
-	dst = OPENSSL_malloc(size);
-	if (dst == NULL)
-		return NULL;
-	memcpy(dst, src, size);
-	return dst;
-}
-
-/*
  * PKCS#11 reinitialization after fork
  * It wipes out the internal state of the PKCS#11 library
  * Any libp11 references to this state are no longer valid

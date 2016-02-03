@@ -147,7 +147,7 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	/* label_<label>, slot is undefined */
 	if (strncmp(slot_id, "label_", 6) == 0) {
 		*slot = -1;
-		*label = strdup(slot_id + 6);
+		*label = OPENSSL_strdup(slot_id + 6);
 		return *label != NULL;
 	}
 
@@ -197,7 +197,7 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	/* ... or "label_" */
 	if (strncmp(slot_id + i, "label_", 6) == 0) {
 		*slot = n;
-		return (*label = strdup(slot_id + i + 6)) != NULL;
+		return (*label = OPENSSL_strdup(slot_id + i + 6)) != NULL;
 	}
 
 	fprintf(stderr, "Could not parse string!\n");
@@ -215,7 +215,7 @@ static int parse_uri_attr(const char *attr, int attrlen, unsigned char **field,
 		out = *field;
 		max = *field_len;
 	} else {
-		out = malloc(attrlen + 1);
+		out = OPENSSL_malloc(attrlen + 1);
 		if (out == NULL)
 			return 0;
 		max = attrlen + 1;
@@ -254,7 +254,7 @@ static int parse_uri_attr(const char *attr, int attrlen, unsigned char **field,
 		}
 	} else {
 		if (field_len == NULL)
-			free(out);
+			OPENSSL_free(out);
 	}
 
 	return ret;
@@ -269,11 +269,12 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 	const char *end, *p;
 	int rv = 1, pin_set = 0;
 
-	tok = calloc(1, sizeof(*tok));
+	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (tok == NULL) {
 		fprintf(stderr, "Could not allocate memory for token info\n");
 		return 0;
 	}
+	memset(tok, 0, sizeof(PKCS11_TOKEN));
 
 	/* We are only ever invoked if the string starts with 'pkcs11:' */
 	end = uri + 6;
@@ -328,9 +329,9 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 		*label = newlabel;
 		*p_tok = tok;
 	} else {
-		free(tok);
+		OPENSSL_free(tok);
 		tok = NULL;
-		free(newlabel);
+		OPENSSL_free(newlabel);
 	}
 
 	return rv;

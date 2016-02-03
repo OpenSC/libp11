@@ -199,8 +199,6 @@ extern void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR, int, const BIGNUM *);
 extern void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR, int, pkcs11_i2d_fn, void *);
 extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
 
-extern void *memdup(const void *, size_t);
-
 int PKCS11_reopen_session(PKCS11_SLOT * slot);
 int PKCS11_relogin(PKCS11_SLOT * slot);
 

@@ -241,7 +241,7 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 			OPENSSL_cleanse(spriv->prev_pin, strlen(spriv->prev_pin));
 			OPENSSL_free(spriv->prev_pin);
 		}
-		spriv->prev_pin = BUF_strdup(pin);
+		spriv->prev_pin = OPENSSL_strdup(pin);
 	}
 	spriv->prev_so = so;
 	return 0;

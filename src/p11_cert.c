@@ -179,7 +179,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	cpriv->parent = token;
 
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
-		cert->label = BUF_strdup(label);
+		cert->label = OPENSSL_strdup(label);
 	size = 0;
 	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, NULL, &size) && size > 0) {
 		data = OPENSSL_malloc(size);

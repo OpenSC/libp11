@@ -484,7 +484,7 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	kpriv->parent = token;
 
 	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
-		key->label = BUF_strdup(label);
+		key->label = OPENSSL_strdup(label);
 	key->id_len = sizeof(id);
 	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &key->id_len)) {
 		key->id = OPENSSL_malloc(key->id_len);

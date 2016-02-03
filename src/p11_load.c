@@ -61,7 +61,7 @@ void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
 	}
-	cpriv->init_args = init_args ? BUF_strdup(init_args) : NULL;
+	cpriv->init_args = init_args ? OPENSSL_strdup(init_args) : NULL;
 }
 
 /*
