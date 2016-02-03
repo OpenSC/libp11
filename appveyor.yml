@@ -49,9 +49,12 @@ build_script:
   - nmake /f Makefile.mak %NMAKE_ARCH% %NMAKE_EXTRA%
   - appveyor PushArtifact src\libp11.dll
   - appveyor PushArtifact src\libp11.lib
+  - appveyor PushArtifact src\pkcs11.dll
+  - appveyor PushArtifact src\pkcs11.lib
   - ps: >-
       If ($env:Configuration -Like "*Debug*") {
          Push-AppveyorArtifact src\libp11.pdb
+         Push-AppveyorArtifact src\pkcs11.pdb
       }
 
 cache:

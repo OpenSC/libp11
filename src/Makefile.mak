@@ -2,26 +2,41 @@ TOPDIR = ..
 
 !INCLUDE $(TOPDIR)\make.rules.mak
 
-TARGET = libp11.dll
-
-OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
+LIBP11_OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
 	p11_err.obj p11_key.obj p11_load.obj p11_misc.obj p11_rsa.obj \
 	p11_ec.obj p11_slot.obj p11_ops.obj
+LIBP11_LIB = libp11.lib
+LIBP11_TARGET = libp11.dll
 
-all: $(TARGET) libp11.res
+PKCS11_OBJECTS = eng_front.obj eng_back.obj eng_parse.obj
+PKCS11_TARGET = pkcs11.dll
 
-RSC_PROJ=/l 0x809 /r /fo"libp11.res"
+OBJECTS = $(LIBP11_OBJECTS) $(PKCS11_OBJECTS)
+TARGETS = $(LIBP11_TARGET) $(PKCS11_TARGET)
 
-libp11.res: libp11.rc
-	rc $(RSC_PROJ) libp11.rc
- 
-.c.obj::
-	cl $(CLFLAGS) /c $<
+all: $(TARGETS)
 
-$(TARGET): $(OBJECTS) libp11.res
-	echo LIBRARY $* > $*.def
-	echo EXPORTS >> $*.def
-	type $*.exports >> $*.def
-	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$(TARGET) \
-		$(OBJECTS) $(LIBS) libp11.res
+clean:
+	del $(OBJECTS) $(TARGETS) *.lib *.exp *.def *.res
+
+.rc.res:
+	rc /r /fo$@ $<
+
+.exports.def:
+	echo LIBRARY $* > $@
+	echo EXPORTS >> $@
+	type $< >> $@
+
+$(LIBP11_LIB): $(LIBP11_TARGET)
+
+$(LIBP11_TARGET): $(LIBP11_OBJECTS) $*.def $*.res
+	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$@ \
+		$(LIBP11_OBJECTS) $(LIBS) $*.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
+
+$(PKCS11_TARGET): $(PKCS11_OBJECTS) $(LIBP11_LIB) $*.def $*.res
+	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$@ \
+		$(PKCS11_OBJECTS) $(LIBP11_LIB) $(LIBS) $*.res
+	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
+
+.SUFFIXES: .exports
