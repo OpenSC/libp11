@@ -25,7 +25,7 @@ set -e
 
 install_from_github() {
     echo "Installing $2"
-    git clone https://github.com/$1/$2.git
+    git clone https://github.com/$1/$2.git -b $3
     cd $2
     autoreconf -fvi
     ./configure
@@ -36,16 +36,15 @@ install_from_github() {
     sudo ldconfig
 }
 
-# ppa:pkg-opendnssec provides a less-obsolete softhsm
-sudo apt-add-repository -y ppa:pkg-opendnssec/ppa
 sudo apt-get update -qq
 # libpcsclite-dev is required for OpenSC
-# softhsm is required for "make check"
-sudo apt-get install -y libpcsclite-dev softhsm
+sudo apt-get install -y libpcsclite-dev
 
 export CC=`which $CC`
 mkdir prerequisites
 cd prerequisites
-install_from_github OpenSC OpenSC
+install_from_github OpenSC OpenSC master
+# softhsm is required for "make check"
+install_from_github mtrojnar SoftHSMv2 libp11
 cd ..
 rm -rf prerequisites
