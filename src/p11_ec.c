@@ -42,8 +42,146 @@
 	#error  "BUILD_WITH_ECS_LOCL_H is no longer supported"
 #endif
 
-#if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+/* initial code will only support what is needed for pkcs11_ec_ckey
+ * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
+ * and CK_EC_KDF_TYPE  supported by token
+ * The secret key object is deleted
+ *
+ * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
+ * could also be supported, and the secret key object could be returned.
+ */
+static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
+		const unsigned long ecdh_mechanism,
+		const void * ec_params,
+		void *outnewkey,
+		PKCS11_KEY * key)
+{
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_TOKEN *token = KEY2TOKEN(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_MECHANISM mechanism;
+	int rv;
+	int ret = -1;
+	unsigned char * buf = NULL;
+	size_t buflen;
 
+	CK_BBOOL true = TRUE;
+	CK_BBOOL false = FALSE;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
+	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_ENCRYPT, &true, sizeof(true)},
+		{CKA_DECRYPT, &true, sizeof(true)}
+	};
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism  = ecdh_mechanism;
+	mechanism.pParameter =  (void*)ec_params;
+	switch (ecdh_mechanism) {
+		case CKM_ECDH1_DERIVE:
+		case CKM_ECDH1_COFACTOR_DERIVE:
+			mechanism.ulParameterLen  = sizeof(CK_ECDH1_DERIVE_PARAMS);
+			break;
+//		case CK_ECMQV_DERIVE_PARAMS:
+//			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
+//			break;
+		default:
+		    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
+		    goto err;
+	}
+
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
+	if (rv) {
+	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
+	    goto err;
+	}
+
+	/* Return the value of the secret key and/or the object handle of the secret key */
+
+	/* pkcs11_ec_ckey only asks for the value */
+
+	if (out && outlen) {
+		/* get size of secret key value */
+		if (!pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, &buflen)
+			&& buflen > 0) {
+			buf = OPENSSL_malloc(buflen);
+			if (buf == NULL) {
+				PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+					pkcs11_map_err(CKR_HOST_MEMORY));
+				goto err;
+			}
+		} else {
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
+			goto err;
+		}
+
+		pkcs11_getattr_var(token, newkey, CKA_VALUE, buf, &buflen);
+		*out = buf;
+		*outlen = buflen;
+		buf = NULL;
+	}
+
+	/* not used by pkcs11_ec_ckey for future use */
+	if (tmpnewkey) {
+	    *tmpnewkey = newkey;
+	    newkey = CK_INVALID_HANDLE;
+	}
+
+	ret = 1;
+err:
+	if (buf)
+	    OPENSSL_free(buf);
+	if (newkey != CK_INVALID_HANDLE && spriv->session != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
+
+	return ret;
+}
+#endif
+
+/* Signature size is the issue, will assume the caller has a big buffer! */
+/* No padding or other stuff needed.  We can call PKCS11 from here */
+int
+pkcs11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
+{
+	int rv;
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_MECHANISM mechanism;
+	CK_ULONG ck_sigsize;
+
+	ck_sigsize = *siglen;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ECDSA;
+
+	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
+	rv = CRYPTOKI_call(ctx, C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
+		CRYPTOKI_call(ctx,
+			C_Sign(spriv->session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
+	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
+
+	if (rv) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
+		return -1;
+	}
+	*siglen = ck_sigsize;
+
+	return ck_sigsize;
+}
+
+#if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 static EC_KEY_METHOD *ops = NULL;
@@ -105,7 +243,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	}
 
 	/* Now get the ec_point */
-	pubkey = key->isPrivate ? PKCS11_find_key_from_key(key) : key;
+	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
 	if (pubkey) {
 		ckrv = key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen);
 		if (ckrv == CKR_OK && ec_pointlen > 0) {
@@ -195,7 +333,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 
 	siglen = sizeof(sigret);
 
-	rv = PKCS11_ecdsa_sign(dgst, dlen, sigret, &siglen, key);
+	rv = pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key);
 	nLen = siglen / 2;
 	if (rv > 0) {
 		sig = ECDSA_SIG_new();

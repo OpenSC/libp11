@@ -120,7 +120,7 @@ typedef struct PKCS11_ctx_st {
 extern PKCS11_CTX *PKCS11_CTX_new(void);
 
 /**
- * Specify any private PKCS#11 module initializtion args, if necessary
+ * Specify any private PKCS#11 module initialization args, if necessary
  *
  * @return none
  */
@@ -363,8 +363,8 @@ extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 		PKCS11_CERT **ret_cert);
 
 /* Access the random number generator */
-extern int PKCS11_seed_random(PKCS11_SLOT *, const unsigned char *s, unsigned int s_len);
-extern int PKCS11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int r_len);
+extern int PKCS11_seed_random(PKCS11_SLOT *slot, const unsigned char *s, unsigned int s_len);
+extern int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r, unsigned int r_len);
 
 /*
  * PKCS#11 implementation for OpenSSL methods
@@ -427,7 +427,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_generate_key(PKCS11_TOKEN * token,
 	char *label, unsigned char* id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
-P11_DEPRECATED_FUNC extern int PKCS11_get_key_size(const PKCS11_KEY *);
+P11_DEPRECATED_FUNC extern int PKCS11_get_key_size(PKCS11_KEY *);
 
 /* Get the RSA key modules as BIGNUM */
 P11_DEPRECATED_FUNC extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);

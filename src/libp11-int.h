@@ -53,9 +53,6 @@ typedef struct pkcs11_ctx_private {
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
-int check_fork(PKCS11_CTX *);
-#define CHECK_FORK(ctx) if (check_fork(ctx) < 0) return -1
-
 typedef struct pkcs11_slot_private {
 	PKCS11_CTX *parent;
 	unsigned char haveSession, loggedIn;
@@ -73,12 +70,6 @@ typedef struct pkcs11_slot_private {
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) ((slot)->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)
-
-int check_slot_fork(PKCS11_SLOT *);
-#define CHECK_SLOT_FORK(slot_ctx) if (check_slot_fork(slot_ctx) < 0) return -1
-
-int check_key_fork(PKCS11_KEY *);
-#define CHECK_KEY_FORK(key) if (check_key_fork(key) < 0) return -1
 
 typedef struct pkcs11_keys {
 	int num;
@@ -199,28 +190,153 @@ extern void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR, int, const BIGNUM *);
 extern void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR, int, pkcs11_i2d_fn, void *);
 extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
 
-int PKCS11_reopen_session(PKCS11_SLOT * slot);
-int PKCS11_relogin(PKCS11_SLOT * slot);
+int pkcs11_reopen_session(PKCS11_SLOT * slot);
+int pkcs11_relogin(PKCS11_SLOT * slot);
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
 extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-/**
- * @param out returned secret
- * @param outlen length of returned secret
- * @param ecdh_mechanism CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE or others in future
- * @param ec_params ptr to CK_ECDH1_DERIVE_PARAMS or in future CK_ECMQV_DERIVE_PARAMS
- * @param outnewkey ptr to CK_OBJECT_HANDLE
- * @param key optional returned private key object
- */
+/* Internal implementation of current features */
 
-extern int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *out_len,
-		const unsigned long ecdh_mechanism,
-		const void * ec_params,
-		void * outnewkey, /* CK_OBJECT_HANDLE */
-		PKCS11_KEY * key);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
+/* Allocate the context */
+extern PKCS11_CTX *pkcs11_CTX_new(void);
+
+/* Specify any private PKCS#11 module initialization args, if necessary */
+extern void pkcs11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
+
+/* Load a PKCS#11 module */
+extern int pkcs11_CTX_load(PKCS11_CTX * ctx, const char * ident);
+
+/* Reinitialize a PKCS#11 module (after a fork) */
+extern int pkcs11_CTX_reload(PKCS11_CTX * ctx);
+
+/* Unload a PKCS#11 module */
+extern void pkcs11_CTX_unload(PKCS11_CTX * ctx);
+
+/* Free a libp11 context */
+extern void pkcs11_CTX_free(PKCS11_CTX * ctx);
+
+/* Open a session in RO or RW mode */
+extern int pkcs11_open_session(PKCS11_SLOT * slot, int rw, int relogin);
+
+/* Get a list of all slots */
+extern int pkcs11_enumerate_slots(PKCS11_CTX * ctx,
+			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
+
+/* Get the slot_id from a slot as it is stored in private */
+extern unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT *slot);
+
+/* Free the list of slots allocated by PKCS11_enumerate_slots() */
+extern void pkcs11_release_all_slots(PKCS11_CTX * ctx,
+			PKCS11_SLOT *slots, unsigned int nslots);
+
+/* Find the first slot with a token */
+extern PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX * ctx,
+			PKCS11_SLOT *slots, unsigned int nslots);
+
+/* Check if user is already authenticated to a card */
+extern int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
+
+/* Authenticate to the card */
+extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin);
+
+/* De-authenticate from the card */
+extern int pkcs11_logout(PKCS11_SLOT * slot);
+
+/* Get a list of keys associated with this token */
+extern int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
+	PKCS11_KEY **keys, unsigned int *nkeys);
+
+/* Get the key type (as EVP_PKEY_XXX) */
+extern int pkcs11_get_key_type(PKCS11_KEY *key);
+
+/* Returns a EVP_PKEY object for the private key */
+extern EVP_PKEY *pkcs11_get_private_key(PKCS11_KEY *key);
+
+/* Returns a EVP_PKEY object with the public key */
+extern EVP_PKEY *pkcs11_get_public_key(PKCS11_KEY *key);
+
+/* Find the corresponding certificate (if any) */
+extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY *key);
+
+/* Find the corresponding key (if any) */
+extern PKCS11_KEY *pkcs11_find_key(PKCS11_CERT *cert);
+
+/* Find the corresponding key (if any)  pub <-> priv base on ID */
+extern PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *key);
+
+/* Get a list of all certificates associated with this token */
+extern int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
+	PKCS11_CERT **certs, unsigned int *ncerts);
+
+/* Initialize a token */
+extern int pkcs11_init_token(PKCS11_TOKEN * token, const char *pin,
+	const char *label);
+
+/* Initialize the user PIN on a token */
+extern int pkcs11_init_pin(PKCS11_TOKEN * token, const char *pin);
+
+/* Change the user PIN on a token */
+extern int pkcs11_change_pin(PKCS11_SLOT * slot,
+	const char *old_pin, const char *new_pin);
+
+/* Store private key on a token */
+extern int pkcs11_store_private_key(PKCS11_TOKEN * token,
+	EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
+
+/* Store public key on a token */
+extern int pkcs11_store_public_key(PKCS11_TOKEN * token,
+	EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
+
+/* Store certificate on a token */
+extern int pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
+		char *label, unsigned char *id, size_t id_len,
+		PKCS11_CERT **ret_cert);
+
+/* Access the random number generator */
+extern int pkcs11_seed_random(PKCS11_SLOT *, const unsigned char *s, unsigned int s_len);
+extern int pkcs11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int r_len);
+
+/* Internal implementation of deprecated features */
+
+/* Sign with the EC private key */
+extern int pkcs11_ecdsa_sign(
+	const unsigned char *m, unsigned int m_len,
+	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
+
+/* Generate and store a private key on the token */
+extern int pkcs11_generate_key(PKCS11_TOKEN * token,
+	int algorithm, unsigned int bits,
+	char *label, unsigned char* id, size_t id_len);
+
+/* Get the RSA key modulus size (in bytes) */
+extern int pkcs11_get_key_size(PKCS11_KEY *);
+
+/* Get the RSA key modules as BIGNUM */
+extern int pkcs11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
+
+/* Get the RSA key public exponent as BIGNUM */
+extern int pkcs11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
+
+/* Sign with the RSA private key */
+extern int pkcs11_sign(int type,
+	const unsigned char *m, unsigned int m_len,
+	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
+
+/* This function has never been implemented */
+extern int pkcs11_verify(int type,
+	const unsigned char *m, unsigned int m_len,
+	unsigned char *signature, unsigned int siglen, PKCS11_KEY * key);
+
+/* Encrypts data using the private key */
+extern int pkcs11_private_encrypt(
+	int flen, const unsigned char *from,
+	unsigned char *to, PKCS11_KEY * rsa, int padding);
+
+/* Decrypts data using the private key */
+extern int pkcs11_private_decrypt(
+	int flen, const unsigned char *from,
+	unsigned char *to, PKCS11_KEY * key, int padding);
 
 #endif
 

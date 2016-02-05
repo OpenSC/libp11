@@ -25,8 +25,6 @@
 #define strncasecmp strnicmp
 #endif
 
-static int pkcs11_enumerate_keys(PKCS11_TOKEN *, unsigned int,
-	PKCS11_KEY **, unsigned int *);
 static int pkcs11_find_keys(PKCS11_TOKEN *, unsigned int);
 static int pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
@@ -37,29 +35,9 @@ static int pkcs11_store_key(PKCS11_TOKEN *, EVP_PKEY *, unsigned int,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
 
 /*
- * Enumerate private keys on the card
- */
-int
-PKCS11_enumerate_keys(PKCS11_TOKEN * token,
-		PKCS11_KEY ** keyp, unsigned int *countp)
-{
-	return pkcs11_enumerate_keys(token, CKO_PRIVATE_KEY, keyp, countp);
-}
-
-/*
- * Enumerate public keys on the card
- */
-int
-PKCS11_enumerate_public_keys(PKCS11_TOKEN * token,
-		PKCS11_KEY ** keyp, unsigned int *countp)
-{
-	return pkcs11_enumerate_keys(token, CKO_PUBLIC_KEY, keyp, countp);
-}
-
-/*
  * Find key matching a certificate
  */
-PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
+PKCS11_KEY *pkcs11_find_key(PKCS11_CERT *cert)
 {
 	PKCS11_CERT_private *cpriv;
 	PKCS11_KEY_private *kpriv;
@@ -81,7 +59,7 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *cert)
 /*
  * Find key matching a key of the other type (public vs private)
  */
-PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY * keyin)
+PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY * keyin)
 {
 	PKCS11_KEY_private *kinpriv = PRIVKEY(keyin);
 	PKCS11_KEY *keys;
@@ -137,8 +115,7 @@ int pkcs11_reload_key(PKCS11_KEY * key)
  * FIXME: We should check first whether the token supports
  * on-board key generation, and if it does, use its own algorithm
  */
-int
-PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
+int pkcs11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
 		char *label, unsigned char* id, size_t id_len)
 {
 	PKCS11_KEY *key_obj;
@@ -200,7 +177,7 @@ PKCS11_generate_key(PKCS11_TOKEN * token, int algorithm, unsigned int bits,
 /*
  * Store a private key on the token
  */
-int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
+int pkcs11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 		char *label, unsigned char *id, size_t id_len)
 {
 	if (pkcs11_store_key(token, pk, CKO_PRIVATE_KEY, label, id, id_len, NULL))
@@ -208,7 +185,7 @@ int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	return 0;
 }
 
-int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
+int pkcs11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 		char *label, unsigned char *id, size_t id_len)
 {
 	if (pkcs11_store_key(token, pk, CKO_PUBLIC_KEY, label, id, id_len, NULL))
@@ -230,8 +207,6 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
-
-	CHECK_SLOT_FORK(slot);
 
 	/* First, make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
@@ -294,7 +269,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 /*
  * Get the key type
  */
-int PKCS11_get_key_type(PKCS11_KEY * key)
+int pkcs11_get_key_type(PKCS11_KEY * key)
 {
 	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 
@@ -305,14 +280,14 @@ int PKCS11_get_key_type(PKCS11_KEY * key)
  * Create an EVP_PKEY OpenSSL object for a given key
  * Always returns the private key object
  */
-EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY * key)
+EVP_PKEY *pkcs11_get_private_key(PKCS11_KEY * key)
 {
 	PKCS11_KEY_private *kpriv;
 
 	if (key == NULL)
 		return NULL;
 	if (!key->isPrivate) {
-		key = PKCS11_find_key_from_key(key);
+		key = pkcs11_find_key_from_key(key);
 		if (key == NULL)
 			return NULL;
 	}
@@ -327,14 +302,14 @@ EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY * key)
  * Create an EVP_PKEY OpenSSL object for a given key
  * Always returns the public key object
  */
-EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY * key)
+EVP_PKEY *pkcs11_get_public_key(PKCS11_KEY * key)
 {
 	PKCS11_KEY_private *kpriv;
 
 	if (key == NULL)
 		return NULL;
 	if (key->isPrivate) {
-		key = PKCS11_find_key_from_key(key);
+		key = pkcs11_find_key_from_key(key);
 		if (key == NULL)
 			return NULL;
 	}
@@ -349,7 +324,7 @@ EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY * key)
  * Return keys of a given type (public or private)
  * Use the cached values if available
  */
-static int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
+int pkcs11_enumerate_keys(PKCS11_TOKEN * token, unsigned int type,
 		PKCS11_KEY ** keyp, unsigned int * countp)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);

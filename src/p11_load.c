@@ -54,7 +54,7 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 /*
  * Set private init args for module
  */
-void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
+void pkcs11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	/* Free previously duplicated string */
@@ -67,7 +67,7 @@ void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 /*
  * Load the shared library, and initialize it.
  */
-int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
+int pkcs11_CTX_load(PKCS11_CTX * ctx, const char *name)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
@@ -112,12 +112,15 @@ int PKCS11_CTX_load(PKCS11_CTX * ctx, const char *name)
 /*
  * Reinitialize (e.g., after a fork).
  */
-int PKCS11_CTX_reload(PKCS11_CTX * ctx)
+int pkcs11_CTX_reload(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
 	CK_C_INITIALIZE_ARGS *args = NULL;
 	int rv;
+
+	if (cpriv->method == NULL) /* Module not loaded */
+		return 0;
 
 	/* Tell the PKCS11 to initialize itself */
 	if (cpriv->init_args != NULL) {
@@ -138,7 +141,7 @@ int PKCS11_CTX_reload(PKCS11_CTX * ctx)
 /*
  * Unload the shared library
  */
-void PKCS11_CTX_unload(PKCS11_CTX * ctx)
+void pkcs11_CTX_unload(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *cpriv;
 	cpriv = PRIVCTX(ctx);
@@ -154,7 +157,7 @@ void PKCS11_CTX_unload(PKCS11_CTX * ctx)
 /*
  * Free a context
  */
-void PKCS11_CTX_free(PKCS11_CTX * ctx)
+void pkcs11_CTX_free(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 

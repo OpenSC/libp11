@@ -33,8 +33,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 /*
  * Enumerate all certs on the card
  */
-int
-PKCS11_enumerate_certs(PKCS11_TOKEN * token,
+int pkcs11_enumerate_certs(PKCS11_TOKEN * token,
 		PKCS11_CERT ** certp, unsigned int *countp)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
@@ -66,7 +65,7 @@ PKCS11_enumerate_certs(PKCS11_TOKEN * token,
 /*
  * Find certificate matching a key
  */
-PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY * key)
+PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY * key)
 {
 	PKCS11_KEY_private *kpriv;
 	PKCS11_CERT_private *cpriv;
@@ -237,8 +236,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
 /*
  * Store certificate
  */
-int
-PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
+int pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 		unsigned char *id, size_t id_len, PKCS11_CERT ** ret_cert)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
@@ -248,8 +246,6 @@ PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
-
-	CHECK_SLOT_FORK(slot);
 
 	/* First, make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))
