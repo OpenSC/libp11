@@ -278,45 +278,25 @@ int pkcs11_get_key_type(PKCS11_KEY * key)
 
 /*
  * Create an EVP_PKEY OpenSSL object for a given key
- * Always returns the private key object
+ * Returns private or public key depending on isPrivate
  */
-EVP_PKEY *pkcs11_get_private_key(PKCS11_KEY * key)
+EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 {
-	PKCS11_KEY_private *kpriv;
-
+	if (key->isPrivate != isPrivate)
+		key = pkcs11_find_key_from_key(key);
 	if (key == NULL)
 		return NULL;
-	if (!key->isPrivate) {
-		key = pkcs11_find_key_from_key(key);
-		if (key == NULL)
+	if (key->evp_key == NULL) {
+		PKCS11_KEY_private *kpriv = PRIVKEY(key);
+		key->evp_key = kpriv->ops->get_evp_key(key);
+		if (key->evp_key == NULL)
 			return NULL;
 	}
-	if (key->evp_key == NULL) {
-		kpriv = PRIVKEY(key);
-		key->evp_key = kpriv->ops->get_evp_key(key);
-	}
-	return key->evp_key;
-}
-
-/*
- * Create an EVP_PKEY OpenSSL object for a given key
- * Always returns the public key object
- */
-EVP_PKEY *pkcs11_get_public_key(PKCS11_KEY * key)
-{
-	PKCS11_KEY_private *kpriv;
-
-	if (key == NULL)
-		return NULL;
-	if (key->isPrivate) {
-		key = pkcs11_find_key_from_key(key);
-		if (key == NULL)
-			return NULL;
-	}
-	if (key->evp_key == NULL) {
-		kpriv = PRIVKEY(key);
-		key->evp_key = kpriv->ops->get_evp_key(key);
-	}
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	EVP_PKEY_up_ref(key->evp_key);
+#else
+	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
+#endif
 	return key->evp_key;
 }
 

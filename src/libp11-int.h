@@ -250,11 +250,8 @@ extern int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int pkcs11_get_key_type(PKCS11_KEY *key);
 
-/* Returns a EVP_PKEY object for the private key */
-extern EVP_PKEY *pkcs11_get_private_key(PKCS11_KEY *key);
-
-/* Returns a EVP_PKEY object with the public key */
-extern EVP_PKEY *pkcs11_get_public_key(PKCS11_KEY *key);
+/* Returns a EVP_PKEY object with the private or public key */
+extern EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate);
 
 /* Find the corresponding certificate (if any) */
 extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY *key);

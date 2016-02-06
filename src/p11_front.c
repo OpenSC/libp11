@@ -285,14 +285,14 @@ EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *key)
 {
 	if (check_key_fork(key) < 0)
 		return NULL;
-	return pkcs11_get_private_key(key);
+	return pkcs11_get_key(key, 1);
 }
 
 EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *key)
 {
 	if (check_key_fork(key) < 0)
 		return NULL;
-	return pkcs11_get_public_key(key);
+	return pkcs11_get_key(key, 0);
 }
 
 PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *key)
