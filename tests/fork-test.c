@@ -21,7 +21,7 @@
 
 #define RANDOM_SOURCE "/dev/urandom"
 #define RANDOM_SIZE 20
-#define MAX_SIGSIZE 256
+#define MAX_SIGSIZE 1024
 
 #if OPENSSL_VERSION_NUMBER < 0x10100003L
 #define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
@@ -38,7 +38,9 @@ int main(int argc, char *argv[])
 	
 	PKCS11_KEY *authkey;
 	PKCS11_CERT *authcert;
-	EVP_PKEY *pubkey = NULL;
+	EVP_PKEY *privkey = NULL, *pubkey = NULL;
+	const EVP_MD *digest_algo = NULL;
+	EVP_MD_CTX *md_ctx = NULL;
 
 	unsigned char *random = NULL, *signature = NULL;
 
@@ -174,34 +176,68 @@ loggedin:
 	if (signature == NULL)
 		goto failed;
 
-	/* do the operations in child */
+	digest_algo = EVP_get_digestbyname("sha256");
+
 	do_fork();
-	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE, signature, &siglen,
-			authkey);
-	error_queue("PKCS11_sign");
-	if (rc != 1) {
-		fprintf(stderr, "fatal: pkcs11_sign failed\n");
+	privkey = PKCS11_get_private_key(authkey);
+	if (privkey == NULL) {
+		fprintf(stderr, "Could not extract the private key\n");
 		goto failed;
 	}
 
-	/* verify the signature */
+	/* sign on the PKCS#11 device */
+	md_ctx = EVP_MD_CTX_create();
+	if (EVP_DigestInit(md_ctx, digest_algo) <= 0) {
+		error_queue("EVP_DigestInit");
+		goto failed;
+	}
+
+	EVP_SignInit(md_ctx, digest_algo);
+	if (EVP_SignUpdate(md_ctx, random, RANDOM_SIZE) <= 0) {
+		error_queue("EVP_SignUpdate");
+		goto failed;
+	}
+
+	if (EVP_SignFinal(md_ctx, signature, &siglen, privkey) <= 0) {
+		error_queue("EVP_SignFinal");
+		goto failed;
+	}
+	EVP_MD_CTX_destroy(md_ctx);
+
+	printf("%u-byte signature created\n", siglen);
+
+	/* Get the public key for verification */
 	pubkey = X509_get_pubkey(authcert->x509);
 	if (pubkey == NULL) {
-		fprintf(stderr, "could not extract public key\n");
+		fprintf(stderr, "Could not extract the public key\n");
 		goto failed;
 	}
 
-	/* now verify the result */
-	rc = RSA_verify(NID_sha1, random, RANDOM_SIZE,
-			signature, siglen, EVP_PKEY_get0_RSA(pubkey));
-	if (rc != 1) {
-		fprintf(stderr, "fatal: RSA_verify failed\n");
+	/* Now verify the result */
+	md_ctx = EVP_MD_CTX_create();
+	if (EVP_DigestInit(md_ctx, digest_algo) <= 0) {
+		error_queue("EVP_DigestInit");
 		goto failed;
 	}
 
+	EVP_VerifyInit(md_ctx, digest_algo);
+	if (EVP_VerifyUpdate(md_ctx, random, RANDOM_SIZE) <= 0) {
+		error_queue("EVP_VerifyUpdate");
+		goto failed;
+	}
+
+	if (EVP_VerifyFinal(md_ctx, signature, siglen, pubkey) <= 0) {
+		error_queue("EVP_VerifyFinal");
+		goto failed;
+	}
+	printf("Signature matched\n");
+
+	if (md_ctx != NULL)
+		EVP_MD_CTX_destroy(md_ctx);
+	if (privkey != NULL)
+		EVP_PKEY_free(privkey);
 	if (pubkey != NULL)
 		EVP_PKEY_free(pubkey);
-
 	if (random != NULL)
 		OPENSSL_free(random);
 	if (signature != NULL)
@@ -214,7 +250,7 @@ loggedin:
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
 
-	printf("authentication successfull.\n");
+	printf("Cleanup complete\n");
 	return 0;
 
 failed:
