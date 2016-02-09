@@ -63,6 +63,7 @@ examples/rawrsasign
 examples/listkeys
 
 test-driver
+tests/openssl_version
 tests/fork-test
 tests/evp-sign
 tests/*.log

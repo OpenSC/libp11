@@ -17,6 +17,16 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
+OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
+case "${OPENSSL_VERSION}" in
+0.*)
+    echo "EC tests skipped with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+	;;
+*)
+	;;
+esac
+
 echo "Current directory: $(pwd)"
 echo "Source directory: ${srcdir}"
 echo "Output directory: ${outdir}"
