@@ -29,9 +29,6 @@
 #include "engine.h"
 #include <stdio.h>
 #include <string.h>
-#include <openssl/crypto.h>
-#include <openssl/objects.h>
-#include <openssl/engine.h>
 
 /* The maximum length of an internally-allocated PIN */
 #define MAX_PIN_LENGTH   32

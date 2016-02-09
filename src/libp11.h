@@ -24,7 +24,6 @@
 #ifndef _LIB11_H
 #define _LIB11_H
 
-#include <openssl/opensslv.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>

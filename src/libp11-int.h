@@ -23,19 +23,14 @@
 #include "config.h"
 #endif
 
-#include <openssl/opensslv.h>
-#include <openssl/bio.h>
-#include <openssl/err.h>
-#include <openssl/x509.h>
+#include "libp11.h"
+#include "atfork.h"
 
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
 
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
-
-#include "libp11.h"
-#include "atfork.h"
 
 /* get private implementations of PKCS11 structures */
 
