@@ -19,9 +19,9 @@
 
 outdir="output.$$"
 
-. ${srcdir}/common.sh
+. ${srcdir}/rsa-common.sh
 
-../examples/listkeys $ADDITIONAL_PARAM $PIN
+./fork-test $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
 	exit 1;
 fi

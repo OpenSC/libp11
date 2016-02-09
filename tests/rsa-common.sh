@@ -94,17 +94,17 @@ PUK=1234
 init_card $PIN $PUK
 
 # generate key in token
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/key.der -y privkey >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/rsa-prvkey.der -y privkey >/dev/null
 if test $? != 0;then
 	exit 1;
 fi
 
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/pubkey.der -y pubkey >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/rsa-pubkey.der -y pubkey >/dev/null
 if test $? != 0;then
 	exit 1;
 fi
 
-pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/cert.der -y cert >/dev/null
+pkcs11-tool -p $PIN --module $ADDITIONAL_PARAM -d 00010203 -a server-key -l -w ${srcdir}/rsa-cert.der -y cert >/dev/null
 if test $? != 0;then
 	exit 1;
 fi

@@ -1,25 +1,28 @@
-EXTRA_DIST = cert.der key.der common.sh
+EXTRA_DIST = engines.cnf.in rsa-common.sh ec-common.sh
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/ \
+	-I$(top_srcdir) \
 	-I$(top_srcdir)/src \
-	-I$(top_builddir)/
+	-I$(top_builddir)
 
 AM_LDFLAGS = -no-install
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
 check_PROGRAMS = fork-test evp-sign
-dist_check_SCRIPTS = testpkcs11.softhsm testfork.softhsm testlistkeys.softhsm \
-	evp-sign.softhsm
-dist_check_DATA = engines.cnf.in cert.der key.der pubkey.der
+dist_check_SCRIPTS = \
+	rsa-testpkcs11.softhsm rsa-testfork.softhsm rsa-testlistkeys.softhsm rsa-evp-sign.softhsm \
+	ec-testfork.softhsm
+dist_check_DATA = \
+	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
+	ec-cert.der ec-prvkey.der ec-pubkey.der
 
 TESTS = $(dist_check_SCRIPTS)
 
-TESTS_ENVIRONMENT =						\
-	LC_ALL="C"						\
-	EXEEXT=$(EXEEXT)					\
-	top_builddir="$(top_builddir)"				\
+TESTS_ENVIRONMENT =	\
+	LC_ALL="C" \
+	EXEEXT=$(EXEEXT) \
+	top_builddir="$(top_builddir)" \
 	srcdir="$(srcdir)"
 
 # vim: set noexpandtab:

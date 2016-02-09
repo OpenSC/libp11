@@ -7,6 +7,7 @@ compiler:
   - gcc
 
 before_script:
+  - openssl version -a
   - ./.travis.sh
   - touch config.rpath && autoreconf -fvi && ./configure --enable-strict --enable-pedantic
 

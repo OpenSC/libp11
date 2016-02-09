@@ -1,9 +1,10 @@
 #!/bin/sh
 
 # Copyright (C) 2013 Nikos Mavrogiannopoulos
-# Copyright (C) 2015 Red Hat, Inc.
 #
-# This is free software; you can redistribute it and/or modify it
+# This file is part of GnuTLS.
+#
+# GnuTLS is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation; either version 3 of the License, or (at
 # your option) any later version.
@@ -19,10 +20,17 @@
 
 outdir="output.$$"
 
-. ${srcdir}/common.sh
+. ${srcdir}/rsa-common.sh
 
-./fork-test $ADDITIONAL_PARAM $PIN
+../examples/auth $ADDITIONAL_PARAM $PIN
 if test $? != 0;then
+	echo "Basic PKCS #11 test test failed"
+	exit 1;
+fi
+
+../examples/rawrsasign $ADDITIONAL_PARAM $PIN
+if test $? != 0;then
+	echo "Raw RSA signature test failed"
 	exit 1;
 fi
 

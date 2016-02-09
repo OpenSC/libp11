@@ -18,7 +18,7 @@
 
 outdir="output.$$"
 
-. ${srcdir}/common.sh
+. ${srcdir}/rsa-common.sh
 
 # This uses the engine for basic sign-verify operation.
 
