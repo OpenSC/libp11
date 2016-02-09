@@ -26,126 +26,115 @@
 
 #include "libp11-int.h"
 #include <string.h>
-#include <openssl/opensslv.h>
-#include <openssl/opensslconf.h>
 
-#define LIBP11_BUILD_WITHOUT_ECDSA
-#if OPENSSL_VERSION_NUMBER >= 0x1000200fL && !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_ECDSA)
-#undef LIBP11_BUILD_WITHOUT_ECDSA
-#include <openssl/evp.h>
+#ifndef OPENSSL_NO_EC
 #include <openssl/ec.h>
+#endif
+#ifndef OPENSSL_NO_ECDSA
 #include <openssl/ecdsa.h>
-#include <openssl/bn.h>
+#endif
+#ifndef OPENSSL_NO_ECDH
+#include <openssl/ecdh.h>
 #endif
 
-#if defined(BUILD_WITH_ECS_LOCL_H)
-	#error  "BUILD_WITH_ECS_LOCL_H is no longer supported"
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+static int ec_key_ex_index = 0;
+#else
+static int ecdsa_ex_index = 0, ecdh_ex_index = 0;
 #endif
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-/* initial code will only support what is needed for pkcs11_ec_ckey
- * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
- * and CK_EC_KDF_TYPE  supported by token
- * The secret key object is deleted
- *
- * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
- * could also be supported, and the secret key object could be returned.
- */
-static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
-		const unsigned long ecdh_mechanism,
-		const void * ec_params,
-		void *outnewkey,
-		PKCS11_KEY * key)
+#ifndef OPENSSL_NO_EC
+
+/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdsa_method {
+	char *name;
+	void (*sign)(), (*sign_setup)(), (*verify)();
+	int flags;
+	char *data;
+};
+
+/* Define missing functions */
+
+ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
 {
-	PKCS11_SLOT *slot = KEY2SLOT(key);
-	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_TOKEN *token = KEY2TOKEN(key);
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	CK_MECHANISM mechanism;
-	int rv;
-	int ret = -1;
-	unsigned char * buf = NULL;
-	size_t buflen;
-
-	CK_BBOOL true = TRUE;
-	CK_BBOOL false = FALSE;
-	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
-	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
-	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
-	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
-	CK_ATTRIBUTE newkey_template[] = {
-		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
-		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
-		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
-		{CKA_ENCRYPT, &true, sizeof(true)},
-		{CKA_DECRYPT, &true, sizeof(true)}
-	};
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism  = ecdh_mechanism;
-	mechanism.pParameter =  (void*)ec_params;
-	switch (ecdh_mechanism) {
-		case CKM_ECDH1_DERIVE:
-		case CKM_ECDH1_COFACTOR_DERIVE:
-			mechanism.ulParameterLen  = sizeof(CK_ECDH1_DERIVE_PARAMS);
-			break;
-//		case CK_ECMQV_DERIVE_PARAMS:
-//			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
-//			break;
-		default:
-		    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
-		    goto err;
-	}
-
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
-	if (rv) {
-	    PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
-	    goto err;
-	}
-
-	/* Return the value of the secret key and/or the object handle of the secret key */
-
-	/* pkcs11_ec_ckey only asks for the value */
-
-	if (out && outlen) {
-		/* get size of secret key value */
-		if (!pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, &buflen)
-			&& buflen > 0) {
-			buf = OPENSSL_malloc(buflen);
-			if (buf == NULL) {
-				PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
-					pkcs11_map_err(CKR_HOST_MEMORY));
-				goto err;
-			}
-		} else {
-			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
-				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
-			goto err;
-		}
-
-		pkcs11_getattr_var(token, newkey, CKA_VALUE, buf, &buflen);
-		*out = buf;
-		*outlen = buflen;
-		buf = NULL;
-	}
-
-	/* not used by pkcs11_ec_ckey for future use */
-	if (tmpnewkey) {
-	    *tmpnewkey = newkey;
-	    newkey = CK_INVALID_HANDLE;
-	}
-
-	ret = 1;
-err:
-	if (buf)
-	    OPENSSL_free(buf);
-	if (newkey != CK_INVALID_HANDLE && spriv->session != CK_INVALID_HANDLE)
-		CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
-
-	return ret;
+	ECDSA_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDSA_METHOD));
+	else
+		memset(out, 0, sizeof(ECDSA_METHOD));
+	return out;
 }
-#endif
+
+void ECDSA_METHOD_free(ECDSA_METHOD *m)
+{
+	OPENSSL_free(m);
+}
+
+void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, void *f)
+{
+	m->sign = f;
+}
+
+void ECDSA_METHOD_set_sign_setup(ECDSA_METHOD *m, void *f)
+{
+	m->sign_setup = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+
+/********** Missing ECDH_METHOD functions for OpenSSL < 1.1.0 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdh_method {
+	char *name;
+	void (*compute_key)();
+	int flags;
+	char *data;
+};
+
+/* Define missing functions */
+
+ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
+{
+	ECDH_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDH_METHOD));
+	else
+		memset(out, 0, sizeof(ECDH_METHOD));
+	return out;
+}
+
+void ECDH_METHOD_free(ECDH_METHOD *m)
+{
+	OPENSSL_free(m);
+}
+
+void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, void *f)
+{
+	m->compute_key = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+/********** ECDSA signature */
 
 /* Signature size is the issue, will assume the caller has a big buffer! */
 /* No padding or other stuff needed.  We can call PKCS11 from here */
@@ -181,15 +170,7 @@ pkcs11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
 	return ck_sigsize;
 }
 
-#if !defined(LIBP11_BUILD_WITHOUT_ECDSA)
-
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-static EC_KEY_METHOD *ops = NULL;
-static int ec_key_ex_index = 0;
-#else
-static ECDSA_METHOD *ops = NULL;
-static int ecdsa_ex_index = 0;
-#endif
+/********** EVP_PKEY retrieval */
 
 /*
  * Get EC key material and stash pointer in ex_data
@@ -282,14 +263,13 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
 #else
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
-	/* TODO: Retrieve the ECDSA private key object attributes instead,
-	 * unless the key has the "sensitive" attribute set */
+		ECDH_set_method(ec, PKCS11_get_ecdh_method());
 #endif
 	}
-	/* TODO: Extract the ECDSA private key instead, if the key
-	 * is marked as extractable (and not private?) */
+	/* TODO: Retrieve the ECDSA private key object attributes instead,
+	 * unless the key has the "sensitive" attribute set */
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	EC_KEY_set_ex_data(ec,ec_key_ex_index, key);
 #else
 	ECDSA_set_ex_data(ec, ecdsa_ex_index, key);
@@ -315,7 +295,6 @@ static int pkcs11_ecdsa_sign_setup(EC_KEY *ec, BN_CTX *ctx_in,
 static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 			const BIGNUM *inv, const BIGNUM *r, EC_KEY * ec)
 {
-
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
 	PKCS11_KEY * key = NULL;
@@ -365,7 +344,111 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	return sig;
 }
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+/********** Key derivation */
+
+/* initial code will only support what is needed for pkcs11_ec_ckey
+ * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
+ * and CK_EC_KDF_TYPE  supported by token
+ * The secret key object is deleted
+ *
+ * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
+ * could also be supported, and the secret key object could be returned.
+ */
+static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
+		const unsigned long ecdh_mechanism,
+		const void * ec_params,
+		void *outnewkey,
+		PKCS11_KEY * key)
+{
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_TOKEN *token = KEY2TOKEN(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_MECHANISM mechanism;
+	int rv;
+	int ret = -1;
+	unsigned char * buf = NULL;
+	size_t buflen;
+
+	CK_BBOOL true = TRUE;
+	CK_BBOOL false = FALSE;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
+	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_ENCRYPT, &true, sizeof(true)},
+		{CKA_DECRYPT, &true, sizeof(true)}
+	};
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism  = ecdh_mechanism;
+	mechanism.pParameter =  (void*)ec_params;
+	switch (ecdh_mechanism) {
+		case CKM_ECDH1_DERIVE:
+		case CKM_ECDH1_COFACTOR_DERIVE:
+			mechanism.ulParameterLen  = sizeof(CK_ECDH1_DERIVE_PARAMS);
+			break;
+//		case CK_ECMQV_DERIVE_PARAMS:
+//			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
+//			break;
+		default:
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
+			goto err;
+	}
+
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
+	if (rv) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
+		goto err;
+	}
+
+	/* Return the value of the secret key and/or the object handle of the secret key */
+
+	/* pkcs11_ec_ckey only asks for the value */
+
+	if (out && outlen) {
+		/* get size of secret key value */
+		if (!pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, &buflen)
+			&& buflen > 0) {
+			buf = OPENSSL_malloc(buflen);
+			if (buf == NULL) {
+				PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+					pkcs11_map_err(CKR_HOST_MEMORY));
+				goto err;
+			}
+		} else {
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
+				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
+			goto err;
+		}
+
+		pkcs11_getattr_var(token, newkey, CKA_VALUE, buf, &buflen);
+		*out = buf;
+		*outlen = buflen;
+		buf = NULL;
+	}
+
+	/* not used by pkcs11_ec_ckey for future use */
+	if (tmpnewkey) {
+		*tmpnewkey = newkey;
+		newkey = CK_INVALID_HANDLE;
+	}
+
+	ret = 1;
+err:
+	if (buf)
+		OPENSSL_free(buf);
+	if (newkey != CK_INVALID_HANDLE && spriv->session != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
+
+	return ret;
+}
+
 /* Our version of the ossl_ecdh_compute_key replaced in the EC_KEY_METHOD */
 static int pkcs11_ec_ckey(void *out,
 		size_t outlen,
@@ -386,11 +469,15 @@ static int pkcs11_ec_ckey(void *out,
 	CK_ECDH1_DERIVE_PARAMS ecdh_parms;
 	PKCS11_KEY * key = NULL;
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_key_ex_index);
+#else
+	key = (PKCS11_KEY *) ECDH_get_ex_data((EC_KEY *)ecdh, ecdh_ex_index);
+#endif
 
 	if (key == NULL) {
-	    ret = -1;
-	    goto err;
+		ret = -1;
+		goto err;
 	}
 
 	/* both peer and ecdh use same group parameters */
@@ -427,7 +514,7 @@ static int pkcs11_ec_ckey(void *out,
 		ret = outlen;
 	} else {
 		if (outlen > buflen)
-		    outlen = buflen;
+			outlen = buflen;
 		memcpy(out, buf, outlen);
 		ret = outlen;
 	}
@@ -435,10 +522,11 @@ err:
 	OPENSSL_free(buf);
 	return (ret);
 }
-#endif
 
+/********** OpenSSL EC methods */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
+
 static void alloc_ec_key_ex_index()
 {
 	if (ec_key_ex_index == 0) {
@@ -449,7 +537,9 @@ static void alloc_ec_key_ex_index()
 			ec_key_ex_index = 0; /* Fallback to app_data */
 	}
 }
+
 #else
+
 static void alloc_ecdsa_ex_index()
 {
 	if (ecdsa_ex_index == 0) {
@@ -460,9 +550,22 @@ static void alloc_ecdsa_ex_index()
 			ecdsa_ex_index = 0; /* Fallback to app_data */
 	}
 }
+
+static void alloc_ecdh_ex_index()
+{
+	if (ecdh_ex_index == 0) {
+		while (ecdh_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+			ecdh_ex_index = ECDH_get_ex_new_index(0, "libp11 ecdh",
+				NULL, NULL, NULL);
+		if (ecdh_ex_index < 0)
+			ecdh_ex_index = 0; /* Fallback to app_data */
+	}
+}
+
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
+
 static void free_ec_key_ex_index()
 {
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
@@ -471,17 +574,27 @@ static void free_ec_key_ex_index()
 		ec_key_ex_index = 0;
 	}
 }
-#else
+
+#else /* OPENSSL_VERSION_NUMBER */
+
 static void free_ecdsa_ex_index()
 {
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
-#if OPENSSL_VERSION_NUMBER >= 0x10100001L
 	if (ecdsa_ex_index > 0) {
 		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_ECDSA, ecdsa_ex_index);
 		ecdsa_ex_index = 0;
 	}
-#endif
 }
+
+static void free_ecdh_ex_index()
+{
+	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
+	if (ecdh_ex_index > 0) {
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_ECDH, ecdh_ex_index);
+		ecdh_ex_index = 0;
+	}
+}
+
 #endif
 
 /*
@@ -494,14 +607,11 @@ static void free_ecdsa_ex_index()
 /* OpenSSL 1.1 has single method  EC_KEY_METHOD for ECDSA and ECDH */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-/* define old way to keep  old engines working with out ECDSA */
-void *PKCS11_get_ecdsa_method(void)
-{
-    return NULL;
-}
 
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
+	static EC_KEY_METHOD *ops = NULL;
+
 	int (*orig_sign)(int type, const unsigned char *dgst,
 		int dlen, unsigned char *sig,
 		unsigned int *siglen,
@@ -531,24 +641,28 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 	return ops;
 }
 
-void PKCS11_EC_KEY_METHOD_free(void)
+/* define old way to keep old engines working without ECDSA */
+void *PKCS11_get_ecdsa_method(void)
 {
-	if (ops) {
-		EC_KEY_METHOD_free(ops);
-		ops = NULL;
-	}
-	free_ec_key_ex_index();
+	return NULL;
 }
 
-#else /* OPENSSL_VERSION_NUMBER >= 0x1000200fL */
-/* define new way to keep new engines from crashing  with older libp11 */
+void *PKCS11_get_ecdh_method(void)
+{
+	return NULL;
+}
+
+#else /* OPENSSL_VERSION_NUMBER */
+
+/* define new way to keep new engines from crashing with older libp11 */
 void *PKCS11_get_ec_key_method(void)
 {
-    return NULL;
+	return NULL;
 }
 
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
+	static ECDSA_METHOD *ops = NULL;
 
 	if (ops == NULL) {
 		alloc_ecdsa_ex_index();
@@ -559,17 +673,19 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 	return ops;
 }
 
-void PKCS11_ecdsa_method_free(void)
+ECDH_METHOD *PKCS11_get_ecdh_method(void)
 {
-	/* It is static in the old method */
-	free_ecdsa_ex_index();
-	if (ops) {
-		ECDSA_METHOD_free(ops);
-		ops = NULL;
+	static ECDH_METHOD *ops = NULL;
+
+	if (ops == NULL) {
+		alloc_ecdh_ex_index();
+		ops = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
+		ECDH_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
+	return ops;
 }
 
-#endif /* OPENSSL_VERSION_NUMBER >= 0x1000200fL */
+#endif /* OPENSSL_VERSION_NUMBER */
 
 PKCS11_KEY_ops pkcs11_ec_ops_s = {
 	EVP_PKEY_EC,
@@ -577,7 +693,7 @@ PKCS11_KEY_ops pkcs11_ec_ops_s = {
 };
 PKCS11_KEY_ops *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
-#else /* LIBP11_BUILD_WITHOUT_ECDSA */
+#else /* OPENSSL_NO_EC */
 
 PKCS11_KEY_ops *pkcs11_ec_ops = {NULL};
 
@@ -596,6 +712,6 @@ void PKCS11_ecdsa_method_free(void)
 	/* no op, as it is static in the old code */
 }
 
-#endif /* LIBP11_BUILD_WITHOUT_ECDSA */
+#endif /* OPENSSL_NO_EC */
 
 /* vim: set noexpandtab: */

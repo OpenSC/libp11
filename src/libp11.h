@@ -368,10 +368,12 @@ RSA_METHOD *PKCS11_get_rsa_method(void);
 /* Also define unsupported methods to retain backward compatibility */
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void);
-void PKCS11_ec_key_method_free(void);
+void *PKCS11_get_ecdsa_method(void);
+void *PKCS11_get_ecdh_method(void);
 #else
-ECDSA_METHOD  *PKCS11_get_ecdsa_method(void);
-void PKCS11_ecdsa_method_free(void);
+void *PKCS11_get_ec_key_method(void);
+ECDSA_METHOD *PKCS11_get_ecdsa_method(void);
+ECDH_METHOD *PKCS11_get_ecdh_method(void);
 #endif
 
 /**
