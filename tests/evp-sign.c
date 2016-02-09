@@ -263,6 +263,10 @@ int main(int argc, char **argv)
 	}
 	EVP_MD_CTX_destroy(ctx);
 
+	printf("Signature created\n");
+
+#if OPENSSL_VERSION_NUMBER >= 0x1000000fL
+
 	ctx = EVP_MD_CTX_create();
 	if (EVP_DigestInit(ctx, digest_algo) <= 0) {
 		display_openssl_errors(__LINE__);
@@ -284,6 +288,14 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	EVP_MD_CTX_destroy(ctx);
+
+	printf("Signature verified\n");
+
+#else /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
+
+	printf("Unable to verify signature with %s\n", OPENSSL_VERSION_TEXT);
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
 	EVP_PKEY_free(public_key);
 	EVP_PKEY_free(private_key);
