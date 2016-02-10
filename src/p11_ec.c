@@ -315,10 +315,10 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 		if (sig) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		/*
-		 * OpenSSL 1.1 does not have a way to allocate r and s 
-		 * in ECDSA_SIG as it is now hidden. 
+		 * OpenSSL 1.1 does not have a way to allocate r and s
+		 * in ECDSA_SIG as it is now hidden.
 		 * Will us dummy ASN1 so r and s are allocated then
-		 * use ECDSA_SIG_get0 to get access to r and s 
+		 * use ECDSA_SIG_get0 to get access to r and s
 		 * can then update r annd s
 		 */
 			const unsigned char *a;
@@ -461,7 +461,6 @@ static int pkcs11_ec_ckey(void *out,
 	size_t peerbuflen;
 	unsigned char *peerbuf = NULL;
 	const EC_GROUP *ecgroup = NULL;
-	const EC_POINT *ecpoint = NULL;
 	CK_ECDH1_DERIVE_PARAMS ecdh_parms;
 	PKCS11_KEY * key = NULL;
 
@@ -497,7 +496,6 @@ static int pkcs11_ec_ckey(void *out,
 			peerbuf, peerbuflen,NULL);
 	ecdh_parms.ulPublicDataLen = peerbuflen;
 	ecdh_parms.pPublicData = peerbuf;
-
 
 	ret = pkcs11_ecdh_derive_internal(&buf, &buflen, CKM_ECDH1_DERIVE,
 		(const void *)&ecdh_parms, NULL, key);
@@ -537,6 +535,7 @@ static void alloc_ec_ex_index()
 	}
 }
 
+#if 0
 static void free_ec_ex_index()
 {
 	if (ec_ex_index > 0) {
@@ -547,6 +546,7 @@ static void free_ec_ex_index()
 		ec_ex_index = 0;
 	}
 }
+#endif
 
 /*
  * Overload the default OpenSSL methods for ECDSA
