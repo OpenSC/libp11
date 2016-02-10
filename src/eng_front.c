@@ -85,11 +85,11 @@ static int pkcs11_idx = -1;
 static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 	{CMD_SO_PATH,
 		"SO_PATH",
-		"Specifies the path to the 'pkcs11-engine' shared library",
+		"Specifies the path to the 'pkcs11' engine shared library",
 		ENGINE_CMD_FLAG_STRING},
 	{CMD_MODULE_PATH,
 		"MODULE_PATH",
-		"Specifies the path to the pkcs11 module shared library",
+		"Specifies the path to the PKCS#11 module shared library",
 		ENGINE_CMD_FLAG_STRING},
 	{CMD_PIN,
 		"PIN",
@@ -109,7 +109,7 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		ENGINE_CMD_FLAG_INTERNAL},
 	{CMD_INIT_ARGS,
 		"INIT_ARGS",
-		"Specifies additional initialization arguments to the pkcs11 module",
+		"Specifies additional initialization arguments to the PKCS#11 module",
 		ENGINE_CMD_FLAG_STRING},
 	{0, NULL, NULL, 0}
 };
