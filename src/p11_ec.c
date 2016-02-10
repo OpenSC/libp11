@@ -37,11 +37,7 @@
 #include <openssl/ecdh.h>
 #endif
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-static int ec_key_ex_index = 0;
-#else
-static int ecdsa_ex_index = 0, ecdh_ex_index = 0;
-#endif
+static int ec_ex_index = 0;
 
 #ifndef OPENSSL_NO_EC
 
@@ -270,9 +266,9 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	 * unless the key has the "sensitive" attribute set */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	EC_KEY_set_ex_data(ec,ec_key_ex_index, key);
+	EC_KEY_set_ex_data(ec, ec_ex_index, key);
 #else
-	ECDSA_set_ex_data(ec, ecdsa_ex_index, key);
+	ECDSA_set_ex_data(ec, ec_ex_index, key);
 #endif
 	EC_KEY_free(ec); /* drops our reference to it */
 	return pk;
@@ -303,9 +299,9 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	int rv;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ec, ec_key_ex_index);
+	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ec, ec_ex_index);
 #else
-	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, ecdsa_ex_index);
+	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, ec_ex_index);
 #endif
 	if (key == NULL)
 		return NULL;
@@ -470,9 +466,9 @@ static int pkcs11_ec_ckey(void *out,
 	PKCS11_KEY * key = NULL;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_key_ex_index);
+	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_ex_index);
 #else
-	key = (PKCS11_KEY *) ECDH_get_ex_data((EC_KEY *)ecdh, ecdh_ex_index);
+	key = (PKCS11_KEY *) ECDSA_get_ex_data((EC_KEY *)ecdh, ec_ex_index);
 #endif
 
 	if (key == NULL) {
@@ -525,77 +521,32 @@ err:
 
 /********** OpenSSL EC methods */
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-
-static void alloc_ec_key_ex_index()
+static void alloc_ec_ex_index()
 {
-	if (ec_key_ex_index == 0) {
-		while (ec_key_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-			ec_key_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
+	if (ec_ex_index == 0) {
+		while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+			ec_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
 				NULL, NULL, NULL);
-		if (ec_key_ex_index < 0)
-			ec_key_ex_index = 0; /* Fallback to app_data */
-	}
-}
-
 #else
-
-static void alloc_ecdsa_ex_index()
-{
-	if (ecdsa_ex_index == 0) {
-		while (ecdsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-			ecdsa_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
+			ec_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
 				NULL, NULL, NULL);
-		if (ecdsa_ex_index < 0)
-			ecdsa_ex_index = 0; /* Fallback to app_data */
-	}
-}
-
-static void alloc_ecdh_ex_index()
-{
-	if (ecdh_ex_index == 0) {
-		while (ecdh_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-			ecdh_ex_index = ECDH_get_ex_new_index(0, "libp11 ecdh",
-				NULL, NULL, NULL);
-		if (ecdh_ex_index < 0)
-			ecdh_ex_index = 0; /* Fallback to app_data */
-	}
-}
-
 #endif
+		if (ec_ex_index < 0)
+			ec_ex_index = 0; /* Fallback to app_data */
+	}
+}
 
+static void free_ec_ex_index()
+{
+	if (ec_ex_index > 0) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
-
-static void free_ec_key_ex_index()
-{
-	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
-	if (ec_key_ex_index > 0) {
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_key_ex_index);
-		ec_key_ex_index = 0;
-	}
-}
-
-#else /* OPENSSL_VERSION_NUMBER */
-
-static void free_ecdsa_ex_index()
-{
-	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
-	if (ecdsa_ex_index > 0) {
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_ECDSA, ecdsa_ex_index);
-		ecdsa_ex_index = 0;
-	}
-}
-
-static void free_ecdh_ex_index()
-{
-	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
-	if (ecdh_ex_index > 0) {
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_ECDH, ecdh_ex_index);
-		ecdh_ex_index = 0;
-	}
-}
-
+		/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_ex_index);
 #endif
+		ec_ex_index = 0;
+	}
+}
 
 /*
  * Overload the default OpenSSL methods for ECDSA
@@ -625,7 +576,7 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 		const BIGNUM *in_r,
 		EC_KEY *eckey) = NULL;
 
-	alloc_ec_key_ex_index();
+	alloc_ec_ex_index();
 	if (ops == NULL) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
 
@@ -665,7 +616,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 	static ECDSA_METHOD *ops = NULL;
 
 	if (ops == NULL) {
-		alloc_ecdsa_ex_index();
+		alloc_ec_ex_index();
 		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
 		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
 		ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
@@ -678,7 +629,7 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 	static ECDH_METHOD *ops = NULL;
 
 	if (ops == NULL) {
-		alloc_ecdh_ex_index();
+		alloc_ec_ex_index();
 		ops = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
 		ECDH_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
