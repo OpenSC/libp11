@@ -38,10 +38,8 @@ extern CK_RV C_UnloadModule(void *module);
  * PKCS11_CTX: context for a PKCS11 implementation
  */
 typedef struct pkcs11_ctx_private {
-	char *name;
-	void *libinfo;
 	CK_FUNCTION_LIST_PTR method;
-
+	void *handle;
 	char *init_args;
 	unsigned int forkid;
 	int lockid;

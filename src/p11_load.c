@@ -19,12 +19,10 @@
 #include "libp11-int.h"
 #include <string.h>
 
-static void *handle = NULL;
-
 /*
  * Create a new context
  */
-PKCS11_CTX *PKCS11_CTX_new(void)
+PKCS11_CTX *pkcs11_CTX_new(void)
 {
 	PKCS11_CTX_private *cpriv = NULL;
 	PKCS11_CTX *ctx = NULL;
@@ -75,12 +73,8 @@ int pkcs11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	CK_INFO ck_info;
 	int rv;
 
-	if (cpriv->libinfo != NULL) {
-		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_MODULE_LOADED_ERROR);
-		return -1;
-	}
-	handle = C_LoadModule(name, &cpriv->method);
-	if (handle == NULL) {
+	cpriv->handle = C_LoadModule(name, &cpriv->method);
+	if (cpriv->handle == NULL) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_LOAD_MODULE_ERROR);
 		return -1;
 	}
@@ -151,7 +145,7 @@ void pkcs11_CTX_unload(PKCS11_CTX * ctx)
 		cpriv->method->C_Finalize(NULL);
 
 	/* Unload the module */
-	C_UnloadModule(handle);
+	C_UnloadModule(cpriv->handle);
 }
 
 /*

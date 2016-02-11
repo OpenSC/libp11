@@ -166,7 +166,7 @@ static int check_cert_fork(PKCS11_CERT *cert)
 
 /* External interface to the libp11 features */
 
-PKCS11_CTX *pkcs11_CTX_new(void)
+PKCS11_CTX *PKCS11_CTX_new(void)
 {
 	return pkcs11_CTX_new();
 }
