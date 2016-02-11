@@ -47,11 +47,17 @@ static int ec_ex_index = 0;
 
 /* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
 
+typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
+	const BIGNUM *, const BIGNUM *, EC_KEY *);
+typedef int (*sign_setup_fn)(EC_KEY *, BN_CTX *, BIGNUM **, BIGNUM **);
+
 /* Data pointers and function pointers may have different sizes on some
  * architectures */
 struct ecdsa_method {
 	char *name;
-	void (*sign)(), (*sign_setup)(), (*verify)();
+	sign_fn sign;
+	sign_setup_fn sign_setup;
+	void (*verify)();
 	int flags;
 	char *data;
 };
@@ -76,12 +82,12 @@ void ECDSA_METHOD_free(ECDSA_METHOD *m)
 	OPENSSL_free(m);
 }
 
-void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, void *f)
+void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_fn f)
 {
 	m->sign = f;
 }
 
-void ECDSA_METHOD_set_sign_setup(ECDSA_METHOD *m, void *f)
+void ECDSA_METHOD_set_sign_setup(ECDSA_METHOD *m, sign_setup_fn f)
 {
 	m->sign_setup = f;
 }
@@ -94,11 +100,14 @@ void ECDSA_METHOD_set_sign_setup(ECDSA_METHOD *m, void *f)
 
 /* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
+typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
+	void *(*)(const void *, size_t, void *, size_t *));
+
 /* Data pointers and function pointers may have different sizes on some
  * architectures */
 struct ecdh_method {
 	char *name;
-	void (*compute_key)();
+	compute_key_fn compute_key;
 	int flags;
 	char *data;
 };
@@ -123,7 +132,7 @@ void ECDH_METHOD_free(ECDH_METHOD *m)
 	OPENSSL_free(m);
 }
 
-void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, void *f)
+void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
 {
 	m->compute_key = f;
 }
