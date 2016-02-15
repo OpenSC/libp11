@@ -41,139 +41,38 @@ static int ec_ex_index = 0;
 
 #ifndef OPENSSL_NO_EC
 
-/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
+/********** Manage EC ex_data */
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000L
-
-/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
-
-typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
-	const BIGNUM *, const BIGNUM *, EC_KEY *);
-typedef int (*sign_setup_fn)(EC_KEY *, BN_CTX *, BIGNUM **, BIGNUM **);
-
-/* Data pointers and function pointers may have different sizes on some
- * architectures */
-struct ecdsa_method {
-	char *name;
-	sign_fn sign;
-	sign_setup_fn sign_setup;
-	void (*verify)();
-	int flags;
-	char *data;
-};
-
-/* Define missing functions */
-
-ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
+/* NOTE: ECDH also uses ECDSA ex_data and *not* ECDH ex_data */
+static void alloc_ec_ex_index()
 {
-	ECDSA_METHOD *out;
-	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
-	if (out == NULL)
-		return NULL;
-	if (m)
-		memcpy(out, m, sizeof(ECDSA_METHOD));
-	else
-		memset(out, 0, sizeof(ECDSA_METHOD));
-	return out;
-}
-
-void ECDSA_METHOD_free(ECDSA_METHOD *m)
-{
-	OPENSSL_free(m);
-}
-
-void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_fn f)
-{
-	m->sign = f;
-}
-
-void ECDSA_METHOD_set_sign_setup(ECDSA_METHOD *m, sign_setup_fn f)
-{
-	m->sign_setup = f;
-}
-
-#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
-
-/********** Missing ECDH_METHOD functions for OpenSSL < 1.1.0 */
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-
-/* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
-
-typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
-	void *(*)(const void *, size_t, void *, size_t *));
-
-/* Data pointers and function pointers may have different sizes on some
- * architectures */
-struct ecdh_method {
-	char *name;
-	compute_key_fn compute_key;
-	int flags;
-	char *data;
-};
-
-/* Define missing functions */
-
-ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
-{
-	ECDH_METHOD *out;
-	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
-	if (out == NULL)
-		return NULL;
-	if (m)
-		memcpy(out, m, sizeof(ECDH_METHOD));
-	else
-		memset(out, 0, sizeof(ECDH_METHOD));
-	return out;
-}
-
-void ECDH_METHOD_free(ECDH_METHOD *m)
-{
-	OPENSSL_free(m);
-}
-
-void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
-{
-	m->compute_key = f;
-}
-
-#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
-
-/********** ECDSA signature */
-
-/* Signature size is the issue, will assume the caller has a big buffer! */
-/* No padding or other stuff needed.  We can call PKCS11 from here */
-int
-pkcs11_ecdsa_sign(const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
-{
-	int rv;
-	PKCS11_SLOT *slot = KEY2SLOT(key);
-	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	CK_MECHANISM mechanism;
-	CK_ULONG ck_sigsize;
-
-	ck_sigsize = *siglen;
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_ECDSA;
-
-	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
-	rv = CRYPTOKI_call(ctx, C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
-		CRYPTOKI_call(ctx,
-			C_Sign(spriv->session, (CK_BYTE *) m, m_len, sigret, &ck_sigsize));
-	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
-
-	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
-		return -1;
+	if (ec_ex_index == 0) {
+		while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+			ec_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
+				NULL, NULL, NULL);
+#else
+			ec_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
+				NULL, NULL, NULL);
+#endif
+		if (ec_ex_index < 0)
+			ec_ex_index = 0; /* Fallback to app_data */
 	}
-	*siglen = ck_sigsize;
-
-	return ck_sigsize;
 }
+
+#if 0
+/* TODO: Free the indexes on unload */
+static void free_ec_ex_index()
+{
+	if (ec_ex_index > 0) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+		/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_ex_index);
+#endif
+		ec_ex_index = 0;
+	}
+}
+#endif
 
 /********** EVP_PKEY retrieval */
 
@@ -283,22 +182,54 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
 	return pk;
 }
 
-/* TODO Looks like this is never called */
-static int pkcs11_ecdsa_sign_setup(EC_KEY *ec, BN_CTX *ctx_in,
-	BIGNUM **kinvp, BIGNUM **rp) {
+/********** ECDSA signing */
 
-	if (*kinvp != NULL)
-		BN_clear_free(*kinvp);
-	*kinvp = BN_new();
+/* Signature size is the issue, will assume the caller has a big buffer! */
+/* No padding or other stuff needed.  We can call PKCS11 from here */
+static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key)
+{
+	int rv;
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_MECHANISM mechanism;
+	CK_ULONG ck_sigsize;
 
-	if (*rp != NULL)
-		BN_clear_free(*rp);
-	*rp = BN_new();
-	return 1;
+	ck_sigsize = *siglen;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ECDSA;
+
+	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
+	rv = CRYPTOKI_call(ctx,
+			C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
+		CRYPTOKI_call(ctx,
+			C_Sign(spriv->session, (CK_BYTE *)msg, msg_len, sigret, &ck_sigsize));
+	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
+
+	if (rv) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
+		return -1;
+	}
+	*siglen = ck_sigsize;
+
+	return ck_sigsize;
 }
 
-static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
-			const BIGNUM *inv, const BIGNUM *r, EC_KEY * ec)
+/**
+ * ECDSA signing method (replaces ossl_ecdsa_sign_sig)
+ *
+ *  @param  dgst     hash value to sign
+ *  @param  dlen     length of the hash value
+ *  @param  kinv     precomputed inverse k (from the sign_setup method)
+ *  @param  rp       precomputed rp (from the sign_setup method)
+ *  @param  ec       private EC signing key
+ *  @return pointer to a ECDSA_SIG structure or NULL if an error occurred
+ */
+static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
+		const BIGNUM *kinv, const BIGNUM *rp, EC_KEY *ec)
 {
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG * sig = NULL;
@@ -306,6 +237,9 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	unsigned int siglen;
 	int nLen = 48; /* HACK */
 	int rv;
+
+	(void)kinv; /* Precomputed values are not used for PKCS#11 */
+	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ec, ec_ex_index);
@@ -323,13 +257,13 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 		sig = ECDSA_SIG_new();
 		if (sig) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-		/*
-		 * OpenSSL 1.1 does not have a way to allocate r and s
-		 * in ECDSA_SIG as it is now hidden.
-		 * Will us dummy ASN1 so r and s are allocated then
-		 * use ECDSA_SIG_get0 to get access to r and s
-		 * can then update r annd s
-		 */
+			/*
+			 * OpenSSL 1.1 does not have a way to allocate r and s
+			 * in ECDSA_SIG as it is now hidden.
+			 * Will us dummy ASN1 so r and s are allocated then
+			 * use ECDSA_SIG_get0 to get access to r and s
+			 * can then update r annd s
+			 */
 			const unsigned char *a;
 			unsigned char dasn1[8] =
 				{0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00};
@@ -349,7 +283,49 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
 	return sig;
 }
 
-/********** Key derivation */
+/********** ECDH key derivation */
+
+static CK_ECDH1_DERIVE_PARAMS *pkcs11_ecdh_params_alloc(
+		const EC_GROUP *group, const EC_POINT *point)
+{
+	CK_ECDH1_DERIVE_PARAMS *parms;
+	size_t len;
+	unsigned char *buf = NULL;
+
+	if (group == NULL || point == NULL)
+		return NULL;
+	len = EC_POINT_point2oct(group, point,
+		POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+	if (len == 0)
+		return NULL;
+	buf = OPENSSL_malloc(len);
+	if (buf == NULL)
+		return NULL;
+	len = EC_POINT_point2oct(group, point,
+		POINT_CONVERSION_UNCOMPRESSED, buf, len, NULL);
+	if (len == 0) {
+		OPENSSL_free(buf);
+		return NULL;
+	}
+
+	parms = OPENSSL_malloc(sizeof(CK_ECDH1_DERIVE_PARAMS));
+	if (parms == NULL) {
+		OPENSSL_free(buf);
+		return NULL;
+	}
+	parms->kdf = CKD_NULL;
+	parms->pSharedData = NULL;
+	parms->ulSharedDataLen = 0;
+	parms->pPublicData = buf;
+	parms->ulPublicDataLen = len;
+	return parms;
+}
+
+static void pkcs11_ecdh_params_free(CK_ECDH1_DERIVE_PARAMS *parms)
+{
+	OPENSSL_free(parms->pPublicData);
+	OPENSSL_free(parms);
+}
 
 /* initial code will only support what is needed for pkcs11_ec_ckey
  * i.e. CKM_ECDH1_DERIVE, CKM_ECDH1_COFACTOR_DERIVE
@@ -359,7 +335,7 @@ static ECDSA_SIG * pkcs11_ecdsa_do_sign(const unsigned char *dgst, int dlen,
  * In future CKM_ECMQV_DERIVE with CK_ECMQV_DERIVE_PARAMS
  * could also be supported, and the secret key object could be returned.
  */
-static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
+static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
 		const void * ec_params,
 		void *outnewkey,
@@ -373,7 +349,7 @@ static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 	CK_MECHANISM mechanism;
 	int rv;
 	int ret = -1;
-	unsigned char * buf = NULL;
+	unsigned char *buf = NULL;
 	size_t buflen;
 
 	CK_BBOOL true = TRUE;
@@ -398,9 +374,12 @@ static int pkcs11_ecdh_derive_internal(unsigned char **out, size_t *outlen,
 		case CKM_ECDH1_COFACTOR_DERIVE:
 			mechanism.ulParameterLen  = sizeof(CK_ECDH1_DERIVE_PARAMS);
 			break;
-//		case CK_ECMQV_DERIVE_PARAMS:
-//			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
-//			break;
+#if 0
+		/* TODO */
+		case CK_ECMQV_DERIVE_PARAMS:
+			mechanism.ulParameterLen  = sizeof(CK_ECMQV_DERIVE_PARAMS);
+			break;
+#endif
 		default:
 			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
 			goto err;
@@ -454,108 +433,151 @@ err:
 	return ret;
 }
 
-/* Our version of the ossl_ecdh_compute_key replaced in the EC_KEY_METHOD */
+/**
+ * ECDH key derivation method (replaces ossl_ecdh_compute_key)
+ *
+ * @param  out        derived key
+ * @param  outlen     derived key length
+ * @param  peer_point public key point
+ * @param  ecdh       private key
+ * @param  KCF        key derivation function
+ * @return the length of the derived key or -1 if an error occurred
+ */
 static int pkcs11_ec_ckey(void *out,
 		size_t outlen,
-		const EC_POINT *ecpointpeer,
+		const EC_POINT *peer_point,
 		const EC_KEY *ecdh,
-		void *(*KDF) (const void *in,
-			size_t inlen,
-			void *out,
-			size_t *outlen))
+		void *(*KDF)(const void *, size_t, void *, size_t *))
 {
-	int ret = -1;
-	size_t buflen;
+	PKCS11_KEY *key;
+	CK_ECDH1_DERIVE_PARAMS *parms;
 	unsigned char *buf = NULL;
-	size_t peerbuflen;
-	unsigned char *peerbuf = NULL;
-	const EC_GROUP *ecgroup = NULL;
-	CK_ECDH1_DERIVE_PARAMS ecdh_parms;
-	PKCS11_KEY * key = NULL;
+	size_t buflen;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ecdh, ec_ex_index);
+	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ecdh, ec_ex_index);
 #else
-	key = (PKCS11_KEY *) ECDSA_get_ex_data((EC_KEY *)ecdh, ec_ex_index);
+	key = (PKCS11_KEY *)ECDSA_get_ex_data((EC_KEY *)ecdh, ec_ex_index);
 #endif
-
-	if (key == NULL) {
-		ret = -1;
-		goto err;
-	}
+	if (key == NULL)
+		return -1;
 
 	/* both peer and ecdh use same group parameters */
-	ecgroup = EC_KEY_get0_group(ecdh);
-	buflen = (EC_GROUP_get_degree(ecgroup) + 7) / 8;
+	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
+	if (parms == NULL)
+		return -1;
+	if (pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
+			parms, NULL, key) < 0)
+		return -1;
+	pkcs11_ecdh_params_free(parms);
 
-	peerbuflen = 2*buflen + 1;
-	peerbuf = OPENSSL_malloc(peerbuflen);
-	if (peerbuf == NULL) {
-		ret = -1;
-		goto err;
-	}
-
-	ecdh_parms.kdf = CKD_NULL;
-	ecdh_parms.ulSharedDataLen = 0;
-	ecdh_parms.pSharedData = NULL;
-	ecdh_parms.ulPublicDataLen = peerbuflen;
-	ret = EC_POINT_point2oct(ecgroup,
-			ecpointpeer,
-			POINT_CONVERSION_UNCOMPRESSED,
-			peerbuf, peerbuflen,NULL);
-	ecdh_parms.ulPublicDataLen = peerbuflen;
-	ecdh_parms.pPublicData = peerbuf;
-
-	ret = pkcs11_ecdh_derive_internal(&buf, &buflen, CKM_ECDH1_DERIVE,
-		(const void *)&ecdh_parms, NULL, key);
-
-	if (KDF != 0) {
+	if (KDF) {
 		if (KDF(buf, buflen, out, &outlen) == NULL) {
-			ret = -1;
-			goto err;
+			OPENSSL_free(buf);
+			return -1;
 		}
-		ret = outlen;
 	} else {
 		if (outlen > buflen)
 			outlen = buflen;
 		memcpy(out, buf, outlen);
-		ret = outlen;
 	}
-err:
 	OPENSSL_free(buf);
-	return (ret);
+	return outlen;
 }
 
-/********** OpenSSL EC methods */
+/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
 
-static void alloc_ec_ex_index()
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
+
+typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
+	const BIGNUM *, const BIGNUM *, EC_KEY *);
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdsa_method {
+	char *name;
+	sign_fn sign;
+	void (*sign_setup)();
+	void (*verify)();
+	int flags;
+	char *data;
+};
+
+/* Define missing functions */
+
+ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
 {
-	if (ec_ex_index == 0) {
-		while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-			ec_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
-				NULL, NULL, NULL);
-#else
-			ec_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
-				NULL, NULL, NULL);
-#endif
-		if (ec_ex_index < 0)
-			ec_ex_index = 0; /* Fallback to app_data */
-	}
+	ECDSA_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDSA_METHOD));
+	else
+		memset(out, 0, sizeof(ECDSA_METHOD));
+	return out;
 }
 
-#if 0
-static void free_ec_ex_index()
+void ECDSA_METHOD_free(ECDSA_METHOD *m)
 {
-	if (ec_ex_index > 0) {
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-		/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EC_KEY, ec_ex_index);
-#endif
-		ec_ex_index = 0;
-	}
+	OPENSSL_free(m);
 }
-#endif
+
+void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_fn f)
+{
+	m->sign = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+
+/********** Missing ECDH_METHOD functions for OpenSSL < 1.1.0 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
+
+typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
+	void *(*)(const void *, size_t, void *, size_t *));
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdh_method {
+	char *name;
+	compute_key_fn compute_key;
+	int flags;
+	char *data;
+};
+
+/* Define missing functions */
+
+ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
+{
+	ECDH_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDH_METHOD));
+	else
+		memset(out, 0, sizeof(ECDH_METHOD));
+	return out;
+}
+
+void ECDH_METHOD_free(ECDH_METHOD *m)
+{
+	OPENSSL_free(m);
+}
+
+void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
+{
+	m->compute_key = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+/********** Set OpenSSL EC methods */
 
 /*
  * Overload the default OpenSSL methods for ECDSA
@@ -571,31 +593,14 @@ static void free_ec_ex_index()
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
 	static EC_KEY_METHOD *ops = NULL;
-
-	int (*orig_sign)(int type, const unsigned char *dgst,
-		int dlen, unsigned char *sig,
-		unsigned int *siglen,
-		const BIGNUM *kinv, const BIGNUM *r,
-		EC_KEY *eckey) = NULL;
-	int (*orig_sign_setup)(EC_KEY *eckey, BN_CTX *ctx_in,
-		BIGNUM **kinvp, BIGNUM **rp) = NULL;
-	ECDSA_SIG *(*orig_sign_sig)(const unsigned char *dgst,
-		int dgst_len,
-		const BIGNUM *in_kinv,
-		const BIGNUM *in_r,
-		EC_KEY *eckey) = NULL;
+	int (*orig_sign)(int, const unsigned char *, int, unsigned char *,
+		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
 	alloc_ec_ex_index();
 	if (ops == NULL) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
-
-		EC_KEY_METHOD_get_sign(ops, &orig_sign,
-			&orig_sign_setup, &orig_sign_sig);
-
-		EC_KEY_METHOD_set_sign(ops, orig_sign,
-			pkcs11_ecdsa_sign_setup,
-			pkcs11_ecdsa_do_sign);
-
+		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
+		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
 		EC_KEY_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
 	return ops;
@@ -627,8 +632,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 	if (ops == NULL) {
 		alloc_ec_ex_index();
 		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
-		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_do_sign);
-		ECDSA_METHOD_set_sign_setup(ops, pkcs11_ecdsa_sign_setup);
+		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_sign_sig);
 	}
 	return ops;
 }

@@ -289,11 +289,6 @@ extern int pkcs11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int 
 
 /* Internal implementation of deprecated features */
 
-/* Sign with the EC private key */
-extern int pkcs11_ecdsa_sign(
-	const unsigned char *m, unsigned int m_len,
-	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
-
 /* Generate and store a private key on the token */
 extern int pkcs11_generate_key(PKCS11_TOKEN * token,
 	int algorithm, unsigned int bits,
