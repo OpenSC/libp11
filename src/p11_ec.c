@@ -232,54 +232,37 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 		const BIGNUM *kinv, const BIGNUM *rp, EC_KEY *ec)
 {
 	unsigned char sigret[512]; /* HACK for now */
-	ECDSA_SIG * sig = NULL;
-	PKCS11_KEY * key = NULL;
+	ECDSA_SIG *sig;
+	PKCS11_KEY *key;
 	unsigned int siglen;
-	int nLen = 48; /* HACK */
-	int rv;
+	BIGNUM *r, *s;
 
 	(void)kinv; /* Precomputed values are not used for PKCS#11 */
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	key = (PKCS11_KEY *) EC_KEY_get_ex_data(ec, ec_ex_index);
+	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ec, ec_ex_index);
 #else
-	key = (PKCS11_KEY *) ECDSA_get_ex_data(ec, ec_ex_index);
+	key = (PKCS11_KEY *)ECDSA_get_ex_data(ec, ec_ex_index);
 #endif
 	if (key == NULL)
 		return NULL;
 
-	siglen = sizeof(sigret);
+	siglen = sizeof sigret;
+	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
+		return NULL;
 
-	rv = pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key);
-	nLen = siglen / 2;
-	if (rv > 0) {
-		sig = ECDSA_SIG_new();
-		if (sig) {
+	sig = ECDSA_SIG_new();
+	if (sig == NULL)
+		return NULL;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-			/*
-			 * OpenSSL 1.1 does not have a way to allocate r and s
-			 * in ECDSA_SIG as it is now hidden.
-			 * Will us dummy ASN1 so r and s are allocated then
-			 * use ECDSA_SIG_get0 to get access to r and s
-			 * can then update r annd s
-			 */
-			const unsigned char *a;
-			unsigned char dasn1[8] =
-				{0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00};
-			BIGNUM *r;
-			BIGNUM *s;
-			a = dasn1;
-			d2i_ECDSA_SIG(&sig, &a, 8);
-			ECDSA_SIG_get0(&r, &s, sig);
-			BN_bin2bn(&sigret[0], nLen, r);
-			BN_bin2bn(&sigret[nLen], nLen, s);
+	ECDSA_SIG_get0(&r, &s, sig);
 #else
-			BN_bin2bn(&sigret[0], nLen, sig->r);
-			BN_bin2bn(&sigret[nLen], nLen, sig->s);
+	r = sig->r;
+	s = sig->s;
 #endif
-		}
-	}
+	BN_bin2bn(sigret, siglen/2, r);
+	BN_bin2bn(sigret + siglen/2, siglen/2, s);
 	return sig;
 }
 
