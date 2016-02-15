@@ -43,7 +43,7 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	cpriv->lockid = pkcs11_get_new_dynlockid();
 
 	return ctx;
- fail:
+fail:
 	OPENSSL_free(cpriv);
 	OPENSSL_free(ctx);
 	return NULL;

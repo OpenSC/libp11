@@ -36,6 +36,9 @@ int main(int argc, char *argv[])
 	int rc = 0, fd, len;
 	unsigned int nslots, ncerts;
 
+	/* get password */
+	struct termios old, new;
+
 	if (argc != 2) {
 		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so\n");
 		return 1;
@@ -152,9 +155,6 @@ int main(int argc, char *argv[])
 	if (!slot->token->loginRequired)
 		goto loggedin;
 
-	/* get password */
-	struct termios old, new;
-
 	/* Turn echoing off and fail if we can't. */
 	if (tcgetattr(0, &old) != 0)
 		goto failed;
@@ -231,8 +231,7 @@ loggedin:
 
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
-/* TODO fix this */
-//	ERR_remove_state(0);
+	ERR_remove_thread_state(NULL);
 
 	printf("decryption successfull.\n");
 	return 0;
