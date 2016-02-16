@@ -292,11 +292,6 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 		if (key->evp_key == NULL)
 			return NULL;
 	}
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	EVP_PKEY_up_ref(key->evp_key);
-#else
-	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
-#endif
 	return key->evp_key;
 }
 
