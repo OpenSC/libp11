@@ -76,6 +76,54 @@ static void free_ec_ex_index()
 
 /********** EVP_PKEY retrieval */
 
+static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
+{
+	EC_KEY *ec;
+	size_t params_len = 0;
+	CK_BYTE *params;
+	size_t point_len = 0;
+	CK_BYTE *point;
+	PKCS11_KEY *pubkey;
+
+	ec = EC_KEY_new();
+	if (ec == NULL)
+		return NULL;
+
+	/* For OpenSSL req we need at least the
+	 * EC_KEY_get0_group(ec_key)) to return the group.
+	 * Continue even if it fails, as the sign operation does not need
+	 * it if the PKCS#11 module or the hardware can figure this out
+	 */
+	if (!key_getattr_alloc(key, CKA_EC_PARAMS, &params, &params_len)) {
+		const unsigned char *a = params;
+
+		/* Convert to OpenSSL parmas */
+		d2i_ECParameters(&ec, &a, (long)params_len);
+		OPENSSL_free(params);
+	}
+
+	/* Now retrieve the point */
+	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
+	if (pubkey == NULL)
+		return ec;
+	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
+		const unsigned char *a;
+		ASN1_OCTET_STRING *os;
+
+		/* PKCS#11 returns ASN1_OCTET_STRING */
+		a = point;
+		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
+		if (os) {
+			a = os->data;
+			o2i_ECPublicKey(&ec, &a, os->length);
+			ASN1_STRING_free(os);
+		}
+		OPENSSL_free(point);
+	}
+
+	return ec;
+}
+
 /*
  * Get EC key material and stash pointer in ex_data
  * Note we get called twice, once for private key, and once for public
@@ -85,82 +133,20 @@ static void free_ec_ex_index()
  * is not in the private key, and the params may or may not be.
  *
  */
-static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY * key)
+static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 {
 	EVP_PKEY *pk;
-	EC_KEY * ec = NULL;
-	CK_RV ckrv;
-	size_t ec_paramslen = 0;
-	CK_BYTE * ec_params = NULL;
-	size_t ec_pointlen = 0;
-	CK_BYTE * ec_point = NULL;
-	PKCS11_KEY * pubkey;
-	ASN1_OCTET_STRING *os=NULL;
+	EC_KEY *ec;
 
-	pk = EVP_PKEY_new();
-	if (pk == NULL)
+	ec = pkcs11_get_ec(key);
+	if (ec == NULL)
 		return NULL;
-
-	ec = EC_KEY_new();
-	if (ec == NULL) {
-		EVP_PKEY_free(pk);
+	pk = EVP_PKEY_new();
+	if (pk == NULL) {
+		EC_KEY_free(ec);
 		return NULL;
 	}
 	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
-
-	/* For Openssl req we need at least the
-	 * EC_KEY_get0_group(ec_key)) to return the group.
-	 * Even if it fails will continue as a sign only does not need
-	 * need this if the pkcs11 or card can figure this out.
-	 */
-
-	if (key_getattr_var(key, CKA_EC_PARAMS, NULL, &ec_paramslen) == CKR_OK &&
-			ec_paramslen > 0) {
-		ec_params = OPENSSL_malloc(ec_paramslen);
-		if (ec_params) {
-			ckrv = key_getattr_var(key, CKA_EC_PARAMS, ec_params, &ec_paramslen);
-			if (ckrv == CKR_OK) {
-				const unsigned char * a = ec_params;
-				/* convert to OpenSSL parmas */
-				d2i_ECParameters(&ec, &a, (long) ec_paramslen);
-			}
-		}
-	}
-
-	/* Now get the ec_point */
-	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
-	if (pubkey) {
-		ckrv = key_getattr_var(pubkey, CKA_EC_POINT, NULL, &ec_pointlen);
-		if (ckrv == CKR_OK && ec_pointlen > 0) {
-			ec_point = OPENSSL_malloc(ec_pointlen);
-			if (ec_point) {
-				ckrv = key_getattr_var(pubkey, CKA_EC_POINT, ec_point, &ec_pointlen);
-				if (ckrv == CKR_OK) {
-					/* PKCS#11 returns ASN1 octstring*/
-					const unsigned char * a;
-					/* we have asn1 octet string, need to strip off 04 len */
-
-					a = ec_point;
-					os = d2i_ASN1_OCTET_STRING(NULL, &a, (long) ec_pointlen);
-					if (os) {
-						a = os->data;
-						o2i_ECPublicKey(&ec, &a, os->length);
-					}
-/* EC_KEY_print_fp(stderr, ec, 5); */
-				}
-			}
-		}
-	}
-
-	/* If the key is not extractable, create a key object
-	 * that will use the card's functions to sign & decrypt
-	 */
-	if (os)
-		ASN1_STRING_free(os);
-	if (ec_point)
-		OPENSSL_free(ec_point);
-	if (ec_params)
-		OPENSSL_free(ec_params);
 
 	if (key->isPrivate) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
@@ -331,9 +317,6 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_MECHANISM mechanism;
 	int rv;
-	int ret = -1;
-	unsigned char *buf = NULL;
-	size_t buflen;
 
 	CK_BBOOL true = TRUE;
 	CK_BBOOL false = FALSE;
@@ -364,56 +347,28 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 			break;
 #endif
 		default:
-			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
-			goto err;
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(PKCS11_NOT_SUPPORTED));
+			return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
-	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(rv));
-		goto err;
-	}
+	CRYPTOKI_checkerr(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, rv);
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
-
-	/* pkcs11_ec_ckey only asks for the value */
-
-	if (out && outlen) {
-		/* get size of secret key value */
-		if (!pkcs11_getattr_var(token, newkey, CKA_VALUE, NULL, &buflen)
-			&& buflen > 0) {
-			buf = OPENSSL_malloc(buflen);
-			if (buf == NULL) {
-				PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
-					pkcs11_map_err(CKR_HOST_MEMORY));
-				goto err;
-			}
-		} else {
+	if (out && outlen) { /* pkcs11_ec_ckey only asks for the value */
+		if (pkcs11_getattr_alloc(token, newkey, CKA_VALUE, out, outlen)) {
 			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
 				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
-			goto err;
+			CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
+			return -1;
 		}
-
-		pkcs11_getattr_var(token, newkey, CKA_VALUE, buf, &buflen);
-		*out = buf;
-		*outlen = buflen;
-		buf = NULL;
 	}
-
-	/* not used by pkcs11_ec_ckey for future use */
-	if (tmpnewkey) {
+	if (tmpnewkey) /* For future use (not used by pkcs11_ec_ckey) */
 		*tmpnewkey = newkey;
-		newkey = CK_INVALID_HANDLE;
-	}
-
-	ret = 1;
-err:
-	if (buf)
-		OPENSSL_free(buf);
-	if (newkey != CK_INVALID_HANDLE && spriv->session != CK_INVALID_HANDLE)
+	else /* Destroy the temporary key */
 		CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -436,6 +391,7 @@ static int pkcs11_ec_ckey(void *out,
 	CK_ECDH1_DERIVE_PARAMS *parms;
 	unsigned char *buf = NULL;
 	size_t buflen;
+	int rv;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ecdh, ec_ex_index);
@@ -449,10 +405,11 @@ static int pkcs11_ec_ckey(void *out,
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
 	if (parms == NULL)
 		return -1;
-	if (pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
-			parms, NULL, key) < 0)
-		return -1;
+	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
+			parms, NULL, key);
 	pkcs11_ecdh_params_free(parms);
+	if (rv < 0)
+		return -1;
 
 	if (KDF) {
 		if (KDF(buf, buflen, out, &outlen) == NULL) {

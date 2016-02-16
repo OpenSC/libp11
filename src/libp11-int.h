@@ -154,25 +154,23 @@ extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern char *pkcs11_strdup(char *, size_t);
 
-extern int pkcs11_getattr(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, void *, size_t);
-extern int pkcs11_getattr_s(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, void *, size_t);
 extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, void *, size_t *);
+	unsigned int, CK_BYTE *, size_t *);
+extern int pkcs11_getattr_alloc(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
+	unsigned int, CK_BYTE **, size_t *);
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, BIGNUM **);
 
 extern int pkcs11_reload_key(PKCS11_KEY *);
 
-#define key_getattr(key, t, p, s) \
-	pkcs11_getattr(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
+#define key_getattr_var(key, t, p, s) \
+	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
+
+#define key_getattr_alloc(key, t, p, s) \
+	pkcs11_getattr_alloc(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
 
 #define key_getattr_bn(key, t, bn) \
 	pkcs11_getattr_bn(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (bn))
-
-#define key_getattr_var(key, t, p, s) \
-	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
 
 typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
 extern void pkcs11_addattr(CK_ATTRIBUTE_PTR, int, const void *, size_t);

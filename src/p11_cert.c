@@ -140,9 +140,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	PKCS11_TOKEN_private *tpriv;
 	PKCS11_CERT_private *cpriv;
 	PKCS11_CERT *cert, *tmp;
-	char label[256];
 	unsigned char *data;
-	unsigned char id[256];
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
 
@@ -150,7 +148,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	(void)session;
 
 	size = sizeof(cert_type);
-	if (pkcs11_getattr_var(token, obj, CKA_CERTIFICATE_TYPE, &cert_type, &size))
+	if (pkcs11_getattr_var(token, obj, CKA_CERTIFICATE_TYPE, (CK_BYTE *)&cert_type, &size))
 		return -1;
 
 	/* Ignore any certs we don't understand */
@@ -177,27 +175,16 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	cpriv->object = obj;
 	cpriv->parent = token;
 
-	if (!pkcs11_getattr_s(token, obj, CKA_LABEL, label, sizeof(label)))
-		cert->label = OPENSSL_strdup(label);
+	pkcs11_getattr_alloc(token, obj, CKA_LABEL, (CK_BYTE **)&cert->label, NULL);
 	size = 0;
-	if (!pkcs11_getattr_var(token, obj, CKA_VALUE, NULL, &size) && size > 0) {
-		data = OPENSSL_malloc(size);
-		if (data) {
-			if (!pkcs11_getattr_var(token, obj, CKA_VALUE, data, &size)) {
-				const unsigned char *p = data;
+	if (!pkcs11_getattr_alloc(token, obj, CKA_VALUE, &data, &size)) {
+		const unsigned char *p = data;
 
-				cert->x509 = d2i_X509(NULL, &p, (long) size);
-			}
-			OPENSSL_free(data);
-		}
+		cert->x509 = d2i_X509(NULL, &p, (long)size);
+		OPENSSL_free(data);
 	}
-	cert->id_len = sizeof(id);
-	if (!pkcs11_getattr_var(token, obj, CKA_ID, id, &cert->id_len)) {
-		cert->id = OPENSSL_malloc(cert->id_len);
-		if (cert->id == NULL)
-			return -1;
-		memcpy(cert->id, id, cert->id_len);
-	}
+	cert->id_len = 0;
+	pkcs11_getattr_alloc(token, obj, CKA_ID, &cert->id, &cert->id_len);
 
 	/* Initialize internal information */
 	cpriv->id_len = sizeof(cpriv->id);

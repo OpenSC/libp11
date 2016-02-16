@@ -1,5 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
+ * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -32,10 +33,9 @@
 /*
  * Query pkcs11 attributes
  */
-static int
-pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
-		CK_OBJECT_HANDLE o, CK_ATTRIBUTE_TYPE type, void *value,
-		size_t * size)
+static int pkcs11_getattr_int(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+		CK_OBJECT_HANDLE o, CK_ATTRIBUTE_TYPE type, CK_BYTE *value,
+		size_t *size)
 {
 	CK_ATTRIBUTE templ;
 	int rv;
@@ -51,52 +51,46 @@ pkcs11_getattr_int(PKCS11_CTX * ctx, CK_SESSION_HANDLE session,
 	return 0;
 }
 
-int
-pkcs11_getattr_var(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		unsigned int type, void *value, size_t * size)
+int pkcs11_getattr_var(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
+		unsigned int type, CK_BYTE *value, size_t *size)
 {
 	return pkcs11_getattr_int(TOKEN2CTX(token),
 		PRIVSLOT(TOKEN2SLOT(token))->session,
 		object, type, value, size);
 }
 
-int
-pkcs11_getattr(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		unsigned int type, void *value, size_t size)
+int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
+		unsigned int type, CK_BYTE **value, size_t *size)
 {
-	return pkcs11_getattr_var(token, object, type, value, &size);
+	CK_BYTE *data;
+	size_t len = 0;
+
+	if (pkcs11_getattr_var(token, object, type, NULL, &len))
+		return -1;
+	data = OPENSSL_malloc(len+1);
+	if (data == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_GETATTR, pkcs11_map_err(CKR_HOST_MEMORY));
+		return -1;
+	}
+	memset(data, 0, len+1); /* also null-terminate the allocated data */
+	if (pkcs11_getattr_var(token, object, type, data, &len))
+		return -1;
+	if (value)
+		*value = data;
+	if (size)
+		*size = len;
+	return 0;
 }
 
-int
-pkcs11_getattr_s(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		unsigned int type, void *value, size_t size)
-{
-	memset(value, 0, size);
-	return pkcs11_getattr_var(token, object, type, value, &size);
-}
-
-int
-pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
-		unsigned int type, BIGNUM ** bn)
+int pkcs11_getattr_bn(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
+		unsigned int type, BIGNUM **bn)
 {
 	CK_BYTE *binary;
 	size_t size;
-	int ret;
 
 	size = 0;
-	if (pkcs11_getattr_var(token, object, type, NULL, &size) || size == 0)
+	if (pkcs11_getattr_alloc(token, object, type, &binary, &size))
 		return -1;
-
-	binary = OPENSSL_malloc(size);
-	if (binary == NULL)
-		return -1;
-	memset(binary, 0, size);
-
-	if (pkcs11_getattr_var(token, object, type, binary, &size)) {
-		ret = -1;
-		goto cleanup;
-	}
-
 	/*
 	 * @ALON: invalid object,
 	 * not sure it will survive the ulValueLen->size_t and keep sign at all platforms
@@ -104,15 +98,12 @@ pkcs11_getattr_bn(PKCS11_TOKEN * token, CK_OBJECT_HANDLE object,
 	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
 			pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
-		ret = -1;
-		goto cleanup;
+		OPENSSL_free(binary);
+		return -1;
 	}
-	*bn = BN_bin2bn(binary, (int) size, *bn);
-	ret = *bn ? 0 : -1;
-
- cleanup:
+	*bn = BN_bin2bn(binary, (int)size, *bn);
 	OPENSSL_free(binary);
-	return ret;
+	return *bn ? 0 : -1;
 }
 
 /*
@@ -146,7 +137,7 @@ void pkcs11_addattr_s(CK_ATTRIBUTE_PTR ap, int type, const char *s)
 	pkcs11_addattr(ap, type, s, s ? strlen(s) : 0); /* RFC2279 string an unpadded string of CK_UTF8CHARs with no null-termination */
 }
 
-void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR ap, int type, const BIGNUM * bn)
+void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR ap, int type, const BIGNUM *bn)
 {
 	unsigned char temp[1024];
 	unsigned int n;
