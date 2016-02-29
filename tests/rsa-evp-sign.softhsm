@@ -22,7 +22,7 @@ outdir="output.$$"
 
 # This uses the engine for basic sign-verify operation.
 
-sed -e "s|@MODULE_PATH@|${ADDITIONAL_PARAM}|g" -e "s|@ENGINE_PATH@|../src/.libs/libpkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+sed -e "s|@MODULE_PATH@|${ADDITIONAL_PARAM}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
 export OPENSSL_ENGINES="../src/.libs/"
 PRIVATE_KEY="pkcs11:token=libp11-test;id=%00%01%02%03;object=server-key;type=private;pin-value=1234"

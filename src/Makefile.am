@@ -6,7 +6,7 @@ EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 noinst_HEADERS= libp11-int.h pkcs11.h atfork.h
 include_HEADERS= libp11.h
 lib_LTLIBRARIES = libp11.la
-engines_LTLIBRARIES = libpkcs11.la
+engines_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_key.c \
@@ -23,16 +23,22 @@ libp11_la_LDFLAGS = $(AM_LDFLAGS) \
 	-version-info @LIBP11_LT_CURRENT@:@LIBP11_LT_REVISION@:@LIBP11_LT_AGE@ \
 	-export-symbols "$(srcdir)/libp11.exports"
 
-libpkcs11_la_SOURCES = eng_front.c eng_back.c eng_parse.c engine.h pkcs11.exports
+pkcs11_la_SOURCES = eng_front.c eng_back.c eng_parse.c engine.h pkcs11.exports
 if WIN32
-libpkcs11_la_SOURCES += pkcs11.rc
+pkcs11_la_SOURCES += pkcs11.rc
 else
 dist_noinst_DATA += pkcs11.rc
 endif
-libpkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
-libpkcs11_la_LIBADD = libp11.la $(OPENSSL_LIBS)
-libpkcs11_la_LDFLAGS = $(AM_LDFLAGS) -shared -avoid-version \
+pkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
+pkcs11_la_LIBADD = libp11.la $(OPENSSL_LIBS)
+pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -avoid-version \
 	-export-symbols "$(srcdir)/pkcs11.exports"
+
+# OpenSSL older than 1.1.0 expected libpkcs11.so instead of pkcs11.so
+all-local:
+	cd .libs && $(LN_S) -f pkcs11.so libpkcs11.so
+install-exec-hook:
+	cd '$(DESTDIR)$(enginesdir)' && $(LN_S) -f pkcs11.so libpkcs11.so
 
 if WIN32
 # def file required for MS users to build library

@@ -119,7 +119,7 @@ static ENGINE_CTX *get_ctx(ENGINE *engine)
 	ENGINE_CTX *ctx;
 
 	if (pkcs11_idx < 0) {
-		pkcs11_idx = ENGINE_get_ex_new_index(0, "libpkcs11", NULL, NULL, 0);
+		pkcs11_idx = ENGINE_get_ex_new_index(0, "pkcs11", NULL, NULL, 0);
 		if (pkcs11_idx < 0)
 			return NULL;
 		ctx = NULL;
