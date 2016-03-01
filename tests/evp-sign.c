@@ -297,8 +297,6 @@ int main(int argc, char **argv)
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
-	EVP_PKEY_free(public_key);
-	EVP_PKEY_free(private_key);
 	ENGINE_finish(e);
 	CONF_modules_unload(1);
 	return 0;
