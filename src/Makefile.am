@@ -9,6 +9,8 @@ lib_LTLIBRARIES = libp11.la
 engines_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
+SHARED_EXT=@SHARED_EXT@
+
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_key.c \
 	p11_load.c p11_misc.c p11_rsa.c p11_ec.c p11_slot.c p11_front.c \
 	atfork.c libp11.exports
@@ -31,14 +33,14 @@ dist_noinst_DATA += pkcs11.rc
 endif
 pkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
 pkcs11_la_LIBADD = libp11.la $(OPENSSL_LIBS)
-pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -avoid-version \
-	-export-symbols "$(srcdir)/pkcs11.exports"
+pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT)
+	-avoid-version -export-symbols "$(srcdir)/pkcs11.exports"
 
 # OpenSSL older than 1.1.0 expected libpkcs11.so instead of pkcs11.so
 all-local:
-	cd .libs && $(LN_S) -f pkcs11.so libpkcs11.so
+	cd .libs && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 install-exec-hook:
-	cd '$(DESTDIR)$(enginesdir)' && $(LN_S) -f pkcs11.so libpkcs11.so
+	cd '$(DESTDIR)$(enginesdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 
 if WIN32
 # def file required for MS users to build library
