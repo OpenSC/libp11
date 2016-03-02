@@ -37,6 +37,10 @@
 #include <openssl/ecdh.h>
 #endif
 
+typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
+	void *(*)(const void *, size_t, void *, size_t *));
+static compute_key_fn ossl_ecdh_compute_key;
+
 static int ec_ex_index = 0;
 
 #ifndef OPENSSL_NO_EC
@@ -398,8 +402,8 @@ static int pkcs11_ec_ckey(void *out,
 #else
 	key = (PKCS11_KEY *)ECDSA_get_ex_data((EC_KEY *)ecdh, ec_ex_index);
 #endif
-	if (key == NULL)
-		return -1;
+	if (key == NULL) /* The private key is not handled by PKCS#11 */
+		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
 
 	/* both peer and ecdh use same group parameters */
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
@@ -478,9 +482,6 @@ void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_fn f)
 
 /* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
-typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
-	void *(*)(const void *, size_t, void *, size_t *));
-
 /* Data pointers and function pointers may have different sizes on some
  * architectures */
 struct ecdh_method {
@@ -508,6 +509,11 @@ ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
 void ECDH_METHOD_free(ECDH_METHOD *m)
 {
 	OPENSSL_free(m);
+}
+
+void ECDH_METHOD_get_compute_key(ECDH_METHOD *m, compute_key_fn *f)
+{
+	*f = m->compute_key;
 }
 
 void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
@@ -541,6 +547,7 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
 		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
 		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
+		EC_KEY_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
 		EC_KEY_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
 	return ops;
@@ -584,6 +591,7 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 	if (ops == NULL) {
 		alloc_ec_ex_index();
 		ops = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
+		ECDH_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
 		ECDH_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
 	}
 	return ops;
