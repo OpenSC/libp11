@@ -83,9 +83,37 @@ pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
 	return rv;
 }
 
-int
-pkcs11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
-		PKCS11_KEY * key, int padding)
+static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
+{
+	memset(mechanism, 0, sizeof(CK_MECHANISM));
+	switch (padding) {
+	case RSA_PKCS1_PADDING:
+		mechanism->mechanism = CKM_RSA_PKCS;
+		break;
+	case RSA_NO_PADDING:
+		mechanism->mechanism = CKM_RSA_X_509;
+		break;
+	case RSA_PKCS1_OAEP_PADDING:
+		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
+		break;
+	case RSA_X931_PADDING:
+		mechanism->mechanism = CKM_RSA_X9_31;
+		break;
+#ifdef RSA_PKCS1_PSS_PADDING
+	case RSA_PKCS1_PSS_PADDING:
+		mechanism->mechanism = CKM_RSA_PKCS_PSS;
+		break;
+#endif
+	default:
+		printf("pkcs11 engine: padding type not supported\n");
+		return -1;
+	}
+	return 0;
+}
+
+int pkcs11_private_encrypt(int flen,
+		const unsigned char *from, unsigned char *to,
+		PKCS11_KEY *key, int padding)
 {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_CTX *ctx = KEY2CTX(key);
@@ -99,22 +127,13 @@ pkcs11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 	sigsize = pkcs11_get_key_size(key);
 	ck_sigsize = sigsize;
 
-	memset(&mechanism, 0, sizeof(mechanism));
-
-	switch (padding) {
-		case RSA_NO_PADDING:
-			mechanism.mechanism = CKM_RSA_X_509;
-			break;
-		case RSA_PKCS1_PADDING:
-			if ((flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
-				return -1; /* the size is wrong */
-			}
-			mechanism.mechanism = CKM_RSA_PKCS;
-			break;
-		default:
-			printf("pkcs11 engine: only RSA_NO_PADDING or RSA_PKCS1_PADDING allowed so far\n");
-			return -1;
+	if (padding == RSA_PKCS1_PADDING &&
+			(flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
+		return -1; /* the size is wrong */
 	}
+
+	if (pkcs11_mechanism(&mechanism, padding) < 0)
+		return -1;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
@@ -148,13 +167,8 @@ pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 	CK_ULONG size = flen;
 	CK_RV rv;
 
-	if (padding != RSA_PKCS1_PADDING) {
-			printf("pkcs11 engine: only RSA_PKCS1_PADDING allowed so far\n");
-			return -1;
-	}
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_RSA_PKCS;
+	if (pkcs11_mechanism(&mechanism, padding) < 0)
+		return -1;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
 	rv = CRYPTOKI_call(ctx, C_DecryptInit(spriv->session, &mechanism, kpriv->object)) ||
