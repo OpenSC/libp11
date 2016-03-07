@@ -388,7 +388,11 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void);
  */
 extern void ERR_load_PKCS11_strings(void);
 
-#if defined(_MSC_VER)
+#if defined(_LIBP11_INT_H)
+	/* Deprecated functions will no longer be exported in libp11 0.5.0 */
+	/* They are, however, used internally in OpenSSL method definitions */
+#define P11_DEPRECATED(msg)
+#elif defined(_MSC_VER)
 #define P11_DEPRECATED(msg) __declspec(deprecated(msg))
 #elif defined(__GNUC__)
 #if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) >= 40500
@@ -508,6 +512,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 #define PKCS11_NOT_SUPPORTED			(PKCS11_ERR_BASE+4)
 #define PKCS11_NO_SESSION			(PKCS11_ERR_BASE+5)
 #define PKCS11_KEYGEN_FAILED			(PKCS11_ERR_BASE+6)
+#define PKCS11_ALIEN_KEY			(PKCS11_ERR_BASE+7)
 
 #ifdef __cplusplus
 }

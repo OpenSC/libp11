@@ -235,8 +235,11 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 #else
 	key = (PKCS11_KEY *)ECDSA_get_ex_data(ec, ec_ex_index);
 #endif
-	if (key == NULL)
+	if (key == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, PKCS11_ALIEN_KEY);
 		return NULL;
+	}
+	/* TODO: Add an atfork check */
 
 	siglen = sizeof sigret;
 	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
@@ -404,6 +407,7 @@ static int pkcs11_ec_ckey(void *out,
 #endif
 	if (key == NULL) /* The private key is not handled by PKCS#11 */
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
+	/* TODO: Add an atfork check */
 
 	/* both peer and ecdh use same group parameters */
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);

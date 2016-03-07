@@ -29,17 +29,16 @@
 
 static int rsa_ex_index = 0;
 
-int
-pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key)
+int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
+		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key)
 {
-	int rv, ssl = ((type == NID_md5_sha1) ? 1 : 0);
 	unsigned char *encoded = NULL;
 	int sigsize;
+	int rv;
 
 	sigsize = pkcs11_get_key_size(key);
 
-	if (ssl) {
+	if (type == NID_md5_sha1) { /* SSL special case padding */
 		if ((m_len != 36) /* SHA1 + MD5 */ ||
 				((m_len + RSA_PKCS1_PADDING_SIZE) > (unsigned)sigsize)) {
 			return 0; /* the size is wrong */
@@ -155,8 +154,7 @@ int pkcs11_private_encrypt(int flen,
 	return sigsize;
 }
 
-int
-pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
+int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY * key, int padding)
 {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
@@ -177,14 +175,15 @@ pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 				(CK_BYTE_PTR)to, &size));
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
-	if (rv)
+	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));
+		return -1;
+	}
 
-	return rv ? 0 : size;
+	return size;
 }
 
-int
-pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
+int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *signature, unsigned int siglen, PKCS11_KEY * key)
 {
 	(void)type;
@@ -277,7 +276,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	 * unless the key has the "sensitive" attribute set */
 
 #if OPENSSL_VERSION_NUMBER < 0x01010000L
-	/* RSA_FLAG_SIGN_VER no longer  in OpenSSL 1.1 */
+	/* RSA_FLAG_SIGN_VER is no longer needed since OpenSSL 1.1 */
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 #endif
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
@@ -312,25 +311,37 @@ int pkcs11_get_key_size(PKCS11_KEY * key)
 	return numbytes;
 }
 
-static int pkcs11_rsa_decrypt(int flen, const unsigned char *from,
-		unsigned char *to, RSA * rsa, int padding)
+static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
+		unsigned char *to, RSA *rsa, int padding)
 {
-	return pkcs11_private_decrypt(flen, from, to,
-		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index), padding);
+	PKCS11_KEY *key = RSA_get_ex_data(rsa, rsa_ex_index);
+	if (key == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, PKCS11_ALIEN_KEY);
+		return -1;
+	}
+	return PKCS11_private_decrypt(flen, from, to, key, padding);
 }
 
-static int pkcs11_rsa_encrypt(int flen, const unsigned char *from,
-		unsigned char *to, RSA * rsa, int padding)
+static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
+		unsigned char *to, RSA *rsa, int padding)
 {
-	return pkcs11_private_encrypt(flen, from, to,
-		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index), padding);
+	PKCS11_KEY *key = RSA_get_ex_data(rsa, rsa_ex_index);
+	if (key == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, PKCS11_ALIEN_KEY);
+		return -1;
+	}
+	return PKCS11_private_encrypt(flen, from, to, key, padding);
 }
 
-static int pkcs11_rsa_sign(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, const RSA * rsa)
+static int pkcs11_rsa_sign_method(int type, const unsigned char *m, unsigned int m_len,
+		unsigned char *sigret, unsigned int *siglen, const RSA *rsa)
 {
-	return pkcs11_sign(type, m, m_len, sigret, siglen,
-		(PKCS11_KEY *) RSA_get_ex_data(rsa, rsa_ex_index));
+	PKCS11_KEY *key = RSA_get_ex_data(rsa, rsa_ex_index);
+	if (key == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_RSA_SIGN, PKCS11_ALIEN_KEY);
+		return -1;
+	}
+	return PKCS11_sign(type, m, m_len, sigret, siglen, key);
 }
 
 static void alloc_rsa_ex_index()
@@ -360,16 +371,17 @@ static void free_rsa_ex_index()
  */
 RSA_METHOD *PKCS11_get_rsa_method(void)
 {
-	static RSA_METHOD ops;
+	static RSA_METHOD *ops = NULL;
 
-	alloc_rsa_ex_index();
-	if (!ops.rsa_priv_enc) {
-		ops = *RSA_get_default_method();
-		ops.rsa_priv_enc = pkcs11_rsa_encrypt;
-		ops.rsa_priv_dec = pkcs11_rsa_decrypt;
-		ops.rsa_sign = pkcs11_rsa_sign;
+	if (ops == NULL) {
+		alloc_rsa_ex_index();
+		ops = OPENSSL_malloc(sizeof(RSA_METHOD));
+		memcpy(ops, RSA_get_default_method(), sizeof(RSA_METHOD));
+		ops->rsa_priv_enc = pkcs11_rsa_priv_enc_method;
+		ops->rsa_priv_dec = pkcs11_rsa_priv_dec_method;
+		ops->rsa_sign = pkcs11_rsa_sign_method;
 	}
-	return &ops;
+	return ops;
 }
 
 /* This function is *not* currently exported */

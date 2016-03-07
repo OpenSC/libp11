@@ -155,7 +155,7 @@ void pkcs11_CTX_free(PKCS11_CTX * ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	/* TODO: move the global methods and ex_data indexes into
+	/* TODO: Move the global methods and ex_data indexes into
 	 * the ctx structure, so they can be safely deallocated here:
 	PKCS11_rsa_method_free(ctx);
 	PKCS11_ecdsa_method_free(ctx);

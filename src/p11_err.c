@@ -53,10 +53,11 @@ static ERR_STRING_DATA PKCS11_str_functs[] = {
 
 static ERR_STRING_DATA PKCS11_str_reasons[] = {
 	{PKCS11_LOAD_MODULE_ERROR, "Unable to load PKCS#11 module"},
-	{PKCS11_MODULE_LOADED_ERROR, "Already loaded module for PKCS11 context"},
+	{PKCS11_MODULE_LOADED_ERROR, "Already loaded module for PKCS#11 context"},
 	{PKCS11_SYMBOL_NOT_FOUND_ERROR, "Symbol not found in PKCS#11 module"},
 	{PKCS11_NOT_SUPPORTED, "Not supported"},
 	{PKCS11_NO_SESSION, "No session open"},
+	{PKCS11_ALIEN_KEY, "Not a PKCS#11 key"},
 	{CKR_CANCEL, "Cancel"},
 	{CKR_HOST_MEMORY, "Host memory error"},
 	{CKR_SLOT_ID_INVALID, "Invalid slot ID"},
