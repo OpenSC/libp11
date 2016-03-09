@@ -376,6 +376,8 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 	if (ops == NULL) {
 		alloc_rsa_ex_index();
 		ops = OPENSSL_malloc(sizeof(RSA_METHOD));
+		if (ops == NULL)
+			return NULL;
 		memcpy(ops, RSA_get_default_method(), sizeof(RSA_METHOD));
 		ops->rsa_priv_enc = pkcs11_rsa_priv_enc_method;
 		ops->rsa_priv_dec = pkcs11_rsa_priv_dec_method;
