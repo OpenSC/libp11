@@ -33,13 +33,23 @@ static int rsa_ex_index = 0;
 #define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
 #endif
 
+static RSA *pkcs11_rsa(PKCS11_KEY *key)
+{
+	EVP_PKEY *evp_key = pkcs11_get_key(key, key->isPrivate);
+	if (evp_key == NULL)
+		return NULL;
+	return EVP_PKEY_get0_RSA(evp_key);
+}
+
 /* PKCS#1 v1.5 RSA signature */
 /* TODO: remove this function in libp11 0.5.0 */
 int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key)
 {
-	EVP_PKEY *evp_key = pkcs11_get_key(key, 1);
-	return RSA_sign(type, m, m_len, sigret, siglen, EVP_PKEY_get0_RSA(evp_key));
+	RSA *rsa = pkcs11_rsa(key);
+	if (rsa == NULL)
+		return -1;
+	return RSA_sign(type, m, m_len, sigret, siglen, rsa);
 }
 
 /* Setup PKCS#11 mechanisms for encryption/decryption */
@@ -53,19 +63,8 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	case RSA_NO_PADDING:
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
-	case RSA_PKCS1_OAEP_PADDING:
-		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
-		break;
-	case RSA_X931_PADDING:
-		mechanism->mechanism = CKM_RSA_X9_31;
-		break;
-#ifdef RSA_PKCS1_PSS_PADDING
-	case RSA_PKCS1_PSS_PADDING:
-		mechanism->mechanism = CKM_RSA_PKCS_PSS;
-		break;
-#endif
 	default:
-		printf("pkcs11 engine: padding type not supported\n");
+		printf("pkcs11 engine: unsupported padding type\n");
 		return -1;
 	}
 	return 0;
@@ -116,7 +115,7 @@ int pkcs11_private_encrypt(int flen,
 }
 
 int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
-		PKCS11_KEY * key, int padding)
+		PKCS11_KEY *key, int padding)
 {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_CTX *ctx = KEY2CTX(key);
@@ -144,8 +143,9 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	return size;
 }
 
+/* TODO: remove this function in libp11 0.5.0 */
 int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *signature, unsigned int siglen, PKCS11_KEY * key)
+		unsigned char *signature, unsigned int siglen, PKCS11_KEY *key)
 {
 	(void)type;
 	(void)m;
@@ -162,7 +162,7 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
 /*
  * Get RSA key material
  */
-static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
+static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 {
 	RSA *rsa;
 	PKCS11_KEY *keys = NULL;
@@ -216,7 +216,7 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY * key)
 /*
  * Build an EVP_PKEY object
  */
-static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
+static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *pk;
 	RSA *rsa;
@@ -245,31 +245,33 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY * key)
 	return pk;
 }
 
-int pkcs11_get_key_modulus(PKCS11_KEY * key, BIGNUM **bn)
+/* TODO: remove this function in libp11 0.5.0 */
+int pkcs11_get_key_modulus(PKCS11_KEY *key, BIGNUM **bn)
 {
-	if (pkcs11_getattr_bn(KEY2TOKEN(key), PRIVKEY(key)->object,
-			CKA_MODULUS, bn))
+	RSA *rsa = pkcs11_rsa(key);
+	if (rsa == NULL)
 		return 0;
-	return 1;
+	*bn = BN_dup(rsa->n);
+	return *bn == NULL ? 0 : 1;
 }
 
-int pkcs11_get_key_exponent(PKCS11_KEY * key, BIGNUM **bn)
+/* TODO: remove this function in libp11 0.5.0 */
+int pkcs11_get_key_exponent(PKCS11_KEY *key, BIGNUM **bn)
 {
-	if (pkcs11_getattr_bn(KEY2TOKEN(key), PRIVKEY(key)->object,
-			CKA_PUBLIC_EXPONENT, bn))
+	RSA *rsa = pkcs11_rsa(key);
+	if (rsa == NULL)
 		return 0;
-	return 1;
+	*bn = BN_dup(rsa->e);
+	return *bn == NULL ? 0 : 1;
 }
 
-int pkcs11_get_key_size(PKCS11_KEY * key)
+/* TODO: make this function static in libp11 0.5.0 */
+int pkcs11_get_key_size(PKCS11_KEY *key)
 {
-	BIGNUM *n = NULL;
-	int numbytes = 0;
-	if (key_getattr_bn(key, CKA_MODULUS, &n))
+	RSA *rsa = pkcs11_rsa(key);
+	if (rsa == NULL)
 		return 0;
-	numbytes = BN_num_bytes(n);
-	BN_clear_free(n);
-	return numbytes;
+	return RSA_size(rsa);
 }
 
 static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
