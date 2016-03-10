@@ -5,6 +5,8 @@ New in 0.4.0; unreleased;
 * Added ECDH key derivation support (Doug Engert and Michał Trojnara)
 * Added support for RSA_NO_PADDING RSA private key decryption, used
   by OpenSSL for various features including OAEP (Michał Trojnara)
+* Added support for the ANSI X9.31 (RSA_X931_PADDING) RSA padding
+  (Michał Trojnara)
 * Fixed deadlocks in keys and certificates listing (Brian Hinz)
 * Use PKCS11_MODULE_PATH environment variable (Doug Engert)
 * Added support for building against OpenSSL 1.1.0-dev (Doug Engert)

@@ -63,6 +63,9 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	case RSA_NO_PADDING:
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
+	case RSA_X931_PADDING:
+		mechanism->mechanism = CKM_RSA_X9_31;
+		break;
 	default:
 		printf("pkcs11 engine: unsupported padding type\n");
 		return -1;
