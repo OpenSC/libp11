@@ -73,6 +73,8 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	return 0;
 }
 
+/* RSA private key encryption (also invoked by OpenSSL for signing) */
+/* OpenSSL assumes that the output buffer is always big enough */
 int pkcs11_private_encrypt(int flen,
 		const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *key, int padding)
@@ -82,41 +84,40 @@ int pkcs11_private_encrypt(int flen,
 	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_MECHANISM mechanism;
+	CK_ULONG size;
 	int rv;
-	int sigsize;
-	CK_ULONG ck_sigsize;
 
-	sigsize = pkcs11_get_key_size(key);
-	ck_sigsize = sigsize;
-
-	if (padding == RSA_PKCS1_PADDING &&
-			(flen + RSA_PKCS1_PADDING_SIZE) > sigsize) {
-		return -1; /* the size is wrong */
-	}
+	size = pkcs11_get_key_size(key);
 
 	if (pkcs11_mechanism(&mechanism, padding) < 0)
 		return -1;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
-	/* API is somewhat fishy here. *siglen is 0 on entry (cleared
-	 * by OpenSSL). The library assumes that the memory passed
-	 * by the caller is always big enough */
-	rv = CRYPTOKI_call(ctx, C_SignInit(spriv->session, &mechanism, kpriv->object)) ||
-		CRYPTOKI_call(ctx,
-			C_Sign(spriv->session, (CK_BYTE *) from, flen, to, &ck_sigsize));
+	/* Try signing first, as applications are more likely to use it */
+	rv = CRYPTOKI_call(ctx,
+		C_SignInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv)
+		rv = CRYPTOKI_call(ctx,
+			C_Sign(spriv->session, (CK_BYTE *)from, flen, to, &size));
+	if (rv == CKR_KEY_FUNCTION_NOT_PERMITTED) {
+		/* OpenSSL may use it for encryption rather than signing */
+		rv = CRYPTOKI_call(ctx,
+			C_EncryptInit(spriv->session, &mechanism, kpriv->object));
+		if (!rv)
+			rv = CRYPTOKI_call(ctx,
+				C_Encrypt(spriv->session, (CK_BYTE *)from, flen, to, &size));
+	}
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
 	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_RSA_SIGN, pkcs11_map_err(rv));
+		PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, pkcs11_map_err(rv));
 		return -1;
 	}
 
-	if ((unsigned)sigsize != ck_sigsize)
-		return -1;
-
-	return sigsize;
+	return size;
 }
 
+/* RSA private key decryption */
 int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *key, int padding)
 {
@@ -132,9 +133,11 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 		return -1;
 
 	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
-	rv = CRYPTOKI_call(ctx, C_DecryptInit(spriv->session, &mechanism, kpriv->object)) ||
-		CRYPTOKI_call(ctx,
-			C_Decrypt(spriv->session, (CK_BYTE *) from, (CK_ULONG)flen,
+	rv = CRYPTOKI_call(ctx,
+		C_DecryptInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv)
+		rv = CRYPTOKI_call(ctx,
+			C_Decrypt(spriv->session, (CK_BYTE *)from, size,
 				(CK_BYTE_PTR)to, &size));
 	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
 
