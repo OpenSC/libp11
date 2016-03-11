@@ -93,6 +93,7 @@ typedef struct pkcs11_key_ops {
 typedef struct pkcs11_key_private {
 	PKCS11_TOKEN *parent;
 	CK_OBJECT_HANDLE object;
+	CK_BBOOL always_authenticate;
 	unsigned char id[255];
 	size_t id_len;
 	PKCS11_KEY_ops *ops;
@@ -164,6 +165,8 @@ extern char *pkcs11_strdup(char *, size_t);
 
 extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, CK_BYTE *, size_t *);
+extern int pkcs11_getattr_val(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
+	unsigned int, void *, size_t);
 extern int pkcs11_getattr_alloc(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, CK_BYTE **, size_t *);
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
@@ -173,6 +176,9 @@ extern int pkcs11_reload_key(PKCS11_KEY *);
 
 #define key_getattr_var(key, t, p, s) \
 	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
+
+#define key_getattr_val(key, t, p, s) \
+	pkcs11_getattr_val(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
 
 #define key_getattr_alloc(key, t, p, s) \
 	pkcs11_getattr_alloc(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
@@ -241,6 +247,9 @@ extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin
 
 /* De-authenticate from the card */
 extern int pkcs11_logout(PKCS11_SLOT * slot);
+
+/* Authenticate a private the key operation if needed */
+int pkcs11_authenticate(PKCS11_KEY *key);
 
 /* Get a list of keys associated with this token */
 extern int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,

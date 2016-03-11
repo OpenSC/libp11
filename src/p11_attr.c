@@ -59,6 +59,12 @@ int pkcs11_getattr_var(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		object, type, value, size);
 }
 
+int pkcs11_getattr_val(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
+		unsigned int type, void *value, size_t size)
+{
+	return pkcs11_getattr_var(token, object, type, value, &size);
+}
+
 int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		unsigned int type, CK_BYTE **value, size_t *size)
 {

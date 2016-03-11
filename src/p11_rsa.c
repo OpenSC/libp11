@@ -97,12 +97,16 @@ int pkcs11_private_encrypt(int flen,
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
 	if (!rv)
+		rv = pkcs11_authenticate(key);
+	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE *)from, flen, to, &size));
 	if (rv == CKR_KEY_FUNCTION_NOT_PERMITTED) {
 		/* OpenSSL may use it for encryption rather than signing */
 		rv = CRYPTOKI_call(ctx,
 			C_EncryptInit(spriv->session, &mechanism, kpriv->object));
+		if (!rv)
+			rv = pkcs11_authenticate(key);
 		if (!rv)
 			rv = CRYPTOKI_call(ctx,
 				C_Encrypt(spriv->session, (CK_BYTE *)from, flen, to, &size));
@@ -135,6 +139,8 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	CRYPTO_THREAD_write_lock(PRIVSLOT(slot)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_DecryptInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv)
+		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Decrypt(spriv->session, (CK_BYTE *)from, size,

@@ -202,6 +202,8 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
 	if (!rv)
+		rv = pkcs11_authenticate(key);
+	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE *)msg, msg_len, sigret, &ck_sigsize));
 	CRYPTO_THREAD_unlock(PRIVSLOT(slot)->rwlock);

@@ -291,8 +291,39 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 		key->evp_key = kpriv->ops->get_evp_key(key);
 		if (key->evp_key == NULL)
 			return NULL;
+		kpriv->always_authenticate = CK_FALSE;
+		if(isPrivate) {
+			if(key_getattr_val(key, CKA_ALWAYS_AUTHENTICATE,
+					&kpriv->always_authenticate, sizeof(CK_BBOOL)))
+				fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
+			else if (kpriv->always_authenticate)
+				fprintf(stderr, "CKA_ALWAYS_AUTHENTICATE attribute set\n");
+			else
+				fprintf(stderr, "CKA_ALWAYS_AUTHENTICATE attribute not set\n");
+		}
 	}
 	return key->evp_key;
+}
+
+/*
+ * Authenticate a private the key operation if needed
+ */
+int pkcs11_authenticate(PKCS11_KEY *key)
+{
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	int rv;
+
+	if (!kpriv->always_authenticate || spriv->prev_pin == NULL)
+		return 0;
+	rv = CRYPTOKI_call(ctx,
+		C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
+			(CK_UTF8CHAR *)spriv->prev_pin, strlen(spriv->prev_pin)));
+	if (rv == CKR_USER_ALREADY_LOGGED_IN) /* ignore */
+		rv = 0;
+	return rv;
 }
 
 /*

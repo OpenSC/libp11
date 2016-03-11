@@ -8,6 +8,7 @@ New in 0.4.0; unreleased;
 * Added support for the ANSI X9.31 (RSA_X931_PADDING) RSA padding
   (Michał Trojnara)
 * Added support for RSA encryption (not only signing) (Michał Trojnara)
+* Added CKA_ALWAYS_AUTHENTICATE support (Michał Trojnara)
 * Fixed incorrect errors reported on signing/encryption/decryption
   (Michał Trojnara)
 * Fixed deadlocks in keys and certificates listing (Brian Hinz)
