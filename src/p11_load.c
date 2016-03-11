@@ -40,7 +40,7 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	memset(ctx, 0, sizeof(PKCS11_CTX));
 	ctx->_private = cpriv;
 	cpriv->forkid = _P11_get_forkid();
-	cpriv->lockid = pkcs11_get_new_dynlockid();
+	cpriv->rwlock = CRYPTO_THREAD_lock_new();
 
 	return ctx;
 fail:
@@ -163,7 +163,7 @@ void pkcs11_CTX_free(PKCS11_CTX * ctx)
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
 	}
-	pkcs11_destroy_dynlockid(cpriv->lockid);
+	CRYPTO_THREAD_lock_free(cpriv->rwlock);
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);
 	OPENSSL_free(ctx->_private);

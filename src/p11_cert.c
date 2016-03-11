@@ -47,9 +47,9 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN * token,
 		/* Make sure we have a session */
 		if (!spriv->haveSession && PKCS11_open_session(slot, 0))
 			return -1;
-		pkcs11_w_lock(cpriv->lockid);
+		CRYPTO_THREAD_write_lock(cpriv->rwlock);
 		rv = pkcs11_find_certs(token);
-		pkcs11_w_unlock(cpriv->lockid);
+		CRYPTO_THREAD_unlock(cpriv->rwlock);
 		if (rv < 0) {
 			pkcs11_destroy_certs(token);
 			return -1;

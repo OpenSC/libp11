@@ -32,6 +32,12 @@
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+typedef int PKCS11_RWLOCK;
+#else
+typedef CRYPTO_RWLOCK *PKCS11_RWLOCK;
+#endif
+
 /* get private implementations of PKCS11 structures */
 
 /*
@@ -42,7 +48,7 @@ typedef struct pkcs11_ctx_private {
 	void *handle;
 	char *init_args;
 	unsigned int forkid;
-	int lockid;
+	PKCS11_RWLOCK rwlock;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
@@ -59,7 +65,7 @@ typedef struct pkcs11_slot_private {
 	int prev_so;
 
 	/* per-slot lock */
-	int lockid;
+	PKCS11_RWLOCK rwlock;
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) ((slot)->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)
@@ -135,17 +141,19 @@ typedef struct pkcs11_cert_private {
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 
-int pkcs11_get_new_dynlockid();
-void pkcs11_destroy_dynlockid(int);
-
-#define pkcs11_w_lock(type)    \
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+/* Emulate the OpenSSL 1.1 locking API for older OpenSSL versions */
+int CRYPTO_THREAD_lock_new();
+void CRYPTO_THREAD_lock_free(int);
+#define CRYPTO_THREAD_write_lock(type) \
 	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
-#define pkcs11_w_unlock(type)  \
+#define CRYPTO_THREAD_unlock(type) \
 	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
-#define pkcs11_r_lock(type)    \
+#define CRYPTO_THREAD_read_lock(type) \
 	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_READ,type,__FILE__,__LINE__)
-#define pkcs11_r_unlock(type)  \
+#define CRYPTO_THREAD_read_unlock(type) \
 	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_READ,type,__FILE__,__LINE__)
+#endif
 
 extern int pkcs11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
 extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);

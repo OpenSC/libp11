@@ -104,9 +104,9 @@ static int check_fork(PKCS11_CTX *ctx)
 	if (ctx == NULL)
 		return -1;
 	cpriv = PRIVCTX(ctx);
-	pkcs11_w_lock(cpriv->lockid);
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
 	rv = check_fork_int(ctx);
-	pkcs11_w_unlock(cpriv->lockid);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
 	return rv;
 }
 
@@ -121,9 +121,9 @@ static int check_slot_fork(PKCS11_SLOT *slot)
 	if (slot == NULL)
 		return -1;
 	cpriv = PRIVCTX(SLOT2CTX(slot));
-	pkcs11_w_lock(cpriv->lockid);
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
 	rv = check_slot_fork_int(slot);
-	pkcs11_w_unlock(cpriv->lockid);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
 	return rv;
 }
 
@@ -148,9 +148,9 @@ static int check_key_fork(PKCS11_KEY *key)
 	if (key == NULL)
 		return -1;
 	cpriv = PRIVCTX(KEY2CTX(key));
-	CRYPTO_w_lock(cpriv->lockid);
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
 	rv = check_key_fork_int(key);
-	CRYPTO_w_unlock(cpriv->lockid);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
 	return rv;
 }
 

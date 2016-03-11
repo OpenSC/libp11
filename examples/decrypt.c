@@ -231,7 +231,11 @@ loggedin:
 
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	ERR_remove_thread_state();
+#else
 	ERR_remove_thread_state(NULL);
+#endif
 
 	printf("decryption successfull.\n");
 	return 0;

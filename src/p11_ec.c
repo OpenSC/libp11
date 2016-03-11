@@ -37,8 +37,14 @@
 #include <openssl/ecdh.h>
 #endif
 
-typedef int (*compute_key_fn)(void *, size_t, const EC_POINT *, const EC_KEY *,
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+typedef int (*compute_key_fn)(unsigned char **, size_t *,
+	const EC_POINT *, const EC_KEY *);
+#else
+typedef int (*compute_key_fn)(void *, size_t,
+	const EC_POINT *, const EC_KEY *,
 	void *(*)(const void *, size_t, void *, size_t *));
+#endif
 static compute_key_fn ossl_ecdh_compute_key;
 
 static int ec_ex_index = 0;
@@ -192,13 +198,13 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_ECDSA;
 
-	pkcs11_w_lock(PRIVSLOT(slot)->lockid);
+	CRYPTO_THREAD_write_lock(PRIVSLOT(slot)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE *)msg, msg_len, sigret, &ck_sigsize));
-	pkcs11_w_unlock(PRIVSLOT(slot)->lockid);
+	CRYPTO_THREAD_unlock(PRIVSLOT(slot)->rwlock);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
@@ -379,8 +385,51 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	return 0;
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+
 /**
  * ECDH key derivation method (replaces ossl_ecdh_compute_key)
+ * Implementation for OpenSSL 1.1.0-pre4 and later
+ *
+ * @param  out        derived key
+ * @param  outlen     derived key length
+ * @param  peer_point public key point
+ * @param  ecdh       private key
+ * @return 1 on success or 0 on error
+ */
+static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
+		const EC_POINT *peer_point, const EC_KEY *ecdh)
+{
+	PKCS11_KEY *key;
+	CK_ECDH1_DERIVE_PARAMS *parms;
+	unsigned char *buf = NULL;
+	size_t buflen;
+	int rv;
+
+	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ecdh, ec_ex_index);
+	if (key == NULL) /* The private key is not handled by PKCS#11 */
+		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
+	/* TODO: Add an atfork check */
+
+	/* both peer and ecdh use same group parameters */
+	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
+	if (parms == NULL)
+		return 0;
+	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE, parms, NULL, key);
+	pkcs11_ecdh_params_free(parms);
+	if (rv < 0)
+		return 0;
+
+	*out = buf;
+	*outlen = buflen;
+	return 1;
+}
+
+#else
+
+/**
+ * ECDH key derivation method (replaces ossl_ecdh_compute_key)
+ * Implementation for OpenSSL 1.1.0-pre3 and earlier
  *
  * @param  out        derived key
  * @param  outlen     derived key length
@@ -389,10 +438,8 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
  * @param  KCF        key derivation function
  * @return the length of the derived key or -1 if an error occurred
  */
-static int pkcs11_ec_ckey(void *out,
-		size_t outlen,
-		const EC_POINT *peer_point,
-		const EC_KEY *ecdh,
+static int pkcs11_ec_ckey(void *out, size_t outlen,
+		const EC_POINT *peer_point, const EC_KEY *ecdh,
 		void *(*KDF)(const void *, size_t, void *, size_t *))
 {
 	PKCS11_KEY *key;
@@ -414,8 +461,7 @@ static int pkcs11_ec_ckey(void *out,
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
 	if (parms == NULL)
 		return -1;
-	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE,
-			parms, NULL, key);
+	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE, parms, NULL, key);
 	pkcs11_ecdh_params_free(parms);
 	if (rv < 0)
 		return -1;
@@ -433,6 +479,8 @@ static int pkcs11_ec_ckey(void *out,
 	OPENSSL_free(buf);
 	return outlen;
 }
+
+#endif
 
 /********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
 

@@ -42,7 +42,10 @@ char *pkcs11_strdup(char *mem, size_t size)
 /*
  * CRYPTO dynlock wrappers: 0 is an invalid dynamic lock ID
  */
-int pkcs11_get_new_dynlockid()
+
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+
+int CRYPTO_THREAD_lock_new()
 {
 	int i;
 
@@ -56,10 +59,12 @@ int pkcs11_get_new_dynlockid()
 	return i;
 }
 
-void pkcs11_destroy_dynlockid(int i)
+void CRYPTO_THREAD_lock_free(int i)
 {
 	if(i)
 		CRYPTO_destroy_dynlockid(i);
 }
+
+#endif
 
 /* vim: set noexpandtab: */
