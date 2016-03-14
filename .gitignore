@@ -59,7 +59,6 @@ m4/lt~obsolete.m4
 examples/auth
 examples/decrypt
 examples/getrandom
-examples/rawrsasign
 examples/listkeys
 
 test-driver

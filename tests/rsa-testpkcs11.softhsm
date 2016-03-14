@@ -28,12 +28,6 @@ if test $? != 0;then
 	exit 1;
 fi
 
-../examples/rawrsasign $ADDITIONAL_PARAM $PIN
-if test $? != 0;then
-	echo "Raw RSA signature test failed"
-	exit 1;
-fi
-
 rm -rf "$outdir"
 
 exit 0
