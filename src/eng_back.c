@@ -141,9 +141,30 @@ int pkcs11_finish(ENGINE_CTX *ctx)
 	return 1;
 }
 
+static int pkcs11_init_ctx(ENGINE_CTX *ctx, char *mod)
+{
+	/* PKCS11_CTX_load() uses C_GetSlotList() via p11-kit */
+	if (PKCS11_CTX_load(ctx->pkcs11_ctx, mod) < 0) {
+		fprintf(stderr, "Unable to load module %s\n", mod);
+		return 0;
+	}
+	/* PKCS11_enumerate_slots() uses C_GetSlotList() via libp11 */
+	if (PKCS11_enumerate_slots(ctx->pkcs11_ctx,
+			&ctx->slot_list, &ctx->slot_count) < 0) {
+		fprintf(stderr, "Failed to enumerate slots\n");
+		return 0;
+	}
+	if (ctx->verbose) {
+		fprintf(stderr, "Found %u slot%s\n", ctx->slot_count,
+			(ctx->slot_count <= 1) ? "" : "s");
+	}
+	return 1;
+}
+
 int pkcs11_init(ENGINE_CTX *ctx)
 {
 	char *mod = ctx->module;
+	int rv;
 
 	if (mod == NULL)
 		mod = getenv("PKCS11_MODULE_PATH");
@@ -156,20 +177,22 @@ int pkcs11_init(ENGINE_CTX *ctx)
 	}
 
 	PKCS11_CTX_init_args(ctx->pkcs11_ctx, ctx->init_args);
-	if (PKCS11_CTX_load(ctx->pkcs11_ctx, mod) < 0) {
-		fprintf(stderr, "Unable to load module %s\n", mod);
-		return 0;
-	}
-	if (PKCS11_enumerate_slots(ctx->pkcs11_ctx,
-			&ctx->slot_list, &ctx->slot_count) < 0) {
-		fprintf(stderr, "Failed to enumerate slots\n");
-		return 0;
-	}
-	if (ctx->verbose) {
-		fprintf(stderr, "Found %u slot%s\n", ctx->slot_count,
-			(ctx->slot_count <= 1) ? "" : "s");
-	}
-	return 1;
+
+	/* HACK ALERT: This is an ugly workaround for a complex OpenSC bug */
+	/* OpenSC implicitly locks CRYPTO_LOCK_ENGINE during C_GetSlotList() */
+	/* OpenSSL also locks CRYPTO_LOCK_ENGINE in ENGINE_init() */
+	/* The workaround is to temporarily unlock the non-recursive rwlock,
+	   so it does not crash or hang (depending on the implementation) */
+	/* FIXME: This workaround currently does not support OpenSSL 1.1 */
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+	CRYPTO_w_unlock(CRYPTO_LOCK_ENGINE);
+#endif
+	rv = pkcs11_init_ctx(ctx, mod);
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+	CRYPTO_w_lock(CRYPTO_LOCK_ENGINE);
+#endif
+
+	return rv;
 }
 
 /******************************************************************************/
