@@ -184,12 +184,6 @@ loggedin:
 		fprintf(stderr, "Could not extract the private key\n");
 		goto failed;
 	}
-	/* allow the EVP_PKEY object to be freed normally */
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	EVP_PKEY_up_ref(privkey);
-#else
-	CRYPTO_add(&privkey->references, 1, CRYPTO_LOCK_EVP_PKEY);
-#endif
 
 	/* sign on the PKCS#11 device */
 	md_ctx = EVP_MD_CTX_create();

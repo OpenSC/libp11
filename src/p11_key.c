@@ -298,6 +298,11 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 				fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
 		}
 	}
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	EVP_PKEY_up_ref(key->evp_key);
+#else
+	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
+#endif
 	return key->evp_key;
 }
 

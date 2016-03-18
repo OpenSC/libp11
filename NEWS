@@ -14,6 +14,7 @@ New in 0.4.0; unreleased;
 * Fixed deadlocks in keys and certificates listing (Brian Hinz)
 * Use PKCS11_MODULE_PATH environment variable (Doug Engert)
 * Added support for building against OpenSSL 1.1.0-dev (Doug Engert)
+* Returned EVP_PKEY objects are no longer "const" (Michał Trojnara)
 * Fixed building against OpenSSL 0.9.8 (Michał Trojnara)
 * Removed support for OpenSSL 0.9.7 (Michał Trojnara)
 

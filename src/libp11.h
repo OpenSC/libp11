@@ -256,8 +256,6 @@ extern int PKCS11_get_key_type(PKCS11_KEY *);
  *
  * @param   key  PKCS11_KEY object
  * @retval !=NULL reference to EVP_PKEY object.
- *         The returned EVP_PKEY object should be treated as const
- *         and must not be freed.
  * @retval NULL error
  */
 extern EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *key);
@@ -267,8 +265,6 @@ extern EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *key);
  *
  * @param  key  PKCS11_KEY object
  * @retval !=NULL reference to EVP_PKEY object.
- *         The returned EVP_PKEY object should be treated as const
- *         and must not be freed.
  * @retval NULL error
  */
 extern EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *key);
