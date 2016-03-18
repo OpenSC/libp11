@@ -174,7 +174,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 #else
 	ECDSA_set_ex_data(ec, ec_ex_index, key);
 #endif
-	EC_KEY_free(ec); /* drops our reference to it */
+	EC_KEY_free(ec); /* Drops our reference to it */
 	return pk;
 }
 

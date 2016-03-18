@@ -67,7 +67,7 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 		mechanism->mechanism = CKM_RSA_X9_31;
 		break;
 	default:
-		printf("pkcs11 engine: unsupported padding type\n");
+		fprintf(stderr, "PKCS#11: Unsupported padding type\n");
 		return -1;
 	}
 	return 0;
@@ -308,6 +308,12 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 	return PKCS11_private_encrypt(flen, from, to, key, padding);
 }
 
+static int pkcs11_rsa_free_method(RSA *rsa)
+{
+	RSA_set_ex_data(rsa, rsa_ex_index, NULL);
+	return 1;
+}
+
 static void alloc_rsa_ex_index()
 {
 	if (rsa_ex_index == 0) {
@@ -345,6 +351,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		memcpy(ops, RSA_get_default_method(), sizeof(RSA_METHOD));
 		ops->rsa_priv_enc = pkcs11_rsa_priv_enc_method;
 		ops->rsa_priv_dec = pkcs11_rsa_priv_dec_method;
+		ops->finish = pkcs11_rsa_free_method;
 	}
 	return ops;
 }
