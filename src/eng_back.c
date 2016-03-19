@@ -38,6 +38,11 @@ struct st_engine_ctx {
 	PKCS11_CTX *pkcs11_ctx;
 	PKCS11_SLOT *slot_list;
 	unsigned int slot_count;
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	CRYPTO_RWLOCK *rwlock;
+#else
+	int rwlock;
+#endif
 	/*
 	 * The PIN used for login. Cache for the get_pin function.
 	 * The memory for this PIN is always owned internally,
@@ -52,7 +57,7 @@ struct st_engine_ctx {
 };
 
 /******************************************************************************/
-/* pin handling                                                               */
+/* PIN handling                                                               */
 /******************************************************************************/
 
 /* Free PIN storage in secure way. */
@@ -107,18 +112,37 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 }
 
 /******************************************************************************/
-/* initialization/cleanup                                                     */
+/* Initialization and cleanup                                                 */
 /******************************************************************************/
 
 ENGINE_CTX *pkcs11_new()
 {
 	ENGINE_CTX *ctx;
+	char *mod;
 
 	ctx = OPENSSL_malloc(sizeof(ENGINE_CTX));
 	if (ctx == NULL)
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
-	ctx->pkcs11_ctx = PKCS11_CTX_new();
+
+	mod = getenv("PKCS11_MODULE_PATH");
+	if (mod) {
+		ctx->module = OPENSSL_strdup(mod);
+	} else {
+#ifdef DEFAULT_PKCS11_MODULE
+		ctx->module = OPENSSL_strdup(DEFAULT_PKCS11_MODULE);
+#else
+		ctx->module = NULL;
+#endif
+	}
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	ctx->rwlock = CRYPTO_THREAD_lock_new();
+#else
+	ctx->rwlock = CRYPTO_get_dynlock_create_callback() ?
+		CRYPTO_get_new_dynlockid() : 0;
+#endif
+
 	return ctx;
 }
 
@@ -136,67 +160,99 @@ int pkcs11_finish(ENGINE_CTX *ctx)
 		destroy_pin(ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+		CRYPTO_THREAD_lock_free(ctx->rwlock);
+#else
+		if (ctx->rwlock)
+			CRYPTO_destroy_dynlockid(ctx->rwlock);
+#endif
 		OPENSSL_free(ctx);
 	}
 	return 1;
 }
 
-static int pkcs11_init_ctx(ENGINE_CTX *ctx, char *mod)
+/* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
+static void pkcs11_init_libp11_unlocked(ENGINE_CTX *ctx)
 {
+	PKCS11_CTX *pkcs11_ctx;
+	PKCS11_SLOT *slot_list = NULL;
+	unsigned int slot_count = 0;
+
+	if (ctx->verbose)
+		fprintf(stderr, "PKCS#11: Initializing the engine\n");
+
+	pkcs11_ctx = PKCS11_CTX_new();
+	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
+
 	/* PKCS11_CTX_load() uses C_GetSlotList() via p11-kit */
-	if (PKCS11_CTX_load(ctx->pkcs11_ctx, mod) < 0) {
-		fprintf(stderr, "Unable to load module %s\n", mod);
-		return 0;
+	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
+		fprintf(stderr, "Unable to load module %s\n", ctx->module);
+		PKCS11_CTX_free(pkcs11_ctx);
+		return;
 	}
+
 	/* PKCS11_enumerate_slots() uses C_GetSlotList() via libp11 */
-	if (PKCS11_enumerate_slots(ctx->pkcs11_ctx,
-			&ctx->slot_list, &ctx->slot_count) < 0) {
+	if (PKCS11_enumerate_slots(pkcs11_ctx, &slot_list, &slot_count) < 0) {
 		fprintf(stderr, "Failed to enumerate slots\n");
-		return 0;
+		PKCS11_CTX_unload(pkcs11_ctx);
+		PKCS11_CTX_free(pkcs11_ctx);
+		return;
 	}
-	if (ctx->verbose) {
-		fprintf(stderr, "Found %u slot%s\n", ctx->slot_count,
-			(ctx->slot_count <= 1) ? "" : "s");
+
+	if (ctx->verbose)
+		fprintf(stderr, "Found %u slot%s\n", slot_count,
+			slot_count <= 1 ? "" : "s");
+
+	ctx->pkcs11_ctx = pkcs11_ctx;
+	ctx->slot_list = slot_list;
+	ctx->slot_count = slot_count;
+}
+
+static int pkcs11_init_libp11(ENGINE_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	CRYPTO_THREAD_write_lock(ctx->rwlock);
+#else
+	if (ctx->rwlock)
+		CRYPTO_w_lock(ctx->rwlock);
+#endif
+	if (ctx->pkcs11_ctx == NULL || ctx->slot_list == NULL)
+		pkcs11_init_libp11_unlocked(ctx);
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	CRYPTO_THREAD_unlock(ctx->rwlock);
+#else
+	if (ctx->rwlock)
+		CRYPTO_w_unlock(ctx->rwlock);
+#endif
+	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+}
+
+/* Function called from ENGINE_init() */
+int pkcs11_init(ENGINE_CTX *ctx)
+{
+	/* OpenSC implicitly locks CRYPTO_LOCK_ENGINE during C_GetSlotList().
+	 * OpenSSL also locks CRYPTO_LOCK_ENGINE in ENGINE_init().
+	 * Double-locking a non-recursive rwlock causes the application to
+	 * crash or hang, depending on the locking library implementation. */
+
+	/* Only attempt initialization when dynamic locks are unavailable.
+	 * This likely also indicates a single-threaded application,
+	 * so temporarily unlocking CRYPTO_LOCK_ENGINE should be safe. */
+#if OPENSSL_VERSION_NUMBER < 0x10100004L
+	if (CRYPTO_get_dynlock_create_callback() == NULL ||
+			CRYPTO_get_dynlock_lock_callback() == NULL ||
+			CRYPTO_get_dynlock_destroy_callback() == NULL) {
+		CRYPTO_w_unlock(CRYPTO_LOCK_ENGINE);
+		pkcs11_init_libp11_unlocked(ctx);
+		CRYPTO_w_lock(CRYPTO_LOCK_ENGINE);
+		return ctx->pkcs11_ctx && ctx->slot_list ? 1 : 0;
 	}
+#endif
 	return 1;
 }
 
-int pkcs11_init(ENGINE_CTX *ctx)
-{
-	char *mod = ctx->module;
-	int rv;
-
-	if (mod == NULL)
-		mod = getenv("PKCS11_MODULE_PATH");
-#ifdef DEFAULT_PKCS11_MODULE
-	if (mod == NULL)
-		mod = DEFAULT_PKCS11_MODULE;
-#endif
-	if (ctx->verbose) {
-		fprintf(stderr, "Initializing engine\n");
-	}
-
-	PKCS11_CTX_init_args(ctx->pkcs11_ctx, ctx->init_args);
-
-	/* HACK ALERT: This is an ugly workaround for a complex OpenSC bug */
-	/* OpenSC implicitly locks CRYPTO_LOCK_ENGINE during C_GetSlotList() */
-	/* OpenSSL also locks CRYPTO_LOCK_ENGINE in ENGINE_init() */
-	/* The workaround is to temporarily unlock the non-recursive rwlock,
-	   so it does not crash or hang (depending on the implementation) */
-	/* FIXME: This workaround currently does not support OpenSSL 1.1 */
-#if OPENSSL_VERSION_NUMBER < 0x10100004L
-	CRYPTO_w_unlock(CRYPTO_LOCK_ENGINE);
-#endif
-	rv = pkcs11_init_ctx(ctx, mod);
-#if OPENSSL_VERSION_NUMBER < 0x10100004L
-	CRYPTO_w_lock(CRYPTO_LOCK_ENGINE);
-#endif
-
-	return rv;
-}
-
 /******************************************************************************/
-/* certificte handling                                                        */
+/* Certificate handling                                                       */
 /******************************************************************************/
 
 /* prototype for OpenSSL ENGINE_load_cert */
@@ -217,6 +273,9 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 	size_t tmp_pin_len = sizeof(tmp_pin);
 	int slot_nr = -1;
 	char flags[64];
+
+	if (pkcs11_init_libp11(ctx)) /* Delayed libp11 initialization */
+		return NULL;
 
 	if (s_slot_cert_id && *s_slot_cert_id) {
 		if (!strncmp(s_slot_cert_id, "pkcs11:", 7)) {
@@ -412,7 +471,7 @@ static int ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 }
 
 /******************************************************************************/
-/* private and public key handling                                            */
+/* Private and public key handling                                            */
 /******************************************************************************/
 
 /*
@@ -491,6 +550,9 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	char tmp_pin[MAX_PIN_LENGTH];
 	size_t tmp_pin_len = sizeof(tmp_pin);
 	char flags[64];
+
+	if (pkcs11_init_libp11(ctx)) /* Delayed libp11 initialization */
+		return NULL;
 
 	if (ctx->verbose)
 		fprintf(stderr, "Loading %s key \"%s\"\n",
@@ -749,7 +811,7 @@ EVP_PKEY *pkcs11_load_private_key(ENGINE_CTX *ctx, const char *s_key_id,
 }
 
 /******************************************************************************/
-/* engine ctrl request handling                                               */
+/* Engine ctrl request handling                                               */
 /******************************************************************************/
 
 static int ctrl_set_module(ENGINE_CTX *ctx, const char *modulename)
