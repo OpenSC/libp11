@@ -674,11 +674,12 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 	return NULL;
 }
 
+#endif /* OPENSSL_NO_EC */
+
+/* TODO: remove this function in libp11 0.5.0 */
 void PKCS11_ecdsa_method_free(void)
 {
-	/* no op, as it is static in the old code */
+	/* no op */
 }
-
-#endif /* OPENSSL_NO_EC */
 
 /* vim: set noexpandtab: */
