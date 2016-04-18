@@ -250,6 +250,40 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	}
 	/* TODO: Add an atfork check */
 
+	// adapted from crypto/ecdsa/ecs_ossl.c:ecdsa_do_sign()
+	/* Need to truncate digest if it is too long */
+	const EC_GROUP *group = EC_KEY_get0_group(ec);
+	BN_CTX *ctx = BN_CTX_new();
+	BIGNUM *order = BN_new();
+	if (group == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, PKCS11_ALIEN_KEY);
+		// return NULL;
+	}
+	if (ctx == NULL || order == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_MALLOC_FAILURE);
+		// return NULL;
+	}
+	if (group && ctx && order) {
+		if (!EC_GROUP_get_order(group, order, ctx)) {
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_EC_LIB);
+			// return NULL;
+		} else {
+			int i = BN_num_bits(order);
+			/* First truncate whole bytes */
+			if (8 * dlen > i)
+				dlen = (i + 7) / 8;
+			/* If still too long, should truncate remaining bits with a shift */
+			if (8 * dlen > i) {
+				PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_BN_LIB);
+				// return NULL;
+			}
+		}
+	}
+	if (order)
+		BN_free(order);
+	if (ctx)
+		BN_CTX_free(ctx);
+
 	siglen = sizeof sigret;
 	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
 		return NULL;
