@@ -484,11 +484,11 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 
 #endif
 
-/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
+/********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 
-/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
 typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
 	const BIGNUM *, const BIGNUM *, EC_KEY *);
@@ -503,6 +503,12 @@ struct ecdsa_method {
 	int flags;
 	char *data;
 };
+
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
 /* Define missing functions */
 
