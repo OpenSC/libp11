@@ -107,7 +107,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	if (!key_getattr_alloc(key, CKA_EC_PARAMS, &params, &params_len)) {
 		const unsigned char *a = params;
 
-		/* Convert to OpenSSL parmas */
+		/* Convert to OpenSSL params */
 		d2i_ECParameters(&ec, &a, (long)params_len);
 		OPENSSL_free(params);
 	}
@@ -115,20 +115,33 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	/* Now retrieve the point */
 	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
 	if (pubkey == NULL)
-		return ec;
+		{ fprintf(stderr, "Warning: pkcs11_get_ec cannot find public key"); return ec; }
 	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
-		const unsigned char *a;
-		ASN1_OCTET_STRING *os;
-
-		/* PKCS#11 returns ASN1_OCTET_STRING */
-		a = point;
-		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
+		const unsigned char *a = point;
+#ifdef PKCS11_EC_POINT_ASN1
+		/* in case PKCS#11 returns ASN1_OCTET_STRING */
+		ASN1_OCTET_STRING *os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
 		if (os) {
 			a = os->data;
-			o2i_ECPublicKey(&ec, &a, os->length);
+			point_len = os->length;
+		} else {
+			EC_KEY_free(ec);
+			ec = NULL;
+		}
+#endif
+		if (!o2i_ECPublicKey(&ec, &a, point_len)) {
+			EC_KEY_free(ec);
+			ec = NULL;
+		}
+#ifdef PKCS11_EC_POINT_ASN1
+		if (os) {
 			ASN1_STRING_free(os);
 		}
+#endif
 		OPENSSL_free(point);
+	} else {
+		EC_KEY_free(ec);
+		ec = NULL;
 	}
 
 	return ec;
