@@ -107,7 +107,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	if (!key_getattr_alloc(key, CKA_EC_PARAMS, &params, &params_len)) {
 		const unsigned char *a = params;
 
-		/* Convert to OpenSSL parmas */
+		/* Convert to OpenSSL params */
 		d2i_ECParameters(&ec, &a, (long)params_len);
 		OPENSSL_free(params);
 	}
@@ -115,20 +115,33 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	/* Now retrieve the point */
 	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
 	if (pubkey == NULL)
-		return ec;
+		{ fprintf(stderr, "Warning: pkcs11_get_ec cannot find public key"); return ec; }
 	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
-		const unsigned char *a;
-		ASN1_OCTET_STRING *os;
-
-		/* PKCS#11 returns ASN1_OCTET_STRING */
-		a = point;
-		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
+		const unsigned char *a = point;
+#ifdef PKCS11_EC_POINT_ASN1
+		/* in case PKCS#11 returns ASN1_OCTET_STRING */
+		ASN1_OCTET_STRING *os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
 		if (os) {
 			a = os->data;
-			o2i_ECPublicKey(&ec, &a, os->length);
+			point_len = os->length;
+		} else {
+			EC_KEY_free(ec);
+			ec = NULL;
+		}
+#endif
+		if (!o2i_ECPublicKey(&ec, &a, point_len)) {
+			EC_KEY_free(ec);
+			ec = NULL;
+		}
+#ifdef PKCS11_EC_POINT_ASN1
+		if (os) {
 			ASN1_STRING_free(os);
 		}
+#endif
 		OPENSSL_free(point);
+	} else {
+		EC_KEY_free(ec);
+		ec = NULL;
 	}
 
 	return ec;
@@ -249,6 +262,40 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 		return NULL;
 	}
 	/* TODO: Add an atfork check */
+
+	// adapted from crypto/ecdsa/ecs_ossl.c:ecdsa_do_sign()
+	/* Need to truncate digest if it is too long */
+	const EC_GROUP *group = EC_KEY_get0_group(ec);
+	BN_CTX *ctx = BN_CTX_new();
+	BIGNUM *order = BN_new();
+	if (group == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, PKCS11_ALIEN_KEY);
+		// return NULL;
+	}
+	if (ctx == NULL || order == NULL) {
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_MALLOC_FAILURE);
+		// return NULL;
+	}
+	if (group && ctx && order) {
+		if (!EC_GROUP_get_order(group, order, ctx)) {
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_EC_LIB);
+			// return NULL;
+		} else {
+			int i = BN_num_bits(order);
+			/* First truncate whole bytes */
+			if (8 * dlen > i)
+				dlen = (i + 7) / 8;
+			/* If still too long, should truncate remaining bits with a shift */
+			if (8 * dlen > i) {
+				PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, ERR_R_BN_LIB);
+				// return NULL;
+			}
+		}
+	}
+	if (order)
+		BN_free(order);
+	if (ctx)
+		BN_CTX_free(ctx);
 
 	siglen = sizeof sigret;
 	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
@@ -484,11 +531,11 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 
 #endif
 
-/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
+/********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 
-/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
 typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
 	const BIGNUM *, const BIGNUM *, EC_KEY *);
@@ -503,6 +550,12 @@ struct ecdsa_method {
 	int flags;
 	char *data;
 };
+
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.2 */
 
 /* Define missing functions */
 
