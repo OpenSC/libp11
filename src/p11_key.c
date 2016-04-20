@@ -207,6 +207,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
+	BIGNUM *rsa_n, *rsa_e, *rsa_d, *rsa_p, *rsa_q;
 
 	/* First, make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
@@ -238,12 +239,22 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 		RSA *rsa = pk->pkey.rsa;
 #endif
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
-		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa->n);
-		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa->e);
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L
+		RSA_get0_key(rsa, &rsa_n, &rsa_e, &rsa_d);
+		RSA_get0_factors(rsa, &rsa_p, &rsa_q);
+#else
+		rsa_n=rsa->n;
+		rsa_e=rsa->e;
+		rsa_d=rsa->d;
+		rsa_p=rsa->p;
+		rsa_q=rsa->q;
+#endif
+		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa_n);
+		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa_e);
 		if (type == CKO_PRIVATE_KEY) {
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIVATE_EXPONENT, rsa->d);
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_1, rsa->p);
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_2, rsa->q);
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIVATE_EXPONENT, rsa_d);
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_1, rsa_p);
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_2, rsa_q);
 		}
 	} else {
 		pkcs11_zap_attrs(attrs, n);
