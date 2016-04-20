@@ -119,14 +119,19 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
 		const unsigned char *a;
 		ASN1_OCTET_STRING *os;
+		EC_KEY *success = NULL;
 
-		/* PKCS#11 returns ASN1_OCTET_STRING */
+		/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
 		a = point;
 		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
 		if (os) {
 			a = os->data;
-			o2i_ECPublicKey(&ec, &a, os->length);
+			success = o2i_ECPublicKey(&ec, &a, os->length);
 			ASN1_STRING_free(os);
+		}
+		if (success == NULL) { /* Workaround for broken PKCS#11 modules */
+			a = point;
+			o2i_ECPublicKey(&ec, &a, point_len);
 		}
 		OPENSSL_free(point);
 	}
