@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.1; unreleased
+* The signed message digest is truncated if it is too long for the
+  signing curve (David von Oheimb)
 * Workaround for broken PKCS#11 modules not returning CKA_EC_POINT
   in the ASN1_OCTET_STRING format (Michał Trojnara)
 * Improved building against OpenSSL 1.1.0-dev (Michał Trojnara)

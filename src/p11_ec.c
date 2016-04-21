@@ -242,7 +242,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	ECDSA_SIG *sig;
 	PKCS11_KEY *key;
 	unsigned int siglen;
-	BIGNUM *r, *s;
+	BIGNUM *r, *s, *order;
 
 	(void)kinv; /* Precomputed values are not used for PKCS#11 */
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
@@ -257,6 +257,18 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 		return NULL;
 	}
 	/* TODO: Add an atfork check */
+
+	/* Truncate digest if its byte size is longer than needed */
+	order = BN_new();
+	if (order) {
+		const EC_GROUP *group = EC_KEY_get0_group(ec);
+		if (group && EC_GROUP_get_order(group, order, NULL)) {
+			int klen = BN_num_bits(order);
+			if (klen < 8*dlen)
+				dlen = (klen+7)/8;
+		}
+		BN_free(order);
+	}
 
 	siglen = sizeof sigret;
 	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
