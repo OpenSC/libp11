@@ -88,11 +88,9 @@ static void free_ec_ex_index()
 
 static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 {
-	EC_KEY *ec;
-	size_t params_len = 0;
-	CK_BYTE *params;
-	size_t point_len = 0;
-	CK_BYTE *point;
+	EC_KEY *ec, *found_params = NULL, *found_point = NULL;
+	CK_BYTE *params, *point;
+	size_t params_len = 0, point_len = 0;
 	PKCS11_KEY *pubkey;
 
 	ec = EC_KEY_new();
@@ -108,7 +106,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 		const unsigned char *a = params;
 
 		/* Convert to OpenSSL parmas */
-		d2i_ECParameters(&ec, &a, (long)params_len);
+		found_params = d2i_ECParameters(&ec, &a, (long)params_len);
 		OPENSSL_free(params);
 	}
 
@@ -119,21 +117,26 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
 		const unsigned char *a;
 		ASN1_OCTET_STRING *os;
-		EC_KEY *success = NULL;
 
 		/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
 		a = point;
 		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
 		if (os) {
 			a = os->data;
-			success = o2i_ECPublicKey(&ec, &a, os->length);
+			found_point = o2i_ECPublicKey(&ec, &a, os->length);
 			ASN1_STRING_free(os);
 		}
-		if (success == NULL) { /* Workaround for broken PKCS#11 modules */
+		if (found_point == NULL) { /* Workaround for broken PKCS#11 modules */
 			a = point;
-			o2i_ECPublicKey(&ec, &a, point_len);
+			found_point = o2i_ECPublicKey(&ec, &a, point_len);
 		}
 		OPENSSL_free(point);
+	}
+
+	/* A public keys requires both the params and the point to be present */
+	if (!key->isPrivate && (found_params == NULL || found_point == NULL)) {
+		EC_KEY_free(ec);
+		return NULL;
 	}
 
 	return ec;
