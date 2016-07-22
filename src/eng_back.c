@@ -57,6 +57,17 @@ struct st_engine_ctx {
 };
 
 /******************************************************************************/
+/* Utility functions                                                          */
+/******************************************************************************/
+
+static void dump_hex(FILE *stream, const char *val, const size_t len) {
+	size_t n;
+
+	for (n = 0; n < len; n++)
+		fprintf(stream, "%02x", val[n]);
+}
+
+/******************************************************************************/
 /* PIN handling                                                               */
 /******************************************************************************/
 
@@ -314,12 +325,15 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 		if (ctx->verbose) {
 			fprintf(stderr, "Looking in slot %d for certificate: ",
 				slot_nr);
-			if (cert_label == NULL) {
-				for (n = 0; n < cert_id_len; n++)
-					fprintf(stderr, "%02x", cert_id[n]);
-				fprintf(stderr, "\n");
-			} else
-				fprintf(stderr, "label: %s\n", cert_label);
+			if (cert_id_len != 0) {
+				fprintf(stderr, "id=");
+				dump_hex(stderr, cert_id, cert_id_len);
+			}
+			if (cert_id_len != 0 && cert_label != NULL)
+				fprintf(stderr, " ");
+			if (cert_label != NULL)
+				fprintf(stderr, "label=%s", cert_label);
+			fprintf(stderr, "\n");
 		}
 	}
 
@@ -429,25 +443,22 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 		for (n = 0; n < cert_count; n++) {
 			PKCS11_CERT *k = certs + n;
 
-			if (cert_label == NULL) {
-				if (cert_id_len != 0 && k->id_len == cert_id_len &&
-						memcmp(k->id, cert_id, cert_id_len) == 0)
-					selected_cert = k;
-			} else {
-				if (strcmp(k->label, cert_label) == 0)
-					selected_cert = k;
-			}
+			if (cert_label != NULL && strcmp(k->label, cert_label) == 0)
+				selected_cert = k;
+			if (cert_id_len != 0 && k->id_len == cert_id_len &&
+					memcmp(k->id, cert_id, cert_id_len) == 0)
+				selected_cert = k;
 		}
 	} else {
 		selected_cert = certs; /* Use the first certificate */
 	}
 
-	if (selected_cert == NULL) {
+	if (selected_cert != NULL) {
+		x509 = X509_dup(selected_cert->x509);
+	} else {
 		fprintf(stderr, "Certificate not found.\n");
-		return NULL;
+		x509 = NULL;
 	}
-
-	x509 = X509_dup(selected_cert->x509);
 	if (cert_label != NULL)
 		OPENSSL_free(cert_label);
 	return x509;
@@ -596,12 +607,15 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		if (ctx->verbose) {
 			fprintf(stderr, "Looking in slot %d for key: ",
 				slot_nr);
-			if (key_label == NULL) {
-				for (n = 0; n < key_id_len; n++)
-					fprintf(stderr, "%02x", key_id[n]);
-				fprintf(stderr, "\n");
-			} else
-				fprintf(stderr, "label: %s\n", key_label);
+			if (key_id_len != 0) {
+				fprintf(stderr, "id=");
+				dump_hex(stderr, key_id, key_id_len);
+			}
+			if (key_id_len != 0 && key_label != NULL)
+				fprintf(stderr, " ");
+			if (key_label != NULL)
+				fprintf(stderr, "label=%s", key_label);
+			fprintf(stderr, "\n");
 		}
 	}
 
@@ -706,7 +720,9 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			PKCS11_CERT *c = certs + n;
 			char *dn = NULL;
 
-			fprintf(stderr, "  %2u    %s", n + 1, c->label);
+			fprintf(stderr, "  %2u    id=", n + 1);
+			dump_hex(stderr, c->id, c->id_len);
+			fprintf(stderr, " label=%s", c->label);
 			if (c->x509)
 				dn = X509_NAME_oneline(X509_get_subject_name(c->x509), NULL, 0);
 			if (dn) {
@@ -752,40 +768,37 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			PKCS11_KEY *k = keys + n;
 
 			if (ctx->verbose) {
-				fprintf(stderr, "  %2u %c%c %s\n", n + 1,
+				fprintf(stderr, "  %2u %c%c id=", n + 1,
 					k->isPrivate ? 'P' : ' ',
-					k->needLogin ? 'L' : ' ', k->label);
+					k->needLogin ? 'L' : ' ');
+				dump_hex(stderr, k->id, k->id_len);
+				fprintf(stderr, " label=%s\n", k->label);
 			}
-			if (key_label == NULL) {
-				if (key_id_len != 0 && k->id_len == key_id_len
-						&& memcmp(k->id, key_id, key_id_len) == 0) {
-					selected_key = k;
-				}
-			} else {
-				if (strcmp(k->label, key_label) == 0) {
-					selected_key = k;
-				}
-			}
+			if (key_label != NULL && strcmp(k->label, key_label) == 0)
+				selected_key = k;
+			if (key_id_len != 0 && k->id_len == key_id_len
+					&& memcmp(k->id, key_id, key_id_len) == 0)
+				selected_key = k;
 		}
 	} else {
 		selected_key = keys; /* Use the first key */
 	}
 
-	if (selected_key == NULL) {
+	if (selected_key != NULL) {
+		pk = isPrivate ?
+			PKCS11_get_private_key(selected_key) :
+			PKCS11_get_public_key(selected_key);
+	} else {
 		fprintf(stderr, "Key not found.\n");
-		return NULL;
+		pk = NULL;
 	}
-
-	pk = isPrivate ?
-		PKCS11_get_private_key(selected_key) :
-		PKCS11_get_public_key(selected_key);
 	if (key_label != NULL)
 		OPENSSL_free(key_label);
 	return pk;
 }
 
 EVP_PKEY *pkcs11_load_public_key(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD * ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *callback_data)
 {
 	EVP_PKEY *pk;
 
@@ -798,7 +811,7 @@ EVP_PKEY *pkcs11_load_public_key(ENGINE_CTX *ctx, const char *s_key_id,
 }
 
 EVP_PKEY *pkcs11_load_private_key(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD * ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *callback_data)
 {
 	EVP_PKEY *pk;
 

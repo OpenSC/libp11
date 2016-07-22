@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen)
+static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 {
 	size_t left, count = 0;
 
@@ -80,12 +80,9 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t * outlen)
 
 /* parse string containing slot and id information */
 int parse_slot_id_string(const char *slot_id, int *slot,
-		unsigned char *id, size_t * id_len, char **label)
+		unsigned char *id, size_t *id_len, char **label)
 {
 	int n, i;
-
-	if (slot_id == NULL)
-		return 0;
 
 	/* support for several formats */
 #define HEXDIGITS "01234567890ABCDEFabcdef"
@@ -148,6 +145,7 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	if (strncmp(slot_id, "label_", 6) == 0) {
 		*slot = -1;
 		*label = OPENSSL_strdup(slot_id + 6);
+		*id_len = 0;
 		return *label != NULL;
 	}
 
@@ -197,7 +195,9 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	/* ... or "label_" */
 	if (strncmp(slot_id + i, "label_", 6) == 0) {
 		*slot = n;
-		return (*label = OPENSSL_strdup(slot_id + i + 6)) != NULL;
+		*label = OPENSSL_strdup(slot_id + i + 6);
+		*id_len = 0;
+		return *label != NULL;
 	}
 
 	fprintf(stderr, "Could not parse string!\n");
@@ -267,7 +267,7 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 	PKCS11_TOKEN *tok;
 	char *newlabel = NULL;
 	const char *end, *p;
-	int rv = 1, pin_set = 0;
+	int rv = 1, id_set = 0, pin_set = 0;
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (tok == NULL) {
@@ -302,6 +302,7 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
 			rv = parse_uri_attr(p, end - p, (void *)&id, id_len);
+			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
 			rv = parse_uri_attr(p, end - p, (void *)&pin, pin_len);
@@ -322,6 +323,8 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 		}
 	}
 
+	if (!id_set)
+		*id_len = 0;
 	if (!pin_set)
 		*pin_len = 0;
 
