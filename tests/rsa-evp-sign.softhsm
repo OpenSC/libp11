@@ -25,8 +25,8 @@ outdir="output.$$"
 sed -e "s|@MODULE_PATH@|${ADDITIONAL_PARAM}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
 export OPENSSL_ENGINES="../src/.libs/"
-PRIVATE_KEY="pkcs11:token=libp11-test;id=%00%01%02%03;object=server-key;type=private;pin-value=1234"
-PUBLIC_KEY="pkcs11:token=libp11-test;id=%00%01%02%03;object=server-key;type=public;pin-value=1234"
+PRIVATE_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
+PUBLIC_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
 
 ./evp-sign ctrl false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${ADDITIONAL_PARAM}
 if test $? != 0;then
@@ -58,7 +58,7 @@ if test $? != 0;then
 	exit 1;
 fi
 
-./evp-sign default 1234 "${outdir}/engines.cnf" "id_00010203" "id_00010203" ${ADDITIONAL_PARAM}
+./evp-sign default 1234 "${outdir}/engines.cnf" "id_01020304" "id_01020304" ${ADDITIONAL_PARAM}
 if test $? != 0;then
 	echo "Basic PKCS #11 test with legacy name #2 failed"
 	exit 1;
