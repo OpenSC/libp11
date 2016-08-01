@@ -77,13 +77,6 @@ int main(int argc, char *argv[])
 	printf("Slot token model.......: %s\n", slot->token->model);
 	printf("Slot token serialnr....: %s\n", slot->token->serialnr);
 
-	/* get public keys */
-	rc = PKCS11_enumerate_public_keys(slot->token, &keys, &nkeys);
-	error_queue("PKCS11_enumerate_public_keys");
-	CHECK_ERR(rc < 0, "PKCS11_enumerate_public_keys failed", 4);
-	CHECK_ERR(nkeys == 0, "No public keys found", 5);
-	list_keys("Public keys", keys, nkeys);
-
 	if (slot->token->loginRequired && argc > 2) {
 		strcpy(password, argv[2]);
 		/* perform pkcs #11 login */
@@ -92,6 +85,13 @@ int main(int argc, char *argv[])
 		memset(password, 0, strlen(password));
 		CHECK_ERR(rc < 0, "PKCS11_login failed", 6);
 	}
+
+	/* get public keys */
+	rc = PKCS11_enumerate_public_keys(slot->token, &keys, &nkeys);
+	error_queue("PKCS11_enumerate_public_keys");
+	CHECK_ERR(rc < 0, "PKCS11_enumerate_public_keys failed", 4);
+	CHECK_ERR(nkeys == 0, "No public keys found", 5);
+	list_keys("Public keys", keys, nkeys);
 
 	/* get private keys */
 	rc = PKCS11_enumerate_keys(slot->token, &keys, &nkeys);
