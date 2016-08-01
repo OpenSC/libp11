@@ -33,7 +33,7 @@ dist_noinst_DATA += pkcs11.rc
 endif
 pkcs11_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
 pkcs11_la_LIBADD = libp11.la $(OPENSSL_LIBS)
-pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT)
+pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT) \
 	-avoid-version -export-symbols "$(srcdir)/pkcs11.exports"
 
 # OpenSSL older than 1.1.0 expected libpkcs11.so instead of pkcs11.so
