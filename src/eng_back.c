@@ -561,6 +561,7 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	char tmp_pin[MAX_PIN_LENGTH];
 	size_t tmp_pin_len = sizeof(tmp_pin);
 	char flags[64];
+	int already_logged_in = 0;
 
 	if (pkcs11_init_libp11(ctx)) /* Delayed libp11 initialization */
 		return NULL;
@@ -734,12 +735,16 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	}
 
 	if (isPrivate) {
+		/* Check if already logged in to avoid resetting state */
+		if (PKCS11_is_logged_in(slot, 0, &already_logged_in) != 0) {
+			fprintf(stderr, "Unable to check if already logged in\n");
+			return NULL;
+		}
 		/* Perform login to the token if required */
-		if (!pkcs11_login(ctx, slot, tok, ui_method, callback_data)) {
+		if (!already_logged_in && !pkcs11_login(ctx, slot, tok, ui_method, callback_data)) {
 			fprintf(stderr, "login to token failed, returning NULL...\n");
 			return NULL;
 		}
-
 		/* Make sure there is at least one private key on the token */
 		if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
 			fprintf(stderr, "Unable to enumerate private keys\n");
