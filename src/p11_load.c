@@ -68,8 +68,7 @@ void pkcs11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)
 int pkcs11_CTX_load(PKCS11_CTX * ctx, const char *name)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
-	CK_C_INITIALIZE_ARGS _args;
-	CK_C_INITIALIZE_ARGS *args = NULL;
+	CK_C_INITIALIZE_ARGS args;
 	CK_INFO ck_info;
 	int rv;
 
@@ -80,14 +79,11 @@ int pkcs11_CTX_load(PKCS11_CTX * ctx, const char *name)
 	}
 
 	/* Tell the PKCS11 to initialize itself */
-	if (cpriv->init_args != NULL) {
-		memset(&_args, 0, sizeof(_args));
-		args = &_args;
-		/* Unconditionally say using OS locking primitives is OK */
-		args->flags |= CKF_OS_LOCKING_OK;
-		args->pReserved = cpriv->init_args;
-	}
-	rv = cpriv->method->C_Initialize(args);
+	memset(&args, 0, sizeof(args));
+	/* Unconditionally say using OS locking primitives is OK */
+	args.flags |= CKF_OS_LOCKING_OK;
+	args.pReserved = cpriv->init_args;
+	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
