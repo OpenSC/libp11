@@ -34,9 +34,9 @@ $(LIBP11_TARGET): $(LIBP11_OBJECTS) $*.def $*.res
 		$(LIBP11_OBJECTS) $(LIBS) $*.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
 
-$(PKCS11_TARGET): $(PKCS11_OBJECTS) $(LIBP11_LIB) $*.def $*.res
+$(PKCS11_TARGET): $(PKCS11_OBJECTS) $(LIBP11_OBJECTS) $*.def $*.res
 	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$@ \
-		$(PKCS11_OBJECTS) $(LIBP11_LIB) $(LIBS) $*.res
+		$(PKCS11_OBJECTS) $(LIBP11_OBJECTS) $(LIBS) $*.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
 
 .SUFFIXES: .exports
