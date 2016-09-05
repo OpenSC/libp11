@@ -195,6 +195,7 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 		if (slot->token) {
 			pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
 			pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
+			pkcs11_destroy_certs(slot->token);
 		}
 		if (spriv->loggedIn) {
 			/* already logged in, log out first */
@@ -251,6 +252,7 @@ int pkcs11_logout(PKCS11_SLOT * slot)
 	if (slot->token) {
 		pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
 		pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
+		pkcs11_destroy_certs(slot->token);
 	}
 	if (!spriv->haveSession) {
 		PKCS11err(PKCS11_F_PKCS11_LOGOUT, PKCS11_NO_SESSION);
