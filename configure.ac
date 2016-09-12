@@ -102,26 +102,29 @@ AC_ARG_WITH(
 	[AS_HELP_STRING([--with-enginesdir], [OpenSSL engines directory])],
 	[enginesdir="${withval}"],
 	[
-		libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
+		enginesdir="`$PKG_CONFIG --variable=enginesdir --silence-errors libcrypto`"
+		if test "${enginesdir}" = ""; then
+		    libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
 			$PKG_CONFIG --variable=libdir openssl`"
-		case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
+		    case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
 			$PKG_CONFIG --modversion openssl`" in
-		1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
-			debian_ssl_prefix="openssl-1.1.0";;
-		1.0.*) # Engines directory prefix for OpenSSL 1.0.x
-			debian_ssl_prefix="openssl-1.0.0";;
-		*) # Engines directory prefix for OpenSSL 0.9.x
-			debian_ssl_prefix="ssl";;
-		esac
-		if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
+			1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
+			    debian_ssl_prefix="openssl-1.1.0";;
+			1.0.*) # Engines directory prefix for OpenSSL 1.0.x
+			    debian_ssl_prefix="openssl-1.0.0";;
+			*) # Engines directory prefix for OpenSSL 0.9.x
+			    debian_ssl_prefix="ssl";;
+		    esac
+		    if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
 			# Debian-based OpenSSL package (for example Ubuntu)
 			enginesdir="$libcryptodir/$debian_ssl_prefix/engines"
-		else # Default OpenSSL engines directory
+		    else # Default OpenSSL engines directory
 			enginesdir="$libcryptodir/engines"
-		fi
-		if test "${prefix}" != "NONE" -o "${exec_prefix}" != "NONE"; then
+		    fi
+		    if test "${prefix}" != "NONE" -o "${exec_prefix}" != "NONE"; then
 			# Override the autodetected value with the default
 			enginesdir="${libdir}"
+		    fi
 		fi
 	]
 )
