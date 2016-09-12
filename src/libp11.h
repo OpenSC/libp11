@@ -24,6 +24,8 @@
 #ifndef _LIB11_H
 #define _LIB11_H
 
+#include "pkcs11.h"
+
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>
@@ -109,6 +111,25 @@ typedef struct PKCS11_ctx_st {
 	char *description;
 	void *_private;
 } PKCS11_CTX;
+
+/**
+ * PKCS11 pin callbacks
+ *
+ * Note: only the slot id and slot labels are passed over the callbacks
+ * so as to not require an application to have the right definition of
+ * the entire PKCS11_SLOT, and this should be sufficient data to
+ * select the correct password to return.
+ */
+typedef const char*(*PKCS11_pin_get_callback)(void* data, CK_SLOT_ID slot_id, const char *slot_label, int so);
+typedef void(*PKCS11_pin_done_callback)(void* data, CK_SLOT_ID slot_id, const char *slot_label, int so);
+
+/** PKCS11 login callback struct */
+typedef struct PKCS11_login_callbacks_st {
+	PKCS11_pin_get_callback pin_get;	/** callback to get a pin for a given slot */
+	void* pin_get_data;	/** application data that corresponds to the pin_get callback */
+	PKCS11_pin_done_callback pin_done;	/** callback indicate a retrieved pin is finished being used */
+	void* pin_done_data;	/** application data that corresponds to the pin_done callback */
+} PKCS11_LOGIN_CALLBACKS;
 
 /**
  * Create a new libp11 context
@@ -230,6 +251,17 @@ extern int PKCS11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
  * @retval -1 error
  */
 extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
+
+/**
+ * Authenticate to the card
+ *
+ * @param slot slot returned by PKCS11_find_token()
+ * @param so login as CKU_SO if != 0, otherwise login as CKU_USER
+ * @param callbacks Callback configuration for returning/clearing PINs
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_login_callback(PKCS11_SLOT * slot, int so, PKCS11_LOGIN_CALLBACKS * callbacks);
 
 /**
  * De-authenticate from the card
@@ -468,7 +500,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_encrypt(
  */
 P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 	int flen, const unsigned char *from,
-	unsigned char *to, PKCS11_KEY * key, int padding); 
+	unsigned char *to, PKCS11_KEY * key, int padding);
 
 /*
  * Function and reason codes

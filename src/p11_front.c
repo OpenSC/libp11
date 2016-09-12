@@ -251,6 +251,13 @@ int PKCS11_login(PKCS11_SLOT *slot, int so, const char *pin)
 	return pkcs11_login(slot, so, pin, 0);
 }
 
+int PKCS11_login_callback(PKCS11_SLOT * slot, int so, PKCS11_LOGIN_CALLBACKS * callbacks)
+{
+	if (check_slot_fork(slot) < 0)
+		return -1;
+	return pkcs11_login_callback(slot, so, callbacks, 0);
+}
+
 int PKCS11_logout(PKCS11_SLOT *slot)
 {
 	if (check_slot_fork(slot) < 0)
