@@ -39,6 +39,8 @@
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 
+#include "pkcs11.h"
+
 /* UI method that's only used to fail if get_pin inside engine_pkcs11
  * has failed to pick up in a PIN sent in with ENGINE_ctrl_cmd_string */
 static UI_METHOD *ui_detect_failed_ctrl = NULL;
@@ -136,6 +138,21 @@ static void display_openssl_errors(int l)
 	}
 }
 
+typedef struct test_pin_done_st {
+	int done;
+} test_pin_done_st;
+
+const char* pin_get_callback(void* data, CK_SLOT_ID slot_id, const char* slot_label, int so)
+{
+	return (const char *) data;
+}
+
+void pin_done_callback(void* data, CK_SLOT_ID slot_id, const char* slot_label, int so)
+{
+	test_pin_done_st* st = (test_pin_done_st*) data;
+	st->done = 1;
+}
+
 int main(int argc, char **argv)
 {
 	char *private_key_name, *public_key_name;
@@ -148,9 +165,10 @@ int main(int argc, char **argv)
 	ENGINE *e;
 	EVP_MD_CTX *ctx;
 	const char *module_path, *efile;
-	enum { NONE, BY_DEFAULT, BY_CTRL } pin_method = NONE;
+	enum { NONE, BY_DEFAULT, BY_CTRL, BY_CALLBACK } pin_method = NONE;
 	UI_METHOD *ui_method = NULL;
 	void *ui_extra = NULL;
+	test_pin_done_st pin_done;
 
 	if (argc < 5) {
 		fprintf(stderr, "usage: %s [PIN setting method] [PIN] [CONF] [private key URL] [public key URL] [module]\n", argv[0]);
@@ -163,6 +181,8 @@ int main(int argc, char **argv)
 		pin_method = BY_DEFAULT;
 	else if (strcmp(argv[1], "ctrl") == 0)
 		pin_method = BY_CTRL;
+	else if (strcmp(argv[1], "callback") == 0)
+		pin_method = BY_CALLBACK;
 	else {
 		fprintf(stderr, "First argument MUST be 'default' or 'ctrl'\n");
 		exit(1);
@@ -221,6 +241,18 @@ int main(int argc, char **argv)
 			display_openssl_errors(__LINE__);
 			exit(1);
 		}
+		break;
+	case BY_CALLBACK:
+		pin_done.done = 0;
+		if (!ENGINE_ctrl_cmd(e, "PIN_GET_CALLBACK", 0, key_pass, &pin_get_callback, 0)) {
+			display_openssl_errors(__LINE__);
+			exit(1);
+		}
+		if (!ENGINE_ctrl_cmd(e, "PIN_DONE_CALLBACK", 0, &pin_done, &pin_done_callback, 0)) {
+			display_openssl_errors(__LINE__);
+			exit(1);
+		}
+		break;
 	default: /* NONE */
 		break;
 	}
@@ -231,6 +263,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "cannot load: %s\n", private_key_name);
 		display_openssl_errors(__LINE__);
 		exit(1);
+	}
+
+	// pin should have been used by loading private key.
+	if (pin_method == BY_CALLBACK) {
+		if (!pin_done.done) {
+			fprintf(stderr, "PIN_DONE_CALLBACK should have been called.\n");
+			exit(1);
+		}
 	}
 
 	public_key = ENGINE_load_public_key(e, public_key_name,

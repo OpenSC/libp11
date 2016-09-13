@@ -111,6 +111,14 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"INIT_ARGS",
 		"Specifies additional initialization arguments to the PKCS#11 module",
 		ENGINE_CMD_FLAG_STRING},
+	{CMD_PIN_GET_CALLBACK,
+		"PIN_GET_CALLBACK",
+		"Specifies a funtion pointer that returns the pin code for a given slot",
+		ENGINE_CMD_FLAG_INTERNAL},
+	{CMD_PIN_DONE_CALLBACK,
+		"PIN_DONE_CALLBACK",
+		"Specifies a funtion pointer that returns a password that libp11 is done using",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 

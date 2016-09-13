@@ -327,15 +327,30 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	int rv;
+	const char* pin = NULL;
 
 	if (!kpriv->always_authenticate)
 		return 0;
+
+	if (spriv->prev_callbacks) {
+		pin = spriv->prev_callbacks->pin_get(spriv->prev_callbacks->pin_get_data, spriv->id,
+			(slot->token ? slot->token->label : NULL), spriv->prev_so);
+	} else {
+		pin = spriv->prev_pin;
+	}
+
 	rv = CRYPTOKI_call(ctx,
 		C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
-			(CK_UTF8CHAR *)spriv->prev_pin,
-			spriv->prev_pin ? strlen(spriv->prev_pin) : 0));
+			(CK_UTF8CHAR *) pin,
+			pin ? strlen(pin) : 0));
 	if (rv == CKR_USER_ALREADY_LOGGED_IN) /* ignore */
 		rv = 0;
+
+	if (spriv->prev_callbacks && spriv->prev_callbacks->pin_done) {
+		spriv->prev_callbacks->pin_done(spriv->prev_callbacks->pin_done_data, spriv->id,
+			(slot->token ? slot->token->label : NULL), spriv->prev_so);
+	}
+
 	return rv;
 }
 

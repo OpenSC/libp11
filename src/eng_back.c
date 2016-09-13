@@ -51,6 +51,7 @@ struct st_engine_ctx {
 	 */
 	char *pin;
 	int pin_length;
+	PKCS11_LOGIN_CALLBACKS pin_callbacks;
 	int verbose;
 	char *module;
 	char *init_args;
@@ -153,6 +154,11 @@ ENGINE_CTX *pkcs11_new()
 	ctx->rwlock = CRYPTO_get_dynlock_create_callback() ?
 		CRYPTO_get_new_dynlockid() : 0;
 #endif
+
+	ctx->pin_callbacks.pin_get = NULL;
+	ctx->pin_callbacks.pin_get_data = NULL;
+	ctx->pin_callbacks.pin_done = NULL;
+	ctx->pin_callbacks.pin_done_data = NULL;
 
 	return ctx;
 }
@@ -294,6 +300,10 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 				cert_id, &cert_id_len,
 				tmp_pin, &tmp_pin_len, &cert_label);
 			if (n && tmp_pin_len > 0 && tmp_pin[0] != 0) {
+				if (ctx->pin_callbacks.pin_get) {
+					fprintf(stderr, "Overriding pin callback with explicit pin value\n");
+				}
+
 				destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
 				if (ctx->pin != NULL) {
@@ -419,13 +429,20 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 	}
 
 	/* In several tokens certificates are marked as private. We use the pin-value */
-	if (tok->loginRequired && ctx->pin) {
-		/* Now login in with the (possibly NULL) pin */
-		if (PKCS11_login(slot, 0, ctx->pin)) {
-			/* Login failed, so free the PIN if present */
-			destroy_pin(ctx);
-			fprintf(stderr, "Login failed\n");
-			return NULL;
+	if (tok->loginRequired) {
+		if (ctx->pin_callbacks.pin_get) {
+			if (PKCS11_login_callback(slot, 0, &ctx->pin_callbacks)) {
+				fprintf(stderr, "Login failed\n");
+				return NULL;
+			}
+		} else {
+			/* Now login in with the (possibly NULL) pin */
+			if (PKCS11_login(slot, 0, ctx->pin)) {
+				/* Login failed, so free the PIN if present */
+				destroy_pin(ctx);
+				fprintf(stderr, "Login failed\n");
+				return NULL;
+			}
 		}
 	}
 
@@ -505,27 +522,39 @@ static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 			/* Free the PIN if it has already been
 			 * assigned (i.e, cached by get_pin) */
 			destroy_pin(ctx);
-		} else if (ctx->pin == NULL) {
-			ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
-			ctx->pin_length = MAX_PIN_LENGTH;
-			if (ctx->pin == NULL) {
-				fprintf(stderr, "Could not allocate memory for PIN");
-				return 0;
-			}
-			memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
-			if (!get_pin(ctx, ui_method, callback_data)) {
-				destroy_pin(ctx);
-				fprintf(stderr, "No pin code was entered");
-				return 0;
-			}
 		}
 
-		/* Now login in with the (possibly NULL) pin */
-		if (PKCS11_login(slot, 0, ctx->pin)) {
-			/* Login failed, so free the PIN if present */
-			destroy_pin(ctx);
-			fprintf(stderr, "Login failed\n");
-			return 0;
+		if (ctx->pin_callbacks.pin_get) {
+			/* Now login in with the pin callback */
+			if (PKCS11_login_callback(slot, 0, &ctx->pin_callbacks)) {
+				/* Login failed, so free the PIN if present */
+				destroy_pin(ctx);
+				fprintf(stderr, "Login failed\n");
+				return 0;
+			}
+		} else {
+			if (ctx->pin == NULL) {
+				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
+				ctx->pin_length = MAX_PIN_LENGTH;
+				if (ctx->pin == NULL) {
+					fprintf(stderr, "Could not allocate memory for PIN");
+					return 0;
+				}
+				memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
+				if (!get_pin(ctx, ui_method, callback_data)) {
+					destroy_pin(ctx);
+					fprintf(stderr, "No pin code was entered");
+					return 0;
+				}
+			}
+
+			/* Now login in with the (possibly NULL) pin */
+			if (PKCS11_login(slot, 0, ctx->pin)) {
+				/* Login failed, so free the PIN if present */
+				destroy_pin(ctx);
+				fprintf(stderr, "Login failed\n");
+				return 0;
+			}
 		}
 		/* Login successful, PIN retained in case further logins are
 		 * required. This will occur on subsequent calls to the
@@ -577,6 +606,10 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				tmp_pin, &tmp_pin_len, &key_label);
 
 			if (n && tmp_pin_len > 0 && tmp_pin[0] != 0) {
+				if (ctx->pin_callbacks.pin_get) {
+					fprintf(stderr, "Overriding pin callback with explicit pin value\n");
+				}
+
 				destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
 				if (ctx->pin != NULL) {
@@ -859,6 +892,16 @@ static int ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 		errno = EINVAL;
 		return 0;
 	}
+	if (ctx->pin_callbacks.pin_get) {
+		errno = EINVAL;
+		fprintf(stderr, "Specifying both PIN and PIN_GET_CALLBACK is not supported\n");
+		return 0;
+	}
+	if (ctx->pin_callbacks.pin_done) {
+		errno = EINVAL;
+		fprintf(stderr, "Specifying both PIN and PIN_DONE_CALLBACK is not supported\n");
+		return 0;
+	}
 
 	/* Copy the PIN. If the string cannot be copied, NULL
 	 * shall be returned and errno shall be set. */
@@ -868,6 +911,46 @@ static int ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 		ctx->pin_length = strlen(ctx->pin);
 
 	return ctx->pin != NULL;
+}
+
+static int ctrl_set_pin_get_callback(ENGINE_CTX *ctx, void* data, void(*func)())
+{
+	PKCS11_pin_get_callback pin_callback = (PKCS11_pin_get_callback) func;
+
+	/* Pre-condition check */
+	if (pin_callback == NULL) {
+		errno = EINVAL;
+		return 0;
+	}
+	if (ctx->pin) {
+		errno = EINVAL;
+		fprintf(stderr, "Specifying both PIN and PIN_GET_CALLBACK is not supported\n");
+		return 0;
+	}
+
+	ctx->pin_callbacks.pin_get = pin_callback;
+	ctx->pin_callbacks.pin_get_data = data;
+	return ctx->pin_callbacks.pin_get != NULL;
+}
+
+static int ctrl_set_pin_done_callback(ENGINE_CTX *ctx, void* data, void(*func)())
+{
+	PKCS11_pin_done_callback pin_callback = (PKCS11_pin_done_callback) func;
+
+	/* Pre-condition check */
+	if (pin_callback == NULL) {
+		errno = EINVAL;
+		return 0;
+	}
+	if (ctx->pin) {
+		errno = EINVAL;
+		fprintf(stderr, "Specifying both PIN and PIN_DONE_CALLBACK is not supported\n");
+		return 0;
+	}
+
+	ctx->pin_callbacks.pin_done = pin_callback;
+	ctx->pin_callbacks.pin_done_data = data;
+	return ctx->pin_callbacks.pin_done != NULL;
 }
 
 static int ctrl_inc_verbose(ENGINE_CTX *ctx)
@@ -893,6 +976,10 @@ int pkcs11_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctrl_set_module(ctx, (const char *)p);
 	case CMD_PIN:
 		return ctrl_set_pin(ctx, (const char *)p);
+	case CMD_PIN_GET_CALLBACK:
+		return ctrl_set_pin_get_callback(ctx, p, f);
+	case CMD_PIN_DONE_CALLBACK:
+		return ctrl_set_pin_done_callback(ctx, p, f);
 	case CMD_VERBOSE:
 		return ctrl_inc_verbose(ctx);
 	case CMD_LOAD_CERT_CTRL:

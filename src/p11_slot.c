@@ -179,15 +179,10 @@ int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res)
 	return 0;
 }
 
-/*
- * Authenticate with the card. relogin should be set if we automatically
- * relogin after a fork.
- */
-int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
+
+static int login_prep(PKCS11_SLOT * slot, int so, int relogin)
 {
-	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	int rv;
 
 	if (relogin == 0) {
 		/* Calling PKCS11_login invalidates all cached
@@ -210,6 +205,23 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 			return -1;
 	}
 
+	return 0;
+}
+
+/*
+ * Authenticate with the card. relogin should be set if we automatically
+ * relogin after a fork.
+ */
+int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
+{
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	int rv;
+
+	if (login_prep(slot, so, relogin) < 0) {
+		return -1;
+	}
+
 	rv = CRYPTOKI_call(ctx,
 		C_Login(spriv->session, so ? CKU_SO : CKU_USER,
 			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
@@ -224,9 +236,44 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 		}
 		spriv->prev_pin = OPENSSL_strdup(pin);
 	}
+	spriv->prev_callbacks = NULL;
 	spriv->prev_so = so;
 	return 0;
 }
+
+int pkcs11_login_callback(PKCS11_SLOT * slot, int so, PKCS11_LOGIN_CALLBACKS * callbacks, int relogin)
+{
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	int rv;
+	const char* pin;
+
+	if (login_prep(slot, so, relogin) < 0) {
+		return -1;
+	}
+
+	pin = callbacks->pin_get(callbacks->pin_get_data, spriv->id,
+		(slot->token ? slot->token->label : NULL), so);
+
+	rv = CRYPTOKI_call(ctx,
+		C_Login(spriv->session, so ? CKU_SO : CKU_USER,
+			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
+
+	// mark pin as done being used
+	if (callbacks->pin_done) {
+		callbacks->pin_done(callbacks->pin_done_data, spriv->id,
+			(slot->token ? slot->token->label : NULL), so);
+	}
+
+	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
+		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
+	spriv->loggedIn = 1;
+	spriv->prev_pin = NULL;
+	spriv->prev_callbacks = callbacks;
+	spriv->prev_so = so;
+	return 0;
+}
+
 
 /*
  * Authenticate with the card
@@ -235,7 +282,11 @@ int pkcs11_relogin(PKCS11_SLOT * slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
-	return pkcs11_login(slot, spriv->prev_so, spriv->prev_pin, 1);
+	if (spriv->prev_callbacks) {
+		return pkcs11_login_callback(slot, spriv->prev_so, spriv->prev_callbacks, 1);
+	} else {
+		return pkcs11_login(slot, spriv->prev_so, spriv->prev_pin, 1);
+	}
 }
 
 /*
@@ -409,6 +460,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	spriv->forkid = PRIVCTX(ctx)->forkid;
 	spriv->prev_rw = 0;
 	spriv->prev_pin = NULL;
+	spriv->prev_callbacks = NULL;
 	spriv->prev_so = 0;
 	spriv->rwlock = CRYPTO_THREAD_lock_new();
 

@@ -9,6 +9,7 @@ PKCS11_release_all_slots
 PKCS11_find_token
 PKCS11_is_logged_in
 PKCS11_login
+PKCS11_login_callback
 PKCS11_logout
 PKCS11_enumerate_keys
 PKCS11_enumerate_public_keys

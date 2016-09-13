@@ -46,6 +46,8 @@
 #define CMD_QUIET		(ENGINE_CMD_BASE+4)
 #define CMD_LOAD_CERT_CTRL	(ENGINE_CMD_BASE+5)
 #define CMD_INIT_ARGS	(ENGINE_CMD_BASE+6)
+#define CMD_PIN_GET_CALLBACK (ENGINE_CMD_BASE+7)
+#define CMD_PIN_DONE_CALLBACK (ENGINE_CMD_BASE+8)
 
 typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 

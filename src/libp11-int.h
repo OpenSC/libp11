@@ -63,6 +63,7 @@ typedef struct pkcs11_slot_private {
 	/* options used in last PKCS11_login */
 	char *prev_pin;
 	int prev_so;
+	PKCS11_LOGIN_CALLBACKS *prev_callbacks;
 
 	/* per-slot lock */
 	PKCS11_RWLOCK rwlock;
@@ -244,6 +245,9 @@ extern int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
 
 /* Authenticate to the card */
 extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin);
+
+/* Authenticate to the card */
+extern int pkcs11_login_callback(PKCS11_SLOT * slot, int so, PKCS11_LOGIN_CALLBACKS * callbacks, int relogin);
 
 /* De-authenticate from the card */
 extern int pkcs11_logout(PKCS11_SLOT * slot);
