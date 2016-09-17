@@ -1,11 +1,20 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.1; unreleased
+New in 0.4.1; 2016-09-17; Michał Trojnara
+* Use enginesdir provided by libcrypto.pc if available (David Woodhouse)
+* Certificate cache destroyed on login/logout (David Woodhouse)
+* Fixed accessing certificates marked as CKA_PRIVATE (David Woodhouse)
+* Directly included libp11 code into the engine (Matt Hauck)
+* Fixed handling simultaneous make jobs (Derek Straka)
+* Reverted an old hack that broke engine initialization (Michał Trojnara)
+* Fixed loading of multiple keys due to unneeded re-logging (Matt Hauck)
+* Makefile fixes and improvements (Nikos Mavrogiannopoulos)
+* Fixed several certificate selection bugs (Michał Trojnara)
 * The signed message digest is truncated if it is too long for the
   signing curve (David von Oheimb)
 * Workaround for broken PKCS#11 modules not returning CKA_EC_POINT
   in the ASN1_OCTET_STRING format (Michał Trojnara)
-* Improved building against OpenSSL 1.1.0-dev (Michał Trojnara)
+* OpenSSL 1.1.0 build fixes (Michał Trojnara)
 
 New in 0.4.0; 2016-03-28; Michał Trojnara
 * Merged engine_pkcs11 (Michał Trojnara)
