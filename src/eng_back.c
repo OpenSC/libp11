@@ -35,14 +35,7 @@
 #define MAX_VALUE_LEN	200
 
 struct st_engine_ctx {
-	PKCS11_CTX *pkcs11_ctx;
-	PKCS11_SLOT *slot_list;
-	unsigned int slot_count;
-#if OPENSSL_VERSION_NUMBER >= 0x10100004L
-	CRYPTO_RWLOCK *rwlock;
-#else
-	int rwlock;
-#endif
+	/* Engine configuration */
 	/*
 	 * The PIN used for login. Cache for the get_pin function.
 	 * The memory for this PIN is always owned internally,
@@ -54,6 +47,18 @@ struct st_engine_ctx {
 	int verbose;
 	char *module;
 	char *init_args;
+
+	/* Engine initialization mutex */
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L
+	CRYPTO_RWLOCK *rwlock;
+#else
+	int rwlock;
+#endif
+
+	/* Current operations */
+	PKCS11_CTX *pkcs11_ctx;
+	PKCS11_SLOT *slot_list;
+	unsigned int slot_count;
 };
 
 /******************************************************************************/
@@ -157,17 +162,11 @@ ENGINE_CTX *pkcs11_new()
 	return ctx;
 }
 
-int pkcs11_finish(ENGINE_CTX *ctx)
+/* Destroy the context allocated with pkcs11_new() */
+int pkcs11_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
-		if (ctx->slot_list) {
-			PKCS11_release_all_slots(ctx->pkcs11_ctx,
-				ctx->slot_list, ctx->slot_count);
-		}
-		if (ctx->pkcs11_ctx) {
-			PKCS11_CTX_unload(ctx->pkcs11_ctx);
-			PKCS11_CTX_free(ctx->pkcs11_ctx);
-		}
+		pkcs11_finish(ctx);
 		destroy_pin(ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);
@@ -259,6 +258,25 @@ int pkcs11_init(ENGINE_CTX *ctx)
 		return ctx->pkcs11_ctx && ctx->slot_list ? 1 : 0;
 	}
 #endif
+	return 1;
+}
+
+/* Finish engine operations initialized with pkcs11_init() */
+int pkcs11_finish(ENGINE_CTX *ctx)
+{
+	if (ctx) {
+		if (ctx->slot_list) {
+			PKCS11_release_all_slots(ctx->pkcs11_ctx,
+				ctx->slot_list, ctx->slot_count);
+			ctx->slot_list = NULL;
+			ctx->slot_count = 0;
+		}
+		if (ctx->pkcs11_ctx) {
+			PKCS11_CTX_unload(ctx->pkcs11_ctx);
+			PKCS11_CTX_free(ctx->pkcs11_ctx);
+			ctx->pkcs11_ctx = NULL;
+		}
+	}
 	return 1;
 }
 

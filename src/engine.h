@@ -53,6 +53,8 @@ typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
 ENGINE_CTX *pkcs11_new();
 
+int pkcs11_destroy(ENGINE_CTX *ctx);
+
 int pkcs11_init(ENGINE_CTX *ctx);
 
 int pkcs11_finish(ENGINE_CTX *ctx);

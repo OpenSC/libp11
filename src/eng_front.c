@@ -133,12 +133,18 @@ static ENGINE_CTX *get_ctx(ENGINE *engine)
 	return ctx;
 }
 
-/* Destructor */
+/* Destroy the context allocated with pkcs11_new() */
 static int engine_destroy(ENGINE *engine)
 {
-	(void)engine;
+	ENGINE_CTX *ctx;
+	int rv;
 
-	return 1;
+	ctx = get_ctx(engine);
+	if (ctx == NULL)
+		return 0;
+	rv = pkcs11_destroy(ctx);
+	ENGINE_set_ex_data(engine, pkcs11_idx, NULL);
+	return rv;
 }
 
 static int engine_init(ENGINE *engine)
@@ -151,17 +157,15 @@ static int engine_init(ENGINE *engine)
 	return pkcs11_init(ctx);
 }
 
+/* Finish engine operations initialized with pkcs11_init() */
 static int engine_finish(ENGINE *engine)
 {
 	ENGINE_CTX *ctx;
-	int rv;
 
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	rv = pkcs11_finish(ctx);
-	ENGINE_set_ex_data(engine, pkcs11_idx, NULL);
-	return rv;
+	return pkcs11_finish(ctx);
 }
 
 static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
