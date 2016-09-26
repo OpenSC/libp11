@@ -281,6 +281,9 @@ extern PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY *);
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
 
+/* Set UI method to allow retrieving PIN values interactively */
+extern int PKCS11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method);
+
 /**
  * Initialize a token
  *
@@ -509,6 +512,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 #define PKCS11_NO_SESSION			(PKCS11_ERR_BASE+5)
 #define PKCS11_KEYGEN_FAILED			(PKCS11_ERR_BASE+6)
 #define PKCS11_ALIEN_KEY			(PKCS11_ERR_BASE+7)
+#define PKCS11_UI_FAILED			(PKCS11_ERR_BASE+8)
 
 #ifdef __cplusplus
 }

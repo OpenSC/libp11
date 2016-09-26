@@ -1,6 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.3; unreleased
+* Use UI to get the CKA_ALWAYS_AUTHENTICATE PIN (Michał Trojnara).
 
 New in 0.4.2; 2016-09-25; Michał Trojnara
 * Fixed a 0.4.0 regression bug causing the engine finish function to

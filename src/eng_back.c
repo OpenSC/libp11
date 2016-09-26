@@ -808,6 +808,7 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	}
 
 	if (selected_key != NULL) {
+		PKCS11_set_ui_method(selected_key, ui_method);
 		pk = isPrivate ?
 			PKCS11_get_private_key(selected_key) :
 			PKCS11_get_public_key(selected_key);

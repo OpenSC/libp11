@@ -19,11 +19,15 @@
 
 #include "libp11-int.h"
 #include <string.h>
+#include <openssl/ui.h>
 #include <openssl/bn.h>
 
 #ifdef _WIN32
 #define strncasecmp strnicmp
 #endif
+
+/* The maximum length of PIN */
+#define MAX_PIN_LENGTH   32
 
 static int pkcs11_find_keys(PKCS11_TOKEN *, unsigned int);
 static int pkcs11_next_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
@@ -33,6 +37,16 @@ static int pkcs11_init_key(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	CK_OBJECT_CLASS type, PKCS11_KEY **);
 static int pkcs11_store_key(PKCS11_TOKEN *, EVP_PKEY *, unsigned int,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
+
+/* Set UI method to allow retrieving PIN values interactively */
+int pkcs11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method)
+{
+	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	if (kpriv == NULL)
+		return -1;
+	kpriv->ui_method = ui_method;
+	return 0;
+}
 
 /*
  * Find key matching a certificate
@@ -326,14 +340,36 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	char pin[MAX_PIN_LENGTH];
+	UI *ui;
 	int rv;
 
 	if (!kpriv->always_authenticate)
 		return 0;
+
+	/* Call UI to ask for a PIN */
+	if (kpriv->ui_method == NULL)
+		return PKCS11_UI_FAILED;
+	ui = UI_new();
+	if (ui == NULL)
+		return PKCS11_UI_FAILED;
+	UI_set_method(ui, kpriv->ui_method);
+	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
+			UI_INPUT_FLAG_DEFAULT_PWD, pin, 1, MAX_PIN_LENGTH)) {
+		UI_free(ui);
+		return PKCS11_UI_FAILED;
+	}
+	if (UI_process(ui)) {
+		UI_free(ui);
+		return PKCS11_UI_FAILED;
+	}
+	UI_free(ui);
+
+	/* Login with the PIN */
 	rv = CRYPTOKI_call(ctx,
 		C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
-			(CK_UTF8CHAR *)spriv->prev_pin,
-			spriv->prev_pin ? strlen(spriv->prev_pin) : 0));
+			(CK_UTF8CHAR *)pin, strlen(pin)));
+	OPENSSL_cleanse(pin, MAX_PIN_LENGTH);
 	if (rv == CKR_USER_ALREADY_LOGGED_IN) /* ignore */
 		rv = 0;
 	return rv;

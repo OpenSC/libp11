@@ -94,6 +94,7 @@ typedef struct pkcs11_key_private {
 	PKCS11_TOKEN *parent;
 	CK_OBJECT_HANDLE object;
 	CK_BBOOL always_authenticate;
+	UI_METHOD *ui_method;
 	unsigned char id[255];
 	size_t id_len;
 	PKCS11_KEY_ops *ops;
@@ -273,6 +274,9 @@ extern PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *key);
 /* Get a list of all certificates associated with this token */
 extern int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 	PKCS11_CERT **certs, unsigned int *ncerts);
+
+/* Set UI method to allow retrieving PIN values interactively */
+extern int pkcs11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method);
 
 /* Initialize a token */
 extern int pkcs11_init_token(PKCS11_TOKEN * token, const char *pin,
