@@ -50,6 +50,15 @@ fail:
 }
 
 /*
+ * Set engine, so keys can refcount it
+ */
+void pkcs11_CTX_engine(PKCS11_CTX * ctx, ENGINE *engine)
+{
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	cpriv->engine = engine;
+}
+
+/*
  * Set private init args for module
  */
 void pkcs11_CTX_init_args(PKCS11_CTX * ctx, const char *init_args)

@@ -26,6 +26,7 @@
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/engine.h>
 
 static int rsa_ex_index = 0;
 
@@ -243,6 +244,15 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	rsa = pkcs11_get_rsa(key);
 	if (rsa == NULL)
 		return NULL;
+
+	if (key->isPrivate) {
+		if (!ENGINE_init(PRIVCTX(KEY2CTX(key))->engine)) {
+			RSA_free(rsa);
+			return NULL;
+		}
+		RSA_set_method(rsa, PKCS11_get_rsa_method());
+	}
+
 	pk = EVP_PKEY_new();
 	if (pk == NULL) {
 		RSA_free(rsa);
@@ -250,8 +260,6 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	}
 	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 
-	if (key->isPrivate)
-		RSA_set_method(rsa, PKCS11_get_rsa_method());
 	/* TODO: Retrieve the RSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
@@ -331,8 +339,16 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 
 static int pkcs11_rsa_free_method(RSA *rsa)
 {
+	PKCS11_KEY *key = RSA_get_ex_data(rsa, rsa_ex_index);
+
+	if (!key)
+		return 1;
+
 	RSA_set_ex_data(rsa, rsa_ex_index, NULL);
-	return 1;
+	/* We have to do it this way because we really need it to be a
+	 * tail-call. Because by the time it returns, we might not be
+	 * here! */
+	return ENGINE_finish(PRIVCTX(KEY2CTX(key))->engine);
 }
 
 static void alloc_rsa_ex_index()

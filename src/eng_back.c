@@ -30,6 +30,9 @@
 #include <stdio.h>
 #include <string.h>
 
+/* For pkcs11_CTX_engine() */
+#include "libp11-int.h"
+
 /* The maximum length of an internally-allocated PIN */
 #define MAX_PIN_LENGTH   32
 #define MAX_VALUE_LEN	200
@@ -47,6 +50,9 @@ struct st_engine_ctx {
 	int verbose;
 	char *module;
 	char *init_args;
+
+	/* We need to reference the engine with every EVP_PKEY we hand out */
+	ENGINE *engine;
 
 	/* Engine initialization mutex */
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L
@@ -131,7 +137,7 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 /* Initialization and cleanup                                                 */
 /******************************************************************************/
 
-ENGINE_CTX *pkcs11_new()
+ENGINE_CTX *pkcs11_new(ENGINE *engine)
 {
 	ENGINE_CTX *ctx;
 	char *mod;
@@ -140,6 +146,8 @@ ENGINE_CTX *pkcs11_new()
 	if (ctx == NULL)
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
+
+	ctx->engine = engine;
 
 	mod = getenv("PKCS11_MODULE_PATH");
 	if (mod) {
@@ -192,6 +200,7 @@ static void pkcs11_init_libp11_unlocked(ENGINE_CTX *ctx)
 		fprintf(stderr, "PKCS#11: Initializing the engine\n");
 
 	pkcs11_ctx = PKCS11_CTX_new();
+	pkcs11_CTX_engine(pkcs11_ctx, ctx->engine);
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
 
 	/* PKCS11_CTX_load() uses C_GetSlotList() via p11-kit */
@@ -512,7 +521,7 @@ static int ctrl_load_cert(ENGINE_CTX *ctx, void *p)
  * @callback_data are application data to the user interface
  * @return 1 on success, 0 on error.
  */
-static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
+static int do_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	if (tok->loginRequired) {
@@ -759,7 +768,7 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			return NULL;
 		}
 		/* Perform login to the token if required */
-		if (!already_logged_in && !pkcs11_login(ctx, slot, tok, ui_method, callback_data)) {
+		if (!already_logged_in && !do_login(ctx, slot, tok, ui_method, callback_data)) {
 			fprintf(stderr, "login to token failed, returning NULL...\n");
 			return NULL;
 		}

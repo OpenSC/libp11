@@ -127,7 +127,7 @@ static ENGINE_CTX *get_ctx(ENGINE *engine)
 		ctx = ENGINE_get_ex_data(engine, pkcs11_idx);
 	}
 	if (ctx == NULL) {
-		ctx = pkcs11_new();
+		ctx = pkcs11_new(engine);
 		ENGINE_set_ex_data(engine, pkcs11_idx, ctx);
 	}
 	return ctx;

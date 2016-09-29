@@ -51,7 +51,7 @@ typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
 /* defined in eng_back.c */
 
-ENGINE_CTX *pkcs11_new();
+ENGINE_CTX *pkcs11_new(ENGINE *engine);
 
 int pkcs11_destroy(ENGINE_CTX *ctx);
 

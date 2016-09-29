@@ -93,7 +93,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	size_t params_len = 0, point_len = 0;
 	PKCS11_KEY *pubkey;
 
-	ec = EC_KEY_new();
+	ec = EC_KEY_new_method(PRIVCTX(KEY2CTX(key))->engine);
 	if (ec == NULL)
 		return NULL;
 

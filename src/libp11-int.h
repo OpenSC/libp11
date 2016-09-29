@@ -49,6 +49,7 @@ typedef struct pkcs11_ctx_private {
 	char *init_args;
 	unsigned int forkid;
 	PKCS11_RWLOCK rwlock;
+	ENGINE *engine;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
@@ -206,6 +207,11 @@ extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
 /* Allocate the context */
 extern PKCS11_CTX *pkcs11_CTX_new(void);
+
+/* Set the ENGINE so that keys can refcount it. There is no external
+ * PKCS11_CTX_engine() version since this is only useful from the
+ * engine. */
+extern void pkcs11_CTX_engine(PKCS11_CTX * ctx, ENGINE *engine);
 
 /* Specify any private PKCS#11 module initialization args, if necessary */
 extern void pkcs11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
