@@ -337,7 +337,8 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 int pkcs11_authenticate(PKCS11_KEY *key)
 {
 	PKCS11_KEY_private *kpriv = PRIVKEY(key);
-	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_TOKEN *token = KEY2TOKEN(key);
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	char pin[MAX_PIN_LENGTH];
@@ -346,6 +347,13 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 
 	if (!kpriv->always_authenticate)
 		return 0;
+
+	/* Handle CKF_PROTECTED_AUTHENTICATION_PATH */
+	if (token->secureLogin) {
+		rv = CRYPTOKI_call(ctx,
+			C_Login(spriv->session, CKU_CONTEXT_SPECIFIC, NULL, 0));
+		return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
+	}
 
 	/* Call UI to ask for a PIN */
 	if (kpriv->ui_method == NULL)
@@ -370,9 +378,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 		C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
 			(CK_UTF8CHAR *)pin, strlen(pin)));
 	OPENSSL_cleanse(pin, MAX_PIN_LENGTH);
-	if (rv == CKR_USER_ALREADY_LOGGED_IN) /* ignore */
-		rv = 0;
-	return rv;
+	return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 }
 
 /*
