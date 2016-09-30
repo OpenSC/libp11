@@ -36,9 +36,12 @@ static int rsa_ex_index = 0;
 static RSA *pkcs11_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->isPrivate);
+	RSA *rsa;
 	if (evp_key == NULL)
 		return NULL;
-	return EVP_PKEY_get0_RSA(evp_key);
+	rsa = EVP_PKEY_get0_RSA(evp_key);
+	EVP_PKEY_free(evp_key);
+	return rsa;
 }
 
 /* PKCS#1 v1.5 RSA signature */
