@@ -39,12 +39,14 @@ static int pkcs11_store_key(PKCS11_TOKEN *, EVP_PKEY *, unsigned int,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
 
 /* Set UI method to allow retrieving PIN values interactively */
-int pkcs11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method)
+int pkcs11_set_ui_method(PKCS11_KEY *key,
+		UI_METHOD *ui_method, void *ui_user_data)
 {
 	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 	if (kpriv == NULL)
 		return -1;
 	kpriv->ui_method = ui_method;
+	kpriv->ui_user_data = ui_user_data;
 	return 0;
 }
 
@@ -362,6 +364,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	if (ui == NULL)
 		return PKCS11_UI_FAILED;
 	UI_set_method(ui, kpriv->ui_method);
+	UI_add_user_data(ui, kpriv->ui_user_data);
 	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 1, MAX_PIN_LENGTH)) {
 		UI_free(ui);

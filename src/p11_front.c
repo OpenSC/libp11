@@ -379,11 +379,11 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r, unsigned int r_l
 	return pkcs11_generate_random(slot, r, r_len);
 }
 
-int PKCS11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method)
+int PKCS11_set_ui_method(PKCS11_KEY *key, UI_METHOD *ui_method, void *ui_user_data)
 {
 	if (check_key_fork(key) < 0)
 		return -1;
-	return pkcs11_set_ui_method(key, ui_method);
+	return pkcs11_set_ui_method(key, ui_method, ui_user_data);
 }
 
 /* External interface to the deprecated features */
