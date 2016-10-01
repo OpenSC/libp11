@@ -211,6 +211,9 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_ctrl_function(e, engine_ctrl) ||
 			!ENGINE_set_cmd_defns(e, engine_cmd_defns) ||
 			!ENGINE_set_name(e, PKCS11_ENGINE_NAME) ||
+#ifndef OPENSSL_NO_RSA
+			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
+#endif
 			!ENGINE_set_load_pubkey_function(e, load_pubkey) ||
 			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
