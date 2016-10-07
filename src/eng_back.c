@@ -105,10 +105,10 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 		UI_add_user_data(ui, callback_data);
 
 	destroy_pin(ctx);
-	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
+	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 	if (ctx->pin == NULL)
 		return 0;
-	memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
+	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
 	if (!UI_add_input_string(ui, "PKCS#11 token PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 1, MAX_PIN_LENGTH)) {
@@ -296,8 +296,8 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 	unsigned char cert_id[MAX_VALUE_LEN / 2];
 	size_t cert_id_len = sizeof(cert_id);
 	char *cert_label = NULL;
-	char tmp_pin[MAX_PIN_LENGTH];
-	size_t tmp_pin_len = sizeof(tmp_pin);
+	char tmp_pin[MAX_PIN_LENGTH+1];
+	size_t tmp_pin_len = MAX_PIN_LENGTH;
 	int slot_nr = -1;
 	char flags[64];
 
@@ -311,12 +311,12 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 				tmp_pin, &tmp_pin_len, &cert_label);
 			if (n && tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				destroy_pin(ctx);
-				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
+				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 				if (ctx->pin != NULL) {
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
 				}
-				memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
+				memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 			}
 
 			if (!n) {
@@ -522,13 +522,13 @@ static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 			 * assigned (i.e, cached by get_pin) */
 			destroy_pin(ctx);
 		} else if (ctx->pin == NULL) {
-			ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
+			ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 			ctx->pin_length = MAX_PIN_LENGTH;
 			if (ctx->pin == NULL) {
 				fprintf(stderr, "Could not allocate memory for PIN");
 				return 0;
 			}
-			memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
+			memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 			if (!get_pin(ctx, ui_method, callback_data)) {
 				destroy_pin(ctx);
 				fprintf(stderr, "No pin code was entered");
@@ -574,8 +574,8 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	size_t key_id_len = sizeof(key_id);
 	char *key_label = NULL;
 	int slot_nr = -1;
-	char tmp_pin[MAX_PIN_LENGTH];
-	size_t tmp_pin_len = sizeof(tmp_pin);
+	char tmp_pin[MAX_PIN_LENGTH+1];
+	size_t tmp_pin_len = MAX_PIN_LENGTH;
 	char flags[64];
 	int already_logged_in = 0;
 
@@ -594,9 +594,9 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 
 			if (n && tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				destroy_pin(ctx);
-				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH * sizeof(char));
+				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 				if (ctx->pin != NULL) {
-					memset(ctx->pin, 0, MAX_PIN_LENGTH * sizeof(char));
+					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
 				}

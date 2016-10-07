@@ -343,7 +343,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	char pin[MAX_PIN_LENGTH];
+	char pin[MAX_PIN_LENGTH+1];
 	UI *ui;
 	int rv;
 
@@ -360,6 +360,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 		return PKCS11_UI_FAILED;
 	if (kpriv->ui_user_data != NULL)
 		UI_add_user_data(ui, kpriv->ui_user_data);
+	memset(pin, 0, MAX_PIN_LENGTH+1);
 	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 1, MAX_PIN_LENGTH)) {
 		UI_free(ui);
@@ -375,7 +376,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	rv = CRYPTOKI_call(ctx,
 		C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
 			(CK_UTF8CHAR *)pin, strlen(pin)));
-	OPENSSL_cleanse(pin, MAX_PIN_LENGTH);
+	OPENSSL_cleanse(pin, MAX_PIN_LENGTH+1);
 	return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 }
 
