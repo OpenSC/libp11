@@ -111,7 +111,7 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
 	if (!UI_add_input_string(ui, "PKCS#11 token PIN: ",
-			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 1, MAX_PIN_LENGTH)) {
+			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH)) {
 		fprintf(stderr, "UI_add_input_string failed\n");
 		UI_free(ui);
 		return 0;
