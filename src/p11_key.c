@@ -355,13 +355,11 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	}
 
 	/* Call UI to ask for a PIN */
-	if (kpriv->ui_method == NULL)
-		return PKCS11_UI_FAILED;
-	ui = UI_new();
+	ui = UI_new_method(kpriv->ui_method);
 	if (ui == NULL)
 		return PKCS11_UI_FAILED;
-	UI_set_method(ui, kpriv->ui_method);
-	UI_add_user_data(ui, kpriv->ui_user_data);
+	if (kpriv->ui_user_data != NULL)
+		UI_add_user_data(ui, kpriv->ui_user_data);
 	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 1, MAX_PIN_LENGTH)) {
 		UI_free(ui);

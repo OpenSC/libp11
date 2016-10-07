@@ -96,13 +96,11 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 	UI *ui;
 
 	/* call ui to ask for a pin */
-	ui = UI_new();
+	ui = UI_new_method(ui_method);
 	if (ui == NULL) {
 		fprintf(stderr, "UI_new failed\n");
 		return 0;
 	}
-	if (ui_method != NULL)
-		UI_set_method(ui, ui_method);
 	if (callback_data != NULL)
 		UI_add_user_data(ui, callback_data);
 
@@ -808,7 +806,6 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	}
 
 	if (selected_key != NULL) {
-		PKCS11_set_ui_method(selected_key, ui_method, callback_data);
 		pk = isPrivate ?
 			PKCS11_get_private_key(selected_key) :
 			PKCS11_get_public_key(selected_key);
