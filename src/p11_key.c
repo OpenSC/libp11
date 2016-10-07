@@ -347,9 +347,6 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	UI *ui;
 	int rv;
 
-	if (!kpriv->always_authenticate)
-		return 0;
-
 	/* Handle CKF_PROTECTED_AUTHENTICATION_PATH */
 	if (token->secureLogin) {
 		rv = CRYPTOKI_call(ctx,
