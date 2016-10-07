@@ -99,7 +99,7 @@ int pkcs11_private_encrypt(int flen,
 	/* Try signing first, as applications are more likely to use it */
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
-	if (!rv)
+	if (rv == CKR_USER_NOT_LOGGED_IN)
 		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,

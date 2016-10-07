@@ -347,6 +347,8 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	UI *ui;
 	int rv;
 
+	memset(pin, 0x00, MAX_PIN_LENGTH);
+	
 	if (!kpriv->always_authenticate)
 		return 0;
 
@@ -363,7 +365,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	ui = UI_new();
 	if (ui == NULL)
 		return PKCS11_UI_FAILED;
-	UI_set_method(ui, kpriv->ui_method);
+	UI_set_method(ui, UI_get_default_method());
 	UI_add_user_data(ui, kpriv->ui_user_data);
 	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 1, MAX_PIN_LENGTH)) {
