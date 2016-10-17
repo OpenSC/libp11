@@ -457,4 +457,9 @@ int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 	return -1;
 }
 
+void PKCS11_set_custom_user_type( unsigned long user_type )
+{
+	return pkcs11_set_custom_user_type(user_type);
+}
+
 /* vim: set noexpandtab: */

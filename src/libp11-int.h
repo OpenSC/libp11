@@ -344,6 +344,9 @@ extern int pkcs11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding);
 
+/* Use a custom user type on C_Login instead of CKU_USER */
+void pkcs11_set_custom_user_type( unsigned long user_type );
+
 #endif
 
 /* vim: set noexpandtab: */

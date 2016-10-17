@@ -231,6 +231,8 @@ int ctx_destroy(ENGINE_CTX *ctx)
 			CRYPTO_destroy_dynlockid(ctx->rwlock);
 #endif
 		OPENSSL_free(ctx);
+		// reset global user type flag
+		PKCS11_set_custom_user_type( 1UL ); // CKU_USER
 	}
 	return 1;
 }
@@ -902,6 +904,12 @@ static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 	return 1;
 }
 
+static int ctrl_set_user_type(ENGINE_CTX *ctx, long type)
+{
+	PKCS11_set_custom_user_type( (unsigned long) type );
+	return 1;
+}
+
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -918,6 +926,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_load_cert(ctx, p);
 	case CMD_INIT_ARGS:
 		return ctx_ctrl_set_init_args(ctx, (const char *)p);
+	case CMD_USER_TYPE:
+		return ctrl_set_user_type(ctx, i);
 	default:
 		break;
 	}
