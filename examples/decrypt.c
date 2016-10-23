@@ -11,7 +11,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#if !defined(_WIN32) || defined(__CYGWIN__)
 #include <termios.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <libp11.h>
@@ -37,8 +39,9 @@ int main(int argc, char *argv[])
 	unsigned int nslots, ncerts;
 
 	/* get password */
+#if !defined(_WIN32) || defined(__CYGWIN__)
 	struct termios old, new;
-
+#endif
 	if (argc != 2) {
 		fprintf(stderr, "usage: auth /usr/lib/opensc-pkcs11.so\n");
 		return 1;
@@ -155,6 +158,7 @@ int main(int argc, char *argv[])
 	if (!slot->token->loginRequired)
 		goto loggedin;
 
+#if !defined(_WIN32) || defined(__CYGWIN__)
 	/* Turn echoing off and fail if we can't. */
 	if (tcgetattr(0, &old) != 0)
 		goto failed;
@@ -163,15 +167,16 @@ int main(int argc, char *argv[])
 	new.c_lflag &= ~ECHO;
 	if (tcsetattr(0, TCSAFLUSH, &new) != 0)
 		goto failed;
-
+#endif
 	/* Read the password. */
 	printf("Password for token %.32s: ", slot->token->label);
 	if (fgets(password, sizeof(password), stdin) == NULL)
 		goto failed;
 
+#if !defined(_WIN32) || defined(__CYGWIN__)
 	/* Restore terminal. */
 	(void)tcsetattr(0, TCSAFLUSH, &old);
-
+#endif
 	/* strip tailing \n from password */
 	rc = strlen(password);
 	if (rc <= 0)

@@ -33,9 +33,23 @@ For x64 bit builds, make sure you opened the Native x64 VS Command Prompt and ru
 
 If any of your builds fail for any reason, ensure you clean the src directory of obj files before re-making.
 
-### Mingw
+### MSYS2
 
-TODO
+To build libp11, download and install msys2-i686-*.exe from https://msys2.github.io
+
+then start a MSYS2 MSYS console from the Start menu and use:
+
+  pacman -S git pkg-config libtool autoconf automake make gcc openssl-devel
+
+  git clone https://github.com/OpenSC/libp11.git
+
+  cd libp11
+
+  autoreconf -fi
+
+  ./configure --prefix=/usr/local
+
+  make && make install
 
 ### Cygwin
 
