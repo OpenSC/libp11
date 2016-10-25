@@ -65,7 +65,7 @@ struct st_engine_ctx {
 /* Utility functions                                                          */
 /******************************************************************************/
 
-static void dump_hex(FILE *stream, const char *val, const size_t len) {
+static void dump_hex(FILE *stream, const unsigned char *val, const size_t len) {
 	size_t n;
 
 	for (n = 0; n < len; n++)
