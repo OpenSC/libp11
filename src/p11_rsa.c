@@ -271,7 +271,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 int pkcs11_get_key_modulus(PKCS11_KEY *key, BIGNUM **bn)
 {
 	RSA *rsa = pkcs11_rsa(key);
-	BIGNUM *rsa_n;
+	const BIGNUM *rsa_n;
 
 	if (rsa == NULL)
 		return 0;
@@ -288,7 +288,7 @@ int pkcs11_get_key_modulus(PKCS11_KEY *key, BIGNUM **bn)
 int pkcs11_get_key_exponent(PKCS11_KEY *key, BIGNUM **bn)
 {
 	RSA *rsa = pkcs11_rsa(key);
-	BIGNUM *rsa_e;
+	const BIGNUM *rsa_e;
 
 	if (rsa == NULL)
 		return 0;

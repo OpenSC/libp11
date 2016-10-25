@@ -68,7 +68,9 @@
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
-#include <openssl/dso.h>
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+# include <openssl/dso.h>
+#endif
 #ifndef ENGINE_CMD_BASE
 #error did not get engine.h
 #endif

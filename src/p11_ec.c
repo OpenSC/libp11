@@ -278,13 +278,26 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	if (sig == NULL)
 		return NULL;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	ECDSA_SIG_get0(&r, &s, sig);
+	r = BN_new();
+	if (r == NULL)
+		return NULL;
+
+	s = BN_new();
+	if (s == NULL) {
+		BN_free(r);
+		return NULL;
+	}
 #else
 	r = sig->r;
 	s = sig->s;
 #endif
+
 	BN_bin2bn(sigret, siglen/2, r);
 	BN_bin2bn(sigret + siglen/2, siglen/2, s);
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	ECDSA_SIG_set0(sig, r, s);
+#endif
 	return sig;
 }
 
