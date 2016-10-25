@@ -10,7 +10,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#if !defined(_WIN32) || defined(__CYGWIN__)
 #include <termios.h>
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
 	if (argc > 2) {
 		strcpy(password, argv[2]);
 	} else {
+#if !defined(_WIN32) || defined(__CYGWIN__)
 		struct termios old, new;
 
 		/* Turn echoing off and fail if we can't. */
@@ -91,15 +94,15 @@ int main(int argc, char *argv[])
 		new.c_lflag &= ~ECHO;
 		if (tcsetattr(0, TCSAFLUSH, &new) != 0)
 			goto failed;
-
+#endif
 		/* Read the password. */
 		printf("Password for token %.32s: ", slot->token->label);
 		if (fgets(password, sizeof(password), stdin) == NULL)
 			goto failed;
-
+#if !defined(_WIN32) || defined(__CYGWIN__)
 		/* Restore terminal. */
 		(void)tcsetattr(0, TCSAFLUSH, &old);
-
+#endif
 		/* strip tailing \n from password */
 		rc = strlen(password);
 		if (rc <= 0)
