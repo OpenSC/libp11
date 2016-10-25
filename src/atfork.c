@@ -20,7 +20,11 @@
  */
 
 #include "libp11-int.h"
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
+#endif
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
