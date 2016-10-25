@@ -1,8 +1,9 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.3; unreleased
-* Use UI to get the CKU_CONTEXT_SPECIFIC PIN (Michał Trojnara).
-* Fixed an EVP_PKEY refcount leak (David Woodhouse).
+* Use UI to get the CKU_CONTEXT_SPECIFIC PIN (Michał Trojnara)
+* Fixed an EVP_PKEY refcount leak (David Woodhouse)
+* OpenSSL 1.1.0 build fixes (Nikos Mavrogiannopoulos, Michał Trojnara)
 
 New in 0.4.2; 2016-09-25; Michał Trojnara
 * Fixed a 0.4.0 regression bug causing the engine finish function to
