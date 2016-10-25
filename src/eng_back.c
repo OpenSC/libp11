@@ -65,7 +65,7 @@ struct st_engine_ctx {
 /* Utility functions                                                          */
 /******************************************************************************/
 
-static void dump_hex(FILE *stream, const char *val, const size_t len) {
+static void dump_hex(FILE *stream, const unsigned char *val, const size_t len) {
 	size_t n;
 
 	for (n = 0; n < len; n++)
@@ -313,10 +313,10 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 				destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 				if (ctx->pin != NULL) {
+					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
 				}
-				memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 			}
 
 			if (!n) {
