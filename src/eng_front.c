@@ -68,7 +68,6 @@
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
-#include <openssl/dso.h>
 #ifndef ENGINE_CMD_BASE
 #error did not get engine.h
 #endif
