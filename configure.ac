@@ -2,6 +2,7 @@ dnl -*- mode: m4; -*-
 
 AC_PREREQ(2.60)
 
+# When bumping versions see also the LT vesion numbers below.
 define([PACKAGE_VERSION_MAJOR], [0])
 define([PACKAGE_VERSION_MINOR], [4])
 define([PACKAGE_VERSION_FIX], [3])
@@ -17,15 +18,6 @@ LIBP11_VERSION_MAJOR="PACKAGE_VERSION_MAJOR"
 LIBP11_VERSION_MINOR="PACKAGE_VERSION_MINOR"
 LIBP11_VERSION_FIX="PACKAGE_VERSION_FIX"
 
-# LT Version numbers, remember to change them just *before* a release.
-#   (Code changed:                      REVISION++)
-#   (Oldest interface removed:          OLDEST++)
-#   (Interfaces added:                  CURRENT++, REVISION=0)
-LIBP11_LT_CURRENT="6"
-LIBP11_LT_OLDEST="2"
-LIBP11_LT_REVISION="2"
-LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"
-
 AC_CONFIG_SRCDIR([src/libp11.h])
 
 # silent build by default
@@ -35,6 +27,35 @@ AC_CANONICAL_HOST
 AC_PROG_CC
 PKG_PROG_PKG_CONFIG
 AC_C_BIGENDIAN
+
+# we need to set our soversion based on openssl's soversion to avoid
+# issues with applications linking to new openssl, old libp11, and vice versa
+case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
+	$PKG_CONFIG --modversion openssl`" in
+	1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
+	    LIBP11_LT_OLDEST="3"
+	    debian_ssl_prefix="openssl-1.1.0";;
+	1.0.*) # Engines directory prefix for OpenSSL 1.0.x
+	    LIBP11_LT_OLDEST="2"
+	    debian_ssl_prefix="openssl-1.0.0";;
+	*) # Engines directory prefix for OpenSSL 0.9.x
+	    LIBP11_LT_OLDEST="2"
+	    debian_ssl_prefix="ssl";;
+esac
+
+
+# LT Version numbers, remember to change them just *before* a release.
+#   (Code changed:                      REVISION++)
+#   (Oldest interface removed:          OLDEST++)
+#   (Interfaces added:                  CURRENT++, REVISION=0)
+#
+# Note that at this moment we tie the oldest (soname) version to
+# the openssl version we link to. If the ABI is broken on a later
+# release, we should either stick to supporting a single openssl ABI
+# or bump the LT_OLDEST version sufficiently to avoid clashes.
+LIBP11_LT_REVISION="2"
+LIBP11_LT_CURRENT="6"
+LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"
 
 gl_LD_VERSION_SCRIPT
 
@@ -108,15 +129,6 @@ AC_ARG_WITH(
 		if test "${enginesdir}" = ""; then
 		    libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
 			$PKG_CONFIG --variable=libdir openssl`"
-		    case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
-			$PKG_CONFIG --modversion openssl`" in
-			1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
-			    debian_ssl_prefix="openssl-1.1.0";;
-			1.0.*) # Engines directory prefix for OpenSSL 1.0.x
-			    debian_ssl_prefix="openssl-1.0.0";;
-			*) # Engines directory prefix for OpenSSL 0.9.x
-			    debian_ssl_prefix="ssl";;
-		    esac
 		    if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
 			# Debian-based OpenSSL package (for example Ubuntu)
 			enginesdir="$libcryptodir/$debian_ssl_prefix/engines"
