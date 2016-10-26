@@ -165,6 +165,13 @@ int pkcs11_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
 		pkcs11_finish(ctx);
+		if (ctx->pkcs11_ctx) {
+			/* Modules cannot be unloaded in pkcs11_finish()
+			 * because of a deadlock in PKCS#11 modules that
+			 * internally use the OpenSSL engine interface */
+			PKCS11_CTX_unload(ctx->pkcs11_ctx);
+			PKCS11_CTX_free(ctx->pkcs11_ctx);
+		}
 		destroy_pin(ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);
@@ -268,11 +275,6 @@ int pkcs11_finish(ENGINE_CTX *ctx)
 				ctx->slot_list, ctx->slot_count);
 			ctx->slot_list = NULL;
 			ctx->slot_count = 0;
-		}
-		if (ctx->pkcs11_ctx) {
-			PKCS11_CTX_unload(ctx->pkcs11_ctx);
-			PKCS11_CTX_free(ctx->pkcs11_ctx);
-			ctx->pkcs11_ctx = NULL;
 		}
 	}
 	return 1;
