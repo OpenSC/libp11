@@ -227,8 +227,7 @@ rm -f src/libp11.map
 echo "LIBP11_${LIBP11_LT_OLDEST}" > src/libp11.map
 echo "{" >> src/libp11.map
 echo "global:" >> src/libp11.map
-#sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/;\n/g' <src/libp11.exports >>src/libp11.map
-tr '\n' ';''\n' <src/libp11.exports >>src/libp11.map
+tr '\n' ';' <src/libp11.exports >>src/libp11.map
 echo "" >> src/libp11.map
 echo "local:" >> src/libp11.map
 echo '*;' >> src/libp11.map
