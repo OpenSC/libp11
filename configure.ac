@@ -123,21 +123,21 @@ AC_ARG_WITH(
 AC_ARG_WITH(
 	[enginesdir],
 	[AS_HELP_STRING([--with-enginesdir], [OpenSSL engines directory])],
-	[enginesdir="${withval}"],
+	[enginesexecdir="${withval}"],
 	[
-		enginesdir="`$PKG_CONFIG --variable=enginesdir --silence-errors libcrypto`"
-		if test "${enginesdir}" = ""; then
+		enginesexecdir="`$PKG_CONFIG --variable=enginesdir --silence-errors libcrypto`"
+		if test "${enginesexecdir}" = ""; then
 		    libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
 			$PKG_CONFIG --variable=libdir openssl`"
 		    if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
 			# Debian-based OpenSSL package (for example Ubuntu)
-			enginesdir="$libcryptodir/$debian_ssl_prefix/engines"
+			enginesexecdir="$libcryptodir/$debian_ssl_prefix/engines"
 		    else # Default OpenSSL engines directory
-			enginesdir="$libcryptodir/engines"
+			enginesexecdir="$libcryptodir/engines"
 		    fi
 		    if test "${prefix}" != "NONE" -o "${exec_prefix}" != "NONE"; then
 			# Override the autodetected value with the default
-			enginesdir="${libdir}"
+			enginesexecdir="\$(libdir)"
 		    fi
 		fi
 	]
@@ -212,7 +212,7 @@ pkgconfigdir="\$(libdir)/pkgconfig"
 
 AC_SUBST([pkgconfigdir])
 AC_SUBST([apidocdir])
-AC_SUBST([enginesdir])
+AC_SUBST([enginesexecdir])
 AC_SUBST([LIBP11_VERSION_MAJOR])
 AC_SUBST([LIBP11_VERSION_MINOR])
 AC_SUBST([LIBP11_VERSION_FIX])
@@ -279,7 +279,7 @@ libp11 has been configured with the following options:
 
 Version:                 ${PACKAGE_VERSION}
 libp11 directory:        $(eval eval eval echo "${libdir}")
-Engine directory:        ${enginesdir}
+Engine directory:        ${enginesexecdir}
 Default PKCS11 module:   ${pkcs11_module}
 API doc support:         ${enable_api_doc}
 

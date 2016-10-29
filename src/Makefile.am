@@ -6,7 +6,7 @@ EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 noinst_HEADERS= libp11-int.h pkcs11.h atfork.h
 include_HEADERS= libp11.h
 lib_LTLIBRARIES = libp11.la
-engines_LTLIBRARIES = pkcs11.la
+enginesexec_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
 SHARED_EXT=@SHARED_EXT@
@@ -49,8 +49,7 @@ check-local: $(LTLIBRARIES)
 	cd .libs && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 
 install-exec-hook:
-	cp -pR -f .libs/pkcs11$(SHARED_EXT) $(DESTDIR)$(enginesdir)/pkcs11$(SHARED_EXT) \
-	&&  cd '$(DESTDIR)$(enginesdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
+	cd '$(DESTDIR)$(enginesexecdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 
 if WIN32
 # def file required for MS users to build library
