@@ -223,7 +223,7 @@ static int pkcs11_store_key(PKCS11_TOKEN * token, EVP_PKEY * pk,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
-	BIGNUM *rsa_n, *rsa_e, *rsa_d, *rsa_p, *rsa_q;
+	const BIGNUM *rsa_n, *rsa_e, *rsa_d, *rsa_p, *rsa_q;
 
 	/* First, make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1))

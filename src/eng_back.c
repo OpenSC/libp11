@@ -270,7 +270,11 @@ int pkcs11_finish(ENGINE_CTX *ctx)
 			ctx->slot_count = 0;
 		}
 		if (ctx->pkcs11_ctx) {
-			PKCS11_CTX_unload(ctx->pkcs11_ctx);
+			/* Modules cannot be unloaded in pkcs11_finish() nor
+			 * pkcs11_destroy() because of a deadlock in PKCS#11
+			 * modules that internally use OpenSSL engines.
+			 * A memory leak is better than a deadlock... */
+			/* PKCS11_CTX_unload(ctx->pkcs11_ctx); */
 			PKCS11_CTX_free(ctx->pkcs11_ctx);
 			ctx->pkcs11_ctx = NULL;
 		}
@@ -313,10 +317,10 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 				destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 				if (ctx->pin != NULL) {
+					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
 				}
-				memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 			}
 
 			if (!n) {
