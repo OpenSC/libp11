@@ -26,6 +26,9 @@ libp11_la_LDFLAGS = $(AM_LDFLAGS) \
 
 if HAVE_LD_VERSION_SCRIPT
 libp11_la_LDFLAGS += -Wl,--version-script="$(srcdir)/libp11.map"
+if WIN32
+libp11_la_LDFLAGS += -export-symbols "$(srcdir)/libp11.exports"
+endif
 else
 libp11_la_LDFLAGS += -export-symbols "$(srcdir)/libp11.exports"
 endif
