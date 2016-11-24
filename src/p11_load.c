@@ -133,8 +133,7 @@ int pkcs11_CTX_reload(PKCS11_CTX * ctx)
  */
 void pkcs11_CTX_unload(PKCS11_CTX * ctx)
 {
-	PKCS11_CTX_private *cpriv;
-	cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
 	/* Tell the PKCS11 library to shut down */
 	if (cpriv->forkid == _P11_get_forkid())
@@ -142,6 +141,7 @@ void pkcs11_CTX_unload(PKCS11_CTX * ctx)
 
 	/* Unload the module */
 	C_UnloadModule(cpriv->handle);
+	cpriv->handle = NULL;
 }
 
 /*
@@ -159,6 +159,9 @@ void pkcs11_CTX_free(PKCS11_CTX * ctx)
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
 	}
+	if (cpriv->handle) {
+		pkcs11_CTX_unload(ctx);
+	}
 	CRYPTO_THREAD_lock_free(cpriv->rwlock);
 	OPENSSL_free(ctx->manufacturer);
 	OPENSSL_free(ctx->description);
@@ -167,3 +170,4 @@ void pkcs11_CTX_free(PKCS11_CTX * ctx)
 }
 
 /* vim: set noexpandtab: */
+
