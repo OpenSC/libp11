@@ -37,7 +37,7 @@ unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT *slot)
 /*
  * Enumerate slots
  */
-int pkcs11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int *countp)
+int pkcs11_enumerate_slots(PKCS11_CTX *ctx, PKCS11_SLOT **slotp, unsigned int *countp)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_SLOT_ID *slotid;
@@ -82,7 +82,7 @@ int pkcs11_enumerate_slots(PKCS11_CTX * ctx, PKCS11_SLOT ** slotp, unsigned int 
 /*
  * Find a slot with a token that looks "valuable"
  */
-PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned int nslots)
+PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX *ctx,  PKCS11_SLOT *slots, unsigned int nslots)
 {
 	PKCS11_SLOT *slot, *best;
 	PKCS11_TOKEN *tok;
@@ -109,7 +109,7 @@ PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX * ctx,  PKCS11_SLOT * slots, unsigned 
 /*
  * Open a session with this slot
  */
-int pkcs11_open_session(PKCS11_SLOT * slot, int rw, int relogin)
+int pkcs11_open_session(PKCS11_SLOT *slot, int rw, int relogin)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -132,7 +132,7 @@ int pkcs11_open_session(PKCS11_SLOT * slot, int rw, int relogin)
 	return 0;
 }
 
-int pkcs11_reopen_session(PKCS11_SLOT * slot)
+int pkcs11_reopen_session(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -151,7 +151,7 @@ int pkcs11_reopen_session(PKCS11_SLOT * slot)
 /*
  * Determines if user is authenticated with token
  */
-int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res)
+int pkcs11_is_logged_in(PKCS11_SLOT *slot, int so, int *res)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
@@ -183,7 +183,7 @@ int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res)
  * Authenticate with the card. relogin should be set if we automatically
  * relogin after a fork.
  */
-int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
+int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
@@ -231,7 +231,7 @@ int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin)
 /*
  * Authenticate with the card
  */
-int pkcs11_relogin(PKCS11_SLOT * slot)
+int pkcs11_relogin(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
@@ -241,7 +241,7 @@ int pkcs11_relogin(PKCS11_SLOT * slot)
 /*
  * Log out
  */
-int pkcs11_logout(PKCS11_SLOT * slot)
+int pkcs11_logout(PKCS11_SLOT *slot)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
@@ -268,7 +268,7 @@ int pkcs11_logout(PKCS11_SLOT * slot)
 /*
  * Initialize the token
  */
-int pkcs11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
+int pkcs11_init_token(PKCS11_TOKEN *token, const char *pin, const char *label)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -299,7 +299,7 @@ int pkcs11_init_token(PKCS11_TOKEN * token, const char *pin, const char *label)
 /*
  * Set the User PIN
  */
-int pkcs11_init_pin(PKCS11_TOKEN * token, const char *pin)
+int pkcs11_init_pin(PKCS11_TOKEN *token, const char *pin)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -321,7 +321,7 @@ int pkcs11_init_pin(PKCS11_TOKEN * token, const char *pin)
 /*
  * Change the User PIN
  */
-int pkcs11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
+int pkcs11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 		const char *new_pin)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -390,7 +390,7 @@ int pkcs11_generate_random(PKCS11_SLOT *slot, unsigned char *r,
 /*
  * Helper functions
  */
-static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
+static int pkcs11_init_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot, CK_SLOT_ID id)
 {
 	PKCS11_SLOT_private *spriv;
 	CK_SLOT_INFO info;
@@ -423,7 +423,7 @@ static int pkcs11_init_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot, CK_SLOT_ID id)
 	return 0;
 }
 
-void pkcs11_release_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned int nslots)
+void pkcs11_release_all_slots(PKCS11_CTX *ctx,  PKCS11_SLOT *slots, unsigned int nslots)
 {
 	unsigned int i;
 
@@ -432,7 +432,7 @@ void pkcs11_release_all_slots(PKCS11_CTX * ctx,  PKCS11_SLOT *slots, unsigned in
 	OPENSSL_free(slots);
 }
 
-void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
+void pkcs11_release_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
@@ -455,7 +455,7 @@ void pkcs11_release_slot(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	memset(slot, 0, sizeof(*slot));
 }
 
-static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
+static int pkcs11_check_token(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_TOKEN_private *tpriv;
@@ -514,7 +514,7 @@ static int pkcs11_check_token(PKCS11_CTX * ctx, PKCS11_SLOT * slot)
 	return 0;
 }
 
-static void pkcs11_destroy_token(PKCS11_TOKEN * token)
+static void pkcs11_destroy_token(PKCS11_TOKEN *token)
 {
 	pkcs11_destroy_keys(token, CKO_PRIVATE_KEY);
 	pkcs11_destroy_keys(token, CKO_PUBLIC_KEY);

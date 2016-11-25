@@ -565,7 +565,7 @@ static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 }
 
 static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
-		UI_METHOD * ui_method, void *callback_data, int isPrivate)
+		UI_METHOD *ui_method, void *callback_data, int isPrivate)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL;

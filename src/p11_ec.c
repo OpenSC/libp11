@@ -344,9 +344,9 @@ static void pkcs11_ecdh_params_free(CK_ECDH1_DERIVE_PARAMS *parms)
  */
 static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
-		const void * ec_params,
+		const void *ec_params,
 		void *outnewkey,
-		PKCS11_KEY * key)
+		PKCS11_KEY *key)
 {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_CTX *ctx = KEY2CTX(key);
@@ -361,7 +361,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
-	CK_OBJECT_HANDLE * tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
+	CK_OBJECT_HANDLE *tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
 	CK_ATTRIBUTE newkey_template[] = {
 		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},

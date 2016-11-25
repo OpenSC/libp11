@@ -221,7 +221,7 @@ static int bind_helper(ENGINE *e)
 	}
 }
 
-static int bind_fn(ENGINE * e, const char *id)
+static int bind_fn(ENGINE *e, const char *id)
 {
 	if (id && (strcmp(id, PKCS11_ENGINE_ID) != 0)) {
 		fprintf(stderr, "bad engine id\n");

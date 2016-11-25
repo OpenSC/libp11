@@ -27,14 +27,14 @@
 
 static int pkcs11_find_certs(PKCS11_TOKEN *);
 static int pkcs11_next_cert(PKCS11_CTX *, PKCS11_TOKEN *, CK_SESSION_HANDLE);
-static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o, PKCS11_CERT **);
 
 /*
  * Enumerate all certs on the card
  */
-int pkcs11_enumerate_certs(PKCS11_TOKEN * token,
-		PKCS11_CERT ** certp, unsigned int *countp)
+int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
+		PKCS11_CERT **certp, unsigned int *countp)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -65,7 +65,7 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN * token,
 /*
  * Find certificate matching a key
  */
-PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY * key)
+PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY *key)
 {
 	PKCS11_KEY_private *kpriv;
 	PKCS11_CERT_private *cpriv;
@@ -87,7 +87,7 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY * key)
 /*
  * Find all certs of a given type (public or private)
  */
-static int pkcs11_find_certs(PKCS11_TOKEN * token)
+static int pkcs11_find_certs(PKCS11_TOKEN *token)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
@@ -114,7 +114,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN * token)
 	return (res < 0) ? -1 : 0;
 }
 
-static int pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+static int pkcs11_next_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		CK_SESSION_HANDLE session)
 {
 	CK_OBJECT_HANDLE obj;
@@ -134,7 +134,7 @@ static int pkcs11_next_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 	return 0;
 }
 
-static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
+static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
 {
 	PKCS11_TOKEN_private *tpriv;
@@ -199,7 +199,7 @@ static int pkcs11_init_cert(PKCS11_CTX * ctx, PKCS11_TOKEN * token,
 /*
  * Destroy all certs
  */
-void pkcs11_destroy_certs(PKCS11_TOKEN * token)
+void pkcs11_destroy_certs(PKCS11_TOKEN *token)
 {
 	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
 
@@ -223,7 +223,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN * token)
 /*
  * Store certificate
  */
-int pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509, char *label,
+int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 		unsigned char *id, size_t id_len, PKCS11_CERT ** ret_cert)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
