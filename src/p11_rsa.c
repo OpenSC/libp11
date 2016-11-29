@@ -384,16 +384,34 @@ static void free_rsa_ex_index()
 
 #if OPENSSL_VERSION_NUMBER < 0x10100005L
 
-static RSA_METHOD *RSA_meth_new(const char *name, int flags)
+static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 {
-	RSA_METHOD *meth = OPENSSL_malloc(sizeof(RSA_METHOD));
-
-	if (meth == NULL)
+	RSA_METHOD *ret = OPENSSL_malloc(sizeof(RSA_METHOD));
+	if (ret == NULL)
 		return NULL;
-	memcpy(meth, RSA_get_default_method(), sizeof(RSA_METHOD));
-	meth->name = OPENSSL_strdup(name);
+	memcpy(ret, meth, sizeof(RSA_METHOD));
+	ret->name = OPENSSL_strdup(meth->name);
+	if (ret->name == NULL) {
+		OPENSSL_free(ret);
+		return NULL;
+	}
+	return ret;
+}
+
+static int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
+{
+	char *tmp = OPENSSL_strdup(name);
+	if (tmp == NULL)
+		return 0;
+	OPENSSL_free((char *)meth->name);
+	meth->name = tmp;
+	return 1;
+}
+
+static int RSA_meth_set_flags(RSA_METHOD *meth, int flags)
+{
 	meth->flags = flags;
-	return meth;
+	return 1;
 }
 
 static int RSA_meth_set_priv_enc(RSA_METHOD *meth,
@@ -429,9 +447,11 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 
 	if (ops == NULL) {
 		alloc_rsa_ex_index();
-		ops = RSA_meth_new("libp11 RSA method", 0);
+		ops = RSA_meth_dup(RSA_get_default_method());
 		if (ops == NULL)
 			return NULL;
+		RSA_meth_set1_name(ops, "libp11 RSA method");
+		RSA_meth_set_flags(ops, 0);
 		RSA_meth_set_priv_enc(ops, pkcs11_rsa_priv_enc_method);
 		RSA_meth_set_priv_dec(ops, pkcs11_rsa_priv_dec_method);
 		RSA_meth_set_finish(ops, pkcs11_rsa_free_method);
