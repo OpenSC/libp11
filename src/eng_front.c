@@ -213,6 +213,19 @@ static int bind_helper(ENGINE *e)
 #ifndef OPENSSL_NO_RSA
 			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
 #endif
+#if OPENSSL_VERSION_NUMBER  >= 0x10100002L
+#ifndef OPENSSL_NO_EC
+			/* PKCS11_get_ec_key_method combines ECDSA and ECDH */
+			!ENGINE_set_EC(e, PKCS11_get_ec_key_method()) ||
+#endif /* OPENSSL_NO_EC */
+#else /* OPENSSL_VERSION_NUMBER */
+#ifndef OPENSSL_NO_ECDSA
+			!ENGINE_set_ECDSA(e, PKCS11_get_ecdsa_method()) ||
+#endif
+#ifndef OPENSSL_NO_ECDH
+			!ENGINE_set_ECDH(e, PKCS11_get_ecdh_method()) ||
+#endif
+#endif /* OPENSSL_VERSION_NUMBER */
 			!ENGINE_set_load_pubkey_function(e, load_pubkey) ||
 			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
