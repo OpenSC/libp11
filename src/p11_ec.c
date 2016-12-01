@@ -51,6 +51,104 @@ static int ec_ex_index = 0;
 
 #ifndef OPENSSL_NO_EC
 
+/********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
+
+typedef ECDSA_SIG *(*sign_sig_fn)(const unsigned char *, int,
+	const BIGNUM *, const BIGNUM *, EC_KEY *);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.2 */
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdsa_method {
+	char *name;
+	sign_sig_fn ecdsa_do_sign;
+	void (*ecdsa_sign_setup)();
+	void (*ecdsa_do_verify)();
+	int flags;
+	char *app_data;
+};
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+
+/* Define missing functions */
+
+ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
+{
+	ECDSA_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDSA_METHOD));
+	else
+		memset(out, 0, sizeof(ECDSA_METHOD));
+	return out;
+}
+
+void ECDSA_METHOD_free(ECDSA_METHOD *m)
+{
+	OPENSSL_free(m);
+}
+
+void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_sig_fn f)
+{
+	m->ecdsa_do_sign = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+
+/********** Missing ECDH_METHOD functions for OpenSSL < 1.1.0 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
+
+/* Data pointers and function pointers may have different sizes on some
+ * architectures */
+struct ecdh_method {
+	char *name;
+	compute_key_fn compute_key;
+	int flags;
+	char *data;
+};
+
+/* Define missing functions */
+
+ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
+{
+	ECDH_METHOD *out;
+	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
+	if (out == NULL)
+		return NULL;
+	if (m)
+		memcpy(out, m, sizeof(ECDH_METHOD));
+	else
+		memset(out, 0, sizeof(ECDH_METHOD));
+	return out;
+}
+
+void ECDH_METHOD_free(ECDH_METHOD *m)
+{
+	OPENSSL_free(m);
+}
+
+void ECDH_METHOD_get_compute_key(ECDH_METHOD *m, compute_key_fn *f)
+{
+	*f = m->compute_key;
+}
+
+void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
+{
+	m->compute_key = f;
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
 /********** Manage EC ex_data */
 
 /* NOTE: ECDH also uses ECDSA ex_data and *not* ECDH ex_data */
@@ -253,8 +351,16 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	key = (PKCS11_KEY *)ECDSA_get_ex_data(ec, ec_ex_index);
 #endif
 	if (key == NULL) {
-		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, PKCS11_ALIEN_KEY);
-		return NULL;
+		sign_sig_fn orig_sign_sig;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		const EC_KEY_METHOD *meth = EC_KEY_OpenSSL();
+		EC_KEY_METHOD_get_sign((EC_KEY_METHOD *)meth,
+			NULL, NULL, &orig_sign_sig);
+#else
+		const ECDSA_METHOD *meth = ECDSA_OpenSSL();
+		orig_sign_sig = meth->ecdsa_do_sign;
+#endif
+		return orig_sign_sig(dgst, dlen, kinv, rp, ec);
 	}
 	/* TODO: Add an atfork check */
 
@@ -505,100 +611,6 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 }
 
 #endif
-
-/********** Missing ECDSA_METHOD functions for OpenSSL < 1.0.2 */
-
-#if OPENSSL_VERSION_NUMBER < 0x10002000L
-
-/* ecdsa_method maintains unchanged layout between 0.9.8 and 1.0.1 */
-
-typedef ECDSA_SIG *(*sign_fn)(const unsigned char *, int,
-	const BIGNUM *, const BIGNUM *, EC_KEY *);
-
-/* Data pointers and function pointers may have different sizes on some
- * architectures */
-struct ecdsa_method {
-	char *name;
-	sign_fn sign;
-	void (*sign_setup)();
-	void (*verify)();
-	int flags;
-	char *data;
-};
-
-/* Define missing functions */
-
-ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
-{
-	ECDSA_METHOD *out;
-	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
-	if (out == NULL)
-		return NULL;
-	if (m)
-		memcpy(out, m, sizeof(ECDSA_METHOD));
-	else
-		memset(out, 0, sizeof(ECDSA_METHOD));
-	return out;
-}
-
-void ECDSA_METHOD_free(ECDSA_METHOD *m)
-{
-	OPENSSL_free(m);
-}
-
-void ECDSA_METHOD_set_sign(ECDSA_METHOD *m, sign_fn f)
-{
-	m->sign = f;
-}
-
-#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
-
-/********** Missing ECDH_METHOD functions for OpenSSL < 1.1.0 */
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-
-/* ecdh_method maintains unchanged layout between 0.9.8 and 1.0.2 */
-
-/* Data pointers and function pointers may have different sizes on some
- * architectures */
-struct ecdh_method {
-	char *name;
-	compute_key_fn compute_key;
-	int flags;
-	char *data;
-};
-
-/* Define missing functions */
-
-ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
-{
-	ECDH_METHOD *out;
-	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
-	if (out == NULL)
-		return NULL;
-	if (m)
-		memcpy(out, m, sizeof(ECDH_METHOD));
-	else
-		memset(out, 0, sizeof(ECDH_METHOD));
-	return out;
-}
-
-void ECDH_METHOD_free(ECDH_METHOD *m)
-{
-	OPENSSL_free(m);
-}
-
-void ECDH_METHOD_get_compute_key(ECDH_METHOD *m, compute_key_fn *f)
-{
-	*f = m->compute_key;
-}
-
-void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
-{
-	m->compute_key = f;
-}
-
-#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
 
 /********** Set OpenSSL EC methods */
 
