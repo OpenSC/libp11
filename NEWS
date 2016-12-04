@@ -1,5 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.4.4; unreleased
+
 New in 0.4.3; 2016-12-04; Michał Trojnara
 * Use UI to get CKU_CONTEXT_SPECIFIC PINs (Michał Trojnara)
 * Added graceful handling of alien (non-PKCS#11) keys (Michał Trojnara)
