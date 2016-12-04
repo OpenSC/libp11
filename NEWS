@@ -1,9 +1,19 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.3; unreleased
-* Use UI to get the CKU_CONTEXT_SPECIFIC PIN (Michał Trojnara)
-* Fixed an EVP_PKEY refcount leak (David Woodhouse)
-* OpenSSL 1.1.0 build fixes (Nikos Mavrogiannopoulos, Michał Trojnara)
+* Use UI to get CKU_CONTEXT_SPECIFIC PINs (Michał Trojnara)
+* Added graceful handling of alien (non-PKCS#11) keys (Michał Trojnara)
+* Added symbol versioning (Nikos Mavrogiannopoulos)
+* Soname tied with with the OpenSSL soname (Nikos Mavrogiannopoulos)
+* Added MSYS2, Cygwin, and MinGW/MSYS support (Paweł Witas)
+* Workaround implemented for a deadlock in PKCS#11 modules that
+  internally use OpenSSL engines (Michał Trojnara, Paweł Witas)
+* Fixed an EVP_PKEY reference count leak (David Woodhouse)
+* Fixed OpenSSL 1.1.x crash in public RSA methods (Doug Engert,
+  Michał Trojnara)
+* Fixed OpenSSL 1.1.x builds (Nikos Mavrogiannopoulos, Michał Trojnara)
+* Fixed retrieving PIN values from certificate URIs (Andrei Korikov)
+* Fixed symlink installation (Alon Bar-Lev)
 
 New in 0.4.2; 2016-09-25; Michał Trojnara
 * Fixed a 0.4.0 regression bug causing the engine finish function to
