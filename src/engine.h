@@ -51,20 +51,20 @@ typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
 /* defined in eng_back.c */
 
-ENGINE_CTX *pkcs11_new();
+ENGINE_CTX *ctx_new();
 
-int pkcs11_destroy(ENGINE_CTX *ctx);
+int ctx_destroy(ENGINE_CTX *ctx);
 
-int pkcs11_init(ENGINE_CTX *ctx);
+int ctx_init(ENGINE_CTX *ctx);
 
-int pkcs11_finish(ENGINE_CTX *ctx);
+int ctx_finish(ENGINE_CTX *ctx);
 
-int pkcs11_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
+int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
 
-EVP_PKEY *pkcs11_load_public_key(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
 
-EVP_PKEY *pkcs11_load_private_key(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
 
 /* defined in eng_parse.c */

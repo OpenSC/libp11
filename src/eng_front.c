@@ -3,7 +3,7 @@
  * project 2000.
  * Copied/modified by Kevin Stefanik (kstef@mtppi.org) for the OpenSC
  * project 2003.
- * Copyright (c) 2016 Michał Trojnara
+ * Copyright (c) 2017 Michał Trojnara
  */
 /* ====================================================================
  * Copyright (c) 1999-2001 The OpenSSL Project.  All rights reserved.
@@ -126,13 +126,13 @@ static ENGINE_CTX *get_ctx(ENGINE *engine)
 		ctx = ENGINE_get_ex_data(engine, pkcs11_idx);
 	}
 	if (ctx == NULL) {
-		ctx = pkcs11_new();
+		ctx = ctx_new();
 		ENGINE_set_ex_data(engine, pkcs11_idx, ctx);
 	}
 	return ctx;
 }
 
-/* Destroy the context allocated with pkcs11_new() */
+/* Destroy the context allocated with ctx_new() */
 static int engine_destroy(ENGINE *engine)
 {
 	ENGINE_CTX *ctx;
@@ -141,7 +141,7 @@ static int engine_destroy(ENGINE *engine)
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	rv = pkcs11_destroy(ctx);
+	rv = ctx_destroy(ctx);
 	ENGINE_set_ex_data(engine, pkcs11_idx, NULL);
 	return rv;
 }
@@ -153,10 +153,10 @@ static int engine_init(ENGINE *engine)
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return pkcs11_init(ctx);
+	return ctx_init(ctx);
 }
 
-/* Finish engine operations initialized with pkcs11_init() */
+/* Finish engine operations initialized with ctx_init() */
 static int engine_finish(ENGINE *engine)
 {
 	ENGINE_CTX *ctx;
@@ -164,7 +164,7 @@ static int engine_finish(ENGINE *engine)
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return pkcs11_finish(ctx);
+	return ctx_finish(ctx);
 }
 
 static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
@@ -175,7 +175,7 @@ static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return pkcs11_load_public_key(ctx, s_key_id, ui_method, callback_data);
+	return ctx_load_pubkey(ctx, s_key_id, ui_method, callback_data);
 }
 
 static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
@@ -186,7 +186,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return pkcs11_load_private_key(ctx, s_key_id, ui_method, callback_data);
+	return ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
 }
 
 static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
@@ -196,7 +196,7 @@ static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return pkcs11_engine_ctrl(ctx, cmd, i, p, f);
+	return ctx_engine_ctrl(ctx, cmd, i, p, f);
 }
 
 /* This internal function is used by ENGINE_pkcs11() and possibly by the
