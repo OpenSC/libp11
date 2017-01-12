@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016 Michał Trojnara
+ * Copyright (c) 2017 Michał Trojnara
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -122,6 +122,62 @@ static int get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
 		return 0;
 	}
 	UI_free(ui);
+	return 1;
+}
+
+/*
+ * Log-into the token if necessary.
+ *
+ * @slot is PKCS11 slot to log in
+ * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
+ * @ui_method is OpenSSL user interface which is used to ask for a password
+ * @callback_data are application data to the user interface
+ * @return 1 on success, 0 on error.
+ */
+static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
+		UI_METHOD *ui_method, void *callback_data)
+{
+	int already_logged_in = 0;
+
+	if (!tok->loginRequired)
+		return 1;
+
+	/* Check if already logged in to avoid resetting state */
+	if (PKCS11_is_logged_in(slot, 0, &already_logged_in) != 0) {
+		fprintf(stderr, "Unable to check if already logged in\n");
+		return 0;
+	}
+	if (already_logged_in)
+		return 1;
+
+	/* If the token has a secure login (i.e., an external keypad),
+	 * then use a NULL PIN. Otherwise, obtain a new PIN if needed. */
+	if (tok->secureLogin) {
+		/* Free the PIN if it has already been
+		 * assigned (i.e, cached by get_pin) */
+		destroy_pin(ctx);
+	} else if (ctx->pin == NULL) {
+		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
+		ctx->pin_length = MAX_PIN_LENGTH;
+		if (ctx->pin == NULL) {
+			fprintf(stderr, "Could not allocate memory for PIN\n");
+			return 0;
+		}
+		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
+		if (!get_pin(ctx, ui_method, callback_data)) {
+			destroy_pin(ctx);
+			fprintf(stderr, "No PIN code was entered\n");
+			return 0;
+		}
+	}
+
+	/* Now login in with the (possibly NULL) PIN */
+	if (PKCS11_login(slot, 0, ctx->pin)) {
+		/* Login failed, so free the PIN if present */
+		destroy_pin(ctx);
+		fprintf(stderr, "Login failed\n");
+		return 0;
+	}
 	return 1;
 }
 
@@ -438,15 +494,11 @@ static X509 *pkcs11_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 		fprintf(stderr, "Found token: %s\n", slot->token->label);
 	}
 
-	/* In several tokens certificates are marked as private. We use the pin-value */
-	if (tok->loginRequired && ctx->pin) {
-		/* Now login in with the (possibly NULL) pin */
-		if (PKCS11_login(slot, 0, ctx->pin)) {
-			/* Login failed, so free the PIN if present */
-			destroy_pin(ctx);
-			fprintf(stderr, "Login failed\n");
-			return NULL;
-		}
+	/* In several tokens certificates are marked as private.
+	 * We require a cached pin, as no UI method is available. */
+	if (ctx->pin && !pkcs11_login(ctx, slot, tok, NULL, NULL)) {
+		fprintf(stderr, "Login to token failed, returning NULL...\n");
+		return NULL;
 	}
 
 	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
@@ -505,65 +557,6 @@ static int ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 /* Private and public key handling                                            */
 /******************************************************************************/
 
-/*
- * Log-into the token if necesary.
- *
- * @slot is PKCS11 slot to log in
- * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
- * @ui_method is OpenSSL user inteface which is used to ask for a password
- * @callback_data are application data to the user interface
- * @return 1 on success, 0 on error.
- */
-static int pkcs11_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
-		UI_METHOD *ui_method, void *callback_data)
-{
-	if (tok->loginRequired) {
-		/* If the token has a secure login (i.e., an external keypad),
-		 * then use a NULL pin. Otherwise, check if a PIN exists. If
-		 * not, allocate and obtain a new PIN. */
-		if (tok->secureLogin) {
-			/* Free the PIN if it has already been
-			 * assigned (i.e, cached by get_pin) */
-			destroy_pin(ctx);
-		} else if (ctx->pin == NULL) {
-			ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-			ctx->pin_length = MAX_PIN_LENGTH;
-			if (ctx->pin == NULL) {
-				fprintf(stderr, "Could not allocate memory for PIN");
-				return 0;
-			}
-			memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-			if (!get_pin(ctx, ui_method, callback_data)) {
-				destroy_pin(ctx);
-				fprintf(stderr, "No pin code was entered");
-				return 0;
-			}
-		}
-
-		/* Now login in with the (possibly NULL) pin */
-		if (PKCS11_login(slot, 0, ctx->pin)) {
-			/* Login failed, so free the PIN if present */
-			destroy_pin(ctx);
-			fprintf(stderr, "Login failed\n");
-			return 0;
-		}
-		/* Login successful, PIN retained in case further logins are
-		 * required. This will occur on subsequent calls to the
-		 * pkcs11_load_key function. Subsequent login calls should be
-		 * relatively fast (the token should maintain its own login
-		 * state), although there may still be a slight performance
-		 * penalty. We could maintain state noting that successful
-		 * login has been performed, but this state may not be updated
-		 * if the token is removed and reinserted between calls. It
-		 * seems safer to retain the PIN and perform a login on each
-		 * call to pkcs11_load_key, even if this may not be strictly
-		 * necessary. */
-		/* TODO confirm that multiple login attempts do not introduce
-		 * significant performance penalties */
-	}
-	return 1;
-}
-
 static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		UI_METHOD *ui_method, void *callback_data, int isPrivate)
 {
@@ -581,7 +574,6 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	char tmp_pin[MAX_PIN_LENGTH+1];
 	size_t tmp_pin_len = MAX_PIN_LENGTH;
 	char flags[64];
-	int already_logged_in = 0;
 
 	if (pkcs11_init_libp11(ctx)) /* Delayed libp11 initialization */
 		return NULL;
@@ -754,17 +746,12 @@ static EVP_PKEY *pkcs11_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 	}
 
+	/* Perform login to the token if required */
+	if (!pkcs11_login(ctx, slot, tok, ui_method, callback_data)) {
+		fprintf(stderr, "Login to token failed, returning NULL...\n");
+		return NULL;
+	}
 	if (isPrivate) {
-		/* Check if already logged in to avoid resetting state */
-		if (PKCS11_is_logged_in(slot, 0, &already_logged_in) != 0) {
-			fprintf(stderr, "Unable to check if already logged in\n");
-			return NULL;
-		}
-		/* Perform login to the token if required */
-		if (!already_logged_in && !pkcs11_login(ctx, slot, tok, ui_method, callback_data)) {
-			fprintf(stderr, "login to token failed, returning NULL...\n");
-			return NULL;
-		}
 		/* Make sure there is at least one private key on the token */
 		if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
 			fprintf(stderr, "Unable to enumerate private keys\n");

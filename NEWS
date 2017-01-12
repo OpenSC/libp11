@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.4; unreleased
+* Fixed a state reset caused by re-login on LOAD_CERT_CTRL engine ctrl;
+  addresses #141 (Michał Trojnara)
 
 New in 0.4.3; 2016-12-04; Michał Trojnara
 * Use UI to get CKU_CONTEXT_SPECIFIC PINs (Michał Trojnara)
