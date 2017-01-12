@@ -280,7 +280,7 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 	end = uri + 6;
 	while (rv && end[0] && end[1]) {
 		p = end + 1;
-		end = strchr(p, ';');
+		end = strpbrk(p, ";?&");
 		if (end == NULL)
 			end = p + strlen(p);
 
