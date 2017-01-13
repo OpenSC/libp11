@@ -746,12 +746,12 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 	}
 
-	/* Perform login to the token if required */
-	if (!ctx_login(ctx, slot, tok, ui_method, callback_data)) {
-		fprintf(stderr, "Login to token failed, returning NULL...\n");
-		return NULL;
-	}
 	if (isPrivate) {
+		/* Perform login to the token if required */
+		if (!ctx_login(ctx, slot, tok, ui_method, callback_data)) {
+			fprintf(stderr, "Login to token failed, returning NULL...\n");
+			return NULL;
+		}
 		/* Make sure there is at least one private key on the token */
 		if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
 			fprintf(stderr, "Unable to enumerate private keys\n");
