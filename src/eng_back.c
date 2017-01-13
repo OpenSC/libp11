@@ -345,7 +345,8 @@ int ctx_finish(ENGINE_CTX *ctx)
 /* prototype for OpenSSL ENGINE_load_cert */
 /* used by load_cert_ctrl via ENGINE_ctrl for now */
 
-static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
+static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
+		const int login)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL;
@@ -496,7 +497,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id)
 
 	/* In several tokens certificates are marked as private.
 	 * We require a cached pin, as no UI method is available. */
-	if (ctx->pin && !ctx_login(ctx, slot, tok, NULL, NULL)) {
+	if (login && ctx->pin && !ctx_login(ctx, slot, tok, NULL, NULL)) {
 		fprintf(stderr, "Login to token failed, returning NULL...\n");
 		return NULL;
 	}
@@ -546,10 +547,12 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	if (parms->cert != NULL)
 		return 0;
 
-	parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id);
+	parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
+	if (parms->cert == NULL) /* Try again with login */
+		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 1);
+
 	if (parms->cert == NULL)
 		return 0;
-
 	return 1;
 }
 
