@@ -561,7 +561,8 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 /******************************************************************************/
 
 static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
-		UI_METHOD *ui_method, void *callback_data, int isPrivate)
+		UI_METHOD *ui_method, void *callback_data,
+		const int isPrivate, const int login)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL;
@@ -749,12 +750,14 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 	}
 
+	/* Both private and public keys can have the CKA_PRIVATE attribute
+	 * set and thus require login (even to retrieve attributes!) */
+	if (login && !ctx_login(ctx, slot, tok, ui_method, callback_data)) {
+		fprintf(stderr, "Login to token failed, returning NULL...\n");
+		return NULL;
+	}
+
 	if (isPrivate) {
-		/* Perform login to the token if required */
-		if (!ctx_login(ctx, slot, tok, ui_method, callback_data)) {
-			fprintf(stderr, "Login to token failed, returning NULL...\n");
-			return NULL;
-		}
 		/* Make sure there is at least one private key on the token */
 		if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
 			fprintf(stderr, "Unable to enumerate private keys\n");
@@ -817,7 +820,9 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 {
 	EVP_PKEY *pk;
 
-	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0);
+	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
+	if (pk == NULL) /* Try again with login */
+		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 1);
 	if (pk == NULL) {
 		fprintf(stderr, "PKCS11_load_public_key returned NULL\n");
 		return NULL;
@@ -830,7 +835,9 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 {
 	EVP_PKEY *pk;
 
-	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1);
+	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
+	if (pk == NULL) /* Try again with login */
+		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 1);
 	if (pk == NULL) {
 		fprintf(stderr, "PKCS11_get_private_key returned NULL\n");
 		return NULL;
