@@ -529,7 +529,8 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 	if (selected_cert != NULL) {
 		x509 = X509_dup(selected_cert->x509);
 	} else {
-		fprintf(stderr, "Certificate not found.\n");
+		if (login) /* Only print the error on the second attempt */
+			fprintf(stderr, "Certificate not found.\n");
 		x509 = NULL;
 	}
 	if (cert_label != NULL)
@@ -807,7 +808,8 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			PKCS11_get_private_key(selected_key) :
 			PKCS11_get_public_key(selected_key);
 	} else {
-		fprintf(stderr, "Key not found.\n");
+		if (login) /* Only print the error on the second attempt */
+			fprintf(stderr, "Key not found.\n");
 		pk = NULL;
 	}
 	if (key_label != NULL)
