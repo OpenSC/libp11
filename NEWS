@@ -1,9 +1,11 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.4; unreleased
+New in 0.4.4; 2017-01-26; Michał Trojnara
 * Fixed a state reset caused by re-login on LOAD_CERT_CTRL engine ctrl;
   fixes #141 (Michał Trojnara)
 * "?" and "&" allowed as URI separators; fixes #142 (Michał Trojnara)
+* engine: Unified private/public key and certificate enumeration
+  to be performed without login if possible (Michał Trojnara)
 
 New in 0.4.3; 2016-12-04; Michał Trojnara
 * Use UI to get CKU_CONTEXT_SPECIFIC PINs (Michał Trojnara)
