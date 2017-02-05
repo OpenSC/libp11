@@ -481,10 +481,10 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	(void)ctx;
 	(void)session;
 
-	size = sizeof(key_type);
+	/* Ignore unknown key types */
+	size = sizeof(CK_KEY_TYPE);
 	if (pkcs11_getattr_var(token, obj, CKA_KEY_TYPE, (CK_BYTE *)&key_type, &size))
 		return -1;
-
 	switch (key_type) {
 	case CKK_RSA:
 		ops = &pkcs11_rsa_ops;
@@ -499,30 +499,29 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		return 0;
 	}
 
-	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
-	if (tmp == NULL) {
-		OPENSSL_free(keys->keys);
-		keys->keys = NULL;
+	/* Allocate memory */
+	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
+	if (kpriv == NULL)
 		return -1;
-	}
+	memset(kpriv, 0, sizeof(PKCS11_KEY_private));
+	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
+	if (tmp == NULL)
+		return -1;
 	keys->keys = tmp;
-
 	key = keys->keys + keys->num++;
 	memset(key, 0, sizeof(PKCS11_KEY));
-	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
-	if (kpriv)
-		memset(kpriv, 0, sizeof(PKCS11_KEY_private));
-	key->_private = kpriv;
-	kpriv->object = obj;
-	kpriv->parent = token;
 
+	/* Fill public properties */
 	pkcs11_getattr_alloc(token, obj, CKA_LABEL, (CK_BYTE **)&key->label, NULL);
 	key->id_len = 0;
 	pkcs11_getattr_alloc(token, obj, CKA_ID, &key->id, &key->id_len);
 	key->isPrivate = (type == CKO_PRIVATE_KEY);
 
-	/* Initialize internal information */
-	kpriv->id_len = sizeof(kpriv->id);
+	/* Fill private properties */
+	key->_private = kpriv;
+	kpriv->object = obj;
+	kpriv->parent = token;
+	kpriv->id_len = sizeof kpriv->id;
 	if (pkcs11_getattr_var(token, obj, CKA_ID, kpriv->id, &kpriv->id_len))
 		kpriv->id_len = 0;
 	kpriv->ops = ops;

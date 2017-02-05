@@ -147,34 +147,28 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	(void)ctx;
 	(void)session;
 
-	size = sizeof(cert_type);
+	/* Ignore unknown certificate types */
+	size = sizeof(CK_CERTIFICATE_TYPE);
 	if (pkcs11_getattr_var(token, obj, CKA_CERTIFICATE_TYPE, (CK_BYTE *)&cert_type, &size))
 		return -1;
-
-	/* Ignore any certs we don't understand */
 	if (cert_type != CKC_X_509)
 		return 0;
 
-	tpriv = PRIVTOKEN(token);
-	tmp = OPENSSL_realloc(tpriv->certs,
-		(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
-	if (tmp == NULL) {
-		OPENSSL_free(tpriv->certs);
-		tpriv->certs = NULL;
-		return -1;
-	}
-	tpriv->certs = tmp;
-
-	cert = tpriv->certs + tpriv->ncerts++;
-	memset(cert, 0, sizeof(*cert));
+	/* Allocate memory */
 	cpriv = OPENSSL_malloc(sizeof(PKCS11_CERT_private));
 	if (cpriv == NULL)
 		return -1;
 	memset(cpriv, 0, sizeof(PKCS11_CERT_private));
-	cert->_private = cpriv;
-	cpriv->object = obj;
-	cpriv->parent = token;
+	tpriv = PRIVTOKEN(token);
+	tmp = OPENSSL_realloc(tpriv->certs,
+		(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
+	if (tmp == NULL)
+		return -1;
+	tpriv->certs = tmp;
+	cert = tpriv->certs + tpriv->ncerts++;
+	memset(cert, 0, sizeof(PKCS11_CERT));
 
+	/* Fill public properties */
 	pkcs11_getattr_alloc(token, obj, CKA_LABEL, (CK_BYTE **)&cert->label, NULL);
 	size = 0;
 	if (!pkcs11_getattr_alloc(token, obj, CKA_VALUE, &data, &size)) {
@@ -186,8 +180,11 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	cert->id_len = 0;
 	pkcs11_getattr_alloc(token, obj, CKA_ID, &cert->id, &cert->id_len);
 
-	/* Initialize internal information */
-	cpriv->id_len = sizeof(cpriv->id);
+	/* Fill private properties */
+	cert->_private = cpriv;
+	cpriv->object = obj;
+	cpriv->parent = token;
+	cpriv->id_len = sizeof cpriv->id;
 	if (pkcs11_getattr_var(token, obj, CKA_ID, cpriv->id, &cpriv->id_len))
 		cpriv->id_len = 0;
 
