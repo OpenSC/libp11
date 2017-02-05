@@ -189,20 +189,9 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	int rv;
 
-	if (relogin == 0) {
-		/* Calling PKCS11_login invalidates all cached
-		 * keys we have */
-		if (slot->token) {
-			pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
-			pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
-			pkcs11_destroy_certs(slot->token);
-		}
-		if (spriv->loggedIn) {
-			/* already logged in, log out first */
-			if (PKCS11_logout(slot))
-				return -1;
-		}
-	}
+	if (!relogin && spriv->loggedIn)
+		return 0; /* Nothing to do */
+
 	if (!spriv->haveSession) {
 		/* SO gets a r/w session by default,
 		 * user gets a r/o session by default. */
@@ -486,10 +475,10 @@ static int pkcs11_check_token(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 	memset(tpriv, 0, sizeof(PKCS11_TOKEN_private));
 	tpriv->parent = slot;
 	tpriv->prv.keys = NULL;
-	tpriv->prv.num = -1;
+	tpriv->prv.num = 0;
 	tpriv->pub.keys = NULL;
-	tpriv->pub.num = -1;
-	tpriv->ncerts = -1;
+	tpriv->pub.num = 0;
+	tpriv->ncerts = 0;
 
 	slot->token->label = PKCS11_DUP(info.label);
 	slot->token->manufacturer = PKCS11_DUP(info.manufacturerID);

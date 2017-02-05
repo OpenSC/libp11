@@ -395,18 +395,18 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 	int rv;
 
-	if (keys->num < 0) { /* No cache was built for the specified type */
-		/* Make sure we have a session */
-		if (!spriv->haveSession && PKCS11_open_session(slot, 0))
-			return -1;
-		CRYPTO_THREAD_write_lock(cpriv->rwlock);
-		rv = pkcs11_find_keys(token, type);
-		CRYPTO_THREAD_unlock(cpriv->rwlock);
-		if (rv < 0) {
-			pkcs11_destroy_keys(token, type);
-			return -1;
-		}
+	/* Make sure we have a session */
+	if (!spriv->haveSession && PKCS11_open_session(slot, 0))
+		return -1;
+
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	rv = pkcs11_find_keys(token, type);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
+	if (rv < 0) {
+		pkcs11_destroy_keys(token, type);
+		return -1;
 	}
+
 	if (keyp)
 		*keyp = keys->keys;
 	if (countp)
@@ -436,7 +436,6 @@ static int pkcs11_find_keys(PKCS11_TOKEN *token, unsigned int type)
 		C_FindObjectsInit(spriv->session, key_search_attrs, 1));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
 
-	keys->num = 0;
 	do {
 		res = pkcs11_next_key(ctx, token, spriv->session, type);
 	} while (res == 0);
@@ -477,6 +476,7 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	CK_KEY_TYPE key_type;
 	PKCS11_KEY_ops *ops;
 	size_t size;
+	int i;
 
 	(void)ctx;
 	(void)session;
@@ -498,6 +498,13 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		/* Ignore any keys we don't understand */
 		return 0;
 	}
+
+	/* Prevent re-adding existing PKCS#11 object handles */
+	/* TODO: Rewrite the O(n) algorithm as O(log n),
+	 * or it may be too slow with a large number of keys */
+	for (i=0; i < keys->num; ++i)
+		if (PRIVKEY(keys->keys + i)->object == obj)
+			return 0;
 
 	/* Allocate memory */
 	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
@@ -554,7 +561,7 @@ void pkcs11_destroy_keys(PKCS11_TOKEN *token, unsigned int type)
 	if (keys->keys)
 		OPENSSL_free(keys->keys);
 	keys->keys = NULL;
-	keys->num = -1;
+	keys->num = 0;
 }
 
 /* vim: set noexpandtab: */

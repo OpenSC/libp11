@@ -43,18 +43,18 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	int rv;
 
-	if (tpriv->ncerts < 0) {
-		/* Make sure we have a session */
-		if (!spriv->haveSession && PKCS11_open_session(slot, 0))
-			return -1;
-		CRYPTO_THREAD_write_lock(cpriv->rwlock);
-		rv = pkcs11_find_certs(token);
-		CRYPTO_THREAD_unlock(cpriv->rwlock);
-		if (rv < 0) {
-			pkcs11_destroy_certs(token);
-			return -1;
-		}
+	/* Make sure we have a session */
+	if (!spriv->haveSession && PKCS11_open_session(slot, 0))
+		return -1;
+
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	rv = pkcs11_find_certs(token);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
+	if (rv < 0) {
+		pkcs11_destroy_certs(token);
+		return -1;
 	}
+
 	if (certp)
 		*certp = tpriv->certs;
 	if (countp)
@@ -104,7 +104,6 @@ static int pkcs11_find_certs(PKCS11_TOKEN *token)
 	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(spriv->session, cert_search_attrs, 1));
 	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
 
-	tpriv->ncerts = 0;
 	do {
 		res = pkcs11_next_cert(ctx, token, spriv->session);
 	} while (res == 0);
@@ -143,6 +142,7 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	unsigned char *data;
 	CK_CERTIFICATE_TYPE cert_type;
 	size_t size;
+	int i;
 
 	(void)ctx;
 	(void)session;
@@ -153,6 +153,13 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		return -1;
 	if (cert_type != CKC_X_509)
 		return 0;
+
+	/* Prevent re-adding existing PKCS#11 object handles */
+	/* TODO: Rewrite the O(n) algorithm as O(log n),
+	 * or it may be too slow with a large number of certificates */
+	for (i=0; i < PRIVTOKEN(token)->ncerts; ++i)
+		if (PRIVCERT(PRIVTOKEN(token)->certs + i)->object == obj)
+			return 0;
 
 	/* Allocate memory */
 	cpriv = OPENSSL_malloc(sizeof(PKCS11_CERT_private));
@@ -214,7 +221,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN *token)
 	if (tpriv->certs)
 		OPENSSL_free(tpriv->certs);
 	tpriv->certs = NULL;
-	tpriv->ncerts = -1;
+	tpriv->ncerts = 0;
 }
 
 /*
