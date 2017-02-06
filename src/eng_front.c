@@ -110,6 +110,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"INIT_ARGS",
 		"Specifies additional initialization arguments to the PKCS#11 module",
 		ENGINE_CMD_FLAG_STRING},
+	{CMD_USER_TYPE,
+		"USER_TYPE",
+		"Specifies a custom CK_USER_TYPE to pass to C_Login instead of CKU_USER",
+		ENGINE_CMD_FLAG_NUMERIC},
 	{0, NULL, NULL, 0}
 };
 

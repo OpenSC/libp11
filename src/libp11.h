@@ -514,6 +514,9 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 #define PKCS11_KEYGEN_FAILED			(PKCS11_ERR_BASE+6)
 #define PKCS11_UI_FAILED			(PKCS11_ERR_BASE+7)
 
+/* Use a custom user type on C_Login instead of CKU_USER */
+void PKCS11_set_custom_user_type( unsigned long user_type );
+
 #ifdef __cplusplus
 }
 #endif

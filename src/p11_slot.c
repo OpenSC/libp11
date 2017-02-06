@@ -24,6 +24,13 @@ static int pkcs11_init_slot(PKCS11_CTX *, PKCS11_SLOT *, CK_SLOT_ID);
 static int pkcs11_check_token(PKCS11_CTX *, PKCS11_SLOT *);
 static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
+static unsigned long pkcs11_user_type = CKU_USER;
+
+void pkcs11_set_custom_user_type( unsigned long user_type )
+{
+	pkcs11_user_type = user_type;
+}
+
 /*
  * Get slotid from private
  */
@@ -200,7 +207,7 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
 	}
 
 	rv = CRYPTOKI_call(ctx,
-		C_Login(spriv->session, so ? CKU_SO : CKU_USER,
+		C_Login(spriv->session, so ? CKU_SO : pkcs11_user_type,
 			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
 	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
 		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
