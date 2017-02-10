@@ -110,6 +110,14 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"INIT_ARGS",
 		"Specifies additional initialization arguments to the PKCS#11 module",
 		ENGINE_CMD_FLAG_STRING},
+	{CMD_SET_USER_INTERFACE,
+		"SET_USER_INTERFACE",
+		"Set the global user interface (internal)",
+		ENGINE_CMD_FLAG_INTERNAL},
+	{CMD_SET_CALLBACK_DATA,
+		"SET_CALLBACK_DATA",
+		"Set the global user interface extra data (internal)",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 

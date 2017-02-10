@@ -47,6 +47,8 @@ typedef struct pkcs11_ctx_private {
 	CK_FUNCTION_LIST_PTR method;
 	void *handle;
 	char *init_args;
+	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
+	void *ui_user_data;
 	unsigned int forkid;
 	PKCS11_RWLOCK rwlock;
 } PKCS11_CTX_private;
@@ -94,8 +96,6 @@ typedef struct pkcs11_key_private {
 	PKCS11_TOKEN *parent;
 	CK_OBJECT_HANDLE object;
 	CK_BBOOL always_authenticate;
-	UI_METHOD *ui_method;
-	void *ui_user_data;
 	unsigned char id[255];
 	size_t id_len;
 	PKCS11_KEY_ops *ops;
@@ -276,8 +276,8 @@ extern PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *key);
 extern int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 	PKCS11_CERT **certs, unsigned int *ncerts);
 
-/* Set UI method to allow retrieving PIN values interactively */
-extern int pkcs11_set_ui_method(PKCS11_KEY *key,
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+extern int pkcs11_set_ui_method(PKCS11_CTX *key,
 	UI_METHOD *ui_method, void *ui_user_data);
 
 /* Initialize a token */

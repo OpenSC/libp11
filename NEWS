@@ -2,6 +2,8 @@ NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.5; unreleased
 * Prevented destroying existing keys/certs at login (Michał Trojnara)
+* SET_USER_INTERFACE and SET_CALLBACK_DATA engine ctrl commands added
+  for certificate and CKU_CONTEXT_SPECIFIC PINs (Michał Trojnara)
 
 New in 0.4.4; 2017-01-26; Michał Trojnara
 * Fixed a state reset caused by re-login on LOAD_CERT_CTRL engine ctrl;

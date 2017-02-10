@@ -38,15 +38,15 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 static int pkcs11_store_key(PKCS11_TOKEN *, EVP_PKEY *, unsigned int,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
 
-/* Set UI method to allow retrieving PIN values interactively */
-int pkcs11_set_ui_method(PKCS11_KEY *key,
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+int pkcs11_set_ui_method(PKCS11_CTX *ctx,
 		UI_METHOD *ui_method, void *ui_user_data)
 {
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
-	if (kpriv == NULL)
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	if (cpriv == NULL)
 		return -1;
-	kpriv->ui_method = ui_method;
-	kpriv->ui_user_data = ui_user_data;
+	cpriv->ui_method = ui_method;
+	cpriv->ui_user_data = ui_user_data;
 	return 0;
 }
 
@@ -343,6 +343,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	char pin[MAX_PIN_LENGTH+1];
 	UI *ui;
 	int rv;
@@ -355,11 +356,11 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	}
 
 	/* Call UI to ask for a PIN */
-	ui = UI_new_method(kpriv->ui_method);
+	ui = UI_new_method(cpriv->ui_method);
 	if (ui == NULL)
 		return PKCS11_UI_FAILED;
-	if (kpriv->ui_user_data != NULL)
-		UI_add_user_data(ui, kpriv->ui_user_data);
+	if (cpriv->ui_user_data != NULL)
+		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
 	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {

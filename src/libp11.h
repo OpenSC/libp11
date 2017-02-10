@@ -281,8 +281,8 @@ extern PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY *);
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
 
-/* Set UI method to allow retrieving PIN values interactively */
-extern int PKCS11_set_ui_method(PKCS11_KEY *key,
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
 
 /**
