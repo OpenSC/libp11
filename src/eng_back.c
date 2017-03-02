@@ -908,12 +908,18 @@ static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 static int ctx_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
 {
 	ctx->ui_method = ui_method;
+	if (ctx->pkcs11_ctx != NULL) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->pkcs11_ctx,
+			ctx->ui_method, ctx->callback_data);
 	return 1;
 }
 
 static int ctx_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
 {
 	ctx->callback_data = callback_data;
+	if (ctx->pkcs11_ctx != NULL) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->pkcs11_ctx,
+			ctx->ui_method, ctx->callback_data);
 	return 1;
 }
 

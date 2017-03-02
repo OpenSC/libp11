@@ -277,7 +277,7 @@ extern int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 	PKCS11_CERT **certs, unsigned int *ncerts);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
-extern int pkcs11_set_ui_method(PKCS11_CTX *key,
+extern int pkcs11_set_ui_method(PKCS11_CTX *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
 
 /* Initialize a token */
