@@ -156,6 +156,8 @@ The supported engine controls are the following.
 * **VERBOSE**: Print additional details 
 * **QUIET**: Do not print additional details 
 * **LOAD_CERT_CTRL**: Load a certificate from token
+* **SET_USER_INTERFACE**: Set the global user interface
+* **SET_CALLBACK_DATA**: Set the global user interface extra data
 
 An example code snippet setting specific module is shown below.
 
