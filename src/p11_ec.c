@@ -304,7 +304,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_ECDSA;
 
-	CRYPTO_THREAD_write_lock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
 	if (rv == CKR_USER_NOT_LOGGED_IN)
@@ -312,7 +312,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE *)msg, msg_len, sigret, &ck_sigsize));
-	CRYPTO_THREAD_unlock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
