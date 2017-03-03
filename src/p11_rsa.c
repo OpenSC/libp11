@@ -95,7 +95,7 @@ int pkcs11_private_encrypt(int flen,
 	if (pkcs11_mechanism(&mechanism, padding) < 0)
 		return -1;
 
-	CRYPTO_THREAD_write_lock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
 	/* Try signing first, as applications are more likely to use it */
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
@@ -114,7 +114,7 @@ int pkcs11_private_encrypt(int flen,
 			rv = CRYPTOKI_call(ctx,
 				C_Encrypt(spriv->session, (CK_BYTE *)from, flen, to, &size));
 	}
-	CRYPTO_THREAD_unlock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, pkcs11_map_err(rv));
@@ -139,7 +139,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	if (pkcs11_mechanism(&mechanism, padding) < 0)
 		return -1;
 
-	CRYPTO_THREAD_write_lock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_DecryptInit(spriv->session, &mechanism, kpriv->object));
 	if (rv == CKR_USER_NOT_LOGGED_IN)
@@ -148,7 +148,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 		rv = CRYPTOKI_call(ctx,
 			C_Decrypt(spriv->session, (CK_BYTE *)from, size,
 				(CK_BYTE_PTR)to, &size));
-	CRYPTO_THREAD_unlock(PRIVSLOT(slot)->rwlock);
+	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
 		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));
