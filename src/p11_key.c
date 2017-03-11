@@ -338,7 +338,6 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
  */
 int pkcs11_authenticate(PKCS11_KEY *key)
 {
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 	PKCS11_TOKEN *token = KEY2TOKEN(key);
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
@@ -422,9 +421,7 @@ static int pkcs11_find_keys(PKCS11_TOKEN *token, unsigned int type)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
-	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 	CK_OBJECT_CLASS key_search_class;
 	CK_ATTRIBUTE key_search_attrs[1] = {
 		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},

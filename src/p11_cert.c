@@ -91,7 +91,6 @@ static int pkcs11_find_certs(PKCS11_TOKEN *token)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	CK_OBJECT_CLASS cert_search_class;
 	CK_ATTRIBUTE cert_search_attrs[] = {
