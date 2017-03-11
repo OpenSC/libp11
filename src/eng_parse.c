@@ -65,7 +65,7 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 		}
 		if (*in == ':')
 			in++;
-		if (left <= 0) {
+		if (left == 0) {
 			fprintf(stderr, "hex_to_bin(): hex string too long\n");
 			*outlen = 0;
 			return 0;

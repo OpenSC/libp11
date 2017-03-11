@@ -125,7 +125,7 @@ loggedin:
 		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
 		goto failed;
 	}
-	if (ncerts <= 0) {
+	if (ncerts == 0) {
 		fprintf(stderr, "no certificates found\n");
 		goto failed;
 	}
