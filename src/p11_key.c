@@ -139,8 +139,8 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 	RSA *rsa;
 	BIO *err;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	BIGNUM *exp = NULL;
-	BN_GENCB *gencb = NULL;
+	BIGNUM *exp;
+	BN_GENCB *gencb;
 #endif
 	int rc;
 
@@ -156,15 +156,15 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 	rsa = RSA_new();
 	gencb = BN_GENCB_new();
 	if (gencb)
-	    BN_GENCB_set(gencb, NULL, err);
-
-	if ( rsa == NULL  || exp == NULL || gencb == NULL
-	    || !BN_set_word(exp, RSA_F4) || !RSA_generate_key_ex(rsa, bits, exp, gencb)) {
+		BN_GENCB_set(gencb, NULL, err);
+	if (rsa == NULL || exp == NULL || gencb == NULL ||
+			!BN_set_word(exp, RSA_F4) ||
+			!RSA_generate_key_ex(rsa, bits, exp, gencb)) {
 		RSA_free(rsa);
+		rsa = NULL;
 	}
 	BN_GENCB_free(gencb);
 	BN_free(exp);
-
 #else
 	rsa = RSA_generate_key(bits, RSA_F4, NULL, err);
 #endif
