@@ -114,22 +114,7 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_m
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
 
-	if (token_label && token_label[0]) {
-		const char prompt_desc_begin[] = "PKCS#11 token '";
-		const char prompt_desc_end[] = "'";
-		size_t len = sizeof(prompt_desc_begin) + sizeof(prompt_desc_end) + strlen(token_label);
-		char* prompt_desc = OPENSSL_malloc(len + 1);
-		if (!prompt_desc) {
-			return 0;
-		}
-		BUF_strlcpy(prompt_desc, prompt_desc_begin, len + 1);
-        BUF_strlcat(prompt_desc, token_label, len + 1);
-        BUF_strlcat(prompt_desc, prompt_desc_end, len + 1);
-		prompt = UI_construct_prompt(ui, "PIN", prompt_desc);
-		OPENSSL_free(prompt_desc);
-	} else {
-		prompt = UI_construct_prompt(ui, "PIN", "PKCS#11 token");
-	}
+	prompt = UI_construct_prompt(ui, "PKCS#11 token PIN", token_label);
 	if (!prompt) {
 		return 0;
 	}
