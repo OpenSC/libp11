@@ -93,9 +93,10 @@ static void ctx_destroy_pin(ENGINE_CTX *ctx)
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int ctx_get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_data)
+static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_method, void *callback_data)
 {
 	UI *ui;
+	char* prompt;
 
 	/* call ui to ask for a pin */
 	ui = UI_new_method(ui_method);
@@ -112,12 +113,19 @@ static int ctx_get_pin(ENGINE_CTX *ctx, UI_METHOD *ui_method, void *callback_dat
 		return 0;
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
-	if (!UI_add_input_string(ui, "PKCS#11 token PIN: ",
-			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH)) {
-		fprintf(stderr, "UI_add_input_string failed\n");
-		UI_free(ui);
+	prompt = UI_construct_prompt(ui, "PKCS#11 token PIN", token_label);
+	if (!prompt) {
 		return 0;
 	}
+	if (!UI_dup_input_string(ui, prompt,
+			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH)) {
+		fprintf(stderr, "UI_dup_input_string failed\n");
+		UI_free(ui);
+		OPENSSL_free(prompt);
+		return 0;
+	}
+	OPENSSL_free(prompt);
+
 	if (UI_process(ui)) {
 		fprintf(stderr, "UI_process failed\n");
 		UI_free(ui);
@@ -166,7 +174,7 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 			return 0;
 		}
 		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-		if (!ctx_get_pin(ctx, ui_method, callback_data)) {
+		if (!ctx_get_pin(ctx, tok->label, ui_method, callback_data)) {
 			ctx_destroy_pin(ctx);
 			fprintf(stderr, "No PIN code was entered\n");
 			return 0;

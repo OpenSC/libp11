@@ -344,6 +344,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	char pin[MAX_PIN_LENGTH+1];
+	char* prompt;
 	UI *ui;
 	int rv;
 
@@ -361,11 +362,18 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	if (cpriv->ui_user_data != NULL)
 		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
-	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
-			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
-		UI_free(ui);
+	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
+	if (!prompt) {
 		return PKCS11_UI_FAILED;
 	}
+	if (!UI_dup_input_string(ui, prompt,
+			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
+		UI_free(ui);
+		OPENSSL_free(prompt);
+		return PKCS11_UI_FAILED;
+	}
+	OPENSSL_free(prompt);
+
 	if (UI_process(ui)) {
 		UI_free(ui);
 		return PKCS11_UI_FAILED;
