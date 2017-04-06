@@ -393,7 +393,9 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
+	PKCS11_KEY *first_key_prev = keys->keys;
 	int rv;
+	int i;
 
 	/* Make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 0))
@@ -405,6 +407,15 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	if (rv < 0) {
 		pkcs11_destroy_keys(token, type);
 		return -1;
+	}
+
+	/* Always update key references if the keys pointer changed */
+	if (first_key_prev != NULL && first_key_prev != keys->keys) {
+		for (i = 0; i < keys->num; ++i) {
+			PKCS11_KEY *key = keys->keys + i;
+			PKCS11_KEY_private *kpriv = PRIVKEY(key);
+			kpriv->ops->update_ex_data(key);
+		}
 	}
 
 	if (keyp)

@@ -87,6 +87,7 @@ typedef struct pkcs11_token_private {
 typedef struct pkcs11_key_ops {
 	int type; /* EVP_PKEY_xxx */
 	EVP_PKEY *(*get_evp_key) (PKCS11_KEY *);
+	void (*update_ex_data) (PKCS11_KEY *);
 } PKCS11_KEY_ops;
 
 typedef struct pkcs11_key_private {
