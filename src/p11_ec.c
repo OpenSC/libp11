@@ -242,7 +242,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 
 static void pkcs11_set_ex_data_ec(EC_KEY* ec, PKCS11_KEY* key)
 {
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EC_KEY_set_ex_data(ec, ec_ex_index, key);
 #else
 	ECDSA_set_ex_data(ec, ec_ex_index, key);
@@ -297,11 +297,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	EC_KEY_set_ex_data(ec, ec_ex_index, key);
-#else
-	ECDSA_set_ex_data(ec, ec_ex_index, key);
-#endif
+	pkcs11_set_ex_data_ec(ec, key);
 	EC_KEY_free(ec); /* Drops our reference to it */
 	return pk;
 }
