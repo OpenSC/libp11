@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.6; unreleased
+* Updated ex_data on EVP_PKEYs after enumerating keys (Matt Hauck)
+* Token/key labels added into PIN prompts (Matt Hauck)
 
 New in 0.4.5; 2017-03-29; Michał Trojnara
 * Prevented destroying existing keys/certs at login (Michał Trojnara)
