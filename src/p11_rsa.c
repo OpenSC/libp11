@@ -235,6 +235,23 @@ success:
 	return rsa;
 }
 
+static void pkcs11_set_ex_data_rsa(RSA* rsa, PKCS11_KEY* key)
+{
+	RSA_set_ex_data(rsa, rsa_ex_index, key);
+}
+
+static void pkcs11_update_ex_data_rsa(PKCS11_KEY* key)
+{
+	EVP_PKEY* evp = key->evp_key;
+	if (evp == NULL)
+		return;
+	if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA)
+		return;
+
+	RSA* rsa = EVP_PKEY_get1_RSA(evp);
+	pkcs11_set_ex_data_rsa(rsa, key);
+	RSA_free(rsa);
+}
 /*
  * Build an EVP_PKEY object
  */
@@ -262,7 +279,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	/* RSA_FLAG_SIGN_VER is no longer needed since OpenSSL 1.1 */
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 #endif
-	RSA_set_ex_data(rsa, rsa_ex_index, key);
+	pkcs11_set_ex_data_rsa(rsa, key);
 	RSA_free(rsa); /* Drops our reference to it */
 	return pk;
 }
@@ -467,7 +484,8 @@ void PKCS11_rsa_method_free(void)
 
 PKCS11_KEY_ops pkcs11_rsa_ops = {
 	EVP_PKEY_RSA,
-	pkcs11_get_evp_key_rsa
+	pkcs11_get_evp_key_rsa,
+	pkcs11_update_ex_data_rsa
 };
 
 /* vim: set noexpandtab: */
