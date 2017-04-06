@@ -344,6 +344,7 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	char pin[MAX_PIN_LENGTH+1];
+	char* prompt;
 	UI *ui;
 	int rv;
 
@@ -361,11 +362,46 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	if (cpriv->ui_user_data != NULL)
 		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
-	if (!UI_add_input_string(ui, "PKCS#11 key PIN: ",
-			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
-		UI_free(ui);
+
+	if (key->label && key->label[0]) {
+		const char prompt1[] = "PKCS#11 key '";
+		const char prompt2[] = "'";
+		const char prompt3[] = ", token '";
+		const char prompt4[] = "'";
+		size_t len = sizeof(prompt1) + sizeof(prompt2) + strlen(key->label);
+		if (token->label && token->label[0]) {
+			len += sizeof(prompt3) + sizeof(prompt4) + strlen(token->label);
+		}
+
+		char* prompt_desc = OPENSSL_malloc(len + 1);
+		if (!prompt_desc) {
+			return PKCS11_UI_FAILED;
+		}
+		BUF_strlcpy(prompt_desc, prompt1, len + 1);
+        BUF_strlcat(prompt_desc, key->label, len + 1);
+        BUF_strlcat(prompt_desc, prompt2, len + 1);
+		if (token->label && token->label[0]) {
+			BUF_strlcat(prompt_desc, prompt3, len + 1);
+			BUF_strlcat(prompt_desc, token->label, len + 1);
+			BUF_strlcat(prompt_desc, prompt4, len + 1);
+		}
+		prompt = UI_construct_prompt(ui, "PIN", prompt_desc);
+		OPENSSL_free(prompt_desc);
+	} else {
+		prompt = UI_construct_prompt(ui, "PIN", "PKCS#11 key");
+	}
+	if (!prompt) {
 		return PKCS11_UI_FAILED;
 	}
+
+	if (!UI_dup_input_string(ui, prompt,
+			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
+		UI_free(ui);
+		OPENSSL_free(prompt);
+		return PKCS11_UI_FAILED;
+	}
+	OPENSSL_free(prompt);
+
 	if (UI_process(ui)) {
 		UI_free(ui);
 		return PKCS11_UI_FAILED;
