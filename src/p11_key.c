@@ -362,12 +362,10 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	if (cpriv->ui_user_data != NULL)
 		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
-
 	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
 	if (!prompt) {
 		return PKCS11_UI_FAILED;
 	}
-
 	if (!UI_dup_input_string(ui, prompt,
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
 		UI_free(ui);

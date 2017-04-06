@@ -113,12 +113,10 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_m
 		return 0;
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
-
 	prompt = UI_construct_prompt(ui, "PKCS#11 token PIN", token_label);
 	if (!prompt) {
 		return 0;
 	}
-
 	if (!UI_dup_input_string(ui, prompt,
 			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH)) {
 		fprintf(stderr, "UI_dup_input_string failed\n");
