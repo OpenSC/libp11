@@ -325,7 +325,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
-	if (rv == CKR_USER_NOT_LOGGED_IN)
+	if (kpriv->always_authenticate == CK_TRUE || rv == CKR_USER_NOT_LOGGED_IN)
 		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
