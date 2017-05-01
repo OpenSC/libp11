@@ -783,8 +783,9 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 	}
 	if (key_count == 0) {
-		fprintf(stderr, "No %s keys found.\n",
-			(char *)(isPrivate ? "private" : "public"));
+		if (login) /* Only print the error on the second attempt */
+			fprintf(stderr, "No %s keys found.\n",
+				(char *)(isPrivate ? "private" : "public"));
 		return NULL;
 	}
 	if (ctx->verbose)
