@@ -118,6 +118,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"SET_CALLBACK_DATA",
 		"Set the global user interface extra data (internal)",
 		ENGINE_CMD_FLAG_INTERNAL},
+	{CMD_FORCE_LOGIN,
+		"FORCE_LOGIN",
+		"Force login to the PKCS#11 module",
+		ENGINE_CMD_FLAG_NO_INPUT},
 	{0, NULL, NULL, 0}
 };
 

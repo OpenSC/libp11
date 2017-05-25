@@ -49,6 +49,7 @@ struct st_engine_ctx {
 	char *init_args;
 	UI_METHOD *ui_method;
 	void *callback_data;
+	int force_login;
 
 	/* Engine initialization mutex */
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -561,7 +562,8 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	if (parms->cert != NULL)
 		return 0;
 
-	parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
+	if (!ctx->force_login)
+		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
 	if (parms->cert == NULL) /* Try again with login */
 		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 1);
 
@@ -833,9 +835,10 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	EVP_PKEY *pk;
+	EVP_PKEY *pk = NULL;
 
-	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
+	if (!ctx->force_login)
+		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
 	if (pk == NULL) /* Try again with login */
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 1);
 	if (pk == NULL) {
@@ -848,9 +851,10 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	EVP_PKEY *pk;
+	EVP_PKEY *pk = NULL;
 
-	pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
+	if (!ctx->force_login)
+		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
 	if (pk == NULL) /* Try again with login */
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 1);
 	if (pk == NULL) {
@@ -933,6 +937,12 @@ static int ctx_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
 	return 1;
 }
 
+static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
+{
+	ctx->force_login = 1;
+	return 1;
+}
+
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -955,6 +965,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case ENGINE_CTRL_SET_CALLBACK_DATA:
 	case CMD_SET_CALLBACK_DATA:
 		return ctx_ctrl_set_callback_data(ctx, p);
+	case CMD_FORCE_LOGIN:
+		return ctx_ctrl_force_login(ctx);
 	default:
 		break;
 	}

@@ -158,6 +158,7 @@ The supported engine controls are the following.
 * **LOAD_CERT_CTRL**: Load a certificate from token
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
+* **FORCE_LOGIN**: Force login to the PKCS#11 module
 
 An example code snippet setting specific module is shown below.
 
