@@ -160,7 +160,7 @@ static int slot_logged_in(PKCS11_SLOT *slot) {
 static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	if (!tok->loginRequired || slot_logged_in(slot))
+	if (!(ctx->force_login || tok->loginRequired) || slot_logged_in(slot))
 		return 1;
 
 	/* If the token has a secure login (i.e., an external keypad),
