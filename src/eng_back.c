@@ -255,7 +255,7 @@ static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	PKCS11_SLOT *slot_list = NULL;
 	unsigned int slot_count = 0;
 
-	if (ctx->verbose)
+	if (ctx->verbose > 0)
 		fprintf(stderr, "PKCS#11: Initializing the engine\n");
 
 	pkcs11_ctx = PKCS11_CTX_new();
@@ -277,7 +277,7 @@ static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 		return;
 	}
 
-	if (ctx->verbose)
+	if (ctx->verbose > 0)
 		fprintf(stderr, "Found %u slot%s\n", slot_count,
 			slot_count <= 1 ? "" : "s");
 
@@ -413,7 +413,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 				return NULL;
 			}
 		}
-		if (ctx->verbose) {
+		if (ctx->verbose > 0) {
 			fprintf(stderr, "Looking in slot %d for certificate: ",
 				slot_nr);
 			if (cert_id_len != 0) {
@@ -462,7 +462,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
-		if (ctx->verbose) {
+		if (ctx->verbose > 0) {
 			fprintf(stderr, "[%lu] %-25.25s  %-16s",
 				PKCS11_get_slotid_from_slot(slot),
 				slot->description, flags);
@@ -504,7 +504,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		return NULL;
 	}
 
-	if (ctx->verbose) {
+	if (ctx->verbose > 0) {
 		fprintf(stderr, "Found slot:  %s\n", slot->description);
 		fprintf(stderr, "Found token: %s\n", slot->token->label);
 	}
@@ -521,7 +521,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		return NULL;
 	}
 
-	if (ctx->verbose) {
+	if (ctx->verbose > 0) {
 		fprintf(stderr, "Found %u cert%s:\n", cert_count,
 			(cert_count <= 1) ? "" : "s");
 	}
@@ -598,7 +598,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	if (ctx_init_libp11(ctx)) /* Delayed libp11 initialization */
 		return NULL;
 
-	if (ctx->verbose)
+	if (ctx->verbose > 0)
 		fprintf(stderr, "Loading %s key \"%s\"\n",
 			(char *)(isPrivate ? "private" : "public"),
 			s_slot_key_id);
@@ -636,7 +636,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				return NULL;
 			}
 		}
-		if (ctx->verbose) {
+		if (ctx->verbose > 0) {
 			fprintf(stderr, "Looking in slot %d for key: ",
 				slot_nr);
 			if (key_id_len != 0) {
@@ -685,7 +685,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
-		if (ctx->verbose) {
+		if (ctx->verbose > 0) {
 			fprintf(stderr, "[%lu] %-25.25s  %-16s",
 				PKCS11_get_slotid_from_slot(slot),
 				slot->description, flags);
@@ -735,7 +735,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		return NULL;
 	}
 
-	if (ctx->verbose) {
+	if (ctx->verbose > 0) {
 		fprintf(stderr, "Found slot:  %s\n", slot->description);
 		fprintf(stderr, "Found token: %s\n", slot->token->label);
 	}
@@ -745,7 +745,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		return NULL;
 	}
 
-	if (ctx->verbose) {
+	if (ctx->verbose > 0) {
 		fprintf(stderr, "Found %u certificate%s:\n", cert_count,
 			(cert_count <= 1) ? "" : "s");
 		for (n = 0; n < cert_count; n++) {
@@ -791,7 +791,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				(char *)(isPrivate ? "private" : "public"));
 		return NULL;
 	}
-	if (ctx->verbose)
+	if (ctx->verbose > 0)
 		fprintf(stderr, "Found %u %s key%s:\n", key_count,
 			(char *)(isPrivate ? "private" : "public"),
 			(key_count == 1) ? "" : "s");
@@ -801,7 +801,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		for (n = 0; n < key_count; n++) {
 			PKCS11_KEY *k = keys + n;
 
-			if (ctx->verbose) {
+			if (ctx->verbose > 0) {
 				fprintf(stderr, "  %2u %c%c id=", n + 1,
 					k->isPrivate ? 'P' : ' ',
 					k->needLogin ? 'L' : ' ');
@@ -912,6 +912,12 @@ static int ctx_ctrl_inc_verbose(ENGINE_CTX *ctx)
 	return 1;
 }
 
+static int ctx_ctrl_set_quiet(ENGINE_CTX *ctx)
+{
+	ctx->verbose = -1;
+	return 1;
+}
+
 static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 {
 	OPENSSL_free(ctx->init_args);
@@ -955,6 +961,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_set_pin(ctx, (const char *)p);
 	case CMD_VERBOSE:
 		return ctx_ctrl_inc_verbose(ctx);
+	case CMD_QUIET:
+		return ctx_ctrl_set_quiet(ctx);
 	case CMD_LOAD_CERT_CTRL:
 		return ctx_ctrl_load_cert(ctx, p);
 	case CMD_INIT_ARGS:
