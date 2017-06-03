@@ -30,7 +30,8 @@
 #include <stdio.h>
 #include <string.h>
 
-static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
+static int hex_to_bin(ENGINE_CTX *ctx,
+		const char *in, unsigned char *out, size_t *outlen)
 {
 	size_t left, count = 0;
 
@@ -55,7 +56,7 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 			else if ('A' <= c && c <= 'F')
 				c = c - 'A' + 10;
 			else {
-				fprintf(stderr,
+				ctx_log(ctx, 0,
 					"hex_to_bin(): invalid char '%c' in hex string\n",
 					c);
 				*outlen = 0;
@@ -66,7 +67,7 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 		if (*in == ':')
 			in++;
 		if (left == 0) {
-			fprintf(stderr, "hex_to_bin(): hex string too long\n");
+			ctx_log(ctx, 0, "hex_to_bin(): hex string too long\n");
 			*outlen = 0;
 			return 0;
 		}
@@ -79,7 +80,8 @@ static int hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
 }
 
 /* parse string containing slot and id information */
-int parse_slot_id_string(const char *slot_id, int *slot,
+int parse_slot_id_string(ENGINE_CTX *ctx,
+		const char *slot_id, int *slot,
 		unsigned char *id, size_t *id_len, char **label)
 {
 	int n, i;
@@ -92,11 +94,11 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	if (strspn(slot_id, HEXDIGITS) == strlen(slot_id)) {
 		/* ah, easiest case: only hex. */
 		if ((strlen(slot_id) + 1) / 2 > *id_len) {
-			fprintf(stderr, "ID string too long!\n");
+			ctx_log(ctx, 0, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
-		return hex_to_bin(slot_id, id, id_len);
+		return hex_to_bin(ctx, slot_id, id, id_len);
 	}
 
 	/* second: slot:id. slot is an digital int. */
@@ -104,7 +106,7 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 		i = strspn(slot_id, DIGITS);
 
 		if (slot_id[i] != ':') {
-			fprintf(stderr, "Could not parse string!\n");
+			ctx_log(ctx, 0, "Could not parse string!\n");
 			return 0;
 		}
 		i++;
@@ -114,31 +116,31 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 			return 1;
 		}
 		if (strspn(slot_id + i, HEXDIGITS) + i != strlen(slot_id)) {
-			fprintf(stderr, "Could not parse string!\n");
+			ctx_log(ctx, 0, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i + 1) / 2 > *id_len) {
-			fprintf(stderr, "ID string too long!\n");
+			ctx_log(ctx, 0, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
-		return hex_to_bin(slot_id + i, id, id_len);
+		return hex_to_bin(ctx, slot_id + i, id, id_len);
 	}
 
 	/* third: id_<id>, slot is undefined */
 	if (strncmp(slot_id, "id_", 3) == 0) {
 		if (strspn(slot_id + 3, HEXDIGITS) + 3 != strlen(slot_id)) {
-			fprintf(stderr, "Could not parse string!\n");
+			ctx_log(ctx, 0, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - 3 + 1) / 2 > *id_len) {
-			fprintf(stderr, "ID string too long!\n");
+			ctx_log(ctx, 0, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
-		return hex_to_bin(slot_id + 3, id, id_len);
+		return hex_to_bin(ctx, slot_id + 3, id, id_len);
 	}
 
 	/* label_<label>, slot is undefined */
@@ -152,13 +154,13 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	/* last try: it has to be slot_<slot> and then "-id_<cert>" */
 
 	if (strncmp(slot_id, "slot_", 5) != 0) {
-		fprintf(stderr, "Format not recognized!\n");
+		ctx_log(ctx, 0, "Format not recognized!\n");
 		return 0;
 	}
 
 	/* slot is an digital int. */
 	if (sscanf(slot_id + 5, "%d", &n) != 1) {
-		fprintf(stderr, "Could not decode slot number!\n");
+		ctx_log(ctx, 0, "Could not decode slot number!\n");
 		return 0;
 	}
 
@@ -171,7 +173,7 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	}
 
 	if (slot_id[i + 5] != '-') {
-		fprintf(stderr, "Could not parse string!\n");
+		ctx_log(ctx, 0, "Could not parse string!\n");
 		return 0;
 	}
 
@@ -180,16 +182,16 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 	/* now followed by "id_" */
 	if (strncmp(slot_id + i, "id_", 3) == 0) {
 		if (strspn(slot_id + i + 3, HEXDIGITS) + 3 + i != strlen(slot_id)) {
-			fprintf(stderr, "Could not parse string!\n");
+			ctx_log(ctx, 0, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i - 3 + 1) / 2 > *id_len) {
-			fprintf(stderr, "ID string too long!\n");
+			ctx_log(ctx, 0, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
-		return hex_to_bin(slot_id + i + 3, id, id_len);
+		return hex_to_bin(ctx, slot_id + i + 3, id, id_len);
 	}
 
 	/* ... or "label_" */
@@ -200,11 +202,12 @@ int parse_slot_id_string(const char *slot_id, int *slot,
 		return *label != NULL;
 	}
 
-	fprintf(stderr, "Could not parse string!\n");
+	ctx_log(ctx, 0, "Could not parse string!\n");
 	return 0;
 }
 
-static int parse_uri_attr(const char *attr, int attrlen, unsigned char **field,
+static int parse_uri_attr(ENGINE_CTX *ctx,
+		const char *attr, int attrlen, unsigned char **field,
 		size_t *field_len)
 {
 	size_t max, outlen = 0;
@@ -232,7 +235,7 @@ static int parse_uri_attr(const char *attr, int attrlen, unsigned char **field,
 				tmp[0] = attr[1];
 				tmp[1] = attr[2];
 				tmp[2] = 0;
-				ret = hex_to_bin(tmp, &out[outlen++], &l);
+				ret = hex_to_bin(ctx, tmp, &out[outlen++], &l);
 				attrlen -= 3;
 				attr += 3;
 			}
@@ -260,7 +263,8 @@ static int parse_uri_attr(const char *attr, int attrlen, unsigned char **field,
 	return ret;
 }
 
-int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
+int parse_pkcs11_uri(ENGINE_CTX *ctx,
+		const char *uri, PKCS11_TOKEN **p_tok,
 		unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
 		char **label)
 {
@@ -271,7 +275,7 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (tok == NULL) {
-		fprintf(stderr, "Could not allocate memory for token info\n");
+		ctx_log(ctx, 0, "Could not allocate memory for token info\n");
 		return 0;
 	}
 	memset(tok, 0, sizeof(PKCS11_TOKEN));
@@ -286,26 +290,26 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 
 		if (!strncmp(p, "model=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(p, end - p, (void *)&tok->model, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->model, NULL);
 		} else if (!strncmp(p, "manufacturer=", 13)) {
 			p += 13;
-			rv = parse_uri_attr(p, end - p, (void *)&tok->manufacturer, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->manufacturer, NULL);
 		} else if (!strncmp(p, "token=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(p, end - p, (void *)&tok->label, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->label, NULL);
 		} else if (!strncmp(p, "serial=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(p, end - p, (void *)&tok->serialnr, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->serialnr, NULL);
 		} else if (!strncmp(p, "object=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(p, end - p, (void *)&newlabel, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&newlabel, NULL);
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
-			rv = parse_uri_attr(p, end - p, (void *)&id, id_len);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&id, id_len);
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
-			rv = parse_uri_attr(p, end - p, (void *)&pin, pin_len);
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
@@ -315,7 +319,7 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 					(end - p == 7 && !strncmp(p, "private", 7))) {
 				/* Actually, just ignore it */
 			} else {
-				fprintf(stderr, "Unknown object type\n");
+				ctx_log(ctx, 0, "Unknown object type\n");
 				rv = 0;
 			}
 		} else {
@@ -339,4 +343,5 @@ int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
 
 	return rv;
 }
+
 /* vim: set noexpandtab: */

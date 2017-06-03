@@ -70,13 +70,21 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
 
+void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
+#ifdef __GNUC__
+	__attribute__((format(printf, 3, 4)))
+#endif
+	;
+
 /* defined in eng_parse.c */
 
-int parse_pkcs11_uri(const char *uri, PKCS11_TOKEN **p_tok,
+int parse_pkcs11_uri(ENGINE_CTX *ctx,
+	const char *uri, PKCS11_TOKEN **p_tok,
 	unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
 	char **label);
 
-int parse_slot_id_string(const char *slot_id, int *slot,
+int parse_slot_id_string(ENGINE_CTX *ctx,
+	const char *slot_id, int *slot,
 	unsigned char *id, size_t * id_len, char **label);
 
 #endif
