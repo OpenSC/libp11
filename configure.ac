@@ -235,18 +235,6 @@ if test "${enable_strict}" = "yes"; then
 	CFLAGS="${CFLAGS} -Wall -Wextra"
 fi
 
-rm -f src/libp11.map
-echo "LIBP11_${LIBP11_LT_OLDEST}" > src/libp11.map
-echo "{" >> src/libp11.map
-echo "global:" >> src/libp11.map
-tr '\n' ';' <src/libp11.exports >>src/libp11.map
-echo "" >> src/libp11.map
-echo "local:" >> src/libp11.map
-echo '*;' >> src/libp11.map
-echo "};" >> src/libp11.map
-
-chmod ugo-w src/libp11.map
-
 AC_MSG_CHECKING([if libtool needs -no-undefined flag to build shared libraries])
 case "`uname`" in
   CYGWIN*|MSYS*|MINGW*|AIX*)
@@ -272,6 +260,19 @@ AC_CONFIG_FILES([
 	tests/Makefile
 ])
 AC_OUTPUT
+
+AC_MSG_NOTICE([creating src/libp11.map])
+# We do it *after* the src directory is created
+rm -f src/libp11.map
+echo "LIBP11_${LIBP11_LT_OLDEST}" >src/libp11.map
+echo "{" >>src/libp11.map
+echo "global:" >>src/libp11.map
+tr '\n' ';' <$srcdir/src/libp11.exports >>src/libp11.map
+echo "" >>src/libp11.map
+echo "local:" >>src/libp11.map
+echo '*;' >>src/libp11.map
+echo "};" >>src/libp11.map
+chmod ugo-w src/libp11.map
 
 cat <<EOF
 

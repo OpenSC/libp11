@@ -1,5 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 	$(srcdir)/config.h.in $(srcdir)/config.h.in~
+DISTCLEANFILES = libp11.map
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
@@ -25,7 +26,7 @@ libp11_la_LDFLAGS = $(AM_LDFLAGS) \
 	-version-info @LIBP11_LT_CURRENT@:@LIBP11_LT_REVISION@:@LIBP11_LT_AGE@
 
 if HAVE_LD_VERSION_SCRIPT
-libp11_la_LDFLAGS += -Wl,--version-script="$(srcdir)/libp11.map"
+libp11_la_LDFLAGS += -Wl,--version-script=libp11.map
 if WIN32
 libp11_la_LDFLAGS += -export-symbols "$(srcdir)/libp11.exports"
 endif
