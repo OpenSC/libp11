@@ -75,7 +75,7 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		return -1;
 	data = OPENSSL_malloc(len+1);
 	if (data == NULL) {
-		PKCS11err(PKCS11_F_PKCS11_GETATTR, pkcs11_map_err(CKR_HOST_MEMORY));
+		PKCS11err(PKCS11_F_PKCS11_GETATTR, CKR_to_PKCS11(CKR_HOST_MEMORY));
 		return -1;
 	}
 	memset(data, 0, len+1); /* also null-terminate the allocated data */
@@ -103,7 +103,7 @@ int pkcs11_getattr_bn(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 	 */
 	if (size == (size_t)-1) {
 		PKCS11err(PKCS11_F_PKCS11_GETATTR,
-			pkcs11_map_err(CKR_ATTRIBUTE_TYPE_INVALID));
+			CKR_to_PKCS11(CKR_ATTRIBUTE_TYPE_INVALID));
 		OPENSSL_free(binary);
 		return -1;
 	}

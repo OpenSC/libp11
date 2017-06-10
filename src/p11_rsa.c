@@ -117,7 +117,7 @@ int pkcs11_private_encrypt(int flen,
 	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, pkcs11_map_err(rv));
+		PKCS11err(PKCS11_F_PKCS11_RSA_ENCRYPT, CKR_to_PKCS11(rv));
 		return -1;
 	}
 
@@ -151,7 +151,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, pkcs11_map_err(rv));
+		PKCS11err(PKCS11_F_PKCS11_RSA_DECRYPT, CKR_to_PKCS11(rv));
 		return -1;
 	}
 

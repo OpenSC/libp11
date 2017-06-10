@@ -122,7 +122,7 @@ typedef struct pkcs11_cert_private {
  * that the few genuine messages we use don't clash with
  * PKCS#11
  */
-#define pkcs11_map_err(rv)	(rv)
+#define CKR_to_PKCS11(rv)	(rv)
 
 /*
  * Internal functions
@@ -130,7 +130,7 @@ typedef struct pkcs11_cert_private {
 #define CRYPTOKI_checkerr(f, rv) \
 	do { \
 		if (rv) { \
-			PKCS11err(f, pkcs11_map_err(rv)); \
+			PKCS11err(f, CKR_to_PKCS11(rv)); \
 			return -1; \
 		} \
 		ERR_clear_error(); \

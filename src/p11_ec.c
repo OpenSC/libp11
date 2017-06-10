@@ -333,7 +333,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, pkcs11_map_err(rv));
+		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, CKR_to_PKCS11(rv));
 		return -1;
 	}
 	*siglen = ck_sigsize;
@@ -509,7 +509,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 			break;
 #endif
 		default:
-			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, pkcs11_map_err(PKCS11_NOT_SUPPORTED));
+			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
 			return -1;
 	}
 
@@ -520,7 +520,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	if (out && outlen) { /* pkcs11_ec_ckey only asks for the value */
 		if (pkcs11_getattr_alloc(token, newkey, CKA_VALUE, out, outlen)) {
 			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
-				pkcs11_map_err(CKR_ATTRIBUTE_VALUE_INVALID));
+				CKR_to_PKCS11(CKR_ATTRIBUTE_VALUE_INVALID));
 			CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
 			return -1;
 		}
