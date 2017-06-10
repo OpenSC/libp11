@@ -19,7 +19,6 @@
 #include "libp11-int.h"
 
 /* The following exported functions are *not* implemented here:
- * ERR_load_PKCS11_strings
  * PKCS11_get_rsa_method
  * PKCS11_get_ecdsa_method
  * PKCS11_ecdsa_method_free
@@ -379,6 +378,12 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r, unsigned int r_l
 	return pkcs11_generate_random(slot, r, r_len);
 }
 
+void ERR_load_PKCS11_strings(void)
+{
+	ERR_load_P11_strings();
+	ERR_load_CKR_strings();
+}
+
 int PKCS11_set_ui_method(PKCS11_CTX *ctx, UI_METHOD *ui_method, void *ui_user_data)
 {
 	if (check_fork(ctx) < 0)
@@ -453,7 +458,7 @@ int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 	(void)key;
 
 	/* PKCS11 calls go here */
-	PKCS11err(PKCS11_F_PKCS11_RSA_VERIFY, PKCS11_NOT_SUPPORTED);
+	P11err(P11_F_PKCS11_VERIFY, P11_R_NOT_SUPPORTED);
 	return -1;
 }
 

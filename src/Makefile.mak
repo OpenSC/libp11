@@ -3,8 +3,8 @@ TOPDIR = ..
 !INCLUDE $(TOPDIR)\make.rules.mak
 
 LIBP11_OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
-	p11_err.obj p11_key.obj p11_load.obj p11_misc.obj p11_rsa.obj \
-	p11_ec.obj p11_slot.obj p11_front.obj
+	p11_err.obj p11_ckr.obj p11_key.obj p11_load.obj p11_misc.obj \
+	p11_rsa.obj p11_ec.obj p11_slot.obj p11_front.obj
 LIBP11_LIB = libp11.lib
 LIBP11_TARGET = libp11.dll
 

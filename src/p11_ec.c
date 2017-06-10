@@ -333,7 +333,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
 
 	if (rv) {
-		PKCS11err(PKCS11_F_PKCS11_EC_KEY_SIGN, CKR_to_PKCS11(rv));
+		CKRerr(CKR_F_PKCS11_ECDSA_SIGN, rv);
 		return -1;
 	}
 	*siglen = ck_sigsize;
@@ -509,18 +509,17 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 			break;
 #endif
 		default:
-			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, PKCS11_NOT_SUPPORTED);
+			P11err(P11_F_PKCS11_ECDH_DERIVE, P11_R_NOT_SUPPORTED);
 			return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_ECDH_DERIVE, rv);
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
 	if (out && outlen) { /* pkcs11_ec_ckey only asks for the value */
 		if (pkcs11_getattr_alloc(token, newkey, CKA_VALUE, out, outlen)) {
-			PKCS11err(PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY,
-				CKR_to_PKCS11(CKR_ATTRIBUTE_VALUE_INVALID));
+			CKRerr(CKR_F_PKCS11_ECDH_DERIVE, CKR_ATTRIBUTE_VALUE_INVALID);
 			CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, newkey));
 			return -1;
 		}

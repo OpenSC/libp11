@@ -45,7 +45,7 @@ static int pkcs11_getattr_int(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
 	templ.ulValueLen = *size;
 
 	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, o, &templ, 1));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GETATTR, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GETATTR_INT, rv);
 
 	*size = templ.ulValueLen;
 	return 0;
@@ -75,7 +75,7 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		return -1;
 	data = OPENSSL_malloc(len+1);
 	if (data == NULL) {
-		PKCS11err(PKCS11_F_PKCS11_GETATTR, CKR_to_PKCS11(CKR_HOST_MEMORY));
+		CKRerr(CKR_F_PKCS11_GETATTR_ALLOC, CKR_HOST_MEMORY);
 		return -1;
 	}
 	memset(data, 0, len+1); /* also null-terminate the allocated data */
@@ -102,8 +102,7 @@ int pkcs11_getattr_bn(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 	 * not sure it will survive the ulValueLen->size_t and keep sign at all platforms
 	 */
 	if (size == (size_t)-1) {
-		PKCS11err(PKCS11_F_PKCS11_GETATTR,
-			CKR_to_PKCS11(CKR_ATTRIBUTE_TYPE_INVALID));
+		CKRerr(CKR_F_PKCS11_GETATTR_BN, CKR_ATTRIBUTE_TYPE_INVALID);
 		OPENSSL_free(binary);
 		return -1;
 	}

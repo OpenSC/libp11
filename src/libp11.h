@@ -29,16 +29,17 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
+#include <p11_err.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Get some structures for local code to handle PKCS#11 data readily */
-#define ERR_LIB_PKCS11	ERR_LIB_USER
+#define ERR_LIB_CKR	ERR_LIB_USER
 
-#define PKCS11err(f,r) \
-	ERR_PUT_error(ERR_LIB_PKCS11,(f),(r),__FILE__,__LINE__)
+#define CKRerr(f,r) \
+	ERR_PUT_error(ERR_LIB_CKR,(f),(r),__FILE__,__LINE__)
 
 /*
  * The purpose of this library is to provide a simple PKCS11
@@ -474,45 +475,44 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding); 
 
-/*
- * Function and reason codes
- */
-#define PKCS11_F_PKCS11_CTX_LOAD		1
-#define PKCS11_F_PKCS11_ENUM_SLOTS		2
-#define PKCS11_F_PKCS11_CHECK_TOKEN		3
-#define PKCS11_F_PKCS11_OPEN_SESSION		4
-#define PKCS11_F_PKCS11_LOGIN			5
-#define PKCS11_F_PKCS11_ENUM_KEYS		6
-#define PKCS11_F_PKCS11_GET_KEY			7
-#define PKCS11_F_PKCS11_RSA_DECRYPT		8
-#define PKCS11_F_PKCS11_RSA_ENCRYPT		9
-#define PKCS11_F_PKCS11_RSA_SIGN		10
-#define PKCS11_F_PKCS11_RSA_VERIFY		11
-#define PKCS11_F_PKCS11_ENUM_CERTS		12
-#define PKCS11_F_PKCS11_INIT_TOKEN		13
-#define PKCS11_F_PKCS11_INIT_PIN		14
-#define PKCS11_F_PKCS11_LOGOUT			15
-#define PKCS11_F_PKCS11_STORE_PRIVATE_KEY	16
-#define PKCS11_F_PKCS11_GENERATE_KEY		17
-#define PKCS11_F_PKCS11_STORE_PUBLIC_KEY	18
-#define PKCS11_F_PKCS11_STORE_CERTIFICATE	19
-#define PKCS11_F_PKCS11_SEED_RANDOM		20
-#define PKCS11_F_PKCS11_GENERATE_RANDOM		21
-#define PKCS11_F_PKCS11_CHANGE_PIN		22
-#define PKCS11_F_PKCS11_GETATTR			40
-#define PKCS11_F_PKCS11_EC_KEY_SIGN			41
-#define PKCS11_F_PKCS11_EC_KEY_VERIFY		42
-#define PKCS11_F_PKCS11_GETSESSIONINFO		43
-#define PKCS11_F_PKCS11_EC_KEY_COMPUTE_KEY	44
+/* Function codes */
+# define CKR_F_PKCS11_CHANGE_PIN                          100
+# define CKR_F_PKCS11_CHECK_TOKEN                         101
+# define CKR_F_PKCS11_CTX_LOAD                            102
+# define CKR_F_PKCS11_ECDH_DERIVE                         103
+# define CKR_F_PKCS11_ECDSA_SIGN                          104
+# define CKR_F_PKCS11_ENUMERATE_SLOTS                     105
+# define CKR_F_PKCS11_FIND_CERTS                          106
+# define CKR_F_PKCS11_FIND_KEYS                           107
+# define CKR_F_PKCS11_GENERATE_RANDOM                     108
+# define CKR_F_PKCS11_GETATTR_ALLOC                       109
+# define CKR_F_PKCS11_GETATTR_BN                          110
+# define CKR_F_PKCS11_GETATTR_INT                         111
+# define CKR_F_PKCS11_INIT_PIN                            112
+# define CKR_F_PKCS11_INIT_SLOT                           113
+# define CKR_F_PKCS11_INIT_TOKEN                          114
+# define CKR_F_PKCS11_IS_LOGGED_IN                        115
+# define CKR_F_PKCS11_LOGIN                               116
+# define CKR_F_PKCS11_LOGOUT                              117
+# define CKR_F_PKCS11_NEXT_CERT                           118
+# define CKR_F_PKCS11_NEXT_KEY                            119
+# define CKR_F_PKCS11_OPEN_SESSION                        120
+# define CKR_F_PKCS11_PRIVATE_DECRYPT                     121
+# define CKR_F_PKCS11_PRIVATE_ENCRYPT                     122
+# define CKR_F_PKCS11_RELOAD_KEY                          123
+# define CKR_F_PKCS11_REOPEN_SESSION                      124
+# define CKR_F_PKCS11_SEED_RANDOM                         125
+# define CKR_F_PKCS11_STORE_CERTIFICATE                   126
+# define CKR_F_PKCS11_STORE_KEY                           127
 
-#define PKCS11_ERR_BASE				1024
-#define PKCS11_LOAD_MODULE_ERROR		(PKCS11_ERR_BASE+1)
-#define PKCS11_MODULE_LOADED_ERROR		(PKCS11_ERR_BASE+2)
-#define PKCS11_SYMBOL_NOT_FOUND_ERROR		(PKCS11_ERR_BASE+3)
-#define PKCS11_NOT_SUPPORTED			(PKCS11_ERR_BASE+4)
-#define PKCS11_NO_SESSION			(PKCS11_ERR_BASE+5)
-#define PKCS11_KEYGEN_FAILED			(PKCS11_ERR_BASE+6)
-#define PKCS11_UI_FAILED			(PKCS11_ERR_BASE+7)
+/* For backward compatibility */
+#define PKCS11_LOAD_MODULE_ERROR                          P11_LOAD_MODULE_ERROR
+#define PKCS11_MODULE_LOADED_ERROR                        -1
+#define PKCS11_SYMBOL_NOT_FOUND_ERROR                     -1
+#define PKCS11_NOT_SUPPORTED                              P11_R_NOT_SUPPORTED
+#define PKCS11_NO_SESSION                                 P11_R_NO_SESSION
+#define PKCS11_KEYGEN_FAILED                              P11_R_KEYGEN_FAILED
+#define PKCS11_UI_FAILED                                  P11_R_UI_FAILED
 
 #ifdef __cplusplus
 }

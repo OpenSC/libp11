@@ -115,11 +115,11 @@ int pkcs11_reload_key(PKCS11_KEY *key)
 
 	rv = CRYPTOKI_call(ctx,
 		C_FindObjectsInit(spriv->session, key_search_attrs, 2));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, rv);
 
 	rv = CRYPTOKI_call(ctx,
 		C_FindObjects(spriv->session, &kpriv->object, 1, &count));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, rv);
 
 	CRYPTOKI_call(ctx, C_FindObjectsFinal(spriv->session));
 
@@ -145,7 +145,7 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 	int rc;
 
 	if (algorithm != EVP_PKEY_RSA) {
-		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_NOT_SUPPORTED);
+		P11err(P11_F_PKCS11_GENERATE_KEY, P11_R_NOT_SUPPORTED);
 		return -1;
 	}
 
@@ -170,7 +170,7 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 #endif
 	BIO_free(err);
 	if (rsa == NULL) {
-		PKCS11err(PKCS11_F_PKCS11_GENERATE_KEY, PKCS11_KEYGEN_FAILED);
+		P11err(P11_F_PKCS11_GENERATE_KEY, P11_R_KEYGEN_FAILED);
 		return -1;
 	}
 
@@ -274,10 +274,7 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 		}
 	} else {
 		pkcs11_zap_attrs(attrs, n);
-		PKCS11err(type == CKO_PRIVATE_KEY ?
-				PKCS11_F_PKCS11_STORE_PRIVATE_KEY :
-				PKCS11_F_PKCS11_STORE_PUBLIC_KEY,
-			PKCS11_NOT_SUPPORTED);
+		P11err(P11_F_PKCS11_STORE_KEY, P11_R_NOT_SUPPORTED);
 		return -1;
 	}
 
@@ -287,7 +284,7 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 	/* Zap all memory allocated when building the template */
 	pkcs11_zap_attrs(attrs, n);
 
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_STORE_PRIVATE_KEY, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_KEY, rv);
 
 	/* Gobble the key object */
 	return pkcs11_init_key(ctx, token, spriv->session, object, type, ret_key);
@@ -358,25 +355,25 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	/* Call UI to ask for a PIN */
 	ui = UI_new_method(cpriv->ui_method);
 	if (ui == NULL)
-		return PKCS11_UI_FAILED;
+		return P11_R_UI_FAILED;
 	if (cpriv->ui_user_data != NULL)
 		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
 	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
 	if (!prompt) {
-		return PKCS11_UI_FAILED;
+		return P11_R_UI_FAILED;
 	}
 	if (!UI_dup_input_string(ui, prompt,
 			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
 		UI_free(ui);
 		OPENSSL_free(prompt);
-		return PKCS11_UI_FAILED;
+		return P11_R_UI_FAILED;
 	}
 	OPENSSL_free(prompt);
 
 	if (UI_process(ui)) {
 		UI_free(ui);
-		return PKCS11_UI_FAILED;
+		return P11_R_UI_FAILED;
 	}
 	UI_free(ui);
 
@@ -451,7 +448,7 @@ static int pkcs11_find_keys(PKCS11_TOKEN *token, unsigned int type)
 	key_search_class = type;
 	rv = CRYPTOKI_call(ctx,
 		C_FindObjectsInit(spriv->session, key_search_attrs, 1));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_KEYS, rv);
 
 	do {
 		res = pkcs11_next_key(ctx, token, spriv->session, type);
@@ -471,7 +468,7 @@ static int pkcs11_next_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	/* Get the next matching object */
 	rv = CRYPTOKI_call(ctx, C_FindObjects(session, &obj, 1, &count));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_KEYS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_NEXT_KEY, rv);
 
 	if (count == 0)
 		return 1;

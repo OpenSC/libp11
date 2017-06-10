@@ -116,27 +116,19 @@ typedef struct pkcs11_cert_private {
 #define CERT2CTX(cert)		TOKEN2CTX(CERT2TOKEN(cert))
 
 /*
- * Mapping Cryptoki error codes to those used internally
- * by this code.
- * Right now, we just map them directly, and make sure
- * that the few genuine messages we use don't clash with
- * PKCS#11
- */
-#define CKR_to_PKCS11(rv)	(rv)
-
-/*
  * Internal functions
  */
 #define CRYPTOKI_checkerr(f, rv) \
 	do { \
 		if (rv) { \
-			PKCS11err(f, CKR_to_PKCS11(rv)); \
+			CKRerr(f, rv); \
 			return -1; \
 		} \
 		ERR_clear_error(); \
 	} while (0)
 #define CRYPTOKI_call(ctx, func_and_args) \
 	PRIVCTX(ctx)->method->func_and_args
+extern void ERR_load_CKR_strings(void);
 
 /* Memory allocation */
 #define PKCS11_DUP(s) \

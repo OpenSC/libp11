@@ -74,7 +74,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 
 	cpriv->handle = C_LoadModule(name, &cpriv->method);
 	if (cpriv->handle == NULL) {
-		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, PKCS11_LOAD_MODULE_ERROR);
+		P11err(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
 		return -1;
 	}
 
@@ -85,13 +85,13 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	args.pReserved = cpriv->init_args;
 	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
+		P11err(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
 	/* Get info on the library */
 	rv = cpriv->method->C_GetInfo(&ck_info);
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CTX_LOAD, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_CTX_LOAD, rv);
 
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
@@ -120,7 +120,7 @@ int pkcs11_CTX_reload(PKCS11_CTX *ctx)
 	}
 	rv = cpriv->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		PKCS11err(PKCS11_F_PKCS11_CTX_LOAD, rv);
+		P11err(P11_F_PKCS11_CTX_RELOAD, rv);
 		return -1;
 	}
 

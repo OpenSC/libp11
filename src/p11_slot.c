@@ -46,14 +46,14 @@ int pkcs11_enumerate_slots(PKCS11_CTX *ctx, PKCS11_SLOT **slotp, unsigned int *c
 	int rv;
 
 	rv = cpriv->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 
 	slotid = OPENSSL_malloc(nslots * sizeof(CK_SLOT_ID));
 	if (slotid == NULL)
 		return -1;
 
 	rv = cpriv->method->C_GetSlotList(FALSE, slotid, &nslots);
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 
 	slots = OPENSSL_malloc(nslots * sizeof(PKCS11_SLOT));
 	if (slots == NULL)
@@ -125,7 +125,7 @@ int pkcs11_open_session(PKCS11_SLOT *slot, int rw, int relogin)
 		C_OpenSession(spriv->id,
 			CKF_SERIAL_SESSION | (rw ? CKF_RW_SESSION : 0),
 			NULL, NULL, &spriv->session));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_OPEN_SESSION, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_OPEN_SESSION, rv);
 	spriv->haveSession = 1;
 	spriv->prev_rw = rw;
 
@@ -142,7 +142,7 @@ int pkcs11_reopen_session(PKCS11_SLOT *slot)
 		C_OpenSession(spriv->id,
 			CKF_SERIAL_SESSION | (spriv->prev_rw ? CKF_RW_SESSION : 0),
 			NULL, NULL, &spriv->session));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_OPEN_SESSION, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_REOPEN_SESSION, rv);
 	spriv->haveSession = 1;
 
 	return 0;
@@ -170,7 +170,7 @@ int pkcs11_is_logged_in(PKCS11_SLOT *slot, int so, int *res)
 	}
 
 	rv = CRYPTOKI_call(ctx, C_GetSessionInfo(spriv->session, &session_info));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GETSESSIONINFO, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_IS_LOGGED_IN, rv);
 	if (so) {
 		*res = session_info.state == CKS_RW_SO_FUNCTIONS;
 	} else {
@@ -203,7 +203,7 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
 		C_Login(spriv->session, so ? CKU_SO : CKU_USER,
 			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
 	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
-		CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGIN, rv);
+		CRYPTOKI_checkerr(CKR_F_PKCS11_LOGIN, rv);
 	spriv->loggedIn = 1;
 
 	if (spriv->prev_pin != pin) {
@@ -244,12 +244,12 @@ int pkcs11_logout(PKCS11_SLOT *slot)
 		pkcs11_destroy_certs(slot->token);
 	}
 	if (!spriv->haveSession) {
-		PKCS11err(PKCS11_F_PKCS11_LOGOUT, PKCS11_NO_SESSION);
+		P11err(P11_F_PKCS11_LOGOUT, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx, C_Logout(spriv->session));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_LOGOUT, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_LOGOUT, rv);
 	spriv->loggedIn = 0;
 	return 0;
 }
@@ -270,7 +270,7 @@ int pkcs11_init_token(PKCS11_TOKEN *token, const char *pin, const char *label)
 		C_InitToken(spriv->id,
 			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
 			(CK_UTF8CHAR *) label));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_TOKEN, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
 	 * PKCS11_CTX_private *cpriv;
@@ -296,13 +296,13 @@ int pkcs11_init_pin(PKCS11_TOKEN *token, const char *pin)
 	int len, rv;
 
 	if (!spriv->haveSession) {
-		PKCS11err(PKCS11_F_PKCS11_INIT_PIN, PKCS11_NO_SESSION);
+		P11err(P11_F_PKCS11_INIT_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	len = pin ? (int) strlen(pin) : 0;
 	rv = CRYPTOKI_call(ctx, C_InitPIN(spriv->session, (CK_UTF8CHAR *) pin, len));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_INIT_PIN, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_PIN, rv);
 
 	return pkcs11_check_token(ctx, TOKEN2SLOT(token));
 }
@@ -318,7 +318,7 @@ int pkcs11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 	int old_len, new_len, rv;
 
 	if (!spriv->haveSession) {
-		PKCS11err(PKCS11_F_PKCS11_CHANGE_PIN, PKCS11_NO_SESSION);
+		P11err(P11_F_PKCS11_CHANGE_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
 
@@ -327,7 +327,7 @@ int pkcs11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 	rv = CRYPTOKI_call(ctx,
 		C_SetPIN(spriv->session, (CK_UTF8CHAR *) old_pin, old_len,
 			(CK_UTF8CHAR *) new_pin, new_len));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CHANGE_PIN, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_CHANGE_PIN, rv);
 
 	return pkcs11_check_token(ctx, slot);
 }
@@ -343,13 +343,13 @@ int pkcs11_seed_random(PKCS11_SLOT *slot, const unsigned char *s,
 	int rv;
 
 	if (!spriv->haveSession && PKCS11_open_session(slot, 0)) {
-		PKCS11err(PKCS11_F_PKCS11_SEED_RANDOM, PKCS11_NO_SESSION);
+		P11err(P11_F_PKCS11_SEED_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
 		C_SeedRandom(spriv->session, (CK_BYTE_PTR) s, s_len));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_SEED_RANDOM, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_SEED_RANDOM, rv);
 
 	return pkcs11_check_token(ctx, slot);
 }
@@ -365,13 +365,13 @@ int pkcs11_generate_random(PKCS11_SLOT *slot, unsigned char *r,
 	int rv;
 
 	if (!spriv->haveSession && PKCS11_open_session(slot, 0)) {
-		PKCS11err(PKCS11_F_PKCS11_GENERATE_RANDOM, PKCS11_NO_SESSION);
+		P11err(P11_F_PKCS11_GENERATE_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
 		C_GenerateRandom(spriv->session, (CK_BYTE_PTR) r, r_len));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_GENERATE_RANDOM, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_RANDOM, rv);
 
 	return pkcs11_check_token(ctx, slot);
 }
@@ -386,7 +386,7 @@ static int pkcs11_init_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot, CK_SLOT_ID id)
 	int rv;
 
 	rv = CRYPTOKI_call(ctx, C_GetSlotInfo(id, &info));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_SLOTS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_SLOT, rv);
 
 	spriv = OPENSSL_malloc(sizeof(PKCS11_SLOT_private));
 	if (spriv == NULL)
@@ -464,7 +464,7 @@ static int pkcs11_check_token(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 		slot->token = NULL;
 		return 0;
 	}
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_CHECK_TOKEN, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_CHECK_TOKEN, rv);
 
 	/* We have a token */
 	tpriv = OPENSSL_malloc(sizeof(PKCS11_TOKEN_private));

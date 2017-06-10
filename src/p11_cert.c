@@ -101,7 +101,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN *token)
 	/* Tell the PKCS11 lib to enumerate all matching objects */
 	cert_search_class = CKO_CERTIFICATE;
 	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(spriv->session, cert_search_attrs, 1));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_CERTS, rv);
 
 	do {
 		res = pkcs11_next_cert(ctx, token, spriv->session);
@@ -121,7 +121,7 @@ static int pkcs11_next_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	/* Get the next matching object */
 	rv = CRYPTOKI_call(ctx, C_FindObjects(session, &obj, 1, &count));
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_ENUM_CERTS, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_NEXT_CERT, rv);
 
 	if (count == 0)
 		return 1;
@@ -257,7 +257,7 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	/* Zap all memory allocated when building the template */
 	pkcs11_zap_attrs(attrs, n);
 
-	CRYPTOKI_checkerr(PKCS11_F_PKCS11_STORE_CERTIFICATE, rv);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_CERTIFICATE, rv);
 
 	/* Gobble the key object */
 	return pkcs11_init_cert(ctx, token, spriv->session, object, ret_cert);
