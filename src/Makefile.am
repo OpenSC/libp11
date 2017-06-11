@@ -34,7 +34,8 @@ else
 libp11_la_LDFLAGS += -export-symbols "$(srcdir)/libp11.exports"
 endif
 
-pkcs11_la_SOURCES = eng_front.c eng_back.c eng_parse.c engine.h pkcs11.exports
+pkcs11_la_SOURCES = eng_front.c eng_back.c eng_parse.c eng_err.c \
+	engine.h eng_err.h pkcs11.exports
 if WIN32
 pkcs11_la_SOURCES += pkcs11.rc
 else

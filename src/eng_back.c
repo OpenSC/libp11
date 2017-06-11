@@ -399,6 +399,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 				ctx_log(ctx, 0,
 					"The certificate ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n");
+				ENGerr(ENG_F_CTX_LOAD_CERT, ENG_R_INVALID_ID);
 				return NULL;
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
@@ -421,6 +422,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
 					"still accepted for now\n");
+				ENGerr(ENG_F_CTX_LOAD_CERT, ENG_R_INVALID_ID);
 				return NULL;
 			}
 		}
@@ -562,16 +564,26 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		X509 *cert;
 	} *parms = p;
 
-	if (parms->cert != NULL)
+	if (parms == NULL) {
+		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
 		return 0;
-
+	}
+	if (parms->cert != NULL) {
+		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_INVALID_PARAMETER);
+		return 0;
+	}
+	ERR_clear_error();
 	if (!ctx->force_login)
 		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
-	if (parms->cert == NULL) /* Try again with login */
+	if (parms->cert == NULL) { /* Try again with login */
+		ERR_clear_error();
 		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 1);
-
-	if (parms->cert == NULL)
+	}
+	if (parms->cert == NULL) {
+		if (!ERR_peek_last_error())
+			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
+	}
 	return 1;
 }
 
@@ -613,6 +625,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				ctx_log(ctx, 0,
 					"The certificate ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n");
+				ENGerr(ENG_F_CTX_LOAD_KEY, ENG_R_INVALID_ID);
 				return NULL;
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
@@ -635,6 +648,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
 					"still accepted for now\n");
+				ENGerr(ENG_F_CTX_LOAD_KEY, ENG_R_INVALID_ID);
 				return NULL;
 			}
 		}
@@ -828,12 +842,17 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 {
 	EVP_PKEY *pk = NULL;
 
+	ERR_clear_error();
 	if (!ctx->force_login)
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
-	if (pk == NULL) /* Try again with login */
+	if (pk == NULL) { /* Try again with login */
+		ERR_clear_error();
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 1);
+	}
 	if (pk == NULL) {
 		ctx_log(ctx, 0, "PKCS11_load_public_key returned NULL\n");
+		if (!ERR_peek_last_error())
+			ENGerr(ENG_F_CTX_LOAD_PUBKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
 	return pk;
@@ -844,12 +863,17 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 {
 	EVP_PKEY *pk = NULL;
 
+	ERR_clear_error();
 	if (!ctx->force_login)
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
-	if (pk == NULL) /* Try again with login */
+	if (pk == NULL) { /* Try again with login */
+		ERR_clear_error();
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 1);
+	}
 	if (pk == NULL) {
 		ctx_log(ctx, 0, "PKCS11_get_private_key returned NULL\n");
+		if (!ERR_peek_last_error())
+			ENGerr(ENG_F_CTX_LOAD_PRIVKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
 	return pk;
@@ -883,6 +907,7 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 {
 	/* Pre-condition check */
 	if (pin == NULL) {
+		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_PASSED_NULL_PARAMETER);
 		errno = EINVAL;
 		return 0;
 	}
@@ -891,10 +916,13 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 	 * shall be returned and errno shall be set. */
 	ctx_destroy_pin(ctx);
 	ctx->pin = OPENSSL_strdup(pin);
-	if (ctx->pin != NULL)
-		ctx->pin_length = strlen(ctx->pin);
-
-	return ctx->pin != NULL;
+	if (ctx->pin == NULL) {
+		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_MALLOC_FAILURE);
+		errno = ENOMEM;
+		return 0;
+	}
+	ctx->pin_length = strlen(ctx->pin);
+	return 1;
 }
 
 static int ctx_ctrl_inc_verbose(ENGINE_CTX *ctx)
@@ -967,6 +995,7 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case CMD_FORCE_LOGIN:
 		return ctx_ctrl_force_login(ctx);
 	default:
+		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
 	}
 	return 0;

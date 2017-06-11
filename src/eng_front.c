@@ -155,6 +155,7 @@ static int engine_destroy(ENGINE *engine)
 		return 0;
 	rv = ctx_destroy(ctx);
 	ENGINE_set_ex_data(engine, pkcs11_idx, NULL);
+	ERR_unload_ENG_strings();
 	return rv;
 }
 
@@ -242,6 +243,7 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
 	} else {
+		ERR_load_ENG_strings();
 		return 1;
 	}
 }
