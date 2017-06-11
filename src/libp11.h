@@ -24,12 +24,12 @@
 #ifndef _LIB11_H
 #define _LIB11_H
 
+#include "p11_err.h"
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
-#include <p11_err.h>
 
 #ifdef __cplusplus
 extern "C" {
