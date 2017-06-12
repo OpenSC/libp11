@@ -12,6 +12,8 @@
 #include <openssl/err.h>
 #include "eng_err.h"
 
+#define ENG_LIB_NAME "pkcs11 engine"
+
 /* BEGIN ERROR CODES */
 #ifndef OPENSSL_NO_ERR
 

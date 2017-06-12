@@ -12,6 +12,8 @@
 #include <openssl/err.h>
 #include "p11_err.h"
 
+#define P11_LIB_NAME "libp11"
+
 /* BEGIN ERROR CODES */
 #ifndef OPENSSL_NO_ERR
 

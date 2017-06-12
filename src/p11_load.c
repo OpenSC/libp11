@@ -85,7 +85,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	args.pReserved = cpriv->init_args;
 	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		P11err(P11_F_PKCS11_CTX_LOAD, rv);
+		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
@@ -120,7 +120,7 @@ int pkcs11_CTX_reload(PKCS11_CTX *ctx)
 	}
 	rv = cpriv->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		P11err(P11_F_PKCS11_CTX_RELOAD, rv);
+		CKRerr(P11_F_PKCS11_CTX_RELOAD, rv);
 		return -1;
 	}
 

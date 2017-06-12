@@ -35,11 +35,10 @@
 extern "C" {
 #endif
 
-/* Get some structures for local code to handle PKCS#11 data readily */
-#define ERR_LIB_CKR	ERR_LIB_USER
-
-#define CKRerr(f,r) \
-	ERR_PUT_error(ERR_LIB_CKR,(f),(r),__FILE__,__LINE__)
+int ERR_load_CKR_strings(void);
+void ERR_unload_CKR_strings(void);
+void ERR_CKR_error(int function, int reason, char *file, int line);
+# define CKRerr(f,r) ERR_CKR_error((f),(r),__FILE__,__LINE__)
 
 /*
  * The purpose of this library is to provide a simple PKCS11

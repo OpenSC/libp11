@@ -128,7 +128,7 @@ typedef struct pkcs11_cert_private {
 	} while (0)
 #define CRYPTOKI_call(ctx, func_and_args) \
 	PRIVCTX(ctx)->method->func_and_args
-extern void ERR_load_CKR_strings(void);
+extern int ERR_load_CKR_strings(void);
 
 /* Memory allocation */
 #define PKCS11_DUP(s) \

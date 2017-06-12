@@ -19,12 +19,10 @@
 #include "libp11.h"
 #include "libp11-int.h"
 
+#define CKR_LIB_NAME "PKCS#11 module"
+
 /* BEGIN ERROR CODES */
 #ifndef NO_ERR
-static ERR_STRING_DATA CKR_str_library[] = {
-	{ERR_PACK(ERR_LIB_CKR, 0, 0), "PKCS11 module"},
-	{0, NULL}
-};
 
 # define ERR_FUNC(func) ERR_PACK(0,func,0)
 # define ERR_REASON(reason) ERR_PACK(0,0,reason)
@@ -150,18 +148,56 @@ static ERR_STRING_DATA CKR_str_reasons[] = {
 };
 #endif
 
-void ERR_load_CKR_strings(void)
-{
-	static int init = 1;
+#ifdef CKR_LIB_NAME
+static ERR_STRING_DATA CKR_lib_name[] = {
+	{0, CKR_LIB_NAME},
+	{0, NULL}
+};
+#endif
 
-	if (init) {
-		init = 0;
-#ifndef NO_ERR
-		ERR_load_strings(0, CKR_str_library);
-		ERR_load_strings(ERR_LIB_CKR, CKR_str_functs);
-		ERR_load_strings(ERR_LIB_CKR, CKR_str_reasons);
+static int CKR_lib_error_code = 0;
+static int CKR_error_init = 1;
+
+int ERR_load_CKR_strings(void)
+{
+	if (CKR_lib_error_code == 0)
+		CKR_lib_error_code = ERR_get_next_error_library();
+
+	if (CKR_error_init) {
+		CKR_error_init = 0;
+#ifndef OPENSSL_NO_ERR
+		ERR_load_strings(CKR_lib_error_code, CKR_str_functs);
+		ERR_load_strings(CKR_lib_error_code, CKR_str_reasons);
+#endif
+
+#ifdef CKR_LIB_NAME
+		CKR_lib_name->error = ERR_PACK(CKR_lib_error_code, 0, 0);
+		ERR_load_strings(0, CKR_lib_name);
 #endif
 	}
+	return 1;
+}
+
+void ERR_unload_CKR_strings(void)
+{
+	if (CKR_error_init == 0) {
+#ifndef OPENSSL_NO_ERR
+		ERR_unload_strings(CKR_lib_error_code, CKR_str_functs);
+		ERR_unload_strings(CKR_lib_error_code, CKR_str_reasons);
+#endif
+
+#ifdef CKR_LIB_NAME
+		ERR_unload_strings(0, CKR_lib_name);
+#endif
+		CKR_error_init = 1;
+	}
+}
+
+void ERR_CKR_error(int function, int reason, char *file, int line)
+{
+	if (CKR_lib_error_code == 0)
+		CKR_lib_error_code = ERR_get_next_error_library();
+	ERR_PUT_error(CKR_lib_error_code, function, reason, file, line);
 }
 
 /* vim: set noexpandtab: */
