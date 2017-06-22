@@ -27,6 +27,7 @@
  */
 
 #include "engine.h"
+#include "libp11-int.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -370,14 +371,13 @@ int ctx_finish(ENGINE_CTX *ctx)
 /* prototype for OpenSSL ENGINE_load_cert */
 /* used by load_cert_ctrl via ENGINE_ctrl for now */
 
-static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
+static PKCS11_CERT *ctx_load_pkcs11_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		const int login)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	PKCS11_CERT *certs, *selected_cert = NULL;
-	X509 *x509;
 	unsigned int cert_count, n, m;
 	unsigned char cert_id[MAX_VALUE_LEN / 2];
 	size_t cert_id_len = sizeof(cert_id);
@@ -545,6 +545,20 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		selected_cert = certs; /* Use the first certificate */
 	}
 
+	if (cert_label != NULL)
+		OPENSSL_free(cert_label);
+
+	return selected_cert;
+}
+
+static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
+		const int login)
+{
+	PKCS11_CERT *selected_cert = NULL;
+	X509 *x509;
+
+	selected_cert = ctx_load_pkcs11_cert(ctx, s_slot_cert_id, login);
+
 	if (selected_cert != NULL) {
 		x509 = X509_dup(selected_cert->x509);
 	} else {
@@ -552,8 +566,6 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			ctx_log(ctx, 0, "Certificate not found.\n");
 		x509 = NULL;
 	}
-	if (cert_label != NULL)
-		OPENSSL_free(cert_label);
 	return x509;
 }
 
@@ -599,7 +611,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	PKCS11_KEY *keys, *selected_key = NULL;
-	PKCS11_CERT *certs;
+	PKCS11_CERT *certs, *selected_cert = NULL;
 	EVP_PKEY *pk;
 	unsigned int cert_count, key_count, n, m;
 	unsigned char key_id[MAX_VALUE_LEN / 2];
@@ -663,6 +675,13 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		if (key_label != NULL)
 			ctx_log(ctx, 1, "label=%s", key_label);
 		ctx_log(ctx, 1, "\n");
+	} else {
+		selected_cert = ctx_load_pkcs11_cert(ctx, NULL, login);
+		if(selected_cert != NULL) {
+			selected_key = pkcs11_find_key(selected_cert);
+			if(selected_key != NULL)
+				goto key_found;
+		}
 	}
 
 	for (n = 0; n < ctx->slot_count; n++) {
@@ -822,7 +841,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	} else {
 		selected_key = keys; /* Use the first key */
 	}
-
+key_found:
 	if (selected_key != NULL) {
 		pk = isPrivate ?
 			PKCS11_get_private_key(selected_key) :
