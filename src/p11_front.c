@@ -380,6 +380,9 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r, unsigned int r_l
 
 void ERR_load_PKCS11_strings(void)
 {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+#endif
 	ERR_load_P11_strings();
 	ERR_load_CKR_strings();
 }
