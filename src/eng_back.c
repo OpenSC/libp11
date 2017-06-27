@@ -80,12 +80,12 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 }
 
 static void dump_hex(ENGINE_CTX *ctx, int level,
-		const char *val, const size_t len)
+		const unsigned char *val, const size_t len)
 {
 	size_t n;
 
 	for (n = 0; n < len; n++)
-		ctx_log(ctx, level, "%02x", (const unsigned char)val[n]);
+		ctx_log(ctx, level, "%02x", val[n]);
 }
 
 /******************************************************************************/
