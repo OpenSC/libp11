@@ -1,9 +1,14 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.7; unreleased
-* Engine error reporting (Michał Trojnara)
-* Added FORCE_LOGIN engine ctrl command (Michał Trojnara)
-* Fixed a bug in printing hex values (Michał Trojnara)
+New in 0.4.7; 2017-07-03; Michał Trojnara
+* Added OpenSSL-style engine error reporting (Michał Trojnara)
+* Added the FORCE_LOGIN engine ctrl command (Michał Trojnara)
+* Implemented the QUIET engine ctrl command (Michał Trojnara)
+* Modified CKU_CONTEXT_SPECIFIC PIN requests to be based
+  on the CKA_ALWAYS_AUTHENTICATE attribute rather than the
+  CKR_USER_NOT_LOGGED_IN error (Michał Trojnara)
+* Fixed printing hex values (Michał Trojnara)
+* Fixed build error with OPENSSL_NO_EC (Kai Kang)
 
 New in 0.4.6; 2017-04-23; Michał Trojnara
 * Updated ex_data on EVP_PKEYs after enumerating keys (Matt Hauck)
