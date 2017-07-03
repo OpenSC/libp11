@@ -37,6 +37,8 @@
 #include <openssl/ecdh.h>
 #endif
 
+#ifndef OPENSSL_NO_EC
+
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
 typedef int (*compute_key_fn)(unsigned char **, size_t *,
 	const EC_POINT *, const EC_KEY *);
@@ -48,8 +50,6 @@ typedef int (*compute_key_fn)(void *, size_t,
 static compute_key_fn ossl_ecdh_compute_key;
 
 static int ec_ex_index = 0;
-
-#ifndef OPENSSL_NO_EC
 
 /********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
 
