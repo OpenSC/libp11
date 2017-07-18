@@ -81,7 +81,7 @@ before any sections are defined:
 openssl_conf = openssl_init
 ```
 
-This can be added to the bottom of the file:
+This should be added to the bottom of the file:
 
 ```
 [engine_section]
