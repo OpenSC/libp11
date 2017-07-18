@@ -74,7 +74,14 @@ PKCS #11 modules and requires no further configuration.
 In systems without p11-kit-proxy you need to configure OpenSSL to know about
 the engine and to use OpenSC PKCS#11 module by the engine_pkcs11. For that you
 add something like the following into your global OpenSSL configuration file
-(often in ``/etc/ssl/openssl.cnf``).
+(often in ``/etc/ssl/openssl.cnf``).  This line must be placed at the top,
+before any sections are defined:
+
+```
+openssl_conf = openssl_init
+```
+
+This should be added to the bottom of the file:
 
 ```
 [engine_section]
@@ -82,8 +89,8 @@ pkcs11 = pkcs11_section
 
 [pkcs11_section]
 engine_id = pkcs11
-dynamic_path = libpkcs11.so
-MODULE_PATH = /usr/lib/opensc-pkcs11.so
+dynamic_path = /usr/lib/opensc-pkcs11.so
+MODULE_PATH = libpkcs11.so
 init = 0
 ```
 
