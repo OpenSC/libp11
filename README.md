@@ -100,6 +100,16 @@ OpenSSL applications to select the engine by the identifier. In systems
 with p11-kit-proxy installed and configured, you do not need to modify the
 OpenSSL configuration file; the configuration of p11-kit will be used.
 
+If you do not update the OpenSSL configuration file you will need to
+specify the engine configuration explicitly. The following line loads
+engine_pkcs11 with the PKCS#11 module opensc-pkcs11.so:
+
+```
+OpenSSL> engine -t dynamic -pre SO_PATH:/usr/lib/engines/engine_pkcs11.so
+         -pre ID:pkcs11 -pre LIST_ADD:1 -pre LOAD 
+         -pre MODULE_PATH:opensc-pkcs11.so
+```
+
 
 ## Testing the engine operation
 
@@ -140,16 +150,6 @@ OpenSSL> req -engine pkcs11 -new -key "pkcs11:object=test-key;type=private;pin-v
          -keyform engine -out req.pem -text -x509 -subj "/CN=Andreas Jellinghaus"
 OpenSSL> x509 -engine pkcs11 -signkey "pkcs11:object=test-key;type=private;pin-value=XXXX" \
          -keyform engine -in req.pem -out cert.pem
-```
-
-For the above commands to operate in systems without p11-kit you will need to provide the
-engine configuration explicitly. The following line loads engine_pkcs11 with the PKCS#11
-module opensc-pkcs11.so. 
-
-```
-OpenSSL> engine -t dynamic -pre SO_PATH:/usr/lib/engines/libpkcs11.so \
-         -pre ID:pkcs11 -pre LIST_ADD:1 -pre LOAD \
-         -pre MODULE_PATH:/usr/lib/opensc-pkcs11.so
 ```
 
 
