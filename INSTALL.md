@@ -26,6 +26,10 @@ To build libp11, start a Visual Studio Command Prompt and use:
 In case your OpenSSL is installed in a different directory, use:
 
   nmake -f Makefile.mak OPENSSL_DIR=\your\openssl\directory
+
+If you are using OpenSSL 1.1.0 or later, use:
+
+  nmake -f Makefile.mak OPENSSL_VERSION=1.1.0
   
 For x64 bit builds, make sure you opened the Native x64 VS Command Prompt and run:
 
