@@ -252,12 +252,13 @@ static void pkcs11_set_ex_data_ec(EC_KEY* ec, PKCS11_KEY* key)
 static void pkcs11_update_ex_data_ec(PKCS11_KEY* key)
 {
 	EVP_PKEY* evp = key->evp_key;
+	EC_KEY* ec;
 	if (evp == NULL)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC)
 		return;
 
-	EC_KEY* ec = EVP_PKEY_get1_EC_KEY(evp);
+	ec = EVP_PKEY_get1_EC_KEY(evp);
 	pkcs11_set_ex_data_ec(ec, key);
 	EC_KEY_free(ec);
 }
