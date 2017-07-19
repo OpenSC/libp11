@@ -63,7 +63,7 @@ to copy the engine_pkcs11 to that location as "libpkcs11.so" to ease usage.
 This is handle by 'make install' of engine_pkcs11.
 
 
-## Using the engine from the command line tool
+## Using the engine from the command line
 
 In systems with p11-kit-proxy engine_pkcs11 has access to all the configured
 PKCS #11 modules and requires no further OpenSSL configuration.
