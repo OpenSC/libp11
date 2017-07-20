@@ -541,8 +541,16 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 					memcmp(k->id, cert_id, cert_id_len) == 0)
 				selected_cert = k;
 		}
-	} else {
-		selected_cert = certs; /* Use the first certificate */
+	} else { 
+		for (n = 0; n < cert_count; n++) {
+			PKCS11_CERT *k = certs + n;
+			if(k->id && *(k->id)) {
+				selected_cert = k; /* Use the first certificate with nonempty id */
+				break;
+			}
+		}
+		if(!selected_cert)
+			selected_cert = certs; /* Use the first certificate */
 	}
 
 	if (selected_cert != NULL) {
