@@ -25,8 +25,20 @@ OPENSSL_INC = /I"$(OPENSSL_DIR)\include"
 
 !IF "$(OPENSSL_STATIC_DIR)" == ""
 OPENSSL_LIB = $(OPENSSL_DIR)\lib\libeay32.lib
+!IF EXIST($(OPENSSL_LIB))
+!MESSAGE OpenSSL < 1.1.0 detected (dynamic library)
+!ELSE
+!MESSAGE OpenSSL >= 1.1.0 detected (dynamic library)
+OPENSSL_LIB = $(OPENSSL_DIR)\lib\libcrypto.lib
+!ENDIF
 !ELSE
 OPENSSL_LIB = $(OPENSSL_DIR)\lib\VC\static\libeay32MT$(DEBUG_SUFFIX).lib
+!IF EXIST($(OPENSSL_LIB))
+!MESSAGE OpenSSL < 1.1.0 detected (static library)
+!ELSE
+OPENSSL_LIB = $(OPENSSL_DIR)\lib\VC\static\libcryptoMT$(DEBUG_SUFFIX).lib
+!MESSAGE OpenSSL >= 1.1.x detected (static library)
+!ENDIF
 !ENDIF
 
 LIBS = "$(OPENSSL_LIB)" user32.lib advapi32.lib crypt32.lib gdi32.lib
