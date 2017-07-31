@@ -243,12 +243,13 @@ static void pkcs11_set_ex_data_rsa(RSA* rsa, PKCS11_KEY* key)
 static void pkcs11_update_ex_data_rsa(PKCS11_KEY* key)
 {
 	EVP_PKEY* evp = key->evp_key;
+	RSA* rsa;
 	if (evp == NULL)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA)
 		return;
 
-	RSA* rsa = EVP_PKEY_get1_RSA(evp);
+	rsa = EVP_PKEY_get1_RSA(evp);
 	pkcs11_set_ex_data_rsa(rsa, key);
 	RSA_free(rsa);
 }
