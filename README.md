@@ -119,7 +119,7 @@ $ openssl engine pkcs11 -t
 
 ## Using p11tool and OpenSSL from the command line
 
-This section demonstrates how to use command line tools to create a self signed
+This section demonstrates how to use the command line to create a self signed
 certificate for "Andreas Jellinghaus". The key of the certificate will be generated
 in the token and will not exportable.
 
