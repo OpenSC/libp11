@@ -13,8 +13,8 @@ pkgconfig_DATA = libp11.pc
 SHARED_EXT=@SHARED_EXT@
 
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_ckr.c \
-	p11_key.c p11_load.c p11_misc.c p11_rsa.c p11_ec.c p11_slot.c p11_front.c \
-	atfork.c libp11.exports
+	p11_key.c p11_load.c p11_misc.c p11_rsa.c p11_ec.c p11_pkey.c \
+	p11_slot.c p11_front.c atfork.c libp11.exports
 if WIN32
 libp11_la_SOURCES += libp11.rc
 else
