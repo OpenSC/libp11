@@ -343,6 +343,9 @@ extern int pkcs11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding);
 
+/* Retrieve PKCS11_KEY from an RSA key */
+extern PKCS11_KEY *pkcs11_get_ex_data_rsa(RSA *rsa);
+
 #endif
 
 /* vim: set noexpandtab: */

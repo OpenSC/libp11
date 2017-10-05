@@ -20,7 +20,17 @@
 #include "libp11-int.h"
 #include <string.h>
 
-/* TODO: implement the rest of PKEY functionality *here* */
+#ifndef EVP_PKEY_CTX_get_signature_md
+#define EVP_PKEY_CTX_get_signature_md(ctx, pmd) *(pmd)=(ctx)->md, 1
+#endif
+#ifndef EVP_PKEY_CTX_get_rsa_mgf1_md
+#define EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, pmd) *(pmd)=(ctx)->mgf1md, 1
+#endif
+
+static int (*orig_pkey_rsa_sign_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
 
 /* Setup PKCS#11 mechanisms for encryption/decryption */
 int pkcs11_mechanism(CK_MECHANISM *mechanism,
@@ -100,7 +110,7 @@ int pkcs11_mechanism(CK_MECHANISM *mechanism,
 			rsa_pkcs_params->pss.mgf = CKG_MGF1_SHA224;
 			break;
 		default:
-		    return -1;
+			return -1;
 		}
 		rsa_pkcs_params->pss.sLen = salt_len;
 
@@ -116,11 +126,90 @@ int pkcs11_mechanism(CK_MECHANISM *mechanism,
 	return 0;
 }
 
+static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	EVP_PKEY *pkey;
+	RSA *rsa;
+	PKCS11_KEY *key;
+	CK_MECHANISM mechanism;
+	PKCS11_RSA_PKCS_PARAMS rsa_pkcs_params;
+	int padding, rv;
+	CK_ULONG size = *siglen;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	PKCS11_KEY_private *kpriv;
+	PKCS11_SLOT_private *spriv;
+	const EVP_MD *sig_md;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
+	if (pkey == NULL)
+		return -1;
+	rsa = EVP_PKEY_get0_RSA(pkey);
+	if (rsa == NULL)
+		return -1;
+	key = pkcs11_get_ex_data_rsa(rsa);
+	if (key == NULL)
+		return -1;
+	slot = KEY2SLOT(key);
+	ctx = KEY2CTX(key);
+	kpriv = PRIVKEY(key);
+	spriv = PRIVSLOT(slot);
+
+	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
+		return -1;
+	if (tbslen != (size_t)EVP_MD_size(sig_md))
+		return -1;
+
+	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
+	if (pkcs11_mechanism(&mechanism, &rsa_pkcs_params,
+			padding, evp_pkey_ctx) < 0)
+		return -1;
+
+	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
+	rv = CRYPTOKI_call(ctx,
+		C_SignInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv || kpriv->always_authenticate == CK_TRUE)
+		rv = pkcs11_authenticate(key);
+	if (!rv)
+		rv = CRYPTOKI_call(ctx,
+			C_Sign(spriv->session, (unsigned char *)tbs, tbslen, sig, &size));
+	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
+	fprintf(stderr, "C_SignInit and or C_Sign rv =%u\n", rv);
+
+	if (rv != 0)
+		return -1;
+	*siglen = size;
+	return 1;
+}
+
+static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	fprintf(stderr, "pkcs11_pkey_rsa_sign called\n");
+	ret = pkcs11_try_pkey_rsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_pkey_rsa_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	return ret;
+}
+
 static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa()
 {
-	/* TODO: return our own method */
-	/* in the meantime we just return the default one: */
-	return EVP_PKEY_meth_find(EVP_PKEY_RSA);
+	EVP_PKEY_METHOD *orig_evp_pkey_meth_rsa, *new_evp_pkey_meth_rsa;
+
+	orig_evp_pkey_meth_rsa = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_RSA);
+	EVP_PKEY_meth_get_sign(orig_evp_pkey_meth_rsa,
+		&orig_pkey_rsa_sign_init, &orig_pkey_rsa_sign);
+
+	new_evp_pkey_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA, 0);
+	EVP_PKEY_meth_copy(new_evp_pkey_meth_rsa, orig_evp_pkey_meth_rsa);
+	EVP_PKEY_meth_set_sign(new_evp_pkey_meth_rsa,
+		orig_pkey_rsa_sign_init, pkcs11_pkey_rsa_sign);
+	return new_evp_pkey_meth_rsa;
 }
 
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,

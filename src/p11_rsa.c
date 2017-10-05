@@ -214,15 +214,21 @@ success:
 	return rsa;
 }
 
-static void pkcs11_set_ex_data_rsa(RSA* rsa, PKCS11_KEY* key)
+
+PKCS11_KEY *pkcs11_get_ex_data_rsa(RSA *rsa)
+{
+	return RSA_get_ex_data(rsa, rsa_ex_index);
+}
+
+static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_KEY *key)
 {
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
 
-static void pkcs11_update_ex_data_rsa(PKCS11_KEY* key)
+static void pkcs11_update_ex_data_rsa(PKCS11_KEY *key)
 {
-	EVP_PKEY* evp = key->evp_key;
-	RSA* rsa;
+	EVP_PKEY *evp = key->evp_key;
+	RSA *rsa;
 	if (evp == NULL)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA)
