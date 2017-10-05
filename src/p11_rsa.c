@@ -55,27 +55,6 @@ int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
 	return RSA_sign(type, m, m_len, sigret, siglen, rsa);
 }
 
-/* Setup PKCS#11 mechanisms for encryption/decryption */
-static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
-{
-	memset(mechanism, 0, sizeof(CK_MECHANISM));
-	switch (padding) {
-	case RSA_PKCS1_PADDING:
-		mechanism->mechanism = CKM_RSA_PKCS;
-		break;
-	case RSA_NO_PADDING:
-		mechanism->mechanism = CKM_RSA_X_509;
-		break;
-	case RSA_X931_PADDING:
-		mechanism->mechanism = CKM_RSA_X9_31;
-		break;
-	default:
-		fprintf(stderr, "PKCS#11: Unsupported padding type\n");
-		return -1;
-	}
-	return 0;
-}
-
 /* RSA private key encryption (also invoked by OpenSSL for signing) */
 /* OpenSSL assumes that the output buffer is always big enough */
 int pkcs11_private_encrypt(int flen,
@@ -92,7 +71,7 @@ int pkcs11_private_encrypt(int flen,
 
 	size = pkcs11_get_key_size(key);
 
-	if (pkcs11_mechanism(&mechanism, padding) < 0)
+	if (pkcs11_mechanism(&mechanism, NULL, padding, NULL) < 0)
 		return -1;
 
 	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
@@ -136,7 +115,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	CK_ULONG size = flen;
 	CK_RV rv;
 
-	if (pkcs11_mechanism(&mechanism, padding) < 0)
+	if (pkcs11_mechanism(&mechanism, NULL, padding, NULL) < 0)
 		return -1;
 
 	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);

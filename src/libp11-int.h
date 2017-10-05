@@ -148,6 +148,15 @@ void CRYPTO_THREAD_lock_free(int);
 	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_READ,type,__FILE__,__LINE__)
 #endif
 
+typedef union {
+	CK_RSA_PKCS_OAEP_PARAMS oaep;
+	CK_RSA_PKCS_PSS_PARAMS pss;
+} PKCS11_RSA_PKCS_PARAMS;
+
+extern int pkcs11_mechanism(CK_MECHANISM *mechanism,
+		PKCS11_RSA_PKCS_PARAMS *rsa_pkcs_params,
+		const int padding, EVP_PKEY_CTX *evp_pkey_ctx);
+
 extern int pkcs11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
 extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
 
