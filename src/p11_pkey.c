@@ -27,14 +27,14 @@ static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
 typedef struct {
-    int nbits;
-    BIGNUM *pub_exp;
-    int gentmp[2];
-    int pad_mode;
-    const EVP_MD *md;
-    const EVP_MD *mgf1md;
-    int saltlen;
-    unsigned char *tbuf;
+	int nbits;
+	BIGNUM *pub_exp;
+	int gentmp[2];
+	int pad_mode;
+	const EVP_MD *md;
+	const EVP_MD *mgf1md;
+	int saltlen;
+	unsigned char *tbuf;
 } RSA_PKEY_CTX;
 #endif
 
@@ -62,42 +62,42 @@ static int EVP_PKEY_CTX_get_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
 
 #if (OPENSSL_VERSION_NUMBER >= 0x10000000L && OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER)
 struct evp_pkey_method_st {
-    int pkey_id;
-    int flags;
-    int (*init) (EVP_PKEY_CTX *ctx);
-    int (*copy) (EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src);
-    void (*cleanup) (EVP_PKEY_CTX *ctx);
-    int (*paramgen_init) (EVP_PKEY_CTX *ctx);
-    int (*paramgen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
-    int (*keygen_init) (EVP_PKEY_CTX *ctx);
-    int (*keygen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
-    int (*sign_init) (EVP_PKEY_CTX *ctx);
-    int (*sign) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
-                 const unsigned char *tbs, size_t tbslen);
-    int (*verify_init) (EVP_PKEY_CTX *ctx);
-    int (*verify) (EVP_PKEY_CTX *ctx,
-                   const unsigned char *sig, size_t siglen,
-                   const unsigned char *tbs, size_t tbslen);
-    int (*verify_recover_init) (EVP_PKEY_CTX *ctx);
-    int (*verify_recover) (EVP_PKEY_CTX *ctx,
-                           unsigned char *rout, size_t *routlen,
-                           const unsigned char *sig, size_t siglen);
-    int (*signctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
-    int (*signctx) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
-                    EVP_MD_CTX *mctx);
-    int (*verifyctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
-    int (*verifyctx) (EVP_PKEY_CTX *ctx, const unsigned char *sig, int siglen,
-                      EVP_MD_CTX *mctx);
-    int (*encrypt_init) (EVP_PKEY_CTX *ctx);
-    int (*encrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
-                    const unsigned char *in, size_t inlen);
-    int (*decrypt_init) (EVP_PKEY_CTX *ctx);
-    int (*decrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
-                    const unsigned char *in, size_t inlen);
-    int (*derive_init) (EVP_PKEY_CTX *ctx);
-    int (*derive) (EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
-    int (*ctrl) (EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
-    int (*ctrl_str) (EVP_PKEY_CTX *ctx, const char *type, const char *value);
+	int pkey_id;
+	int flags;
+	int (*init) (EVP_PKEY_CTX *ctx);
+	int (*copy) (EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src);
+	void (*cleanup) (EVP_PKEY_CTX *ctx);
+	int (*paramgen_init) (EVP_PKEY_CTX *ctx);
+	int (*paramgen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+	int (*keygen_init) (EVP_PKEY_CTX *ctx);
+	int (*keygen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+	int (*sign_init) (EVP_PKEY_CTX *ctx);
+	int (*sign) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen);
+	int (*verify_init) (EVP_PKEY_CTX *ctx);
+	int (*verify) (EVP_PKEY_CTX *ctx,
+		const unsigned char *sig, size_t siglen,
+		const unsigned char *tbs, size_t tbslen);
+	int (*verify_recover_init) (EVP_PKEY_CTX *ctx);
+	int (*verify_recover) (EVP_PKEY_CTX *ctx,
+		unsigned char *rout, size_t *routlen,
+		const unsigned char *sig, size_t siglen);
+	int (*signctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
+	int (*signctx) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
+		EVP_MD_CTX *mctx);
+	int (*verifyctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
+	int (*verifyctx) (EVP_PKEY_CTX *ctx, const unsigned char *sig, int siglen,
+		EVP_MD_CTX *mctx);
+	int (*encrypt_init) (EVP_PKEY_CTX *ctx);
+	int (*encrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
+		const unsigned char *in, size_t inlen);
+	int (*decrypt_init) (EVP_PKEY_CTX *ctx);
+	int (*decrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
+		const unsigned char *in, size_t inlen);
+	int (*derive_init) (EVP_PKEY_CTX *ctx);
+	int (*derive) (EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
+	int (*ctrl) (EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
+	int (*ctrl_str) (EVP_PKEY_CTX *ctx, const char *type, const char *value);
 } /* EVP_PKEY_METHOD */ ;
 #endif
 
