@@ -29,10 +29,6 @@
 
 static int rsa_ex_index = 0;
 
-#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
-#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
-#endif
-
 static RSA *pkcs11_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->isPrivate);

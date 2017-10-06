@@ -29,6 +29,10 @@
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
+#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
+#endif
+
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 
