@@ -127,7 +127,7 @@ static void EVP_PKEY_meth_copy(EVP_PKEY_METHOD *dst, const EVP_PKEY_METHOD *src)
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
+static void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
 		int (**psign_init) (EVP_PKEY_CTX *ctx),
 		int (**psign) (EVP_PKEY_CTX *ctx,
 			unsigned char *sig, size_t *siglen,
@@ -187,8 +187,8 @@ int pkcs11_mechanism(CK_MECHANISM *mechanism,
 			if (salt_len < 0) /* integer underflow detected */
 				return -1;
 		}
-		fprintf(stderr, "salt_len=%d sig_md=%s mdf1_md=%s\n",
-			salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md));
+		/* fprintf(stderr, "salt_len=%d sig_md=%s mdf1_md=%s\n",
+			salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md)); */
 
 		/* fill rsa_pkcs_params */
 		switch (EVP_MD_type(sig_md)) {
@@ -228,7 +228,7 @@ int pkcs11_mechanism(CK_MECHANISM *mechanism,
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_PSS_PARAMS);
 		break;
 	default:
-		fprintf(stderr, "PKCS#11: Unsupported padding type\n");
+		P11err(P11_F_PKCS11_MECHANISM, P11_R_UNSUPPORTED_PADDING_TYPE);
 		return -1;
 	}
 	return 0;
@@ -284,7 +284,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (unsigned char *)tbs, tbslen, sig, &size));
 	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
-	fprintf(stderr, "C_SignInit and or C_Sign rv =%u\n", rv);
+	/* fprintf(stderr, "C_SignInit and or C_Sign rv = %u\n", rv); */
 
 	if (rv != 0)
 		return -1;
@@ -298,7 +298,6 @@ static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	int ret;
 
-	fprintf(stderr, "pkcs11_pkey_rsa_sign called\n");
 	ret = pkcs11_try_pkey_rsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
 	if (ret < 0)
 		ret = (*orig_pkey_rsa_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
