@@ -30,6 +30,7 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
+#include <openssl/evp.h>
 
 #ifdef __cplusplus
 extern "C" {

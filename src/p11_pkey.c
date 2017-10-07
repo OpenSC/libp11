@@ -25,42 +25,7 @@ static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
-typedef struct {
-	int nbits;
-	BIGNUM *pub_exp;
-	int gentmp[2];
-	int pad_mode;
-	const EVP_MD *md;
-	const EVP_MD *mgf1md;
-	int saltlen;
-	unsigned char *tbuf;
-} RSA_PKEY_CTX;
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
-static int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
-{
-	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
-	if (rctx == NULL)
-		return -1;
-	*pmd = rctx->md;
-	return 1;
-}
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10001000L || defined(LIBRESSL_VERSION_NUMBER)
-static int EVP_PKEY_CTX_get_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
-{
-	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
-	if (rctx == NULL)
-		return -1;
-	*pmd = rctx->mgf1md;
-	return 1;
-}
-#endif
-
-#if (OPENSSL_VERSION_NUMBER >= 0x10000000L && OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 struct evp_pkey_method_st {
 	int pkey_id;
 	int flags;
@@ -99,6 +64,66 @@ struct evp_pkey_method_st {
 	int (*ctrl) (EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
 	int (*ctrl_str) (EVP_PKEY_CTX *ctx, const char *type, const char *value);
 } /* EVP_PKEY_METHOD */ ;
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
+
+typedef struct {
+	int nbits;
+	BIGNUM *pub_exp;
+	int gentmp[2];
+	int pad_mode;
+	const EVP_MD *md;
+	const EVP_MD *mgf1md;
+	int saltlen;
+	unsigned char *tbuf;
+} RSA_PKEY_CTX;
+
+static int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
+{
+	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
+	if (rctx == NULL)
+		return -1;
+	*pmd = rctx->md;
+	return 1;
+}
+
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10001000L
+
+static int EVP_PKEY_CTX_get_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
+{
+	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
+	if (rctx == NULL)
+		return -1;
+	*pmd = rctx->mgf1md;
+	return 1;
+}
+
+static int EVP_PKEY_CTX_get_rsa_padding(EVP_PKEY_CTX *ctx, int *padding)
+{
+	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
+	if (rctx == NULL)
+		return -1;
+	*padding = rctx->pad_mode;
+	return 1;
+}
+
+static int EVP_PKEY_CTX_get_rsa_pss_saltlen(EVP_PKEY_CTX *ctx, int *saltlen)
+{
+	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
+	if (rctx == NULL)
+		return -1;
+	*saltlen = rctx->saltlen;
+	return 1;
+}
+
+static void EVP_PKEY_meth_copy(EVP_PKEY_METHOD *dst, const EVP_PKEY_METHOD *src)
+{
+	memcpy(dst, src, 2 * sizeof(int) + 25 * sizeof(void (*)()));
+}
+
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)

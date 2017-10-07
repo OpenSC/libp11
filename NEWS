@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.8; unreleased
+* PSS signature support (Doug Engert, Michał Trojnara)
+* Removed support for OpenSSL 0.9.8 (Michał Trojnara)
 
 New in 0.4.7; 2017-07-03; Michał Trojnara
 * Added OpenSSL-style engine error reporting (Michał Trojnara)
