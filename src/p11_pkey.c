@@ -88,6 +88,15 @@ static int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
 	return 1;
 }
 
+static int EVP_PKEY_CTX_get_rsa_oaep_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
+{
+	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
+	if (rctx == NULL)
+		return -1;
+	*pmd = rctx->md;
+	return 1;
+}
+
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10001000L
@@ -140,15 +149,116 @@ static void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
 }
 #endif
 
-/* Setup PKCS#11 mechanisms for encryption/decryption */
-int pkcs11_mechanism(CK_MECHANISM *mechanism,
-		PKCS11_RSA_PKCS_PARAMS *rsa_pkcs_params,
-		const int padding, EVP_PKEY_CTX *evp_pkey_ctx)
+static CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md)
+{
+	switch (EVP_MD_type(md)) {
+	case NID_sha1:
+		return CKM_SHA_1;
+	case NID_sha224:
+		return CKM_SHA224;
+	case NID_sha256:
+		return CKM_SHA256;
+	case NID_sha512:
+		return CKM_SHA512;
+	case NID_sha384:
+		return CKM_SHA384;
+	default:
+		return 0;
+	}
+}
+
+static CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
+{
+	switch (EVP_MD_type(md)) {
+	case NID_sha1:
+		return CKG_MGF1_SHA1;
+	case NID_sha224:
+		return CKG_MGF1_SHA224;
+	case NID_sha256:
+		return CKG_MGF1_SHA256;
+	case NID_sha512:
+		return CKG_MGF1_SHA512;
+	case NID_sha384:
+		return CKG_MGF1_SHA384;
+	default:
+		return 0;
+	}
+}
+
+static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
+		EVP_PKEY_CTX *ctx)
 {
 	const EVP_MD *sig_md, *mgf1_md;
 	EVP_PKEY *evp_pkey;
 	int salt_len;
 
+	/* retrieve PSS parameters */
+	if (EVP_PKEY_CTX_get_signature_md(ctx, &sig_md) <= 0)
+		return -1;
+	if (EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, &mgf1_md) <= 0)
+		return -1;
+	if (!EVP_PKEY_CTX_get_rsa_pss_saltlen(ctx, &salt_len))
+		return -1;
+	switch (salt_len) {
+	case -1:
+		salt_len = EVP_MD_size(sig_md);
+		break;
+	case -2:
+		evp_pkey = EVP_PKEY_CTX_get0_pkey(ctx);
+		if (evp_pkey == NULL)
+			return -1;
+		salt_len = EVP_PKEY_size(evp_pkey) - EVP_MD_size(sig_md) - 2;
+		if (((EVP_PKEY_bits(evp_pkey) - 1) & 0x7) == 0)
+			salt_len--;
+		if (salt_len < 0) /* integer underflow detected */
+			return -1;
+	}
+#ifdef DEBUG
+	fprintf(stderr, "salt_len=%d sig_md=%s mdf1_md=%s\n",
+		salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md));
+#endif
+
+	/* fill the CK_RSA_PKCS_PSS_PARAMS structure */
+	pss->hashAlg = pkcs11_md2ckm(sig_md);
+	pss->mgf = pkcs11_md2ckg(mgf1_md);
+	if (!pss->hashAlg || !pss->mgf)
+		return -1;
+	pss->sLen = salt_len;
+	return 0;
+}
+
+static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
+		EVP_PKEY_CTX *ctx)
+{
+	const EVP_MD *oaep_md, *mgf1_md;
+
+	/* retrieve OAEP parameters */
+	if (EVP_PKEY_CTX_get_rsa_oaep_md(ctx, &oaep_md) <= 0)
+		return -1;
+	if (EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, &mgf1_md) <= 0)
+		return -1;
+#ifdef DEBUG
+	fprintf(stderr, "oaep_md=%s mdf1_md=%s\n",
+		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md));
+#endif
+
+	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
+	oaep->hashAlg = pkcs11_md2ckm(oaep_md);
+	oaep->mgf = pkcs11_md2ckg(mgf1_md);
+	if (!oaep->hashAlg || !oaep->mgf)
+		return -1;
+	/* we do not support the OAEP "label" parameter yet... */
+	oaep->source = 0UL; /* empty parameter (label) */
+	oaep->pSourceData = NULL;
+	oaep->ulSourceDataLen = 0;
+	return 0;
+}
+
+/* Setup PKCS#11 mechanisms for encryption/decryption */
+int pkcs11_mechanism(CK_MECHANISM *mechanism,
+		PKCS11_RSA_PKCS_PARAMS *rsa_pkcs_params,
+		const int padding, EVP_PKEY_CTX *evp_pkey_ctx)
+{
 	memset(mechanism, 0, sizeof(CK_MECHANISM));
 	if (rsa_pkcs_params)
 		memset(rsa_pkcs_params, 0, sizeof(PKCS11_RSA_PKCS_PARAMS));
@@ -164,68 +274,22 @@ int pkcs11_mechanism(CK_MECHANISM *mechanism,
 		mechanism->mechanism = CKM_RSA_X9_31;
 		break;
 	case RSA_PKCS1_PSS_PADDING:
-		/* retrieve PSS parameters */
 		if (evp_pkey_ctx == NULL || rsa_pkcs_params == NULL)
 			return -1;
-		if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
+		if (pkcs11_params_pss(&rsa_pkcs_params->pss, evp_pkey_ctx) < 0)
 			return -1;
-		if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
-			return -1;
-		if (!EVP_PKEY_CTX_get_rsa_pss_saltlen(evp_pkey_ctx, &salt_len))
-			return -1;
-		switch (salt_len) {
-		case -1:
-			salt_len = EVP_MD_size(sig_md);
-			break;
-		case -2:
-			evp_pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
-			if (evp_pkey == NULL)
-				return -1;
-			salt_len = EVP_PKEY_size(evp_pkey) - EVP_MD_size(sig_md) - 2;
-			if (((EVP_PKEY_bits(evp_pkey) - 1) & 0x7) == 0)
-				salt_len--;
-			if (salt_len < 0) /* integer underflow detected */
-				return -1;
-		}
-		/* fprintf(stderr, "salt_len=%d sig_md=%s mdf1_md=%s\n",
-			salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md)); */
-
-		/* fill rsa_pkcs_params */
-		switch (EVP_MD_type(sig_md)) {
-		case NID_sha256:
-			rsa_pkcs_params->pss.hashAlg = CKM_SHA256;
-			break;
-		case NID_sha512:
-			rsa_pkcs_params->pss.hashAlg = CKM_SHA512;
-			break;
-		case NID_sha384:
-			rsa_pkcs_params->pss.hashAlg = CKM_SHA384;
-			break;
-		default:
-			return -1;
-		}
-		switch (EVP_MD_type(mgf1_md)) {
-		case NID_sha256:
-			rsa_pkcs_params->pss.mgf = CKG_MGF1_SHA256;
-			break;
-		case NID_sha512:
-			rsa_pkcs_params->pss.mgf = CKG_MGF1_SHA512;
-			break;
-		case NID_sha384:
-			rsa_pkcs_params->pss.mgf = CKG_MGF1_SHA384;
-			break;
-		case NID_sha224:
-			rsa_pkcs_params->pss.mgf = CKG_MGF1_SHA224;
-			break;
-		default:
-			return -1;
-		}
-		rsa_pkcs_params->pss.sLen = salt_len;
-
-		/* fill mechanism */
 		mechanism->mechanism = CKM_RSA_PKCS_PSS;
 		mechanism->pParameter = &rsa_pkcs_params->pss;
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_PSS_PARAMS);
+		break;
+	case RSA_PKCS1_OAEP_PADDING:
+		if (evp_pkey_ctx == NULL || rsa_pkcs_params == NULL)
+			return -1;
+		if (pkcs11_params_oaep(&rsa_pkcs_params->oaep, evp_pkey_ctx) < 0)
+			return -1;
+		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
+		mechanism->pParameter = &rsa_pkcs_params->oaep;
+		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_OAEP_PARAMS);
 		break;
 	default:
 		P11err(P11_F_PKCS11_MECHANISM, P11_R_UNSUPPORTED_PADDING_TYPE);
@@ -292,7 +356,9 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	cpriv->sign_initialized = !rv && sig == NULL;
 	if (!cpriv->sign_initialized)
 		CRYPTO_THREAD_unlock(cpriv->rwlock);
-	/* fprintf(stderr, "C_SignInit and or C_Sign rv = %u\n", rv); */
+#ifdef DEBUG
+	fprintf(stderr, "C_SignInit and or C_Sign rv = %u\n", rv);
+#endif
 
 	if (rv != 0)
 		return -1;
