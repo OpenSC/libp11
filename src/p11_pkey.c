@@ -121,7 +121,7 @@ static int EVP_PKEY_CTX_get_rsa_pss_saltlen(EVP_PKEY_CTX *ctx, int *saltlen)
 
 static void EVP_PKEY_meth_copy(EVP_PKEY_METHOD *dst, const EVP_PKEY_METHOD *src)
 {
-	memcpy(dst, src, 2 * sizeof(int) + 25 * sizeof(void (*)()));
+	memcpy((int *)dst + 2, (int *)src + 2, 25 * sizeof(void (*)()));
 }
 
 #endif
@@ -320,7 +320,8 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa()
 	EVP_PKEY_meth_get_sign(orig_evp_pkey_meth_rsa,
 		&orig_pkey_rsa_sign_init, &orig_pkey_rsa_sign);
 
-	new_evp_pkey_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA, 0);
+	new_evp_pkey_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA,
+		EVP_PKEY_FLAG_AUTOARGLEN);
 	EVP_PKEY_meth_copy(new_evp_pkey_meth_rsa, orig_evp_pkey_meth_rsa);
 	EVP_PKEY_meth_set_sign(new_evp_pkey_meth_rsa,
 		orig_pkey_rsa_sign_init, pkcs11_pkey_rsa_sign);
