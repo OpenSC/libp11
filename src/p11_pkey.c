@@ -241,14 +241,13 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	RSA *rsa;
 	PKCS11_KEY *key;
-	CK_MECHANISM mechanism;
-	PKCS11_RSA_PKCS_PARAMS rsa_pkcs_params;
-	int padding, rv;
+	int rv = 0;
 	CK_ULONG size = *siglen;
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
 	PKCS11_KEY_private *kpriv;
 	PKCS11_SLOT_private *spriv;
+	PKCS11_CTX_private *cpriv;
 	const EVP_MD *sig_md;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
@@ -264,26 +263,35 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ctx = KEY2CTX(key);
 	kpriv = PRIVKEY(key);
 	spriv = PRIVSLOT(slot);
+	cpriv = PRIVCTX(ctx);
 
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		return -1;
 	if (tbslen != (size_t)EVP_MD_size(sig_md))
 		return -1;
 
-	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-	if (pkcs11_mechanism(&mechanism, &rsa_pkcs_params,
-			padding, evp_pkey_ctx) < 0)
-		return -1;
+	if (!cpriv->sign_initialized) {
+		int padding;
+		CK_MECHANISM mechanism;
+		PKCS11_RSA_PKCS_PARAMS rsa_pkcs_params;
 
-	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(spriv->session, &mechanism, kpriv->object));
-	if (kpriv->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key);
+		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
+		if (pkcs11_mechanism(&mechanism, &rsa_pkcs_params,
+				padding, evp_pkey_ctx) < 0)
+			return -1;
+
+		CRYPTO_THREAD_write_lock(cpriv->rwlock);
+		rv = CRYPTOKI_call(ctx,
+			C_SignInit(spriv->session, &mechanism, kpriv->object));
+		if (kpriv->always_authenticate == CK_TRUE)
+			rv = pkcs11_authenticate(key);
+	}
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (unsigned char *)tbs, tbslen, sig, &size));
-	CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
+	cpriv->sign_initialized = !rv && sig == NULL;
+	if (!cpriv->sign_initialized)
+		CRYPTO_THREAD_unlock(cpriv->rwlock);
 	/* fprintf(stderr, "C_SignInit and or C_Sign rv = %u\n", rv); */
 
 	if (rv != 0)

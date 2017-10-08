@@ -55,6 +55,7 @@ typedef struct pkcs11_ctx_private {
 	void *ui_user_data;
 	unsigned int forkid;
 	PKCS11_RWLOCK rwlock;
+	int sign_initialized;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
