@@ -283,7 +283,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		CRYPTO_THREAD_write_lock(cpriv->rwlock);
 		rv = CRYPTOKI_call(ctx,
 			C_SignInit(spriv->session, &mechanism, kpriv->object));
-		if (kpriv->always_authenticate == CK_TRUE)
+		if (!rv && kpriv->always_authenticate == CK_TRUE)
 			rv = pkcs11_authenticate(key);
 	}
 	if (!rv)

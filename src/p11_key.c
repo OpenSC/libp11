@@ -332,6 +332,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 
 /*
  * Authenticate a private the key operation if needed
+ * This function *only* handles CKU_CONTEXT_SPECIFIC logins.
  */
 int pkcs11_authenticate(PKCS11_KEY *key)
 {
