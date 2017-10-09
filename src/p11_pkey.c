@@ -219,6 +219,7 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
 #endif
 
 	/* fill the CK_RSA_PKCS_PSS_PARAMS structure */
+	memset(pss, 0, sizeof(CK_RSA_PKCS_PSS_PARAMS));
 	pss->hashAlg = pkcs11_md2ckm(sig_md);
 	pss->mgf = pkcs11_md2ckg(mgf1_md);
 	if (!pss->hashAlg || !pss->mgf)
@@ -227,6 +228,7 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
 	return 0;
 }
 
+#if 0 /* TODO */
 static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
 		EVP_PKEY_CTX *ctx)
 {
@@ -243,6 +245,7 @@ static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
 #endif
 
 	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
+	memset(oaep, 0, sizeof(CK_RSA_PKCS_OAEP_PARAMS));
 	oaep->hashAlg = pkcs11_md2ckm(oaep_md);
 	oaep->mgf = pkcs11_md2ckg(mgf1_md);
 	if (!oaep->hashAlg || !oaep->mgf)
@@ -253,50 +256,7 @@ static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
 	oaep->ulSourceDataLen = 0;
 	return 0;
 }
-
-/* Setup PKCS#11 mechanisms for encryption/decryption */
-int pkcs11_mechanism(CK_MECHANISM *mechanism,
-		PKCS11_RSA_PKCS_PARAMS *rsa_pkcs_params,
-		const int padding, EVP_PKEY_CTX *evp_pkey_ctx)
-{
-	memset(mechanism, 0, sizeof(CK_MECHANISM));
-	if (rsa_pkcs_params)
-		memset(rsa_pkcs_params, 0, sizeof(PKCS11_RSA_PKCS_PARAMS));
-
-	switch (padding) {
-	case RSA_PKCS1_PADDING:
-		mechanism->mechanism = CKM_RSA_PKCS;
-		break;
-	case RSA_NO_PADDING:
-		mechanism->mechanism = CKM_RSA_X_509;
-		break;
-	case RSA_X931_PADDING:
-		mechanism->mechanism = CKM_RSA_X9_31;
-		break;
-	case RSA_PKCS1_PSS_PADDING:
-		if (evp_pkey_ctx == NULL || rsa_pkcs_params == NULL)
-			return -1;
-		if (pkcs11_params_pss(&rsa_pkcs_params->pss, evp_pkey_ctx) < 0)
-			return -1;
-		mechanism->mechanism = CKM_RSA_PKCS_PSS;
-		mechanism->pParameter = &rsa_pkcs_params->pss;
-		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_PSS_PARAMS);
-		break;
-	case RSA_PKCS1_OAEP_PADDING:
-		if (evp_pkey_ctx == NULL || rsa_pkcs_params == NULL)
-			return -1;
-		if (pkcs11_params_oaep(&rsa_pkcs_params->oaep, evp_pkey_ctx) < 0)
-			return -1;
-		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
-		mechanism->pParameter = &rsa_pkcs_params->oaep;
-		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_OAEP_PARAMS);
-		break;
-	default:
-		P11err(P11_F_PKCS11_MECHANISM, P11_R_UNSUPPORTED_PADDING_TYPE);
-		return -1;
-	}
-	return 0;
-}
+#endif
 
 static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
@@ -329,6 +289,8 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	spriv = PRIVSLOT(slot);
 	cpriv = PRIVCTX(ctx);
 
+	if (evp_pkey_ctx == NULL)
+		return -1;
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		return -1;
 	if (tbslen != (size_t)EVP_MD_size(sig_md))
@@ -337,12 +299,17 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!cpriv->sign_initialized) {
 		int padding;
 		CK_MECHANISM mechanism;
-		PKCS11_RSA_PKCS_PARAMS rsa_pkcs_params;
+		CK_RSA_PKCS_PSS_PARAMS params;
 
 		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-		if (pkcs11_mechanism(&mechanism, &rsa_pkcs_params,
-				padding, evp_pkey_ctx) < 0)
+		if (padding != RSA_PKCS1_PSS_PADDING)
 			return -1;
+		if (pkcs11_params_pss(&params, evp_pkey_ctx) < 0)
+			return -1;
+		memset(&mechanism, 0, sizeof mechanism);
+		mechanism.mechanism = CKM_RSA_PKCS_PSS;
+		mechanism.pParameter = &params;
+		mechanism.ulParameterLen = sizeof params;
 
 		CRYPTO_THREAD_write_lock(cpriv->rwlock);
 		rv = CRYPTOKI_call(ctx,
