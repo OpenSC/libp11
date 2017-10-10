@@ -29,10 +29,6 @@
 
 static int rsa_ex_index = 0;
 
-#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
-#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
-#endif
-
 static RSA *pkcs11_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->isPrivate);
@@ -61,8 +57,8 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	memset(mechanism, 0, sizeof(CK_MECHANISM));
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
-		mechanism->mechanism = CKM_RSA_PKCS;
-		break;
+		 mechanism->mechanism = CKM_RSA_PKCS;
+		 break;
 	case RSA_NO_PADDING:
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
@@ -70,7 +66,7 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 		mechanism->mechanism = CKM_RSA_X9_31;
 		break;
 	default:
-		fprintf(stderr, "PKCS#11: Unsupported padding type\n");
+		P11err(P11_F_PKCS11_MECHANISM, P11_R_UNSUPPORTED_PADDING_TYPE);
 		return -1;
 	}
 	return 0;
@@ -99,7 +95,7 @@ int pkcs11_private_encrypt(int flen,
 	/* Try signing first, as applications are more likely to use it */
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(spriv->session, &mechanism, kpriv->object));
-	if (kpriv->always_authenticate == CK_TRUE)
+	if (!rv && kpriv->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
@@ -108,7 +104,7 @@ int pkcs11_private_encrypt(int flen,
 		/* OpenSSL may use it for encryption rather than signing */
 		rv = CRYPTOKI_call(ctx,
 			C_EncryptInit(spriv->session, &mechanism, kpriv->object));
-		if (kpriv->always_authenticate == CK_TRUE)
+		if (!rv && kpriv->always_authenticate == CK_TRUE)
 			rv = pkcs11_authenticate(key);
 		if (!rv)
 			rv = CRYPTOKI_call(ctx,
@@ -142,7 +138,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
 	rv = CRYPTOKI_call(ctx,
 		C_DecryptInit(spriv->session, &mechanism, kpriv->object));
-	if (kpriv->always_authenticate == CK_TRUE)
+	if (!rv && kpriv->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
@@ -235,15 +231,21 @@ success:
 	return rsa;
 }
 
-static void pkcs11_set_ex_data_rsa(RSA* rsa, PKCS11_KEY* key)
+
+PKCS11_KEY *pkcs11_get_ex_data_rsa(RSA *rsa)
+{
+	return RSA_get_ex_data(rsa, rsa_ex_index);
+}
+
+static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_KEY *key)
 {
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
 
-static void pkcs11_update_ex_data_rsa(PKCS11_KEY* key)
+static void pkcs11_update_ex_data_rsa(PKCS11_KEY *key)
 {
-	EVP_PKEY* evp = key->evp_key;
-	RSA* rsa;
+	EVP_PKEY *evp = key->evp_key;
+	RSA *rsa;
 	if (evp == NULL)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA)

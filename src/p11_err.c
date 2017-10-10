@@ -29,6 +29,7 @@ static ERR_STRING_DATA P11_str_functs[] = {
     {ERR_FUNC(P11_F_PKCS11_GENERATE_RANDOM), "pkcs11_generate_random"},
     {ERR_FUNC(P11_F_PKCS11_INIT_PIN), "pkcs11_init_pin"},
     {ERR_FUNC(P11_F_PKCS11_LOGOUT), "pkcs11_logout"},
+    {ERR_FUNC(P11_F_PKCS11_MECHANISM), "pkcs11_mechanism"},
     {ERR_FUNC(P11_F_PKCS11_SEED_RANDOM), "pkcs11_seed_random"},
     {ERR_FUNC(P11_F_PKCS11_STORE_KEY), "pkcs11_store_key"},
     {ERR_FUNC(P11_F_PKCS11_VERIFY), "PKCS11_verify"},
@@ -41,6 +42,7 @@ static ERR_STRING_DATA P11_str_reasons[] = {
     {ERR_REASON(P11_R_NOT_SUPPORTED), "Not supported"},
     {ERR_REASON(P11_R_NO_SESSION), "No session open"},
     {ERR_REASON(P11_R_UI_FAILED), "UI request failed"},
+    {ERR_REASON(P11_R_UNSUPPORTED_PADDING_TYPE), "Unsupported padding type"},
     {0, NULL}
 };
 

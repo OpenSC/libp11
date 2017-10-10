@@ -29,6 +29,10 @@
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
+#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
+#endif
+
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 
@@ -51,6 +55,7 @@ typedef struct pkcs11_ctx_private {
 	void *ui_user_data;
 	unsigned int forkid;
 	PKCS11_RWLOCK rwlock;
+	int sign_initialized;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
@@ -333,6 +338,9 @@ extern int pkcs11_private_encrypt(
 extern int pkcs11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding);
+
+/* Retrieve PKCS11_KEY from an RSA key */
+extern PKCS11_KEY *pkcs11_get_ex_data_rsa(RSA *rsa);
 
 #endif
 
