@@ -194,7 +194,8 @@ static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
 static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	ENGINE_CTX *ctx;
+	ENGINE_CTX *ctx  = NULL;
+	EVP_PKEY   *pkey = NULL;
 
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
@@ -204,8 +205,10 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 		pkey->engine = engine;
 #else
+#if defined(EVP_F_EVP_PKEY_SET1_ENGINE)
 		EVP_PKEY_set1_engine(pkey,engine);
-#endif
+#endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
+#endif /* OPENSSL_VERSION_NUMBER */
 	return pkey;
 }
 
