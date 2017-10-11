@@ -412,7 +412,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 
 		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
 #if defined(DEBUG)
-		fprintf(stderr, "%s:%d padding=%d\n", __FILE__, __LINE__, pad);
+		fprintf(stderr, "%s:%d padding=%d\n", __FILE__, __LINE__, padding);
 #endif
 		switch (padding) {
 		case RSA_PKCS1_OAEP_PADDING:
