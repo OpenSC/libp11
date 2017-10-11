@@ -290,6 +290,11 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_CTX_private *cpriv;
 	const EVP_MD *sig_md;
 
+#ifdef DEBUG
+	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_sign() "
+		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
+#endif
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (pkey == NULL)
 		return -1;
@@ -315,17 +320,29 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!cpriv->sign_initialized) {
 		int padding;
 		CK_MECHANISM mechanism;
-		CK_RSA_PKCS_PSS_PARAMS params;
+		CK_RSA_PKCS_PSS_PARAMS pss_params;
 
-		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-		if (padding != RSA_PKCS1_PSS_PADDING)
-			return -1;
-		if (pkcs11_params_pss(&params, evp_pkey_ctx) < 0)
-			return -1;
 		memset(&mechanism, 0, sizeof mechanism);
-		mechanism.mechanism = CKM_RSA_PKCS_PSS;
-		mechanism.pParameter = &params;
-		mechanism.ulParameterLen = sizeof params;
+		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
+		switch (padding) {
+		case RSA_PKCS1_PSS_PADDING:
+#ifdef DEBUG
+			fprintf(stderr, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
+				__FILE__, __LINE__);
+#endif
+			if (pkcs11_params_pss(&pss_params, evp_pkey_ctx) < 0)
+				return -1;
+			mechanism.mechanism = CKM_RSA_PKCS_PSS;
+			mechanism.pParameter = &pss_params;
+			mechanism.ulParameterLen = sizeof pss_params;
+			break;
+		default:
+#ifdef DEBUG
+			fprintf(stderr, "%s:%d unsupported padding: %d\n",
+				__FILE__, __LINE__, padding);
+#endif
+			return -1;
+		} /* end switch(padding) */
 
 		CRYPTO_THREAD_write_lock(cpriv->rwlock);
 		rv = CRYPTOKI_call(ctx,
@@ -335,15 +352,16 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	}
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
-			C_Sign(spriv->session, (unsigned char *)tbs, tbslen, sig, &size));
+			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
 	cpriv->sign_initialized = !rv && sig == NULL;
 	if (!cpriv->sign_initialized)
 		CRYPTO_THREAD_unlock(cpriv->rwlock);
 #ifdef DEBUG
-	fprintf(stderr, "%s:%d C_SignInit and or C_Sign rv = %u\n", __FILE__, __LINE__, rv);
+	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
+		__FILE__, __LINE__, rv);
 #endif
 
-	if (rv != 0)
+	if (rv != CKR_OK)
 		return -1;
 	*siglen = size;
 	return 1;
@@ -365,24 +383,22 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *out, size_t *outlen,
 		const unsigned char *in, size_t inlen)
 {
-	unsigned char out_buf[20480];
-	EVP_PKEY *pkey = NULL;
-	RSA *rsa = NULL;
-	PKCS11_KEY *key = NULL;
+	EVP_PKEY *pkey;
+	RSA *rsa;
+	PKCS11_KEY *key;
 	int rv = 0;
 	CK_ULONG size = *outlen;
-	PKCS11_SLOT *slot = NULL;
-	PKCS11_CTX *ctx = NULL;
-	PKCS11_KEY_private *kpriv = NULL;
-	PKCS11_SLOT_private *spriv = NULL;
-	PKCS11_CTX_private *cpriv = NULL;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	PKCS11_KEY_private *kpriv;
+	PKCS11_SLOT_private *spriv;
+	PKCS11_CTX_private *cpriv;
 
-#if defined(DEBUG)
-	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_decrypt() out=%p "
-			" *outlen=%lu in=%p inlen=%lu\n",
-			__FILE__, __LINE__, out, *outlen, in, inlen);
+#ifdef DEBUG
+	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_decrypt() "
+		"out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__, out, *outlen, in, inlen);
 #endif
-
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (pkey == NULL)
 		return -1;
@@ -402,81 +418,61 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (evp_pkey_ctx == NULL)
 		return -1;
 
-	memset(out_buf, 0, sizeof(out_buf));
-	size = sizeof(out_buf);
-
 	if (!cpriv->decrypt_initialized) {
-		int padding = -1;
+		int padding;
 		CK_MECHANISM mechanism;
 		CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
+		memset(&mechanism, 0, sizeof mechanism);
 		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-#if defined(DEBUG)
-		fprintf(stderr, "%s:%d padding=%d\n", __FILE__, __LINE__, padding);
-#endif
 		switch (padding) {
 		case RSA_PKCS1_OAEP_PADDING:
-#if defined(DEBUG)
-			fprintf(stderr, "RSA_OAEP\n");
+#ifdef DEBUG
+			fprintf(stderr, "%s:%d padding=RSA_PKCS1_OAEP_PADDING\n",
+				__FILE__, __LINE__);
 #endif
 			if (pkcs11_params_oaep(&oaep_params, evp_pkey_ctx) < 0)
 				return -1;
-			memset(&mechanism, 0, sizeof mechanism);
 			mechanism.mechanism = CKM_RSA_PKCS_OAEP;
 			mechanism.pParameter = &oaep_params;
 			mechanism.ulParameterLen = sizeof oaep_params;
 			break;
 		case CKM_RSA_PKCS:
+#ifdef DEBUG
+			fprintf(stderr, "%s:%d padding=CKM_RSA_PKCS\n",
+				__FILE__, __LINE__);
+#endif
 			mechanism.pParameter = NULL;
 			mechanism.ulParameterLen = 0;
 			break;
 		default:
-#if defined(DEBUG)
-			fprintf(stderr, "%s:%d unknown/unsupported padding: %d\n",
+#ifdef DEBUG
+			fprintf(stderr, "%s:%d unsupported padding: %d\n",
 				__FILE__, __LINE__, padding);
 #endif
 			return -1;
 		} /* end switch(padding) */
 
-		CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock);
-
+		CRYPTO_THREAD_write_lock(cpriv->rwlock);
 		rv = CRYPTOKI_call(ctx,
 			C_DecryptInit(spriv->session, &mechanism, kpriv->object));
+		if (!rv && kpriv->always_authenticate == CK_TRUE)
+			rv = pkcs11_authenticate(key);
 	}
-
-	if (!rv && kpriv->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key); /* don't re-auth unless flag is set! */
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(spriv->session, (CK_BYTE *) in, inlen, (CK_BYTE_PTR) out_buf, &size));
+			C_Decrypt(spriv->session, (CK_BYTE_PTR)in, inlen, out, &size));
 	cpriv->decrypt_initialized = !rv && out == NULL;
 	if (!cpriv->decrypt_initialized)
-		CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock);
-#if defined(DEBUG)
-	if (rv != CKR_OK)
-		fprintf(stderr, "%s:%d C_DecryptInit or C_Decrypt rv=%d\n", 
-			__FILE__, __LINE__, rv);
+		CRYPTO_THREAD_unlock(cpriv->rwlock);
+#ifdef DEBUG
+	fprintf(stderr, "%s:%d C_DecryptInit or C_Decrypt rv=%d\n",
+		__FILE__, __LINE__, rv);
 #endif
 
 	if (rv != CKR_OK)
 		return -1;
-
-	if (out != NULL) { /* real decryption request - not just a query for output size */
-		/* Validate output buffer size before copying to there */
-		/* Because if the output buffer was provided - its size "*outlen" should */
-		/* be meaningful                                                         */
-		if (*outlen < size) {
-			fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_decrypt(): "
-				"output buffer (%lu bytes) too small! (need %lu)\n",
-				__FILE__, __LINE__, *outlen, size);
-			return -1;
-		}
-		memcpy(out, out_buf, size);
-	}
-	/* Make sure we aren't overstepping provided output buffer size */
-	if (*outlen >= size || out == NULL || *outlen == 0)
-		*outlen = size;
-
+	*outlen = size;
 	return 1;
 }
 

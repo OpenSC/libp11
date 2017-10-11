@@ -336,6 +336,8 @@ int ctx_init(ENGINE_CTX *ctx)
 		CRYPTO_w_lock(CRYPTO_LOCK_ENGINE);
 		return ctx->pkcs11_ctx && ctx->slot_list ? 1 : 0;
 	}
+#else
+	(void)ctx; /* squash the unused parameter warning */
 #endif
 	return 1;
 }
