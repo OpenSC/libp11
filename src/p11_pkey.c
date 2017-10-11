@@ -162,7 +162,7 @@ static void EVP_PKEY_meth_get_decrypt(EVP_PKEY_METHOD *pmeth,
 {
 	if (pdecrypt_init)
 		*pdecrypt_init = pmeth->decrypt_init;
-	if (pencrypt)
+	if (pdecrypt)
 		*pdecrypt = pmeth->decrypt;
 }
 #endif
