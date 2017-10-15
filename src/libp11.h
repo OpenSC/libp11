@@ -245,6 +245,9 @@ extern int PKCS11_logout(PKCS11_SLOT * slot);
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
 	PKCS11_KEY **, unsigned int *);
 
+/* Remove the key from this token */
+extern int PKCS11_remove_key(PKCS11_KEY *);
+
 /* Get a list of public keys associated with this token */
 extern int PKCS11_enumerate_public_keys(PKCS11_TOKEN *,
 	PKCS11_KEY **, unsigned int *);
@@ -281,6 +284,9 @@ extern PKCS11_KEY *PKCS11_find_key_from_key(PKCS11_KEY *);
 
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
+
+/* Remove the certificate from this token */
+extern int PKCS11_remove_certificate(PKCS11_CERT *);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
@@ -418,7 +424,7 @@ extern void ERR_load_PKCS11_strings(void);
  * duplicate the functionality OpenSSL provides for EVP_PKEY objects
  */
 
-/**
+/** 
  * Generate and store a private key on the token
  *
  * @param token token returned by PKCS11_find_token()
@@ -506,6 +512,8 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 # define CKR_F_PKCS11_SEED_RANDOM                         125
 # define CKR_F_PKCS11_STORE_CERTIFICATE                   126
 # define CKR_F_PKCS11_STORE_KEY                           127
+# define CKR_F_PKCS11_REMOVE_KEY                          128
+# define CKR_F_PKCS11_REMOVE_CERTIFICATE                  129
 
 /* For backward compatibility */
 #define PKCS11_LOAD_MODULE_ERROR                          P11_LOAD_MODULE_ERROR

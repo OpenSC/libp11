@@ -253,6 +253,9 @@ int pkcs11_authenticate(PKCS11_KEY *key);
 extern int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	PKCS11_KEY **keys, unsigned int *nkeys);
 
+/* Remove a key from the token */
+extern int pkcs11_remove_key(PKCS11_KEY *key);
+
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int pkcs11_get_key_type(PKCS11_KEY *key);
 
@@ -271,6 +274,9 @@ extern PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *key);
 /* Get a list of all certificates associated with this token */
 extern int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 	PKCS11_CERT **certs, unsigned int *ncerts);
+
+/* Remove a certificate from the token */
+extern int pkcs11_remove_certificate(PKCS11_CERT *key);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int pkcs11_set_ui_method(PKCS11_CTX *ctx,
