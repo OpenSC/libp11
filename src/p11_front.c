@@ -257,6 +257,7 @@ int PKCS11_logout(PKCS11_SLOT *slot)
 	return pkcs11_logout(slot);
 }
 
+
 int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
@@ -264,6 +265,13 @@ int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 		return -1;
 	return pkcs11_enumerate_keys(token, CKO_PRIVATE_KEY, keys, nkeys);
 }
+
+int PKCS11_remove_key(PKCS11_KEY *key)
+{
+	if (check_key_fork(key) < 0)
+		return -1;
+	return pkcs11_remove_key(key);
+};
 
 int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
 		PKCS11_KEY **keys, unsigned int *nkeys)
@@ -315,6 +323,13 @@ int PKCS11_enumerate_certs(PKCS11_TOKEN *token,
 		return -1;
 	return pkcs11_enumerate_certs(token, certs, ncerts);
 }
+
+int PKCS11_remove_certificate(PKCS11_CERT *cert)
+{
+	if (check_cert_fork(cert) < 0)
+		return -1;
+	return pkcs11_remove_certificate(cert);
+};
 
 int PKCS11_init_token(PKCS11_TOKEN *token, const char *pin,
 		const char *label)

@@ -444,6 +444,55 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	return 0;
 }
 
+/**
+ * Remove a key from the associated token
+ */ 
+int pkcs11_remove_key(PKCS11_KEY *key){
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_OBJECT_HANDLE obj;
+	CK_ULONG count;
+	CK_ATTRIBUTE search_parameters[32];
+	unsigned int n = 0;
+
+	/* First, make sure we have a session */
+	if (!spriv->haveSession && PKCS11_open_session(slot, 1)){
+		return -1;
+	}
+	if (key->isPrivate){
+		pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_PRIVATE_KEY);
+	}else{
+		pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_PUBLIC_KEY);
+	}
+	if (key->id && key->id_len){
+		pkcs11_addattr(search_parameters + n++, CKA_ID, key->id, key->id_len);
+	}
+	if (key->label){
+	 	pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, key->label);
+	}
+
+	int rv = CRYPTOKI_call(ctx,
+		C_FindObjectsInit(spriv->session, search_parameters, n));
+	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_KEY, rv);
+	
+	rv = CRYPTOKI_call(ctx, C_FindObjects(spriv->session, &obj, 1, &count));
+	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_KEY, rv);
+
+	CRYPTOKI_call(ctx, C_FindObjectsFinal(spriv->session));
+	if (count!=1){
+		pkcs11_zap_attrs(search_parameters, n);
+		return -1;
+	}
+	rv = CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, obj));
+	if (rv != CKR_OK){
+		pkcs11_zap_attrs(search_parameters, n);
+		return -1;
+	}
+	pkcs11_zap_attrs(search_parameters, n);
+	return 0;
+}
+
 /*
  * Find all keys of a given type (public or private)
  */
