@@ -301,10 +301,6 @@ extern int pkcs11_store_private_key(PKCS11_TOKEN * token,
 extern int pkcs11_store_public_key(PKCS11_TOKEN * token,
 	EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
 
-/* Generate a keyPair directly on token*/
-extern int pkcs11_generate_key_on_token(PKCS11_TOKEN *token, char *label, 
-	unsigned char *id, size_t id_len, unsigned long modulus_bits);
-
 /* Store certificate on a token */
 extern int pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 		char *label, unsigned char *id, size_t id_len,

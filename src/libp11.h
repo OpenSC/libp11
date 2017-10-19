@@ -111,6 +111,7 @@ typedef struct PKCS11_ctx_st {
 	void *_private;
 } PKCS11_CTX;
 
+
 /**
  * Create a new libp11 context
  *
@@ -352,19 +353,21 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
  */
 extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
 
-/**
- * Generate a keypair on a token
+/** 
+ * Generate and store a private key on the token
  *
  * @param token token returned by PKCS11_find_token()
- * @param label label for this keys
- * @param id bytes to use as id values
- * @param id_len length of id values.
- * @param modulus_bits number of modulis bits (i.e. 1024,2048)
+ * @param algorithm IGNORED (still here to retro-compatibility)
+ * @param bits size of the modulus in bits
+ * @param label label for this key
+ * @param id bytes to use as id value
+ * @param id_len length of id value.
  * @retval 0 success
  * @retval -1 error
  */
-
-extern int PKCS11_generate_key_on_token(PKCS11_TOKEN *token, char *label, unsigned char *id, size_t id_len, unsigned long modulus_bits);
+extern int PKCS11_generate_key(PKCS11_TOKEN * token,
+	int algorithm, unsigned int bits,
+	char *label, unsigned char* id, size_t id_len);
 
 /**
  * Store certificate on a token
@@ -437,22 +440,6 @@ extern void ERR_load_PKCS11_strings(void);
  * These functions will be removed from libp11, because they partially
  * duplicate the functionality OpenSSL provides for EVP_PKEY objects
  */
-
-/** 
- * Generate and store a private key on the token
- *
- * @param token token returned by PKCS11_find_token()
- * @param algorithm EVP_PKEY_RSA
- * @param bits size of the modulus in bits
- * @param label label for this key
- * @param id bytes to use as id value
- * @param id_len length of id value.
- * @retval 0 success
- * @retval -1 error
- */
-P11_DEPRECATED_FUNC extern int PKCS11_generate_key(PKCS11_TOKEN * token,
-	int algorithm, unsigned int bits,
-	char *label, unsigned char* id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
 P11_DEPRECATED_FUNC extern int PKCS11_get_key_size(PKCS11_KEY *);

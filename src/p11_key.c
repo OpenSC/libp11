@@ -127,70 +127,6 @@ int pkcs11_reload_key(PKCS11_KEY *key)
 }
 
 /*
- * Generate and store a private key on the token
- * FIXME: We should check first whether the token supports
- * on-board key generation, and if it does, use its own algorithm
- */
-int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
-		char *label, unsigned char* id, size_t id_len)
-{
-	PKCS11_KEY *key_obj;
-	EVP_PKEY *pk;
-	RSA *rsa;
-	BIO *err;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	BIGNUM *exp;
-	BN_GENCB *gencb;
-#endif
-	int rc;
-
-	if (algorithm != EVP_PKEY_RSA) {
-		P11err(P11_F_PKCS11_GENERATE_KEY, P11_R_NOT_SUPPORTED);
-		return -1;
-	}
-
-	err = BIO_new_fp(stderr, BIO_NOCLOSE);
-
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	exp = BN_new();
-	rsa = RSA_new();
-	gencb = BN_GENCB_new();
-	if (gencb)
-		BN_GENCB_set(gencb, NULL, err);
-	if (rsa == NULL || exp == NULL || gencb == NULL ||
-			!BN_set_word(exp, RSA_F4) ||
-			!RSA_generate_key_ex(rsa, bits, exp, gencb)) {
-		RSA_free(rsa);
-		rsa = NULL;
-	}
-	BN_GENCB_free(gencb);
-	BN_free(exp);
-#else
-	rsa = RSA_generate_key(bits, RSA_F4, NULL, err);
-#endif
-	BIO_free(err);
-	if (rsa == NULL) {
-		P11err(P11_F_PKCS11_GENERATE_KEY, P11_R_KEYGEN_FAILED);
-		return -1;
-	}
-
-	pk = EVP_PKEY_new();
-	EVP_PKEY_assign_RSA(pk, rsa);
-	rc = pkcs11_store_key(token, pk, CKO_PRIVATE_KEY,
-		label, id, id_len, &key_obj);
-
-	if (rc == 0) {
-		PKCS11_KEY_private *kpriv;
-
-		kpriv = PRIVKEY(key_obj);
-		rc = pkcs11_store_key(token, pk, CKO_PUBLIC_KEY,
-			label, kpriv->id, kpriv->id_len, NULL);
-	}
-	EVP_PKEY_free(pk);
-	return rc;
-}
-
-/*
  * Store a private key on the token
  */
 int pkcs11_store_private_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
@@ -306,11 +242,10 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 
 /**
  * Generate a keyPair directly on token
- * Instead of pkcs11_generate_key, this function generate the keys directly on token icreasing security.
  */
-int pkcs11_generate_key_on_token(PKCS11_TOKEN *token, 
-	char *label, unsigned char *id, size_t id_len,
-	unsigned long modulus_bits){
+int pkcs11_generate_key(PKCS11_TOKEN * token,
+	int algorithm, unsigned int bits,
+	char *label, unsigned char* id, size_t id_len){
 
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = TOKEN2CTX(token);
@@ -337,10 +272,12 @@ int pkcs11_generate_key_on_token(PKCS11_TOKEN *token,
 		pkcs11_addattr_s(pubkey_attrs + n_pub++, CKA_LABEL, label);
 	}
 	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_TOKEN, TRUE);
+
+
 	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_ENCRYPT, TRUE);
 	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_VERIFY, TRUE);
 	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_WRAP, TRUE);
-	pkcs11_addattr_int(pubkey_attrs + n_pub++, CKA_MODULUS_BITS, modulus_bits);
+	pkcs11_addattr_int(pubkey_attrs + n_pub++, CKA_MODULUS_BITS, bits);
 	pkcs11_addattr(pubkey_attrs + n_pub++, CKA_PUBLIC_EXPONENT, public_exponent, 3);
 
 	// privkey attributes
