@@ -370,6 +370,15 @@ int PKCS11_store_public_key(PKCS11_TOKEN *token,
 	return pkcs11_store_public_key(token, pk, label, id, id_len);
 }
 
+int PKCS11_generate_key_on_token(PKCS11_TOKEN *token, 
+	char *label, unsigned char *id, size_t id_len,
+	unsigned long modulus_bits){
+
+	if (check_token_fork(token) < 0)
+		return -1;
+	return pkcs11_generate_key_on_token(token, label, id,  id_len, modulus_bits);
+}
+
 int PKCS11_store_certificate(PKCS11_TOKEN *token, X509 *x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert)

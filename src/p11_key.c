@@ -303,6 +303,82 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 	return pkcs11_init_key(ctx, token, spriv->session, object, type, ret_key);
 }
 
+
+/**
+ * Generate a keyPair directly on token
+ * Instead of pkcs11_generate_key, this function generate the keys directly on token icreasing security.
+ */
+int pkcs11_generate_key_on_token(PKCS11_TOKEN *token, 
+	char *label, unsigned char *id, size_t id_len,
+	unsigned long modulus_bits){
+
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
+	PKCS11_CTX *ctx = TOKEN2CTX(token);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+
+	CK_ATTRIBUTE pubkey_attrs[32];
+	CK_ATTRIBUTE privkey_attrs[32];
+	unsigned int n_pub, n_priv = 0;
+	CK_MECHANISM mechanism = {
+		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+	CK_BYTE public_exponent[] = { 1, 0, 1 };
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	int rv;
+
+	/* First, make sure we have a session */
+	if (!spriv->haveSession && PKCS11_open_session(slot, 1)){
+		return -1;
+	}
+
+	// pubkey attributes
+	pkcs11_addattr(pubkey_attrs + n_pub++, CKA_ID, id, id_len);
+	if (label){
+		pkcs11_addattr_s(pubkey_attrs + n_pub++, CKA_LABEL, label);
+	}
+	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_ENCRYPT, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_VERIFY, TRUE);
+	pkcs11_addattr_bool(pubkey_attrs + n_pub++, CKA_WRAP, TRUE);
+	pkcs11_addattr_int(pubkey_attrs + n_pub++, CKA_MODULUS_BITS, modulus_bits);
+	pkcs11_addattr(pubkey_attrs + n_pub++, CKA_PUBLIC_EXPONENT, public_exponent, 3);
+
+	// privkey attributes
+	pkcs11_addattr(privkey_attrs + n_priv++, CKA_ID, id, id_len);
+	if (label){
+		pkcs11_addattr_s(privkey_attrs + n_priv++, CKA_LABEL, label);
+	}
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_PRIVATE, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_SENSITIVE, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_DECRYPT, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_SIGN, TRUE);
+	pkcs11_addattr_bool(privkey_attrs + n_priv++, CKA_UNWRAP, TRUE);
+
+	/* Now call the pkcs11 module to create the key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+		spriv->session,
+		&mechanism,
+		pubkey_attrs,
+		n_pub,
+		privkey_attrs,
+		n_priv,
+		&pub_key_obj,
+		&priv_key_obj
+	));
+	
+	/* Zap all memory allocated when building the template */
+	pkcs11_zap_attrs(privkey_attrs, n_priv);
+	pkcs11_zap_attrs(pubkey_attrs, n_pub);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEYPAIRS, rv);
+
+	if (rv != CKR_OK){
+		return -1;
+	}
+	return 0;
+}
+
 /*
  * Get the key type
  */

@@ -353,6 +353,20 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
 extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
 
 /**
+ * Generate a keypair on a token
+ *
+ * @param token token returned by PKCS11_find_token()
+ * @param label label for this keys
+ * @param id bytes to use as id values
+ * @param id_len length of id values.
+ * @param modulus_bits number of modulis bits (i.e. 1024,2048)
+ * @retval 0 success
+ * @retval -1 error
+ */
+
+extern int PKCS11_generate_key_on_token(PKCS11_TOKEN *token, char *label, unsigned char *id, size_t id_len, unsigned long modulus_bits);
+
+/**
  * Store certificate on a token
  *
  * @param token token returned by PKCS11_find_token()
@@ -514,6 +528,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 # define CKR_F_PKCS11_STORE_KEY                           127
 # define CKR_F_PKCS11_REMOVE_KEY                          128
 # define CKR_F_PKCS11_REMOVE_CERTIFICATE                  129
+# define CKR_F_PKCS11_GENERATE_KEYPAIRS                   130
 
 /* For backward compatibility */
 #define PKCS11_LOAD_MODULE_ERROR                          P11_LOAD_MODULE_ERROR
