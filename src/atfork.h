@@ -35,6 +35,10 @@ extern unsigned int P11_forkid;
 int _P11_register_fork_handler(void); /* global init */
 
 # if defined(HAVE_ATFORK)
+#ifndef __STDC_VERSION__
+/* older than C90 */
+#define inline
+#endif
 inline static int _P11_detect_fork(unsigned int forkid)
 {
 	if (forkid == P11_forkid)
@@ -46,6 +50,9 @@ inline static unsigned int _P11_get_forkid(void)
 {
 	return P11_forkid;
 }
+#ifndef __STDC_VERSION__
+#undef inline
+#endif
 # else
 int _P11_detect_fork(unsigned int forkid);
 unsigned int _P11_get_forkid(void);

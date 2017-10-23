@@ -409,17 +409,16 @@ int PKCS11_set_ui_method(PKCS11_CTX *ctx, UI_METHOD *ui_method, void *ui_user_da
 	return pkcs11_set_ui_method(ctx, ui_method, ui_user_data);
 }
 
+/* External interface to the deprecated features */
 
 int PKCS11_generate_key(PKCS11_TOKEN *token,
-	int algorithm, unsigned int bits,
-	char *label, unsigned char *id, size_t id_len)
+		int algorithm, unsigned int bits,
+		char *label, unsigned char *id, size_t id_len)
 {
 	if (check_token_fork(token) < 0)
 		return -1;
 	return pkcs11_generate_key(token, algorithm, bits, label, id, id_len);
 }
-
-/* External interface to the deprecated features */
 
 int PKCS11_get_key_size(PKCS11_KEY *key)
 {
