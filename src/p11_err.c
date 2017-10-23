@@ -25,7 +25,6 @@ static ERR_STRING_DATA P11_str_functs[] = {
     {ERR_FUNC(P11_F_PKCS11_CTX_LOAD), "pkcs11_CTX_load"},
     {ERR_FUNC(P11_F_PKCS11_CTX_RELOAD), "pkcs11_CTX_reload"},
     {ERR_FUNC(P11_F_PKCS11_ECDH_DERIVE), "pkcs11_ecdh_derive"},
-    {ERR_FUNC(P11_F_PKCS11_GENERATE_KEY), "pkcs11_generate_key"},
     {ERR_FUNC(P11_F_PKCS11_GENERATE_RANDOM), "pkcs11_generate_random"},
     {ERR_FUNC(P11_F_PKCS11_INIT_PIN), "pkcs11_init_pin"},
     {ERR_FUNC(P11_F_PKCS11_LOGOUT), "pkcs11_logout"},

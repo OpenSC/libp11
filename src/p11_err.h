@@ -32,7 +32,6 @@ void ERR_P11_error(int function, int reason, char *file, int line);
 # define P11_F_PKCS11_CTX_LOAD                            101
 # define P11_F_PKCS11_CTX_RELOAD                          102
 # define P11_F_PKCS11_ECDH_DERIVE                         103
-# define P11_F_PKCS11_GENERATE_KEY                        104
 # define P11_F_PKCS11_GENERATE_RANDOM                     105
 # define P11_F_PKCS11_INIT_PIN                            106
 # define P11_F_PKCS11_LOGOUT                              107
