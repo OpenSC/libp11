@@ -609,9 +609,8 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	PKCS11_KEY *keys, *selected_key = NULL;
-	PKCS11_CERT *certs;
 	EVP_PKEY *pk;
-	unsigned int cert_count, key_count, n, m;
+	unsigned int key_count, n, m;
 	unsigned char key_id[MAX_VALUE_LEN / 2];
 	size_t key_id_len = sizeof(key_id);
 	char *key_label = NULL;
@@ -633,7 +632,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				tmp_pin, &tmp_pin_len, &key_label);
 			if (!n) {
 				ctx_log(ctx, 0,
-					"The certificate ID is not a valid PKCS#11 URI\n"
+					"The key ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n");
 				ENGerr(ENG_F_CTX_LOAD_KEY, ENG_R_INVALID_ID);
 				return NULL;
@@ -654,7 +653,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				key_id, &key_id_len, &key_label);
 			if (!n) {
 				ctx_log(ctx, 0,
-					"The certificate ID is not a valid PKCS#11 URI\n"
+					"The key ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
 					"still accepted for now\n");
@@ -759,29 +758,6 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 
 	ctx_log(ctx, 1, "Found slot:  %s\n", slot->description);
 	ctx_log(ctx, 1, "Found token: %s\n", slot->token->label);
-
-	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-		return NULL;
-	}
-
-	ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count,
-		(cert_count <= 1) ? "" : "s");
-	for (n = 0; n < cert_count; n++) {
-		PKCS11_CERT *c = certs + n;
-		char *dn = NULL;
-
-		ctx_log(ctx, 1, "  %2u    id=", n + 1);
-		dump_hex(ctx, 1, c->id, c->id_len);
-		ctx_log(ctx, 1, " label=%s", c->label);
-		if (c->x509)
-			dn = X509_NAME_oneline(X509_get_subject_name(c->x509), NULL, 0);
-		if (dn) {
-			ctx_log(ctx, 1, " (%s)", dn);
-			OPENSSL_free(dn);
-		}
-		ctx_log(ctx, 1, "\n");
-	}
 
 	/* Both private and public keys can have the CKA_PRIVATE attribute
 	 * set and thus require login (even to retrieve attributes!) */
