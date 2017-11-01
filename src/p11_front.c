@@ -271,7 +271,7 @@ int PKCS11_remove_key(PKCS11_KEY *key)
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_remove_key(key);
-};
+}
 
 int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
 		PKCS11_KEY **keys, unsigned int *nkeys)
@@ -329,7 +329,7 @@ int PKCS11_remove_certificate(PKCS11_CERT *cert)
 	if (check_cert_fork(cert) < 0)
 		return -1;
 	return pkcs11_remove_certificate(cert);
-};
+}
 
 int PKCS11_init_token(PKCS11_TOKEN *token, const char *pin,
 		const char *label)

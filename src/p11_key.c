@@ -138,13 +138,15 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 
 	CK_ATTRIBUTE pubkey_attrs[32];
 	CK_ATTRIBUTE privkey_attrs[32];
-	unsigned int n_pub, n_priv = 0;
+	unsigned int n_pub = 0, n_priv = 0;
 	CK_MECHANISM mechanism = {
 		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
 	};
 	CK_BYTE public_exponent[] = { 1, 0, 1 };
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	int rv;
+
+	(void)algorithm; /* squash the unused parameter warning */
 
 	/* make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
