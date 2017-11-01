@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2017 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -176,38 +176,33 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
 static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 {
 	RSA *rsa;
-	PKCS11_KEY *keys = NULL;
-	unsigned int i, count = 0;
-	BIGNUM *rsa_n=NULL, *rsa_e=NULL;
+	PKCS11_KEY *keys;
+	unsigned int i, count;
+	BIGNUM *rsa_n = NULL, *rsa_e = NULL;
 
-	rsa = RSA_new();
-	if (rsa == NULL)
+	/* Retrieve the modulus */
+	if (key_getattr_bn(key, CKA_MODULUS, &rsa_n))
 		return NULL;
 
-	/* Retrieve the modulus and the public exponent */
-	if (key_getattr_bn(key, CKA_MODULUS, &rsa_n) ||
-			key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa_e))
-		goto failure;
-	if (!BN_is_zero(rsa_e)) /* The public exponent was retrieved */
-		goto success;
-	BN_clear_free(rsa_e);
-	rsa_e = NULL;
+	/* Retrieve the public exponent */
+	if (!key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa_e)) {
+		if (!BN_is_zero(rsa_e)) /* A valid public exponent */
+			goto success;
+		BN_clear_free(rsa_e);
+		rsa_e = NULL;
+	}
 
 	/* The public exponent was not found in the private key:
 	 * retrieve it from the corresponding public key */
 	if (!PKCS11_enumerate_public_keys(KEY2TOKEN(key), &keys, &count)) {
 		for(i = 0; i < count; i++) {
 			BIGNUM *pubmod;
-
-			if (key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod))
-				continue; /* Failed to retrieve the modulus */
-			if (BN_cmp(rsa_n, pubmod) == 0) { /* The key was found */
+			if (!key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod)) {
+				int found = BN_cmp(rsa_n, pubmod) == 0;
 				BN_clear_free(pubmod);
-				if (key_getattr_bn(&keys[i], CKA_PUBLIC_EXPONENT, &rsa_e))
-					continue; /* Failed to retrieve the public exponent */
-				goto success;
-			} else {
-				BN_clear_free(pubmod);
+				if (found && !key_getattr_bn(&keys[i],
+						CKA_PUBLIC_EXPONENT, &rsa_e))
+					goto success;
 			}
 		}
 	}
@@ -218,15 +213,21 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 		goto success;
 
 failure:
-	RSA_free(rsa);
+	if (rsa_n)
+		BN_clear_free(rsa_n);
+	if (rsa_e)
+		BN_clear_free(rsa_e);
 	return NULL;
 
 success:
+	rsa = RSA_new();
+	if (rsa == NULL)
+		goto failure;
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
-		RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
+	RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
 #else
-		rsa->n=rsa_n;
-		rsa->e=rsa_e;
+	rsa->n = rsa_n;
+	rsa->e = rsa_e;
 #endif
 	return rsa;
 }
