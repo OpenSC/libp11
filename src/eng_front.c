@@ -195,11 +195,19 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	ENGINE_CTX *ctx;
+	EVP_PKEY *pkey;
 
 	ctx = get_ctx(engine);
 	if (ctx == NULL)
 		return 0;
-	return ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
+	pkey = ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
+#ifdef EVP_F_EVP_PKEY_SET1_ENGINE
+	/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
+	 * but otherwise setting pkey->engine breaks OpenSSL 1.0.2 */
+	if (pkey)
+		EVP_PKEY_set1_engine(pkey, engine);
+#endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
+	return pkey;
 }
 
 static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
