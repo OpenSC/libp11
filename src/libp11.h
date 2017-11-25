@@ -312,7 +312,7 @@ extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
 extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
 
 /**
- * Change the user PIN on a token
+ * Change the currently used (either USER or SO) PIN on a token.
  *
  * @param slot slot returned by PKCS11_find_token()
  * @param old_pin old PIN value
