@@ -80,13 +80,16 @@ openssl_conf = openssl_init
 This should be added to the bottom of the file:
 
 ```
+[openssl_init]
+engines=engine_section
+
 [engine_section]
 pkcs11 = pkcs11_section
 
 [pkcs11_section]
 engine_id = pkcs11
-dynamic_path = /usr/lib/opensc-pkcs11.so
-MODULE_PATH = libpkcs11.so
+dynamic_path = /usr/lib/ssl/engines/libpkcs11.so
+MODULE_PATH = opensc-pkcs11.so
 init = 0
 ```
 
