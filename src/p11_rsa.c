@@ -196,7 +196,7 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 	 * retrieve it from the corresponding public key */
 	if (!PKCS11_enumerate_public_keys(KEY2TOKEN(key), &keys, &count)) {
 		for(i = 0; i < count; i++) {
-			BIGNUM *pubmod;
+			BIGNUM *pubmod = NULL;
 			if (!key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod)) {
 				int found = BN_cmp(rsa_n, pubmod) == 0;
 				BN_clear_free(pubmod);
