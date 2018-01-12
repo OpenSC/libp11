@@ -167,6 +167,10 @@ extern int pkcs11_getattr_val(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, void *, size_t);
 extern int pkcs11_getattr_alloc(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, CK_BYTE **, size_t *);
+/*
+ * Caution: the BIGNUM ** shall reference either a NULL pointer or a
+ * pointer to a valid BIGNUM.
+ */
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, BIGNUM **);
 
@@ -181,6 +185,10 @@ extern int pkcs11_reload_key(PKCS11_KEY *);
 #define key_getattr_alloc(key, t, p, s) \
 	pkcs11_getattr_alloc(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
 
+/*
+ * Caution: bn shall reference either a NULL pointer or a pointer to
+ * a valid BIGNUM.
+ */
 #define key_getattr_bn(key, t, bn) \
 	pkcs11_getattr_bn(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (bn))
 
