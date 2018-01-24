@@ -66,6 +66,7 @@ test-driver
 tests/openssl_version
 tests/fork-test
 tests/evp-sign
+tests/fork-change-slot
 tests/*.log
 tests/*.trs
 tests/output.*

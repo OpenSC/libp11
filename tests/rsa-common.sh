@@ -24,7 +24,8 @@ echo "Output directory: ${outdir}"
 mkdir -p $outdir
 
 # Set the module to be used
-for i in /usr/lib64/pkcs11 /usr/lib64/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/softhsm /usr/lib ;do
+for i in /usr/lib64/pkcs11 /usr/lib64/softhsm /usr/lib/x86_64-linux-gnu/softhsm \
+	/usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/softhsm /usr/lib ;do
 	if test -f "$i/libsofthsm2.so"; then
 		MODULE="$i/libsofthsm2.so"
 		break
@@ -105,19 +106,22 @@ import_objects () {
 	ID=$1
 	OBJ_LABEL=$2
 
-	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w ${srcdir}/rsa-prvkey.der -y privkey >/dev/null
-		if test $? != 0;then
-			exit 1;
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+		${srcdir}/rsa-prvkey.der -y privkey >/dev/null
+	if test $? != 0;then
+		exit 1;
 	fi
 
-		pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w ${srcdir}/rsa-pubkey.der -y pubkey >/dev/null
-		if test $? != 0;then
-			exit 1;
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+		${srcdir}/rsa-pubkey.der -y pubkey >/dev/null
+	if test $? != 0;then
+		exit 1;
 	fi
 
-		pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w ${srcdir}/rsa-cert.der -y cert >/dev/null
-		if test $? != 0;then
-			exit 1;
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+		${srcdir}/rsa-cert.der -y cert >/dev/null
+	if test $? != 0;then
+		exit 1;
 	fi
 
 	echo Finished
