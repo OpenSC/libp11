@@ -40,7 +40,6 @@ int main(int argc, char *argv[])
 	PKCS11_SLOT *slots=NULL, *slot;
 	PKCS11_KEY *keys;
 	unsigned int nslots, nkeys;
-	char *password;
 	int rc = 0;
 
 	if (argc < 2) {
@@ -83,12 +82,9 @@ int main(int argc, char *argv[])
 	list_keys("Public keys", keys, nkeys);
 
 	if (slot->token->loginRequired && argc > 2) {
-		password = malloc(sizeof(argv[2])+1);
-		strcpy(password, argv[2]);
 		/* perform pkcs #11 login */
-		rc = PKCS11_login(slot, 0, password);
+		rc = PKCS11_login(slot, 0, argv[2]);
 		error_queue("PKCS11_login");
-		memset(password, 0, strlen(password));
 		CHECK_ERR(rc < 0, "PKCS11_login failed", 6);
 	}
 
