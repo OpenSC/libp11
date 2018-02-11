@@ -33,7 +33,7 @@ echo "Output directory: ${outdir}"
 
 mkdir -p $outdir
 
-for i in /usr/lib64/pkcs11 /usr/lib/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib /usr/lib64/softhsm;do
+for i in /usr/lib64/pkcs11 /usr/lib64/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/softhsm /usr/lib ;do
 	if test -f "$i/libsofthsm2.so"; then
 		ADDITIONAL_PARAM="$i/libsofthsm2.so"
 		break
@@ -53,6 +53,11 @@ init_card () {
 	PIN="$1"
 	PUK="$2"
 
+	if test -x "/usr/bin/softhsm"; then
+		export SOFTHSM_CONF="$outdir/softhsm-testpkcs11.config"
+		SOFTHSM_TOOL="/usr/bin/softhsm"
+	fi
+
 	if test -x "/usr/local/bin/softhsm2-util"; then
 		export SOFTHSM2_CONF="$outdir/softhsm-testpkcs11.config"
 		SOFTHSM_TOOL="/usr/local/bin/softhsm2-util"
@@ -68,17 +73,12 @@ init_card () {
 		SOFTHSM_TOOL="/usr/bin/softhsm2-util"
 	fi
 
-	if test -x "/usr/bin/softhsm"; then
-		export SOFTHSM_CONF="$outdir/softhsm-testpkcs11.config"
-		SOFTHSM_TOOL="/usr/bin/softhsm"
-	fi
-
 	if test -z "${SOFTHSM_TOOL}"; then
 		echo "Could not find softhsm(2) tool"
 		exit 77
 	fi
 
-	if test -z "${SOFTHSM_CONF}"; then
+	if test -n "${SOFTHSM2_CONF}"; then
 		rm -rf $outdir/softhsm-testpkcs11.db
 		mkdir -p $outdir/softhsm-testpkcs11.db
 		echo "objectstore.backend = file" > "${SOFTHSM2_CONF}"

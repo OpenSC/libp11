@@ -19,13 +19,19 @@
 
 outdir="output.$$"
 
+# Load common test functions
 . ${srcdir}/rsa-common.sh
 
-./fork-test $ADDITIONAL_PARAM $PIN
+# Do the common test initialization
+common_init
+
+# Run the test
+./fork-test ${MODULE} ${PIN}
 if test $? != 0;then
 	exit 1;
 fi
 
+# Cleanup
 rm -rf "$outdir"
 
 exit 0

@@ -1,0 +1,75 @@
+#!/bin/sh
+
+# Copyright (C) 2013 Nikos Mavrogiannopoulos
+# Copyright (C) 2015 Red Hat, Inc.
+#
+# This is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
+	"s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" \
+	<"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+# Set the used PIN and PUK
+PIN=1234
+PUK=1234
+
+# Initialize SoftHSM DB
+init_db
+
+# Create 2 different tokens
+init_card $PIN $PUK "token1"
+init_card $PIN $PUK "token2"
+
+# Force the use of the local built engine
+export OPENSSL_ENGINES="../src/.libs/"
+
+# Generate a key pair in the second token
+pkcs11-tool --module ${MODULE} -l --pin $PIN --keypairgen --key-type \
+	rsa:1024 --id 01020304 --label pkey --token-label token2
+if test $? != 0;then
+	exit 1;
+fi
+
+# Run the test program which will stop and wait for a signal (SIGUSR1)
+./fork-change-slot \
+	"pkcs11:token=token2;object=pkey;type=private;pin-value=$PIN" \
+	"${outdir}/engines.cnf" ${MODULE} &
+pid=$!
+
+# Wait the test program to reach the sigwait
+sleep 3
+
+# Remove the first token to change the slotID associated with token2
+${SOFTHSM_TOOL} --delete-token --token token1
+
+# Send the signal to the waiting process
+kill -USR1 `pgrep -P $pid`
+
+# Test the result
+wait $pid
+if test $? != 0;then
+	exit 1;
+fi
+
+# Cleanup
+rm -rf "$outdir"
+
+exit 0
+

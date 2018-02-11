@@ -19,9 +19,14 @@
 
 outdir="output.$$"
 
+# Load common test functions
 . ${srcdir}/rsa-common.sh
 
-../examples/listkeys $ADDITIONAL_PARAM $PIN
+# Do the common test initialization
+common_init
+
+# Run the test
+../examples/listkeys ${MODULE} ${PIN}
 if test $? != 0;then
 	exit 1;
 fi

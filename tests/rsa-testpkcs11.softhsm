@@ -20,14 +20,19 @@
 
 outdir="output.$$"
 
+# Load common test functions
 . ${srcdir}/rsa-common.sh
 
-../examples/auth $ADDITIONAL_PARAM $PIN
+# Do the common test initialization
+common_init
+
+../examples/auth ${MODULE} ${PIN}
 if test $? != 0;then
 	echo "Basic PKCS #11 test test failed"
 	exit 1;
 fi
 
+# Cleanup
 rm -rf "$outdir"
 
 exit 0

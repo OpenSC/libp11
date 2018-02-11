@@ -9,10 +9,10 @@ AM_CPPFLAGS = \
 AM_LDFLAGS = -no-install
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
-check_PROGRAMS = openssl_version fork-test evp-sign
+check_PROGRAMS = openssl_version fork-test evp-sign fork-change-slot
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm rsa-testfork.softhsm rsa-testlistkeys.softhsm rsa-evp-sign.softhsm \
-	ec-testfork.softhsm
+	ec-testfork.softhsm fork-change-slot.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
 	ec-cert.der ec-prvkey.der ec-pubkey.der
