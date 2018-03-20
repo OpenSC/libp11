@@ -208,28 +208,39 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 		OPENSSL_free(params);
 	}
 
-	/* Now retrieve the point */
-	pubkey = key->isPrivate ? pkcs11_find_key_from_key(key) : key;
-	if (pubkey == NULL)
-		return ec;
-	if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
-		const unsigned char *a;
-		ASN1_OCTET_STRING *os;
+	/* Now retrieve the point
+	 * Some non-standard but helpful modules already
+	 * return the point with the private key
+	 * Save a round-trip in this case
+	 */
+	pubkey = key;
+	do {
+		if (!key_getattr_alloc(pubkey, CKA_EC_POINT, &point, &point_len)) {
+			const unsigned char *a;
+			ASN1_OCTET_STRING *os;
 
-		/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
-		a = point;
-		os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
-		if (os) {
-			a = os->data;
-			found_point = o2i_ECPublicKey(&ec, &a, os->length);
-			ASN1_STRING_free(os);
-		}
-		if (found_point == NULL) { /* Workaround for broken PKCS#11 modules */
+			/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
 			a = point;
-			found_point = o2i_ECPublicKey(&ec, &a, point_len);
+			os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
+			if (os) {
+				a = os->data;
+				found_point = o2i_ECPublicKey(&ec, &a, os->length);
+				ASN1_STRING_free(os);
+			}
+			if (found_point == NULL) { /* Workaround for broken PKCS#11 modules */
+				a = point;
+				found_point = o2i_ECPublicKey(&ec, &a, point_len);
+			}
+			OPENSSL_free(point);
 		}
-		OPENSSL_free(point);
-	}
+
+		if (found_point || !key->isPrivate)
+			break;
+		/* private key without point - make a round-trip to the HSM */
+		pubkey = pkcs11_find_key_from_key(key);
+		if (pubkey == NULL)
+			return ec;
+	} while (1);
 
 	/* A public keys requires both the params and the point to be present */
 	if (!key->isPrivate && (found_params == NULL || found_point == NULL)) {
