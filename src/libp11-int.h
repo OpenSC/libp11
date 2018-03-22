@@ -245,6 +245,11 @@ extern void pkcs11_release_all_slots(PKCS11_CTX * ctx,
 extern PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX * ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
+/* Find the next slot with a token */
+extern PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX * ctx,
+			PKCS11_SLOT *slots, unsigned int nslots,
+			PKCS11_SLOT *current);
+
 /* Check if user is already authenticated to a card */
 extern int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
 
