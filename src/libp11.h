@@ -211,6 +211,20 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
 /**
+ * Find the next slot with a token
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slots list of slots allocated by PKCS11_enumerate_slots()
+ * @param nslots size of the list
+ * @param slot current slot
+ * @retval !=NULL pointer on a slot structure
+ * @retval NULL error
+ */
+PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX * ctx,
+			PKCS11_SLOT *slots, unsigned int nslots,
+		   	PKCS11_SLOT *slot);
+
+/**
  * Check if user is already authenticated to a card
  *
  * @param slot slot returned by PKCS11_find_token()

@@ -82,7 +82,7 @@ int pkcs11_enumerate_slots(PKCS11_CTX *ctx, PKCS11_SLOT **slotp, unsigned int *c
 /*
  * Find a slot with a token that looks "valuable"
  */
-PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX *ctx,  PKCS11_SLOT *slots, unsigned int nslots)
+PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots, unsigned int nslots)
 {
 	PKCS11_SLOT *slot, *best;
 	PKCS11_TOKEN *tok;
@@ -104,6 +104,26 @@ PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX *ctx,  PKCS11_SLOT *slots, unsigned in
 		}
 	}
 	return best;
+}
+
+/*
+ * Find the next slot with a token that looks "valuable"
+ */
+PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots, unsigned int nslots, PKCS11_SLOT *current)
+{
+	if (slots == NULL)
+		return NULL;
+
+	if (current) {
+		if (slots > current || (current - slots) > nslots)
+			return NULL;
+
+		current++;
+		nslots -= (current - slots);
+		slots = current;
+	}
+
+	return pkcs11_find_token(ctx, slots, nslots);
 }
 
 /*

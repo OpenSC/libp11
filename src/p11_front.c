@@ -236,6 +236,15 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *ctx,
 	return pkcs11_find_token(ctx, slots, nslots);
 }
 
+PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
+		PKCS11_SLOT *slots, unsigned int nslots,
+		PKCS11_SLOT *current)
+{
+	if (check_fork(ctx) < 0)
+		return NULL;
+	return pkcs11_find_next_token(ctx, slots, nslots, current);
+}
+
 int PKCS11_is_logged_in(PKCS11_SLOT *slot, int so, int *res)
 {
 	if (check_slot_fork(slot) < 0)
