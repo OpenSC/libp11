@@ -88,6 +88,8 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	const char *slot_id, int *slot,
 	unsigned char *id, size_t * id_len, char **label);
 
+int rand_bytes(unsigned char *buf, int num);
+
 #endif
 
 /* vim: set noexpandtab: */
