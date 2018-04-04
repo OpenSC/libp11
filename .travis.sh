@@ -28,7 +28,7 @@ install_from_github() {
     git clone https://github.com/$1/$2.git -b $3
     cd $2
     autoreconf -fvi
-    ./configure
+    ./configure $4
     make
     sudo -E make install
     cd ..
@@ -45,6 +45,6 @@ mkdir prerequisites
 cd prerequisites
 install_from_github OpenSC OpenSC master
 # softhsm is required for "make check"
-install_from_github opendnssec SoftHSMv2 develop
+install_from_github opendnssec SoftHSMv2 master --disable-gost
 cd ..
 rm -rf prerequisites
