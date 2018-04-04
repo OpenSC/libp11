@@ -45,6 +45,6 @@ mkdir prerequisites
 cd prerequisites
 install_from_github OpenSC OpenSC master
 # softhsm is required for "make check"
-install_from_github opendnssec SoftHSMv2 master --disable-gost
+install_from_github opendnssec SoftHSMv2 master --disable-gost --disable-eddsa
 cd ..
 rm -rf prerequisites
