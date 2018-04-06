@@ -263,6 +263,7 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
 	} else {
+		ENGINE_set_table_flags(ENGINE_TABLE_FLAG_NOINIT);
 		ERR_load_ENG_strings();
 		return 1;
 	}
