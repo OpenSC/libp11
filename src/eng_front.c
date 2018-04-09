@@ -123,6 +123,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"FORCE_LOGIN",
 		"Force login to the PKCS#11 module",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_ENABLE_RAND,
+		"ENABLE_RAND",
+		"Enable the random interface",
+		ENGINE_CMD_FLAG_NO_INPUT},
 	{0, NULL, NULL, 0}
 };
 
@@ -230,6 +234,29 @@ static RAND_METHOD *PKCS11_get_rand_method(void) {
 	return &ops;
 }
 
+static int set_rand_if_enabled(ENGINE *engine,
+		const RAND_METHOD *rand_meth) {
+
+	int rc;
+	ENGINE_CTX *ctx;
+
+	ctx = get_ctx(engine);
+	if (ctx == NULL)
+		return 0;
+
+	if (!ctx_is_rand_enabled(ctx))
+		return 1;
+
+	rc = ENGINE_set_RAND(engine,
+			rand_meth);
+	if (!rc)
+		return 0;
+
+	ENGINE_set_table_flags(ENGINE_TABLE_FLAG_NOINIT);
+
+	return 1;
+}
+
 /* This internal function is used by ENGINE_pkcs11() and possibly by the
  * "dynamic" ENGINE support too */
 static int bind_helper(ENGINE *e)
@@ -241,7 +268,7 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_ctrl_function(e, engine_ctrl) ||
 			!ENGINE_set_cmd_defns(e, engine_cmd_defns) ||
 			!ENGINE_set_name(e, PKCS11_ENGINE_NAME) ||
-			!ENGINE_set_RAND(e, PKCS11_get_rand_method()) ||
+			!set_rand_if_enabled(e, PKCS11_get_rand_method()) ||
 #ifndef OPENSSL_NO_RSA
 			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
 #endif
@@ -263,7 +290,6 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
 	} else {
-		ENGINE_set_table_flags(ENGINE_TABLE_FLAG_NOINIT);
 		ERR_load_ENG_strings();
 		return 1;
 	}

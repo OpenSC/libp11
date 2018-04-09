@@ -52,6 +52,7 @@ struct st_engine_ctx {
 	UI_METHOD *ui_method;
 	void *callback_data;
 	int force_login;
+	int enable_rand;
 
 	/* Engine initialization mutex */
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -963,6 +964,12 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 	return 1;
 }
 
+static int ctx_ctrl_enable_rand(ENGINE_CTX *ctx) {
+
+	ctx->enable_rand = 1;
+	return 1;
+}
+
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -989,6 +996,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_set_callback_data(ctx, p);
 	case CMD_FORCE_LOGIN:
 		return ctx_ctrl_force_login(ctx);
+	case CMD_ENABLE_RAND:
+		return ctx_ctrl_enable_rand(ctx);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
@@ -1040,5 +1049,11 @@ int rand_bytes (unsigned char *buf, int num)
 	/* Goes back to openssl, where 1 is success */
 	return 1;
 }
+
+int ctx_is_rand_enabled(ENGINE_CTX *ctx)
+{
+	return ctx->enable_rand;
+}
+
 
 /* vim: set noexpandtab: */

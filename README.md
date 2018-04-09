@@ -166,6 +166,7 @@ The supported engine controls are the following.
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
 * **FORCE_LOGIN**: Force login to the PKCS#11 module
+* **ENABLE_RAND**: Enable support of random number generation from the PKCS#11 module
 
 An example code snippet setting specific module is shown below.
 
