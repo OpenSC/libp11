@@ -1,14 +1,34 @@
 sudo: true
 
+env:
+  global:
+    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+    #   via the "travis encrypt" command using the project repo's public key
+    - secure: "bJF508I/e6JAhNwQ1kpSDACZ+wdND+vOWFR7XuSLNMh3J0yD1dWVW8rBsELrERcdbIXyDp3G9qVnL0gwCUvf0teeYJx0iOaEz0fsvr3P6Bbbr7ke3f43yBeocdXgQiAuBrIzLJt+SnhPzEPnRSl1nEpcLp3ON0tKtBGiCpcX3dQ="
+    - COVERITY_SCAN_BRANCH_PATTERN="(master|coverity.*)"
+    - COVERITY_SCAN_NOTIFICATION_EMAIL="Michal.Trojnara@stunnel.org"
+    - COVERITY_SCAN_BUILD_COMMAND="make"
+    - COVERITY_SCAN_PROJECT_NAME="$TRAVIS_REPO_SLUG"
+    - SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+
 language: c
 
-compiler:
-  - clang
-  - gcc
+matrix:
+  include:
+    - compiler: clang
+    - compiler: gcc
+    - env: DO_COVERITY_SCAN=yes
 
 before_script:
   - openssl version -a
   - ./.travis.sh
   - touch config.rpath && autoreconf -fvi && ./configure --enable-strict --enable-pedantic
+  # Optionally try to upload to Coverity Scan
+  # On error (propably quota is exhausted), just continue
+  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
+  - if [ -n "${DO_COVERITY_SCAN}" ]; then curl -s 'https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh' | bash || true; fi
 
-script: make && make check && make dist
+script:
+  - if [ -z "${DO_COVERITY_SCAN}" ]; then
+      make && make check && make dist;
+    fi
