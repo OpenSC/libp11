@@ -193,8 +193,6 @@ int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 
-	if (rv != CKR_OK)
-		return -1;
 	return 0;
 }
 
