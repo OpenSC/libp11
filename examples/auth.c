@@ -81,7 +81,8 @@ int main(int argc, char *argv[])
 
 	/* get password */
 	if (argc > 2) {
-		strcpy(password, argv[2]);
+		strncpy(password, argv[2], sizeof password);
+		password[(sizeof password) - 1] = '\0';
 	} else {
 #if !defined(_WIN32) || defined(__CYGWIN__)
 		struct termios old, new;
