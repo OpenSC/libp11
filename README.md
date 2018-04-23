@@ -166,7 +166,12 @@ The supported engine controls are the following.
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
 * **FORCE_LOGIN**: Force login to the PKCS#11 module
-* **ENABLE_RAND**: Enable support of random number generation from the PKCS#11 module
+* **ENABLE_RAND**: Enable support of random number generation from
+    the PKCS#11 module. 0 is disabled and 1 is enabled.
+    On Open SSL versions below 1.1.0, this is known to work and
+    is defaulted to enabled. On versions equal to or after 1.1.0
+    the default is disabled, but can be overridden via this engine
+    control.
 
 An example code snippet setting specific module is shown below.
 

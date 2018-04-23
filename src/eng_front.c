@@ -126,7 +126,7 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 	{CMD_ENABLE_RAND,
 		"ENABLE_RAND",
 		"Enable the random interface",
-		ENGINE_CMD_FLAG_NO_INPUT},
+		ENGINE_CMD_FLAG_NUMERIC},
 	{0, NULL, NULL, 0}
 };
 

@@ -241,7 +241,15 @@ ENGINE_CTX *ctx_new()
 	ctx->rwlock = CRYPTO_get_dynlock_create_callback() ?
 		CRYPTO_get_new_dynlockid() : 0;
 #endif
-
+/*
+ * OpenSSL Version prior to 1.1.0 are known to work
+ * with random.
+ */
+#if OPENSSL_VERSION_NUMBER < 0x101010000
+	ctx->enable_rand = 1;
+#else
+	ctx->enable_rand = 0;
+#endif
 	return ctx;
 }
 
@@ -964,10 +972,13 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 	return 1;
 }
 
-static int ctx_ctrl_enable_rand(ENGINE_CTX *ctx) {
+static int ctx_ctrl_enable_rand(ENGINE_CTX *ctx, long value) {
 
-	ctx->enable_rand = 1;
-	return 1;
+	if (value == 0 || value == 1) {
+		ctx->enable_rand = (int)value;
+		return 1;
+	}
+	return 0;
 }
 
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
@@ -997,7 +1008,7 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case CMD_FORCE_LOGIN:
 		return ctx_ctrl_force_login(ctx);
 	case CMD_ENABLE_RAND:
-		return ctx_ctrl_enable_rand(ctx);
+		return ctx_ctrl_enable_rand(ctx, i);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
