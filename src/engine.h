@@ -50,6 +50,7 @@
 #define CMD_SET_USER_INTERFACE	(ENGINE_CMD_BASE + 7)
 #define CMD_SET_CALLBACK_DATA	(ENGINE_CMD_BASE + 8)
 #define CMD_FORCE_LOGIN	(ENGINE_CMD_BASE+9)
+#define CMD_ENABLE_RAND	(ENGINE_CMD_BASE+10)
 
 typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
@@ -64,6 +65,8 @@ int ctx_init(ENGINE_CTX *ctx);
 int ctx_finish(ENGINE_CTX *ctx);
 
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
+
+int ctx_is_rand_enabled(ENGINE_CTX *ctx);
 
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD * ui_method, void *callback_data);
