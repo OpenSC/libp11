@@ -43,8 +43,29 @@ sudo apt-get install -y libpcsclite-dev
 export CC=`which $CC`
 mkdir prerequisites
 cd prerequisites
+
+# Install OpenSSL if not present
+if [ -n "${OPENSSL}" ]; then
+    OPENSSL_DIR="${HOME}/openssl/${OPENSSL}"
+    if [ ! -f "${OPENSSL_DIR}/bin/openssl" ]; then
+        git clone https://github.com/openssl/openssl.git -b ${OPENSSL}
+        cd "openssl"
+        ./config shared -fPIC --prefix="${OPENSSL_DIR}"
+        make depend
+        make install
+        cd ..
+    fi
+
+    PATH="${OPENSSL_DIR}/bin:${PATH}"
+    CFLAGS="${CFLAGS} -I${OPENSSL_DIR}/include"
+    LDFLAGS="${LD_FLAGS} -L${OPENSSL_DIR}/lib"
+    LD_RUN_PATH="${OPENSSL_DIR}/lib"
+    LD_LIBRARY_PATH="${OPENSSL_DIR}/lib:${LD_LIBRARY_PATH}"
+fi
+
 install_from_github OpenSC OpenSC master
 # softhsm is required for "make check"
 install_from_github opendnssec SoftHSMv2 master --disable-gost
+
 cd ..
 rm -rf prerequisites

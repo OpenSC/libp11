@@ -1,4 +1,9 @@
-sudo: true
+language: c
+sudo: required
+
+cache:
+    directories:
+        - ${HOME}/openssl
 
 env:
   global:
@@ -10,25 +15,44 @@ env:
     - COVERITY_SCAN_BUILD_COMMAND="make"
     - COVERITY_SCAN_PROJECT_NAME="$TRAVIS_REPO_SLUG"
     - SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+  matrix:
+    - OPENSSL="OpenSSL_1_0_2-stable"
+    - OPENSSL="OpenSSL_1_1_0-stable"
 
-language: c
+compiler:
+  - gcc
+  - clang
+
+os:
+  - linux
 
 matrix:
   include:
-    - compiler: clang
-    - compiler: gcc
-    - env: DO_COVERITY_SCAN=yes
+    - os: linux
+      compiler: gcc
+      env: DO_COVERITY_SCAN=yes
+
+install:
+  - ./.travis.sh
 
 before_script:
-  - openssl version -a
-  - ./.travis.sh
-  - touch config.rpath && autoreconf -fvi && ./configure --enable-strict --enable-pedantic
+  - export OPENSSL_DIR="${HOME}/openssl/${OPENSSL}"
+  - export PATH="${OPENSSL_DIR}/bin:${PATH}"
+  - export CFLAGS="${CFLAGS} -I${OPENSSL_DIR}/include"
+  - export LDFLAGS="${LD_FLAGS} -L${OPENSSL_DIR}/lib"
+  - export LD_RUN_PATH="${OPENSSL_DIR}/lib"
+  - export LD_LIBRARY_PATH="${OPENSSL_DIR}/lib:${LD_LIBRARY_PATH}"
+  - touch config.rpath && autoreconf -fvi && ./configure ${CONFIG_FLAGS}
   # Optionally try to upload to Coverity Scan
   # On error (propably quota is exhausted), just continue
   - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
   - if [ -n "${DO_COVERITY_SCAN}" ]; then curl -s 'https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh' | bash || true; fi
+  - openssl version -a
 
 script:
   - if [ -z "${DO_COVERITY_SCAN}" ]; then
       make && make check && make dist;
     fi
+
+after_failure:
+  - cat tests/test-suite.log
