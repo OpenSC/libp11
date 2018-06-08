@@ -206,11 +206,6 @@ int main(int argc, char *argv[])
             goto failed;
         }
 
-        if (!ENGINE_set_default(engine, ENGINE_METHOD_ALL)) {
-            error_queue("ENGINE_set_default", pid);
-            goto failed;
-        }
-
         ENGINE_free(engine);
         engine = NULL;
     }
