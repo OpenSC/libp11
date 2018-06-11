@@ -37,6 +37,7 @@ install_from_github() {
 }
 
 sudo apt-get update -qq
+
 # libpcsclite-dev is required for OpenSC
 sudo apt-get install -y libpcsclite-dev
 
@@ -44,18 +45,18 @@ export CC=`which $CC`
 mkdir prerequisites
 cd prerequisites
 
-# Install OpenSSL if not present
+# Install OpenSSL
 if [ -n "${OPENSSL}" ]; then
-    OPENSSL_DIR="${HOME}/openssl/${OPENSSL}"
-    if [ ! -f "${OPENSSL_DIR}/bin/openssl" ]; then
-        git clone https://github.com/openssl/openssl.git -b ${OPENSSL}
-        cd "openssl"
-        ./config shared -fPIC --prefix="${OPENSSL_DIR}"
-        make depend
-        make install
-        cd ..
-    fi
+    # Remove pre-installed OpenSSL
+    sudo apt-get remove openssl libssl-dev
 
+    OPENSSL_DIR=/usr
+    git clone https://github.com/openssl/openssl.git -b ${OPENSSL}
+    cd "openssl"
+    ./config shared -fPIC --prefix=${OPENSSL_DIR}
+    make depend && make
+    sudo make install
+    cd ..
     PATH="${OPENSSL_DIR}/bin:${PATH}"
     CFLAGS="${CFLAGS} -I${OPENSSL_DIR}/include"
     LDFLAGS="${LD_FLAGS} -L${OPENSSL_DIR}/lib"
