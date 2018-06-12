@@ -32,14 +32,6 @@ install:
   - ./.travis.sh
 
 before_script:
-  - if [ -n "${OPENSSL}" ]; then
-      export OPENSSL_DIR=/usr;
-      export PATH="${OPENSSL_DIR}/bin:${PATH}";
-      export CFLAGS="${CFLAGS} -I${OPENSSL_DIR}/include";
-      export LDFLAGS="${LD_FLAGS} -L${OPENSSL_DIR}/lib";
-      export LD_RUN_PATH="${OPENSSL_DIR}/lib";
-      export LD_LIBRARY_PATH="${OPENSSL_DIR}/lib:${LD_LIBRARY_PATH}";
-    fi;
   - touch config.rpath && autoreconf -fvi && ./configure ${CONFIG_FLAGS}
   # Optionally try to upload to Coverity Scan
   # On error (propably quota is exhausted), just continue
