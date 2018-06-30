@@ -234,8 +234,6 @@ loggedin:
 	if (decrypted != NULL)
 		OPENSSL_free(decrypted);
 
-	CRYPTO_cleanup_all_ex_data();
-	ERR_free_strings();
 #if OPENSSL_VERSION_NUMBER >= 0x10100006L
 	/* OpenSSL version >= 1.1.0-pre6 */
 	/* the function is no longer needed */

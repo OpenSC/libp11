@@ -29,10 +29,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <openssl/rsa.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/engine.h>
+#include <openssl/rand.h>
 #include <openssl/conf.h>
 
 static void display_openssl_errors(int l)
@@ -94,8 +96,14 @@ int main(int argc, char **argv)
 	}
 
 	ENGINE_add_conf_module();
+#if OPENSSL_VERSION_NUMBER>=0x10100000
+	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
+		| OPENSSL_INIT_ADD_ALL_DIGESTS \
+		| OPENSSL_INIT_LOAD_CONFIG, NULL);
+#else
 	OpenSSL_add_all_algorithms();
 	ERR_load_crypto_strings();
+#endif
 	ERR_clear_error();
 	ENGINE_load_builtin_engines();
 

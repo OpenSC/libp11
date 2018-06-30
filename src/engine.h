@@ -39,6 +39,7 @@
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
+#include <openssl/ui.h>
 
 #define CMD_SO_PATH		ENGINE_CMD_BASE
 #define CMD_MODULE_PATH 	(ENGINE_CMD_BASE+1)

@@ -31,6 +31,8 @@
 #include <openssl/evp.h>
 #include <openssl/conf.h>
 #include <openssl/engine.h>
+#include <openssl/rand.h>
+#include <openssl/err.h>
 
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 1024
@@ -83,7 +85,7 @@ static int spawn_processes(int num)
 
     pids = (pid_t *)malloc(num * sizeof(pid_t));
     if (pids == NULL) {
-        exit(ENOMEM);
+        exit(12);
     }
 
     /* Spawn (num - 1) new processes to get a total of num processes */
@@ -180,8 +182,14 @@ int main(int argc, char *argv[])
     }
 
     ENGINE_add_conf_module();
+#if OPENSSL_VERSION_NUMBER>=0x10100000
+	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
+		| OPENSSL_INIT_ADD_ALL_DIGESTS \
+		| OPENSSL_INIT_LOAD_CONFIG, NULL);
+#else
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
+#endif
     ERR_clear_error();
     ENGINE_load_builtin_engines();
 
@@ -276,8 +284,6 @@ failed:
         EVP_PKEY_free(pkey);
     if (engine != NULL)
         ENGINE_free(engine);
-    CRYPTO_cleanup_all_ex_data();
-    ERR_free_strings();
 
     return rv;
 }

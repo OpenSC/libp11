@@ -102,8 +102,6 @@ end:
 		PKCS11_CTX_unload(ctx);
 		PKCS11_CTX_free(ctx);
 	}
-	CRYPTO_cleanup_all_ex_data();
-	ERR_free_strings();
 
 	if (rc)
 		printf("Failed (error code %d).\n", rc);

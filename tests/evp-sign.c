@@ -38,6 +38,7 @@
 #include <openssl/err.h>
 #include <openssl/engine.h>
 #include <openssl/conf.h>
+#include <openssl/ui.h>
 
 /* UI method that's only used to fail if get_pin inside engine_pkcs11
  * has failed to pick up in a PIN sent in with ENGINE_ctrl_cmd_string */
@@ -183,8 +184,15 @@ int main(int argc, char **argv)
 	}
 
 	ENGINE_add_conf_module();
+#if OPENSSL_VERSION_NUMBER>=0x10100000
+	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
+		| OPENSSL_INIT_ADD_ALL_DIGESTS \
+		| OPENSSL_INIT_LOAD_CONFIG, NULL);
+#else
 	OpenSSL_add_all_algorithms();
+	OpenSSL_add_all_digests();
 	ERR_load_crypto_strings();
+#endif
 	ERR_clear_error();
 
 	ENGINE_load_builtin_engines();
@@ -240,10 +248,6 @@ int main(int argc, char **argv)
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
-
-	/* Digest the module data. */
-	OpenSSL_add_all_digests();
-	display_openssl_errors(__LINE__);
 
 	digest_algo = EVP_get_digestbyname("sha1");
 
