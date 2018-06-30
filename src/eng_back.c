@@ -4,7 +4,6 @@
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
  * Copyright (c) 2017 Michał Trojnara
- * Copyright (c) 2018 William Roberts
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +27,6 @@
  */
 
 #include "engine.h"
-#include "libp11.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -263,8 +261,6 @@ int ctx_destroy(ENGINE_CTX *ctx)
 	return 1;
 }
 
-static PKCS11_CTX *_g_pkcs11_ctx;
-
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
 static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 {
@@ -296,12 +292,7 @@ static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	ctx_log(ctx, 1, "Found %u slot%s\n", slot_count,
 		slot_count <= 1 ? "" : "s");
 
-	/*
-	 * Capture the pkcs11 context as the random callback from openssl
-	 * doesn't pass any contextual information and pkcs11 will require
-	 * the context.
-	 */
-	_g_pkcs11_ctx = ctx->pkcs11_ctx = pkcs11_ctx;
+	ctx->pkcs11_ctx = pkcs11_ctx;
 	ctx->slot_list = slot_list;
 	ctx->slot_count = slot_count;
 }
@@ -994,51 +985,6 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		break;
 	}
 	return 0;
-}
-
-int rand_bytes (unsigned char *buf, int num)
-{
-	unsigned int nslots;
-	PKCS11_SLOT *slot, *slots;
-	PKCS11_TOKEN *tok;
-	unsigned int n;
-	int rc;
-
-	/*
-	 * Find the first token that supports RNG and use it.
-	 */
-	rc = PKCS11_enumerate_slots(_g_pkcs11_ctx, &slots, &nslots);
-	if (rc < 0)
-		return 0;
-
-	/*
-	 * for each slot and token, check to see if it's
-	 * initialized and has an rng.
-	 */
-	for (n = 0, slot = slots; n < nslots; n++, slot++) {
-		tok = slot->token;
-		if (!tok)
-			continue;
-
-		/*
-		 * slot found, slot is pointing it to now.
-		 * If the token in the slot has rng support,
-		 * try it, if it fails, keep searching.
-		 */
-		if (tok->initialized && tok->hasRng) {
-			rc = PKCS11_generate_random(slot, buf, num);
-			if (rc == 0)
-				break;
-			/* failed keep trying */
-		}
-	}
-
-	/* no working rng found */
-	if (n >= nslots)
-		return 0;
-
-	/* Goes back to openssl, where 1 is success */
-	return 1;
 }
 
 /* vim: set noexpandtab: */

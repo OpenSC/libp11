@@ -4,7 +4,6 @@
  * Copied/modified by Kevin Stefanik (kstef@mtppi.org) for the OpenSC
  * project 2003.
  * Copyright (c) 2017 Michał Trojnara
- * Copyright (c) 2018 William Roberts
  */
 /* ====================================================================
  * Copyright (c) 1999-2001 The OpenSSL Project.  All rights reserved.
@@ -221,15 +220,6 @@ static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
 	return ctx_engine_ctrl(ctx, cmd, i, p, f);
 }
 
-static RAND_METHOD *PKCS11_get_rand_method(void) {
-
-	static RAND_METHOD ops = {
-		.bytes = rand_bytes,
-	};
-
-	return &ops;
-}
-
 /* This internal function is used by ENGINE_pkcs11() and possibly by the
  * "dynamic" ENGINE support too */
 static int bind_helper(ENGINE *e)
@@ -241,7 +231,6 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_ctrl_function(e, engine_ctrl) ||
 			!ENGINE_set_cmd_defns(e, engine_cmd_defns) ||
 			!ENGINE_set_name(e, PKCS11_ENGINE_NAME) ||
-			!ENGINE_set_RAND(e, PKCS11_get_rand_method()) ||
 #ifndef OPENSSL_NO_RSA
 			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
 #endif
