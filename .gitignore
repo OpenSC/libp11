@@ -68,6 +68,8 @@ tests/fork-test
 tests/list-tokens
 tests/evp-sign
 tests/fork-change-slot
+tests/rsa-oaep
+tests/rsa-pss-sign
 tests/*.log
 tests/*.trs
 tests/output.*
