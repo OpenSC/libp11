@@ -87,13 +87,21 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	args.pReserved = cpriv->init_args;
 	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+		C_UnloadModule(cpriv->handle);
+		cpriv->handle = NULL;
 		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
 	/* Get info on the library */
 	rv = cpriv->method->C_GetInfo(&ck_info);
-	CRYPTOKI_checkerr(CKR_F_PKCS11_CTX_LOAD, rv);
+	if (rv) {
+		cpriv->method->C_Finalize(NULL);
+		C_UnloadModule(cpriv->handle);
+		cpriv->handle = NULL;
+		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		return -1;
+	}
 
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
