@@ -246,7 +246,6 @@ ENGINE_CTX *ctx_new()
 int ctx_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
-		ctx_finish(ctx);
 		ctx_destroy_pin(ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);
@@ -353,11 +352,7 @@ int ctx_finish(ENGINE_CTX *ctx)
 			ctx->slot_count = 0;
 		}
 		if (ctx->pkcs11_ctx) {
-			/* Modules cannot be unloaded in pkcs11_finish() nor
-			 * ctx_destroy() because of a deadlock in PKCS#11
-			 * modules that internally use OpenSSL engines.
-			 * A memory leak is better than a deadlock... */
-			/* PKCS11_CTX_unload(ctx->pkcs11_ctx); */
+			PKCS11_CTX_unload(ctx->pkcs11_ctx);
 			PKCS11_CTX_free(ctx->pkcs11_ctx);
 			ctx->pkcs11_ctx = NULL;
 		}
