@@ -30,6 +30,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#define strncasecmp _strnicmp
+#endif
+
 /* The maximum length of an internally-allocated PIN */
 #define MAX_PIN_LENGTH   32
 #define MAX_VALUE_LEN	200
@@ -388,7 +392,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		return NULL;
 
 	if (s_slot_cert_id && *s_slot_cert_id) {
-		if (!strncmp(s_slot_cert_id, "pkcs11:", 7)) {
+		if (!strncasecmp(s_slot_cert_id, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, s_slot_cert_id, &match_tok,
 				cert_id, &cert_id_len,
 				tmp_pin, &tmp_pin_len, &cert_label);
@@ -621,7 +625,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		(char *)(isPrivate ? "private" : "public"),
 		s_slot_key_id);
 	if (s_slot_key_id && *s_slot_key_id) {
-		if (!strncmp(s_slot_key_id, "pkcs11:", 7)) {
+		if (!strncasecmp(s_slot_key_id, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, s_slot_key_id, &match_tok,
 				key_id, &key_id_len,
 				tmp_pin, &tmp_pin_len, &key_label);

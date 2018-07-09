@@ -24,7 +24,8 @@ dist_check_SCRIPTS = \
 	ec-testfork.softhsm \
 	fork-change-slot.softhsm \
 	rsa-pss-sign.softhsm \
-	rsa-oaep.softhsm
+	rsa-oaep.softhsm \
+	case-insensitive.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
 	ec-cert.der ec-prvkey.der ec-pubkey.der
