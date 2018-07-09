@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# Copyright (C) 2015 Nikos Mavrogiannopoulos
+# Copyright (C) 2018 Anderson Toshiyuki Sasaki
+#
+# GnuTLS is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+# This test if the PKCS#11 URI scheme detection is case insensitive
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+# Do the common test initialization
+common_init
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+ALL_LOWER_PRIV_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
+ALL_LOWER_PUB_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
+
+ALL_UPPER_PRIV_KEY="PKCS11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
+ALL_UPER_PUB_KEY="PKCS11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
+
+MIXED_PRIV_KEY="PkCs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
+MIXED_PUB_KEY="pKcS11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
+
+./evp-sign default false "${outdir}/engines.cnf" ${ALL_LOWER_PRIV_KEY} ${ALL_LOWER_PUB_KEY} ${MODULE}
+if test $? != 0;then
+	echo "All lower case PKCS#11 URI scheme detection failed"
+	exit 1;
+fi
+
+./evp-sign default false "${outdir}/engines.cnf" ${ALL_UPPER_PRIV_KEY} ${ALL_UPER_PUB_KEY} ${MODULE}
+if test $? != 0;then
+	echo "All upper case PKCS#11 URI scheme detection failed"
+	exit 1;
+fi
+
+./evp-sign default false "${outdir}/engines.cnf" ${MIXED_PRIV_KEY} ${MIXED_PUB_KEY} ${MODULE}
+if test $? != 0;then
+	echo "Mixed case PKCS#11 URI scheme detection failed"
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0
