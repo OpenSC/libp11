@@ -536,6 +536,12 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 #define PKCS11_KEYGEN_FAILED                              P11_R_KEYGEN_FAILED
 #define PKCS11_UI_FAILED                                  P11_R_UI_FAILED
 
+/* Backward compatibility emulation of the ERR_LIB_PKCS11 constant.
+ * We currently use two separate variables for library error codes:
+ * one for imported PKCS#11 module errors, and one for our own libp11 errors.
+ * We return the value for PKCS#11, as it is more likely to be needed. */
+#define ERR_LIB_PKCS11 (ERR_get_CKR_code())
+
 #ifdef __cplusplus
 }
 #endif

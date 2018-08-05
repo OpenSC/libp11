@@ -200,4 +200,11 @@ void ERR_CKR_error(int function, int reason, char *file, int line)
 	ERR_PUT_error(CKR_lib_error_code, function, reason, file, line);
 }
 
+int ERR_get_CKR_code(void)
+{
+	if (CKR_lib_error_code == 0)
+		CKR_lib_error_code = ERR_get_next_error_library();
+	return CKR_lib_error_code;
+}
+
 /* vim: set noexpandtab: */
