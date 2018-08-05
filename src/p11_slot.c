@@ -43,19 +43,26 @@ int pkcs11_enumerate_slots(PKCS11_CTX *ctx, PKCS11_SLOT **slotp, unsigned int *c
 	CK_SLOT_ID *slotid;
 	CK_ULONG nslots, n;
 	PKCS11_SLOT *slots;
+	size_t alloc_size;
 	int rv;
 
 	rv = cpriv->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 
-	slotid = OPENSSL_malloc(nslots * sizeof(CK_SLOT_ID));
+	alloc_size = nslots * sizeof(CK_SLOT_ID);
+	if (alloc_size / sizeof(CK_SLOT_ID) != nslots) /* integer overflow */
+		return -1;
+	slotid = OPENSSL_malloc(alloc_size);
 	if (slotid == NULL)
 		return -1;
 
 	rv = cpriv->method->C_GetSlotList(FALSE, slotid, &nslots);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 
-	slots = OPENSSL_malloc(nslots * sizeof(PKCS11_SLOT));
+	alloc_size = nslots * sizeof(PKCS11_SLOT);
+	if (alloc_size / sizeof(PKCS11_SLOT) != nslots) /* integer overflow */
+		return -1;
+	slots = OPENSSL_malloc(alloc_size);
 	if (slots == NULL)
 		return -1;
 	memset(slots, 0, nslots * sizeof(PKCS11_SLOT));

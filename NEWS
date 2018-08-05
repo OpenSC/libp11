@@ -15,6 +15,7 @@ New in 0.4.8; 2018-08-05; Michał Trojnara
 * Backward compatibility for new error handling introduced
   in libp11 0.4.7 (Michał Trojnara)
 * Memory leak fixes (Frank Morgner, Doug Engert)
+* Added an integer overflow protection (Eric Sesterhenn, Michał Trojnara)
 * Several bugfixes (Michał Trojnara, Emmanuel Deloget, Anderson Sasaki)
 
 New in 0.4.7; 2017-07-03; Michał Trojnara
