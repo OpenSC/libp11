@@ -527,8 +527,8 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 # define CKR_F_PKCS11_REMOVE_CERTIFICATE                  129
 # define CKR_F_PKCS11_GENERATE_KEY                        130
 
-/* For backward compatibility */
-#define PKCS11_LOAD_MODULE_ERROR                          P11_LOAD_MODULE_ERROR
+/* Backward compatibility of error reason codes */
+#define PKCS11_LOAD_MODULE_ERROR                          P11_R_LOAD_MODULE_ERROR
 #define PKCS11_MODULE_LOADED_ERROR                        -1
 #define PKCS11_SYMBOL_NOT_FOUND_ERROR                     -1
 #define PKCS11_NOT_SUPPORTED                              P11_R_NOT_SUPPORTED
