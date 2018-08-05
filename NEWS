@@ -1,8 +1,21 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.8; unreleased
-* PSS and OAEP signature support (Doug Engert, Michał Trojnara)
+New in 0.4.8; 2018-08-05; Michał Trojnara
+* RSA key generation on the token (n3wtron)
+* PSS signature support (Doug Engert, Michał Trojnara)
+* RSA-OAEP and RSA-PKCS encryption support (Mouse, Michał Trojnara)
+* Engine no longer set as default for all methods (Anderson Sasaki)
+* Added PKCS11_remove_key and PKCS11_remove_certificate (n3wtron)
+* Added PKCS11_find_next_token interface (Frank Morgner)
+* Added support for OpenSSL 1.1.1 beta (Michał Trojnara)
 * Removed support for OpenSSL 0.9.8 (Michał Trojnara)
+* Case insensitive PKCS#11 URI scheme (Anderson Sasaki)
+* Testing framework improvements (Anderson Sasaki)
+* Coverity scanning and defect fixes (Frank Morgner)
+* Backward compatibility for new error handling introduced
+  in libp11 0.4.7 (Michał Trojnara)
+* Memory leak fixes (Frank Morgner, Doug Engert)
+* Several bugfixes (Michał Trojnara, Emmanuel Deloget, Anderson Sasaki)
 
 New in 0.4.7; 2017-07-03; Michał Trojnara
 * Added OpenSSL-style engine error reporting (Michał Trojnara)
