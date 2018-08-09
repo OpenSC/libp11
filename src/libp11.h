@@ -40,6 +40,7 @@ int ERR_load_CKR_strings(void);
 void ERR_unload_CKR_strings(void);
 void ERR_CKR_error(int function, int reason, char *file, int line);
 # define CKRerr(f,r) ERR_CKR_error((f),(r),__FILE__,__LINE__)
+int ERR_get_CKR_code(void);
 
 /*
  * The purpose of this library is to provide a simple PKCS11
