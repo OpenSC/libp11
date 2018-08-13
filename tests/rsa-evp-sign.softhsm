@@ -36,7 +36,7 @@ KEY_ID="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key"
 
 for PIN_ATTR in \
 	"pin-value=1234" \
-	"pin-source=file:$config/pin.txt" \
+	"pin-source=file:$outdir/pin.txt" \
 	"pin-source=|./$outdir/pin.sh";
 do
 

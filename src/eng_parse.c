@@ -31,6 +31,11 @@
 #include <string.h>
 #include <limits.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#define popen _popen
+#define pclose _pclose
+#endif
+
 static int hex_to_bin(ENGINE_CTX *ctx,
 		const char *in, unsigned char *out, size_t *outlen)
 {
