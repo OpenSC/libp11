@@ -26,33 +26,62 @@ common_init
 
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
+echo -n $PIN > $outdir/pin.txt
+echo "cat $outdir/pin.txt" > $outdir/pin.sh
+chmod +x $outdir/pin.sh
+
 export OPENSSL_ENGINES="../src/.libs/"
-PRIVATE_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
-PUBLIC_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
 
-./evp-sign ctrl false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if test $? != 0;then
-	echo "Basic PKCS #11 test, using ctrl failed"
-	exit 1;
-fi
+KEY_ID="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key"
 
-./evp-sign default false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if test $? != 0;then
-	echo "Basic PKCS #11 test, using default failed"
-	exit 1;
-fi
+for PIN_ATTR in \
+	"pin-value=1234" \
+	"pin-source=file:$config/pin.txt" \
+	"pin-source=|./$outdir/pin.sh";
+do
 
-./evp-sign ctrl 1234 "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if test $? != 0;then
-	echo "Basic PKCS #11 test without pin-value, using ctrl failed"
-	exit 1;
-fi
+	PRIVATE_KEY="$KEY_ID;type=private;$PIN_ATTR"
+	PUBLIC_KEY="$KEY_ID;type=public;$PIN_ATTR"
 
-./evp-sign default 1234 "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if test $? != 0;then
-	echo "Basic PKCS #11 test without pin-value, using default failed"
-	exit 1;
-fi
+	echo $PRIVATE_KEY
+
+	./evp-sign ctrl false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test, using ctrl failed"
+		exit 1;
+	fi
+
+	./evp-sign default false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test, using default failed"
+		exit 1;
+	fi
+
+	./evp-sign ctrl false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test, using ctrl failed"
+		exit 1;
+	fi
+
+	./evp-sign default false "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test, using default failed"
+		exit 1;
+	fi
+
+	./evp-sign ctrl 1234 "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test without pin-value, using ctrl failed"
+		exit 1;
+	fi
+
+	./evp-sign default 1234 "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+	if test $? != 0;then
+		echo "Basic PKCS #11 test without pin-value, using default failed"
+		exit 1;
+	fi
+
+done
 
 ./evp-sign ctrl 1234 "${outdir}/engines.cnf" "label_server-key" "label_server-key" ${MODULE}
 if test $? != 0;then

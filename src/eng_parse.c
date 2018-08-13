@@ -29,6 +29,7 @@
 #include "engine.h"
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 static int hex_to_bin(ENGINE_CTX *ctx,
 		const char *in, unsigned char *out, size_t *outlen)
@@ -263,6 +264,71 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 	return ret;
 }
 
+static int read_from_file(ENGINE_CTX *ctx,
+	const char *path, unsigned char *field, size_t *field_len)
+{
+	FILE *fp;
+
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		ctx_log(ctx, 0, "Could not open file %s\n", path);
+		return 0;
+	}
+	if (fgets(field, *field_len, fp) != NULL) {
+		*field_len = strlen(field);
+	} else {
+		*field_len = 0;
+	}
+
+	fclose(fp);
+	return 1;
+}
+
+static int read_from_command(ENGINE_CTX *ctx,
+	const char *cmd, unsigned char *field, size_t *field_len)
+{
+	FILE *fp;
+
+	fp = popen(cmd, "r");
+	if (fp == NULL) {
+		ctx_log(ctx, 0, "Could not run command %s\n", cmd);
+		return 0;
+	}
+	if (fgets(field, *field_len, fp) != NULL) {
+		*field_len = strlen(field);
+	} else {
+		*field_len = 0;
+	}
+
+	pclose(fp);
+	return 1;
+}
+
+static int parse_pin_source(ENGINE_CTX *ctx,
+		const char *attr, int attrlen, unsigned char *field,
+		size_t *field_len)
+{
+	FILE *in;
+	unsigned char *val;
+	int ret = 1;
+
+	if (!parse_uri_attr(ctx, attr, attrlen, &val, NULL)) {
+		return 0;
+	}
+
+	if (!strncmp(val, "file:", 5)) {
+		ret = read_from_file(ctx, val + 5, field, field_len);
+	} else if (*val == '|') {
+		ret = read_from_command(ctx, val + 1, field, field_len);
+	} else {
+		ctx_log(ctx, 0, "Unsupported pin-source syntax\n");
+		ret = 0;
+	}
+	OPENSSL_free(val);
+
+	return ret;
+}
+
 int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		const char *uri, PKCS11_TOKEN **p_tok,
 		unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
@@ -310,6 +376,10 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
 			rv = parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
+			pin_set = 1;
+		} else if (!strncmp(p, "pin-source=", 11)) {
+			p += 11;
+			rv = parse_pin_source(ctx, p, end - p, pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
