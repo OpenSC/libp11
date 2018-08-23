@@ -29,6 +29,13 @@ static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen);
 
+#ifndef OPENSSL_NO_EC
+static int (*orig_pkey_ec_sign_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+#endif /* OPENSSL_NO_EC */
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 struct evp_pkey_method_st {
 	int pkey_id;
@@ -490,54 +497,109 @@ static int pkcs11_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 
 static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa()
 {
-	EVP_PKEY_METHOD *orig_evp_pkey_meth_rsa, *new_evp_pkey_meth_rsa;
+	EVP_PKEY_METHOD *orig_meth, *new_meth;
 
-	orig_evp_pkey_meth_rsa = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_RSA);
-	EVP_PKEY_meth_get_sign(orig_evp_pkey_meth_rsa,
+	orig_meth = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_RSA);
+	EVP_PKEY_meth_get_sign(orig_meth,
 		&orig_pkey_rsa_sign_init, &orig_pkey_rsa_sign);
-	EVP_PKEY_meth_get_decrypt(orig_evp_pkey_meth_rsa,
+	EVP_PKEY_meth_get_decrypt(orig_meth,
 		&orig_pkey_rsa_decrypt_init,
 		&orig_pkey_rsa_decrypt);
 
-	new_evp_pkey_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA,
+	new_meth = EVP_PKEY_meth_new(EVP_PKEY_RSA,
 		EVP_PKEY_FLAG_AUTOARGLEN);
 
-	EVP_PKEY_meth_copy(new_evp_pkey_meth_rsa, orig_evp_pkey_meth_rsa);
+	EVP_PKEY_meth_copy(new_meth, orig_meth);
 
-	EVP_PKEY_meth_set_sign(new_evp_pkey_meth_rsa,
+	EVP_PKEY_meth_set_sign(new_meth,
 		orig_pkey_rsa_sign_init, pkcs11_pkey_rsa_sign);
-	EVP_PKEY_meth_set_decrypt(new_evp_pkey_meth_rsa,
+	EVP_PKEY_meth_set_decrypt(new_meth,
 		orig_pkey_rsa_decrypt_init, pkcs11_pkey_rsa_decrypt);
 
-	return new_evp_pkey_meth_rsa;
+	return new_meth;
 }
+
+#ifndef OPENSSL_NO_EC
+
+static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() not implemented\n",
+		__FILE__, __LINE__);
+	return -1;
+}
+
+static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_try_pkey_ec_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_pkey_ec_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	return ret;
+}
+
+static EVP_PKEY_METHOD *pkcs11_pkey_method_ec()
+{
+	EVP_PKEY_METHOD *orig_meth, *new_meth;
+
+	orig_meth = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_EC);
+	EVP_PKEY_meth_get_sign(orig_meth,
+		&orig_pkey_ec_sign_init, &orig_pkey_ec_sign);
+
+	new_meth = EVP_PKEY_meth_new(EVP_PKEY_EC,
+		EVP_PKEY_FLAG_AUTOARGLEN);
+
+	EVP_PKEY_meth_copy(new_meth, orig_meth);
+
+	EVP_PKEY_meth_set_sign(new_meth,
+		orig_pkey_ec_sign_init, pkcs11_pkey_ec_sign);
+
+	return new_meth;
+}
+
+#endif /* OPENSSL_NO_EC */
 
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid)
 {
 	static int pkey_nids[] = {
 		EVP_PKEY_RSA,
+		EVP_PKEY_EC,
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
+	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */
 
-	if (pkey_method_rsa == NULL)
-		pkey_method_rsa = pkcs11_pkey_method_rsa();
-	if (pkey_method_rsa == NULL)
-		return 0;
-
 	if (!pmeth) { /* get the list of supported nids */
 		*nids = pkey_nids;
-		return 1; /* the number of returned nids */
+		return sizeof(pkey_nids) / sizeof(int) - 1;
 	}
 
 	/* get the EVP_PKEY_METHOD */
-	if (nid == EVP_PKEY_RSA) {
+	switch (nid) {
+	case EVP_PKEY_RSA:
+		if (pkey_method_rsa == NULL)
+			pkey_method_rsa = pkcs11_pkey_method_rsa();
+		if (pkey_method_rsa == NULL)
+			return 0;
 		*pmeth = pkey_method_rsa;
 		return 1; /* success */
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		if (pkey_method_ec == NULL)
+			pkey_method_ec = pkcs11_pkey_method_ec();
+		if (pkey_method_ec == NULL)
+			return 0;
+		*pmeth = pkey_method_ec;
+		return 1; /* success */
+#endif /* OPENSSL_NO_EC */
 	}
 	*pmeth = NULL;
 	return 0;
