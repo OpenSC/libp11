@@ -21,6 +21,7 @@ dist_check_SCRIPTS = \
 	rsa-testfork.softhsm \
 	rsa-testlistkeys.softhsm \
 	rsa-evp-sign.softhsm \
+	ec-evp-sign.softhsm \
 	ec-testfork.softhsm \
 	fork-change-slot.softhsm \
 	rsa-pss-sign.softhsm \

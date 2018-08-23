@@ -21,7 +21,7 @@ outdir="output.$$"
 
 . ${srcdir}/ec-common.sh
 
-./fork-test $ADDITIONAL_PARAM $PIN
+./fork-test $MODULE $PIN
 if test $? != 0;then
 	exit 1;
 fi
