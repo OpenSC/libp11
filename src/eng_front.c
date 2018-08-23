@@ -233,8 +233,12 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 #ifdef EVP_F_EVP_PKEY_SET1_ENGINE
 	/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
 	 * but otherwise setting pkey->engine breaks OpenSSL 1.0.2 */
-	if (pkey)
-		EVP_PKEY_set1_engine(pkey, engine);
+	if (pkey) {
+		if (!EVP_PKEY_set1_engine(pkey, engine)) {
+			EVP_PKEY_free(pkey);
+			return NULL;
+		}
+	}
 #endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
 	return pkey;
 }
