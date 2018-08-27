@@ -28,6 +28,7 @@
 
 #include "engine.h"
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <limits.h>
 
@@ -309,6 +310,22 @@ static int read_from_command(ENGINE_CTX *ctx,
 	return 1;
 }
 
+static int strnicmp(const char *cs, const char *ct, size_t count)
+{
+	unsigned char c1, c2;
+
+	while (count) {
+		c1 = tolower(*cs++);
+		c2 = tolower(*ct++);
+		if (c1 != c2)
+			return c1 < c2 ? -1 : 1;
+		if (!c1)
+			break;
+		count--;
+	}
+	return 0;
+}
+
 static int parse_pin_source(ENGINE_CTX *ctx,
 		const char *attr, int attrlen, unsigned char *field,
 		size_t *field_len)
@@ -321,7 +338,7 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 		return 0;
 	}
 
-	if (!strncmp(val, "file:", 5)) {
+	if (!strnicmp(val, "file:", 5)) {
 		ret = read_from_file(ctx, val + 5, field, field_len);
 	} else if (*val == '|') {
 		ret = read_from_command(ctx, val + 1, field, field_len);
@@ -380,11 +397,11 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
+			rv = pin_set ? 0 : parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "pin-source=", 11)) {
 			p += 11;
-			rv = parse_pin_source(ctx, p, end - p, pin, pin_len);
+			rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
