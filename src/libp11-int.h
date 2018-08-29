@@ -367,7 +367,7 @@ extern int pkcs11_private_decrypt(
 	unsigned char *to, PKCS11_KEY * key, int padding);
 
 /* Retrieve PKCS11_KEY from an RSA key */
-extern PKCS11_KEY *pkcs11_get_ex_data_rsa(RSA *rsa);
+extern PKCS11_KEY *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
 #endif
 

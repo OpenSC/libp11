@@ -260,7 +260,16 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	return ec;
 }
 
-static void pkcs11_set_ex_data_ec(EC_KEY* ec, PKCS11_KEY* key)
+static PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+	return EC_KEY_get_ex_data(ec, ec_ex_index);
+#else
+	return ECDSA_get_ex_data((EC_KEY *)ec, ec_ex_index);
+#endif
+}
+
+static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_KEY *key)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EC_KEY_set_ex_data(ec, ec_ex_index, key);
@@ -269,10 +278,10 @@ static void pkcs11_set_ex_data_ec(EC_KEY* ec, PKCS11_KEY* key)
 #endif
 }
 
-static void pkcs11_update_ex_data_ec(PKCS11_KEY* key)
+static void pkcs11_update_ex_data_ec(PKCS11_KEY *key)
 {
-	EVP_PKEY* evp = key->evp_key;
-	EC_KEY* ec;
+	EVP_PKEY *evp = key->evp_key;
+	EC_KEY *ec;
 	if (evp == NULL)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC)
@@ -384,11 +393,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	(void)kinv; /* Precomputed values are not used for PKCS#11 */
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ec, ec_ex_index);
-#else
-	key = (PKCS11_KEY *)ECDSA_get_ex_data(ec, ec_ex_index);
-#endif
+	key = pkcs11_get_ex_data_ec(ec);
 	if (key == NULL) {
 		sign_sig_fn orig_sign_sig;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -574,7 +579,7 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 	size_t buflen;
 	int rv;
 
-	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ecdh, ec_ex_index);
+	key = pkcs11_get_ex_data_ec(ecdh);
 	if (key == NULL) /* The private key is not handled by PKCS#11 */
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
 	/* TODO: Add an atfork check */
@@ -616,11 +621,7 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 	size_t buflen;
 	int rv;
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	key = (PKCS11_KEY *)EC_KEY_get_ex_data(ecdh, ec_ex_index);
-#else
-	key = (PKCS11_KEY *)ECDSA_get_ex_data((EC_KEY *)ecdh, ec_ex_index);
-#endif
+	key = pkcs11_get_ex_data_ec(ecdh);
 	if (key == NULL) /* The private key is not handled by PKCS#11 */
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
 	/* TODO: Add an atfork check */
