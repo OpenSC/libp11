@@ -309,7 +309,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (rsa == NULL)
 		return -1;
 	key = pkcs11_get_ex_data_rsa(rsa);
-	if (key == NULL)
+	if (check_key_fork(key) < 0)
 		return -1;
 	slot = KEY2SLOT(key);
 	ctx = KEY2CTX(key);
@@ -413,11 +413,10 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (rsa == NULL)
 		return -1;
 	key = pkcs11_get_ex_data_rsa(rsa);
-	if (key == NULL)
+	if (check_key_fork(key) < 0)
 		return -1;
-
-	slot  = KEY2SLOT(key);
-	ctx   = KEY2CTX(key);
+	slot = KEY2SLOT(key);
+	ctx = KEY2CTX(key);
 	kpriv = PRIVKEY(key);
 	spriv = PRIVSLOT(slot);
 	cpriv = PRIVCTX(ctx);

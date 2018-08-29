@@ -394,7 +394,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
 	key = pkcs11_get_ex_data_ec(ec);
-	if (key == NULL) {
+	if (check_key_fork(key) < 0) {
 		sign_sig_fn orig_sign_sig;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 		const EC_KEY_METHOD *meth = EC_KEY_OpenSSL();
@@ -406,7 +406,6 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 #endif
 		return orig_sign_sig(dgst, dlen, kinv, rp, ec);
 	}
-	/* TODO: Add an atfork check */
 
 	/* Truncate digest if its byte size is longer than needed */
 	order = BN_new();
@@ -580,9 +579,8 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 	int rv;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (key == NULL) /* The private key is not handled by PKCS#11 */
+	if (check_key_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
-	/* TODO: Add an atfork check */
 
 	/* both peer and ecdh use same group parameters */
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
@@ -622,9 +620,8 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 	int rv;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (key == NULL) /* The private key is not handled by PKCS#11 */
+	if (check_key_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
-	/* TODO: Add an atfork check */
 
 	/* both peer and ecdh use same group parameters */
 	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
