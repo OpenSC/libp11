@@ -39,7 +39,7 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 		goto fail;
 	memset(ctx, 0, sizeof(PKCS11_CTX));
 	ctx->_private = cpriv;
-	cpriv->forkid = _P11_get_forkid();
+	cpriv->forkid = get_forkid();
 	cpriv->rwlock = CRYPTO_THREAD_lock_new();
 	cpriv->sign_initialized = 0;
 	cpriv->decrypt_initialized = 0;
@@ -145,7 +145,7 @@ void pkcs11_CTX_unload(PKCS11_CTX *ctx)
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
 	/* Tell the PKCS11 library to shut down */
-	if (cpriv->forkid == _P11_get_forkid())
+	if (cpriv->forkid == get_forkid())
 		cpriv->method->C_Finalize(NULL);
 
 	/* Unload the module */

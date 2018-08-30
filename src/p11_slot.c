@@ -21,6 +21,7 @@
 #include <openssl/buffer.h>
 
 static int pkcs11_init_slot(PKCS11_CTX *, PKCS11_SLOT *, CK_SLOT_ID);
+static void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *);
 static int pkcs11_check_token(PKCS11_CTX *, PKCS11_SLOT *);
 static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
@@ -447,7 +448,7 @@ void pkcs11_release_all_slots(PKCS11_CTX *ctx,  PKCS11_SLOT *slots, unsigned int
 	OPENSSL_free(slots);
 }
 
-void pkcs11_release_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
+static void pkcs11_release_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 

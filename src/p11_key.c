@@ -609,7 +609,7 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	if (pkcs11_getattr_var(token, obj, CKA_ID, kpriv->id, &kpriv->id_len))
 		kpriv->id_len = 0;
 	kpriv->ops = ops;
-	kpriv->forkid = _P11_get_forkid();
+	kpriv->forkid = get_forkid();
 
 	if (ret)
 		*ret = key;

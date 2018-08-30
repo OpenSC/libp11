@@ -24,17 +24,9 @@
 #endif
 
 #include "libp11.h"
-#include "atfork.h"
 
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
-
-#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
-#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
-#endif
-
-extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
-extern CK_RV C_UnloadModule(void *module);
 
 #if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
 typedef int PKCS11_RWLOCK;
@@ -121,6 +113,9 @@ typedef struct pkcs11_cert_private {
 #define CERT2TOKEN(cert)	(PRIVCERT(cert)->parent)
 #define CERT2CTX(cert)		TOKEN2CTX(CERT2TOKEN(cert))
 
+extern PKCS11_KEY_ops pkcs11_rsa_ops;
+extern PKCS11_KEY_ops *pkcs11_ec_ops;
+
 /*
  * Internal functions
  */
@@ -139,9 +134,10 @@ extern int ERR_load_CKR_strings(void);
 /* Memory allocation */
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
+extern char *pkcs11_strdup(char *, size_t);
 
-#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
 /* Emulate the OpenSSL 1.1 locking API for older OpenSSL versions */
+#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
 int CRYPTO_THREAD_lock_new();
 void CRYPTO_THREAD_lock_free(int);
 #define CRYPTO_THREAD_write_lock(type) \
@@ -154,13 +150,29 @@ void CRYPTO_THREAD_lock_free(int);
 	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_READ,type,__FILE__,__LINE__)
 #endif
 
-extern int pkcs11_enumerate_slots(PKCS11_CTX *, PKCS11_SLOT **, unsigned int *);
-extern void pkcs11_release_slot(PKCS11_CTX *, PKCS11_SLOT *slot);
+/* Emulate the OpenSSL 1.1 getters */
+#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
+#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
+#endif
 
+/* Reinitializing the module afer fork (if detected) */
+extern unsigned int get_forkid();
+extern int check_fork(PKCS11_CTX *ctx);
+extern int check_slot_fork(PKCS11_SLOT *slot);
+extern int check_token_fork(PKCS11_TOKEN *token);
+extern int check_key_fork(PKCS11_KEY *key);
+extern int check_cert_fork(PKCS11_CERT *cert);
+
+/* Other internal functions */
+extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
+extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
-extern char *pkcs11_strdup(char *, size_t);
+extern int pkcs11_reload_key(PKCS11_KEY *);
+extern int pkcs11_reopen_session(PKCS11_SLOT * slot);
+extern int pkcs11_relogin(PKCS11_SLOT * slot);
 
+/* Managing object attributes */
 extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, CK_BYTE *, size_t *);
 extern int pkcs11_getattr_val(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
@@ -173,8 +185,6 @@ extern int pkcs11_getattr_alloc(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
  */
 extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
 	unsigned int, BIGNUM **);
-
-extern int pkcs11_reload_key(PKCS11_KEY *);
 
 #define key_getattr_var(key, t, p, s) \
 	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
@@ -200,12 +210,6 @@ extern void pkcs11_addattr_s(CK_ATTRIBUTE_PTR, int, const char *);
 extern void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR, int, const BIGNUM *);
 extern void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR, int, pkcs11_i2d_fn, void *);
 extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
-
-int pkcs11_reopen_session(PKCS11_SLOT * slot);
-int pkcs11_relogin(PKCS11_SLOT * slot);
-
-extern PKCS11_KEY_ops pkcs11_rsa_ops;
-extern PKCS11_KEY_ops *pkcs11_ec_ops;
 
 /* Internal implementation of current features */
 
@@ -322,13 +326,6 @@ extern int pkcs11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
 /* Access the random number generator */
 extern int pkcs11_seed_random(PKCS11_SLOT *, const unsigned char *s, unsigned int s_len);
 extern int pkcs11_generate_random(PKCS11_SLOT *, unsigned char *r, unsigned int r_len);
-
-/* Reinitialize the module afer fork if needed */
-extern int check_fork(PKCS11_CTX *ctx);
-extern int check_slot_fork(PKCS11_SLOT *slot);
-extern int check_token_fork(PKCS11_TOKEN *token);
-extern int check_key_fork(PKCS11_KEY *key);
-extern int check_cert_fork(PKCS11_CERT *cert);
 
 /* Internal implementation of deprecated features */
 

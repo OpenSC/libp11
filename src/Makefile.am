@@ -4,7 +4,7 @@ DISTCLEANFILES = libp11.map
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
-noinst_HEADERS= libp11-int.h pkcs11.h atfork.h
+noinst_HEADERS= libp11-int.h pkcs11.h
 include_HEADERS= libp11.h p11_err.h
 lib_LTLIBRARIES = libp11.la
 enginesexec_LTLIBRARIES = pkcs11.la

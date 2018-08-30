@@ -29,30 +29,45 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <atfork.h>
-
-#ifdef __sun
-# pragma fini(lib_deinit)
-# pragma init(lib_init)
-# define _CONSTRUCTOR
-# define _DESTRUCTOR
-#else
-# define _CONSTRUCTOR __attribute__((constructor))
-# define _DESTRUCTOR __attribute__((destructor))
-#endif
-
-unsigned int P11_forkid = 0;
 
 #ifndef _WIN32
 
-# ifdef HAVE_ATFORK
+#ifndef __STDC_VERSION__
+/* older than C90 */
+#define inline
+#endif /* __STDC_VERSION__ */
+
+#ifdef HAVE___REGISTER_ATFORK
+
+#ifdef __sun
+#pragma fini(lib_deinit)
+#pragma init(lib_init)
+#define _CONSTRUCTOR
+#define _DESTRUCTOR
+#else /* __sun */
+#define _CONSTRUCTOR __attribute__((constructor))
+#define _DESTRUCTOR __attribute__((destructor))
+#endif /* __sun */
+
+static unsigned int P11_forkid = 0;
+
+inline static unsigned int _P11_get_forkid(void)
+{
+	return P11_forkid;
+}
+
+inline static int _P11_detect_fork(unsigned int forkid)
+{
+	if (forkid == P11_forkid)
+		return 0;
+	return 1;
+}
+
 static void fork_handler(void)
 {
 	P11_forkid++;
 }
-# endif
 
-# if defined(HAVE___REGISTER_ATFORK)
 extern int __register_atfork(void (*)(void), void(*)(void), void (*)(void), void *);
 extern void *__dso_handle;
 
@@ -64,31 +79,33 @@ int _P11_register_fork_handler(void)
 	return 0;
 }
 
-# else
+#else /* HAVE___REGISTER_ATFORK */
 
-unsigned int _P11_get_forkid(void)
+inline static unsigned int _P11_get_forkid(void)
 {
 	return getpid();
 }
 
-int _P11_detect_fork(unsigned int forkid)
+inline static int _P11_detect_fork(unsigned int forkid)
 {
 	if (getpid() == forkid)
 		return 0;
 	return 1;
 }
 
-/* we have to detect fork manually */
-_CONSTRUCTOR
-int _P11_register_fork_handler(void)
-{
-	P11_forkid = getpid();
-	return 0;
-}
+#endif /* HAVE___REGISTER_ATFORK */
 
-# endif
+#else /* !_WIN32 */
+
+#define _P11_get_forkid() 0
+#define _P11_detect_fork(x) 0
 
 #endif /* !_WIN32 */
+
+unsigned int get_forkid()
+{
+	return _P11_get_forkid();
+}
 
 /*
  * PKCS#11 reinitialization after fork
