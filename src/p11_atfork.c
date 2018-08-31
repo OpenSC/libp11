@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2010-2012 Free Software Foundation, Inc.
  * Copyright (C) 2014 Red Hat
+ * Copyright (C) 2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Author: Nikos Mavrogiannopoulos
  *
@@ -20,15 +21,6 @@
  */
 
 #include "libp11-int.h"
-#if defined(_WIN32) && !defined(__CYGWIN__)
-#include <winsock2.h>
-#else
-#include <sys/socket.h>
-#endif
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #ifndef _WIN32
 
