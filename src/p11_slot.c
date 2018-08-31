@@ -119,19 +119,20 @@ PKCS11_SLOT *pkcs11_find_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots, unsigned int
  */
 PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots, unsigned int nslots, PKCS11_SLOT *current)
 {
+	int offset;
+
 	if (slots == NULL)
 		return NULL;
 
 	if (current) {
-		if (slots > current || (current - slots) > nslots)
+		offset = current + 1 - slots;
+		if (offset < 1 || (unsigned int)offset >= nslots)
 			return NULL;
-
-		current++;
-		nslots -= (current - slots);
-		slots = current;
+	} else {
+		offset = 0;
 	}
 
-	return pkcs11_find_token(ctx, slots, nslots);
+	return pkcs11_find_token(ctx, slots+offset, nslots-offset);
 }
 
 /*
