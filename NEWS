@@ -3,6 +3,8 @@ NEWS for Libp11 -- History of user visible changes
 New in 0.4.9; unreleased
 * Fixed EVP_PKEY ENGINE reference count with the EC EVP_PKEY_METHOD
   (Michał Trojnara, Anderson Sasaki)
+* Fixed a leak of RSA object in pkcs11_store_key() (lbonn)
+* Added atfork checks for RSA and EC_KEY methods (Michał Trojnara)
 
 New in 0.4.8; 2018-08-05; Michał Trojnara
 * RSA key generation on the token (n3wtron)
