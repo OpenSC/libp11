@@ -1,5 +1,5 @@
 /* libp11, a simple layer on to of PKCS#11 API
- * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -127,7 +127,6 @@ int PKCS11_logout(PKCS11_SLOT *slot)
 		return -1;
 	return pkcs11_logout(slot);
 }
-
 
 int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 		PKCS11_KEY **keys, unsigned int *nkeys)

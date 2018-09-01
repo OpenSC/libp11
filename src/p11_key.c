@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -256,17 +256,15 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 #if OPENSSL_VERSION_NUMBER >= 0x10100003L && !defined(LIBRESSL_VERSION_NUMBER)
 	if (EVP_PKEY_base_id(pk) == EVP_PKEY_RSA) {
 		RSA *rsa = EVP_PKEY_get1_RSA(pk);
-#else
-	if (pk->type == EVP_PKEY_RSA) {
-		RSA *rsa = pk->pkey.rsa;
-#endif
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 		RSA_get0_key(rsa, &rsa_n, &rsa_e, &rsa_d);
 		RSA_get0_factors(rsa, &rsa_p, &rsa_q);
 		RSA_get0_crt_params(rsa, &rsa_dmp1, &rsa_dmq1, &rsa_iqmp);
 		RSA_free(rsa);
 #else
+	if (pk->type == EVP_PKEY_RSA) {
+		RSA *rsa = pk->pkey.rsa;
+		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
 		rsa_n=rsa->n;
 		rsa_e=rsa->e;
 		rsa_d=rsa->d;
@@ -306,7 +304,6 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 	/* Gobble the key object */
 	return pkcs11_init_key(ctx, token, spriv->session, object, type, ret_key);
 }
-
 
 /*
  * Get the key type

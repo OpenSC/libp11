@@ -232,7 +232,6 @@ success:
 	return rsa;
 }
 
-
 PKCS11_KEY *pkcs11_get_ex_data_rsa(const RSA *rsa)
 {
 	return RSA_get_ex_data(rsa, rsa_ex_index);

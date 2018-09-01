@@ -2,7 +2,7 @@
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2011, 2013 Douglas E. Engert <deengert@anl.gov>
  * Copyright (C) 2014, 2016 Douglas E. Engert <deengert@gmail.com>
- * Copyright (C) 2016 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public

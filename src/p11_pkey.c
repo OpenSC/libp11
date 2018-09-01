@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2017 Douglas E. Engert <deengert@gmail.com>
- * Copyright (C) 2017 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2017-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
