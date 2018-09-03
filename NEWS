@@ -1,5 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.4.10; unreleased
+
 New in 0.4.9; 2018-09-03; Michał Trojnara
 * Fixed EVP_PKEY ENGINE reference count with the EC EVP_PKEY_METHOD
   (Michał Trojnara, Anderson Sasaki)
