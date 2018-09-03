@@ -74,6 +74,7 @@ int pkcs11_remove_certificate(PKCS11_CERT *cert){
 	CK_ULONG count;
 	CK_ATTRIBUTE search_parameters[32];
 	unsigned int n = 0;
+	int rv;
 
 	/* First, make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1)){
@@ -88,7 +89,7 @@ int pkcs11_remove_certificate(PKCS11_CERT *cert){
 	 	pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, cert->label);
 	}
 
-	int rv = CRYPTOKI_call(ctx,
+	rv = CRYPTOKI_call(ctx,
 		C_FindObjectsInit(spriv->session, search_parameters, n));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
 	
