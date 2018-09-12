@@ -524,8 +524,10 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
 		const unsigned char *tbs, size_t tbslen)
 {
+#ifdef DEBUG
 	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() not implemented\n",
 		__FILE__, __LINE__);
+#endif
 	return -1;
 }
 

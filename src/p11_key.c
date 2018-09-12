@@ -331,10 +331,11 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 		if (key->evp_key == NULL)
 			return NULL;
 		kpriv->always_authenticate = CK_FALSE;
-		if(isPrivate) {
-			if(key_getattr_val(key, CKA_ALWAYS_AUTHENTICATE,
-					&kpriv->always_authenticate, sizeof(CK_BBOOL)))
-				fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
+		if (isPrivate && key_getattr_val(key, CKA_ALWAYS_AUTHENTICATE,
+				&kpriv->always_authenticate, sizeof(CK_BBOOL))) {
+#ifdef DEBUG
+			fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
+#endif
 		}
 	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
