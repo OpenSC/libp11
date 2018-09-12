@@ -750,10 +750,6 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	 * with some other (which ones?) PKCS#11 libraries */
 	if (!tok->initialized)
 		ctx_log(ctx, 0, "Found uninitialized token\n");
-	if (isPrivate && !tok->userPinSet && !tok->readOnly) {
-		ctx_log(ctx, 0, "Found slot without user PIN\n");
-		goto error;
-	}
 
 	ctx_log(ctx, 1, "Found slot:  %s\n", slot->description);
 	ctx_log(ctx, 1, "Found token: %s\n", slot->token->label);
