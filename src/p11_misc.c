@@ -61,7 +61,7 @@ int CRYPTO_THREAD_lock_new()
 
 void CRYPTO_THREAD_lock_free(int i)
 {
-	if(i)
+	if (i)
 		CRYPTO_destroy_dynlockid(i);
 }
 

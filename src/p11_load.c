@@ -168,7 +168,7 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
 	}
-	if(cpriv->handle) {
+	if (cpriv->handle) {
 		OPENSSL_free(cpriv->handle);
 	}
 	CRYPTO_THREAD_lock_free(cpriv->rwlock);
