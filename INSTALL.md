@@ -1,4 +1,5 @@
 # libp11 Installation
+The following instructions only apply to the [release tarballs.](https://github.com/OpenSC/libp11/releases)
 
 ## Unix Build
 
