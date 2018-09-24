@@ -284,6 +284,10 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
+    const EVP_MD* evp_md;
+    CK_MECHANISM_TYPE ckm_md;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int md_len;
 
 	/* First, make sure we have a session */
 	if (!PRIVSLOT(slot)->haveSession && PKCS11_open_session(slot, 1))
@@ -295,6 +299,33 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	pkcs11_addattr_int(attrs + n++, CKA_CERTIFICATE_TYPE, CKC_X_509);
 	pkcs11_addattr_obj(attrs + n++, CKA_SUBJECT,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_subject_name(x509));
+    pkcs11_addattr_obj(attrs + n++, CKA_ISSUER,
+        (pkcs11_i2d_fn)i2d_X509_NAME, X509_get_issuer_name(x509));
+
+    /* Get digest algorithm from x509 certificate */
+    evp_md = EVP_get_digestbynid(X509_get_signature_nid(x509));
+    switch (EVP_MD_type(evp_md)) {
+    case NID_sha1:
+        ckm_md = CKM_SHA_1;
+    case NID_sha224:
+        ckm_md = CKM_SHA224;
+    case NID_sha256:
+        ckm_md = CKM_SHA256;
+    case NID_sha512:
+        ckm_md = CKM_SHA512;
+    case NID_sha384:
+        ckm_md = CKM_SHA384;
+    default:
+        ckm_md = 0;
+    }
+
+    /* Set hash algorithm; default is SHA-1 */
+    if (ckm_md) {
+        pkcs11_addattr_int(attrs + n++, CKA_NAME_HASH_ALGORITHM, ckm_md);
+        if(X509_pubkey_digest(x509,evp_md,md,&md_len))
+            pkcs11_addattr(attrs + n++, CKA_HASH_OF_SUBJECT_PUBLIC_KEY,md,md_len);
+    }
+
 	pkcs11_addattr_obj(attrs + n++, CKA_VALUE, (pkcs11_i2d_fn)i2d_X509, x509);
 	if (label)
 		pkcs11_addattr_s(attrs + n++, CKA_LABEL, label);
