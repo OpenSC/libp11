@@ -5,7 +5,7 @@ env:
   global:
     # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
     #   via the "travis encrypt" command using the project repo's public key
-    - secure: "bJF508I/e6JAhNwQ1kpSDACZ+wdND+vOWFR7XuSLNMh3J0yD1dWVW8rBsELrERcdbIXyDp3G9qVnL0gwCUvf0teeYJx0iOaEz0fsvr3P6Bbbr7ke3f43yBeocdXgQiAuBrIzLJt+SnhPzEPnRSl1nEpcLp3ON0tKtBGiCpcX3dQ="
+    - secure: "o1Gatu7TwkfWYzmUht2+N5S7dhxUjcajFBT3cRoj3xXH0ghCZ2Yyu+yRDakYujIXb1waUMiwNdPQOxjEbo/2oLRoV3E29wi6bZWhO7RBymM6zHTEoGY7F2XXYOxWlVeU2x4TrYS7UWgosCK1Hi3A0nOnvbMQFfV8F5R0RouKJvM="
     - COVERITY_SCAN_BRANCH_PATTERN="(master|coverity.*)"
     - COVERITY_SCAN_NOTIFICATION_EMAIL="Michal.Trojnara@stunnel.org"
     - COVERITY_SCAN_BUILD_COMMAND="make"
