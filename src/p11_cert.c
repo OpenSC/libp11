@@ -308,14 +308,19 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	default:
 	case NID_sha1:
 		ckm_md = CKM_SHA_1;
+		break;
 	case NID_sha224:
 		ckm_md = CKM_SHA224;
+		break;
 	case NID_sha256:
 		ckm_md = CKM_SHA256;
+		break;
 	case NID_sha512:
 		ckm_md = CKM_SHA512;
+		break;
 	case NID_sha384:
 		ckm_md = CKM_SHA384;
+		break;
 	}
 
 	/* Set hash algorithm; default is SHA-1 */
