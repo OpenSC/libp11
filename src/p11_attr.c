@@ -79,8 +79,10 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		return -1;
 	}
 	memset(data, 0, len+1); /* also null-terminate the allocated data */
-	if (pkcs11_getattr_var(token, object, type, data, &len))
+	if (pkcs11_getattr_var(token, object, type, data, &len)) {
+		OPENSSL_free(data);
 		return -1;
+	}
 	if (value)
 		*value = data;
 	if (size)
