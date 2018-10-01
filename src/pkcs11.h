@@ -391,6 +391,7 @@ typedef unsigned long ck_attribute_type_t;
 #define CKA_URL				(0x89UL)
 #define CKA_HASH_OF_SUBJECT_PUBLIC_KEY	(0x8aUL)
 #define CKA_HASH_OF_ISSUER_PUBLIC_KEY	(0x8bUL)
+#define CKA_NAME_HASH_ALGORITHM         (0x8cUL)
 #define CKA_CHECK_VALUE			(0x90UL)
 #define CKA_KEY_TYPE			(0x100UL)
 #define CKA_SUBJECT			(0x101UL)
