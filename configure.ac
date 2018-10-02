@@ -236,8 +236,8 @@ if test "${enable_strict}" = "yes"; then
 fi
 
 AC_MSG_CHECKING([if libtool needs -no-undefined flag to build shared libraries])
-case "`uname`" in
-  CYGWIN*|MSYS*|MINGW*|AIX*)
+case "$host_os" in
+  cygwin*|mingw*)
     ## Add in the -no-undefined flag to LDFLAGS for libtool.
     AC_MSG_RESULT([yes])
     LDFLAGS="$LDFLAGS -no-undefined"
