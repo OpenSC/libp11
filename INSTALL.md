@@ -17,7 +17,6 @@ Download and install OpenSSL, for example the Windows builds available here:
 
 * https://slproweb.com/products/Win32OpenSSL.html
 
-
 ### MSVC
 
 To build libp11, start a Visual Studio Command Prompt and use:
@@ -27,7 +26,7 @@ To build libp11, start a Visual Studio Command Prompt and use:
 In case your OpenSSL is installed in a different directory, use:
 
   nmake -f Makefile.mak OPENSSL_DIR=\your\openssl\directory
-  
+
 For x64 bit builds, make sure you opened the Native x64 VS Command Prompt and run:
 
   nmake /f Makefile.mak OPENSSL_DIR=c:\OpenSSL-Win64 BUILD_FOR=WIN64
@@ -56,11 +55,11 @@ then start a MSYS2 MSYS console from the Start menu and use:
 
 As above, assuming that you have mentioned packages already installed.
 
-### MINGW / MSYS
+### MinGW / MSYS
 
 To build libp11, download and install mingw-get-setup.exe from https://sourceforge.net/projects/mingw/
 
-I'm assuming that you have selected all necessary MINGW and MSYS packages during install 
+I'm assuming that you have selected all necessary MinGW and MSYS packages during install
 
 (useful hint - after clicking at checkbox press key I).
 
@@ -97,4 +96,15 @@ Then download and unpack libp11, in its directory use:
   ./configure --prefix=/usr/local
 
   make && make install
+
+### MinGW cross-compile on a Unix host
+
+We assume that OpenSSL is installed in /opt/openssl-mingw64.
+Update the paths to match your environment.
+
+  export PKG_CONFIG_PATH=/opt/openssl-mingw64/lib/pkgconfig
+
+  ./configure --host=x86_64-w64-mingw32 --prefix=/opt/libp11-mingw64
+
+  make && sudo make install
 
