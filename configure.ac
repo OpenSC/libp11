@@ -237,7 +237,7 @@ fi
 
 AC_MSG_CHECKING([if libtool needs -no-undefined flag to build shared libraries])
 case "$host_os" in
-  cygwin*|mingw*)
+  cygwin*|msys*|mingw*)
     ## Add in the -no-undefined flag to LDFLAGS for libtool.
     AC_MSG_RESULT([yes])
     LDFLAGS="$LDFLAGS -no-undefined"
