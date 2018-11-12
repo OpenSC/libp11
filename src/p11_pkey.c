@@ -551,7 +551,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (pkey == NULL)
 		return -1;
 
-	eckey = EVP_PKEY_get0_EC_KEY(pkey);
+	eckey = (EC_KEY *)EVP_PKEY_get0_EC_KEY(pkey);
 	if (eckey == NULL)
 		return -1;
 
@@ -609,9 +609,9 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 		ECDSA_SIG_set0(ossl_sig, r, s);
 #else
-		BN_free(sig->r);
+		BN_free(ossl_sig->r);
 		ossl_sig->r = r;
-		BN_free(sig->s);
+		BN_free(ossl_sig->s);
 		ossl_sig->s = s;
 #endif
 		*siglen = i2d_ECDSA_SIG(ossl_sig, &sig);
