@@ -524,11 +524,105 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
 		const unsigned char *tbs, size_t tbslen)
 {
+	EVP_PKEY *pkey;
+	EC_KEY *eckey;
+	PKCS11_KEY *key;
+	int rv = 0;
+	CK_ULONG size = *siglen;
+	PKCS11_SLOT *slot;
+	PKCS11_CTX *ctx;
+	PKCS11_KEY_private *kpriv;
+	PKCS11_SLOT_private *spriv;
+	PKCS11_CTX_private *cpriv;
+	const EVP_MD *sig_md;
+	ECDSA_SIG *ossl_sig;
+
 #ifdef DEBUG
-	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() not implemented\n",
-		__FILE__, __LINE__);
+	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() "
+		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
 #endif
-	return -1;
+
+	ossl_sig = ECDSA_SIG_new();
+	if (ossl_sig == NULL)
+		return-1;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
+	if (pkey == NULL)
+		return -1;
+
+	eckey = EVP_PKEY_get0_EC_KEY(pkey);
+	if (eckey == NULL)
+		return -1;
+
+	if (*siglen < (size_t)ECDSA_size(eckey))
+		return -1;
+
+	key = pkcs11_get_ex_data_ec(eckey);
+	if (check_key_fork(key) < 0)
+		return -1;
+
+	slot = KEY2SLOT(key);
+	ctx = KEY2CTX(key);
+	kpriv = PRIVKEY(key);
+	spriv = PRIVSLOT(slot);
+	cpriv = PRIVCTX(ctx);
+
+	if (evp_pkey_ctx == NULL)
+		return -1;
+
+	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
+		return -1;
+
+	if (tbslen < (size_t)EVP_MD_size(sig_md))
+		return -1;
+
+	if (!cpriv->sign_initialized) {
+		int padding;
+		CK_MECHANISM mechanism;
+		memset(&mechanism, 0, sizeof mechanism);
+
+		mechanism.mechanism = CKM_ECDSA;
+
+		CRYPTO_THREAD_write_lock(cpriv->rwlock);
+		rv = CRYPTOKI_call(ctx,
+			C_SignInit(spriv->session, &mechanism, kpriv->object));
+		if (!rv && kpriv->always_authenticate == CK_TRUE)
+			rv = pkcs11_authenticate(key);
+	}
+	if (!rv)
+		rv = CRYPTOKI_call(ctx,
+			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+
+	cpriv->sign_initialized = !rv && sig == NULL;
+	if (!cpriv->sign_initialized)
+		CRYPTO_THREAD_unlock(cpriv->rwlock);
+#ifdef DEBUG
+	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
+		__FILE__, __LINE__, rv);
+#endif
+
+	if (rv == CKR_OK) {
+		BIGNUM *r = BN_bin2bn(sig, size/2, NULL);
+		BIGNUM *s = BN_bin2bn(sig + size/2, size/2, NULL);
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+		ECDSA_SIG_set0(ossl_sig, r, s);
+#else
+		BN_free(sig->r);
+		ossl_sig->r = r;
+		BN_free(sig->s);
+		ossl_sig->s = s;
+#endif
+		*siglen = i2d_ECDSA_SIG(ossl_sig, &sig);
+	}
+
+	ECDSA_SIG_free(ossl_sig);
+
+	if (rv != CKR_OK)
+		return -1;
+
+	return 1;
 }
 
 static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,

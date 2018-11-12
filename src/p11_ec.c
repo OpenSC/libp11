@@ -264,7 +264,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	return ec;
 }
 
-static PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
+PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	return EC_KEY_get_ex_data(ec, ec_ex_index);
