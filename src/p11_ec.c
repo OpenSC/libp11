@@ -251,6 +251,10 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	if (no_point && key->isPrivate) /* Retry with the public key */
 		no_point = pkcs11_get_point(ec, pkcs11_find_key_from_key(key));
 
+	if (key->isPrivate && EC_KEY_get0_private_key(ec) == NULL) {
+		EC_KEY_set_private_key(ec, BN_new());
+	}
+
 	/* A public keys requires both the params and the point to be present */
 	if (!key->isPrivate && (no_params || no_point)) {
 		EC_KEY_free(ec);
