@@ -64,11 +64,15 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 #ifdef WIN32
 	mod->handle = LoadLibraryA(mspec);
 #else
-	mod->handle = dlopen(mspec, RTLD_NOW);
+	mod->handle = dlopen(mspec, RTLD_LAZY | RTLD_LOCAL);
 #endif
 
-	if (mod->handle == NULL)
+	if (mod->handle == NULL) {
+#ifndef WIN32
+		fprintf(stderr, "%s\n", dlerror());
+#endif
 		goto failed;
+	}
 
 #ifdef WIN32
 	c_get_function_list = (CK_C_GetFunctionList)
@@ -83,8 +87,12 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	}
 #endif
 
-	if (c_get_function_list == NULL)
+	if (c_get_function_list == NULL) {
+#ifndef WIN32
+		fprintf(stderr, "%s\n", dlerror());
+#endif
 		goto failed;
+	}
 	rv = c_get_function_list(funcs);
 	if (rv == CKR_OK)
 		return mod;
