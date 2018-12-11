@@ -265,17 +265,11 @@ int PKCS11_generate_random(PKCS11_SLOT *slot, unsigned char *r, unsigned int r_l
 
 void ERR_load_PKCS11_strings(void)
 {
-	static int initialized = 0;
-
-	if (!initialized) {
-		/* TODO: Use CRYPTO_THREAD_run_once() on OpenSSL >= 1.1.0 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-		OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+	OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
 #endif
-		ERR_load_P11_strings();
-		ERR_load_CKR_strings();
-		initialized = 1;
-	}
+	ERR_load_P11_strings();
+	ERR_load_CKR_strings();
 }
 
 int PKCS11_set_ui_method(PKCS11_CTX *ctx, UI_METHOD *ui_method, void *ui_user_data)
