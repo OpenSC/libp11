@@ -50,7 +50,6 @@ int main(int argc, char *argv[])
 	if (rc) {
 		fprintf(stderr, "loading pkcs11 engine failed: %s\n",
 			ERR_reason_error_string(ERR_get_error()));
-		rc = 1;
 		goto nolib;
 	}
 
@@ -58,7 +57,6 @@ int main(int argc, char *argv[])
 	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
 	if (rc < 0) {
 		fprintf(stderr, "no slots available\n");
-		rc = 2;
 		goto noslots;
 	}
 
@@ -66,7 +64,6 @@ int main(int argc, char *argv[])
 	slot = PKCS11_find_token(ctx, slots, nslots);
 	if (slot == NULL || slot->token == NULL) {
 		fprintf(stderr, "no token available\n");
-		rc = 3;
 		goto notoken;
 	}
 	printf("Slot manufacturer......: %s\n", slot->manufacturer);
