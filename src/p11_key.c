@@ -81,11 +81,15 @@ PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *keyin)
 	PKCS11_KEY *keys;
 	unsigned int n, count;
 
-	pkcs11_enumerate_keys(KEY2TOKEN(keyin),
-		keyin->isPrivate ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY, /* other type */
-		&keys, &count);
+	if (pkcs11_enumerate_keys(KEY2TOKEN(keyin),
+				keyin->isPrivate ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY, /* other type */
+				&keys, &count))
+		return NULL;
 	for (n = 0; n < count; n++) {
-		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
+		PKCS11_KEY_private *kpriv;
+		if (NULL == keys[n]._private)
+			continue;
+		kpriv = PRIVKEY(&keys[n]);
 		if (kinpriv->id_len == kpriv->id_len
 				&& !memcmp(kinpriv->id, kpriv->id, kinpriv->id_len))
 			return &keys[n];
