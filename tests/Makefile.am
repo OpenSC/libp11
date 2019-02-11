@@ -15,7 +15,8 @@ check_PROGRAMS = \
 	fork-change-slot \
 	list-tokens \
 	rsa-pss-sign \
-	rsa-oaep
+	rsa-oaep \
+	check-privkey
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -26,7 +27,8 @@ dist_check_SCRIPTS = \
 	fork-change-slot.softhsm \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
-	case-insensitive.softhsm
+	case-insensitive.softhsm \
+	ec-check-privkey.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
 	ec-cert.der ec-prvkey.der ec-pubkey.der
