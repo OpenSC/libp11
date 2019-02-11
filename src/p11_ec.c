@@ -238,6 +238,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	PKCS11_CERT *cert;
 	EVP_PKEY *pubkey;
 	EC_KEY *pubkey_ec;
+	BIGNUM *bn;
 	const EC_POINT *point;
 	int no_params, no_point;
 
@@ -280,7 +281,9 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	}
 
 	if (key->isPrivate && EC_KEY_get0_private_key(ec) == NULL) {
-		EC_KEY_set_private_key(ec, BN_new());
+		bn = BN_new();
+		EC_KEY_set_private_key(ec, bn);
+		BN_free(bn);
 	}
 
 	/* A public keys requires both the params and the point to be present */
