@@ -24,6 +24,7 @@
 #include <openssl/conf.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <openssl/pem.h>
 #include <openssl/err.h>
 
 static void usage(char *argv[])
