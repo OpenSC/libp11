@@ -51,21 +51,19 @@ int pkcs11_set_ui_method(PKCS11_CTX *ctx,
 }
 
 /*
- * Find key matching a certificate
+ * Find private key matching a certificate
  */
 PKCS11_KEY *pkcs11_find_key(PKCS11_CERT *cert)
 {
-	PKCS11_CERT_private *cpriv;
-	PKCS11_KEY_private *kpriv;
+	PKCS11_CERT_private *cpriv = PRIVCERT(cert);
 	PKCS11_KEY *keys;
 	unsigned int n, count;
 
-	cpriv = PRIVCERT(cert);
-	if (PKCS11_enumerate_keys(CERT2TOKEN(cert), &keys, &count))
+	if (pkcs11_enumerate_keys(CERT2TOKEN(cert), CKO_PRIVATE_KEY, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
-		kpriv = PRIVKEY(&keys[n]);
-		if (cpriv->id_len == kpriv->id_len
+		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
+		if (kpriv && cpriv->id_len == kpriv->id_len
 				&& !memcmp(cpriv->id, kpriv->id, cpriv->id_len))
 			return &keys[n];
 	}
@@ -79,14 +77,14 @@ PKCS11_KEY *pkcs11_find_key_from_key(PKCS11_KEY *keyin)
 {
 	PKCS11_KEY_private *kinpriv = PRIVKEY(keyin);
 	PKCS11_KEY *keys;
-	unsigned int n, count;
+	unsigned int n, count, type =
+		keyin->isPrivate ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY;
 
-	pkcs11_enumerate_keys(KEY2TOKEN(keyin),
-		keyin->isPrivate ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY, /* other type */
-		&keys, &count);
+	if (pkcs11_enumerate_keys(KEY2TOKEN(keyin), type, &keys, &count))
+		return NULL;
 	for (n = 0; n < count; n++) {
 		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
-		if (kinpriv->id_len == kpriv->id_len
+		if (kpriv && kinpriv->id_len == kpriv->id_len
 				&& !memcmp(kinpriv->id, kpriv->id, kinpriv->id_len))
 			return &keys[n];
 	}
