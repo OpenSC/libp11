@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 	unsigned char *random = NULL, *encrypted = NULL, *decrypted = NULL;
 
 	char password[20];
-	int rc = 0, fd, len;
+	int rc, fd, len;
 	unsigned int nslots, ncerts;
 
 	/* get password */
@@ -84,10 +84,12 @@ int main(int argc, char *argv[])
 	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
 	if (rc) {
 		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
+		rc = 4;
 		goto failed;
 	}
 	if (ncerts <= 0) {
 		fprintf(stderr, "no certificates found\n");
+		rc = 5;
 		goto failed;
 	}
 
@@ -96,13 +98,16 @@ int main(int argc, char *argv[])
 
 	/* get random bytes */
 	random = OPENSSL_malloc(RANDOM_SIZE);
-	if (random == NULL)
+	if (random == NULL) {
+		rc = 6;
 		goto failed;
+	}
 
 	fd = open(RANDOM_SOURCE, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "fatal: cannot open RANDOM_SOURCE: %s\n",
 				strerror(errno));
+		rc = 7;
 		goto failed;
 	}
 
@@ -111,6 +116,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "fatal: read from random source failed: %s\n",
 			strerror(errno));
 		close(fd);
+		rc = 8;
 		goto failed;
 	}
 
@@ -118,6 +124,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "fatal: read returned less than %d<%d bytes\n",
 			rc, RANDOM_SIZE);
 		close(fd);
+		rc = 9;
 		goto failed;
 	}
 
@@ -127,6 +134,7 @@ int main(int argc, char *argv[])
 	pubkey = X509_get_pubkey(authcert->x509);
 	if (pubkey == NULL) {
 		fprintf(stderr, "could not extract public key\n");
+		rc = 10;
 		goto failed;
 	}
 
@@ -138,6 +146,7 @@ int main(int argc, char *argv[])
 #endif
 	if (encrypted == NULL) {
 		fprintf(stderr,"out of memory for encrypted data");
+		rc = 11;
 		goto failed;
 	}
 
@@ -151,6 +160,7 @@ int main(int argc, char *argv[])
 			RSA_PKCS1_PADDING);
 	if (len < 0) {
 		fprintf(stderr, "fatal: RSA_public_encrypt failed\n");
+		rc = 12;
 		goto failed;
 	}
 
@@ -160,18 +170,24 @@ int main(int argc, char *argv[])
 
 #if !defined(_WIN32) || defined(__CYGWIN__)
 	/* Turn echoing off and fail if we can't. */
-	if (tcgetattr(0, &old) != 0)
+	if (tcgetattr(0, &old) != 0) {
+		rc = 13;
 		goto failed;
+	}
 
 	new = old;
 	new.c_lflag &= ~ECHO;
-	if (tcsetattr(0, TCSAFLUSH, &new) != 0)
+	if (tcsetattr(0, TCSAFLUSH, &new) != 0) {
+		rc = 14;
 		goto failed;
+	}
 #endif
 	/* Read the password. */
 	printf("Password for token %.32s: ", slot->token->label);
-	if (fgets(password, sizeof(password), stdin) == NULL)
+	if (fgets(password, sizeof(password), stdin) == NULL) {
+		rc = 15;
 		goto failed;
+	}
 
 #if !defined(_WIN32) || defined(__CYGWIN__)
 	/* Restore terminal. */
@@ -179,8 +195,10 @@ int main(int argc, char *argv[])
 #endif
 	/* strip tailing \n from password */
 	rc = strlen(password);
-	if (rc <= 0)
+	if (rc <= 0) {
+		rc = 16;
 		goto failed;
+	}
 	password[rc-1]=0;
 
 	/* perform pkcs #11 login */
@@ -188,14 +206,15 @@ int main(int argc, char *argv[])
 	memset(password, 0, strlen(password));
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_login failed\n");
+		rc = 17;
 		goto failed;
 	}
 
 loggedin:
-
 	authkey = PKCS11_find_key(authcert);
 	if (authkey == NULL) {
 		fprintf(stderr, "no key matching certificate available\n");
+		rc = 18;
 		goto failed;
 	}
 
@@ -205,55 +224,40 @@ loggedin:
 #else
 	decrypted = OPENSSL_malloc(RSA_size(pubkey->pkey.rsa));
 #endif
-	if (decrypted == NULL)
+	if (decrypted == NULL) {
+		rc = 19;
 		goto failed;
+	}
 
 	rc = PKCS11_private_decrypt(len, encrypted,
 			decrypted, authkey, RSA_PKCS1_PADDING);
 	if (rc != RANDOM_SIZE) {
 		fprintf(stderr, "fatal: PKCS11_private_decrypt failed\n");
+		rc = 20;
 		goto failed;
 	}
 
 	/* check if original matches decypted */
 	if (memcmp(random, decrypted, RANDOM_SIZE) != 0) {
 		fprintf(stderr, "fatal: decrypted data does not match original\n");
+		rc = 21;
 		goto failed;
 	}
 
-	PKCS11_release_all_slots(ctx, slots, nslots);
-	PKCS11_CTX_unload(ctx);
-	PKCS11_CTX_free(ctx);
+	rc = 0;
 
-	if (pubkey != NULL)
-		EVP_PKEY_free(pubkey);
+failed:
+	if (rc)
+		ERR_print_errors_fp(stderr); 
 	if (random != NULL)
 		OPENSSL_free(random);
+	if (pubkey != NULL)
+		EVP_PKEY_free(pubkey);
 	if (encrypted != NULL)
 		OPENSSL_free(encrypted);
 	if (decrypted != NULL)
 		OPENSSL_free(decrypted);
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100006L
-	/* OpenSSL version >= 1.1.0-pre6 */
-	/* the function is no longer needed */
-#elif OPENSSL_VERSION_NUMBER >= 0x10100004L
-	/* OpenSSL version 1.1.0-pre4 or 1.1.0-pre5 */
-	ERR_remove_thread_state();
-#elif OPENSSL_VERSION_NUMBER >= 0x10000000L
-	/* OpenSSL version >= 1.0.0 */
-	ERR_remove_thread_state(NULL);
-#else
-	/* OpenSSL version < 1.0.0 */
-	ERR_remove_state(0);
-#endif
-
-	printf("decryption successfull.\n");
-	return 0;
-
-
-failed:
-	ERR_print_errors_fp(stderr); 
 notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
@@ -262,10 +266,12 @@ noslots:
 
 nolib:
 	PKCS11_CTX_free(ctx);
-	
 
-	printf("decryption failed.\n");
-	return 1;
+	if (rc)
+		printf("decryption failed.\n");
+	else
+		printf("decryption successfull.\n");
+	return rc;
 }
 
 /* vim: set noexpandtab: */

@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 	PKCS11_CTX *ctx;
 	PKCS11_SLOT *slots, *slot;
 	PKCS11_CERT *certs;
-	
+
 	PKCS11_KEY *authkey;
 	PKCS11_CERT *authcert;
 	EVP_PKEY *pubkey = NULL;
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 	unsigned char *random = NULL, *signature = NULL;
 
 	char password[20];
-	int rc = 0, fd, logged_in;
+	int rc, fd, logged_in;
 	unsigned int nslots, ncerts, siglen;
 
 	if (argc < 2) {
@@ -88,26 +88,34 @@ int main(int argc, char *argv[])
 		struct termios old, new;
 
 		/* Turn echoing off and fail if we can't. */
-		if (tcgetattr(0, &old) != 0)
+		if (tcgetattr(0, &old) != 0) {
+			rc = 4;
 			goto failed;
+		}
 
 		new = old;
 		new.c_lflag &= ~ECHO;
-		if (tcsetattr(0, TCSAFLUSH, &new) != 0)
+		if (tcsetattr(0, TCSAFLUSH, &new) != 0) {
+			rc = 5;
 			goto failed;
+		}
 #endif
 		/* Read the password. */
 		printf("Password for token %.32s: ", slot->token->label);
-		if (fgets(password, sizeof(password), stdin) == NULL)
+		if (fgets(password, sizeof(password), stdin) == NULL) {
+			rc = 6;
 			goto failed;
+		}
 #if !defined(_WIN32) || defined(__CYGWIN__)
 		/* Restore terminal. */
 		(void)tcsetattr(0, TCSAFLUSH, &old);
 #endif
 		/* strip tailing \n from password */
 		rc = strlen(password);
-		if (rc <= 0)
+		if (rc <= 0) {
+			rc = 7;
 			goto failed;
+		}
 		password[rc-1]=0;
 	}
 
@@ -116,10 +124,12 @@ int main(int argc, char *argv[])
 	rc = PKCS11_is_logged_in(slot, 0, &logged_in);
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_is_logged_in failed\n");
+		rc = 8;
 		goto failed;
 	}
 	if (logged_in) {
 		fprintf(stderr, "PKCS11_is_logged_in says user is logged in, expected to be not logged in\n");
+		rc = 9;
 		goto failed;
 	}
 
@@ -128,6 +138,7 @@ int main(int argc, char *argv[])
 	memset(password, 0, strlen(password));
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_login failed\n");
+		rc = 10;
 		goto failed;
 	}
 
@@ -135,10 +146,12 @@ int main(int argc, char *argv[])
 	rc = PKCS11_is_logged_in(slot, 0, &logged_in);
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_is_logged_in failed\n");
+		rc = 11;
 		goto failed;
 	}
 	if (!logged_in) {
 		fprintf(stderr, "PKCS11_is_logged_in says user is not logged in, expected to be logged in\n");
+		rc = 12;
 		goto failed;
 	}
 
@@ -146,10 +159,12 @@ int main(int argc, char *argv[])
 	rc = PKCS11_enumerate_certs(slot->token, &certs, &ncerts);
 	if (rc) {
 		fprintf(stderr, "PKCS11_enumerate_certs failed\n");
+		rc = 13;
 		goto failed;
 	}
 	if (ncerts <= 0) {
 		fprintf(stderr, "no certificates found\n");
+		rc = 14;
 		goto failed;
 	}
 
@@ -158,13 +173,16 @@ int main(int argc, char *argv[])
 
 	/* get random bytes */
 	random = OPENSSL_malloc(RANDOM_SIZE);
-	if (random == NULL)
+	if (random == NULL) {
+		rc = 15;
 		goto failed;
+	}
 
 	fd = open(RANDOM_SOURCE, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "fatal: cannot open RANDOM_SOURCE: %s\n",
 				strerror(errno));
+		rc = 16;
 		goto failed;
 	}
 
@@ -173,6 +191,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "fatal: read from random source failed: %s\n",
 			strerror(errno));
 		close(fd);
+		rc = 17;
 		goto failed;
 	}
 
@@ -180,6 +199,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "fatal: read returned less than %d<%d bytes\n",
 			rc, RANDOM_SIZE);
 		close(fd);
+		rc = 18;
 		goto failed;
 	}
 
@@ -188,19 +208,23 @@ int main(int argc, char *argv[])
 	authkey = PKCS11_find_key(authcert);
 	if (authkey == NULL) {
 		fprintf(stderr, "no key matching certificate available\n");
+		rc = 19;
 		goto failed;
 	}
 
 	/* ask for a sha1 hash of the random data, signed by the key */
 	siglen = MAX_SIGSIZE;
 	signature = OPENSSL_malloc(MAX_SIGSIZE);
-	if (signature == NULL)
+	if (signature == NULL) {
+		rc = 20;
 		goto failed;
+	}
 
 	rc = PKCS11_sign(NID_sha1, random, RANDOM_SIZE,
 		signature, &siglen, authkey);
 	if (rc != 1) {
 		fprintf(stderr, "fatal: pkcs11_sign failed\n");
+		rc = 21;
 		goto failed;
 	}
 
@@ -208,6 +232,7 @@ int main(int argc, char *argv[])
 	pubkey = X509_get_pubkey(authcert->x509);
 	if (pubkey == NULL) {
 		fprintf(stderr, "could not extract public key\n");
+		rc = 22;
 		goto failed;
 	}
 
@@ -220,27 +245,22 @@ int main(int argc, char *argv[])
 #endif
 	if (rc != 1) {
 		fprintf(stderr, "fatal: RSA_verify failed\n");
+		rc = 23;
 		goto failed;
 	}
 
-	if (pubkey != NULL)
-		EVP_PKEY_free(pubkey);
+	rc = 0;
 
+failed:
+	if (rc)
+		ERR_print_errors_fp(stderr);
 	if (random != NULL)
 		OPENSSL_free(random);
+	if (pubkey != NULL)
+		EVP_PKEY_free(pubkey);
 	if (signature != NULL)
 		OPENSSL_free(signature);
 
-	PKCS11_release_all_slots(ctx, slots, nslots);
-	PKCS11_CTX_unload(ctx);
-	PKCS11_CTX_free(ctx);
-
-	printf("authentication successfull.\n");
-	return 0;
-
-
-failed:
-	ERR_print_errors_fp(stderr);
 notoken:
 	PKCS11_release_all_slots(ctx, slots, nslots);
 
@@ -249,10 +269,12 @@ noslots:
 
 nolib:
 	PKCS11_CTX_free(ctx);
-	
 
-	printf("authentication failed.\n");
-	return 1;
+	if (rc)
+		printf("authentication failed.\n");
+	else
+		printf("authentication successfull.\n");
+	return rc;
 }
 
 /* vim: set noexpandtab: */
