@@ -402,7 +402,7 @@ static void free_rsa_ex_index()
 #endif
 }
 
-#if OPENSSL_VERSION_NUMBER < 0x10100005L || defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
 
 static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 {
@@ -428,11 +428,18 @@ static int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
 	return 1;
 }
 
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || defined(LIBRESSL_VERSION_NUMBER)
+
 static int RSA_meth_set_flags(RSA_METHOD *meth, int flags)
 {
 	meth->flags = flags;
 	return 1;
 }
+#endif 
+
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
 
 static int RSA_meth_set_priv_enc(RSA_METHOD *meth,
 		int (*priv_enc) (int flen, const unsigned char *from,
