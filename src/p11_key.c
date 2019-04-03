@@ -447,7 +447,7 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 
 /**
  * Remove a key from the associated token
- */ 
+ */
 int pkcs11_remove_key(PKCS11_KEY *key) {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_CTX *ctx = KEY2CTX(key);

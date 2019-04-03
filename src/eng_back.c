@@ -542,7 +542,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 					memcmp(k->id, cert_id, cert_id_len) == 0)
 				selected_cert = k;
 		}
-	} else { 
+	} else {
 		for (n = 0; n < cert_count; n++) {
 			PKCS11_CERT *k = certs + n;
 			if (k->id && *(k->id)) {

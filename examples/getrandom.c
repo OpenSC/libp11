@@ -1,8 +1,8 @@
-/* libp11 example code: getrandom.c 
+/* libp11 example code: getrandom.c
  *
- * This examply simply connects to your smart card and 
+ * This examply simply connects to your smart card and
  * asks for a few random bytes.
- * 
+ *
  * Feel free to copy all of the code as needed.
  *
  */

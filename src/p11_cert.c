@@ -65,7 +65,7 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 
 /**
  * Remove a certificate from the associated token
- */ 
+ */
 int pkcs11_remove_certificate(PKCS11_CERT *cert){
 	PKCS11_SLOT *slot = CERT2SLOT(cert);
 	PKCS11_CTX *ctx = CERT2CTX(cert);

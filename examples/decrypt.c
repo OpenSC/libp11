@@ -248,7 +248,7 @@ loggedin:
 
 failed:
 	if (rc)
-		ERR_print_errors_fp(stderr); 
+		ERR_print_errors_fp(stderr);
 	if (random != NULL)
 		OPENSSL_free(random);
 	if (pubkey != NULL)

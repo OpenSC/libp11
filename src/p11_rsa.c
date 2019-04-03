@@ -437,7 +437,7 @@ static int RSA_meth_set_flags(RSA_METHOD *meth, int flags)
 	meth->flags = flags;
 	return 1;
 }
-#endif 
+#endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
 
