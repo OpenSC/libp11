@@ -1,13 +1,14 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.10; unreleased
+New in 0.4.10; 2019-04-03; Michał Trojnara
 * Added EC signing through EVP API (Bryan Hunt)
 * Added an empty EC private key required by OpenSSL 1.1.1 (Doug Engert)
 * Stored additional certificate attributes (FdLSifu, Michał Trojnara)
 * Engine allowed to use private keys without a PIN (Michał Trojnara)
 * Lazy binding used as a workaround for buggy modules (Michał Trojnara)
 * MinGW build fixes and documentation (Michał Trojnara)
-* Fixed a memory leak in error handling (Michał Trojnara)
+* LibreSSL 2.8.3 build fixes (patchMonkey156)
+* Error handling fixes (Michał Trojnara)
 
 New in 0.4.9; 2018-09-03; Michał Trojnara
 * Fixed EVP_PKEY ENGINE reference count with the EC EVP_PKEY_METHOD
