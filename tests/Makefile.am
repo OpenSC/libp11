@@ -1,4 +1,4 @@
-EXTRA_DIST = engines.cnf.in rsa-common.sh ec-common.sh
+EXTRA_DIST = engines.cnf.in rsa-common.sh ec-common.sh ec-no-pubkey.sh
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
