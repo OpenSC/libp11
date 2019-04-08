@@ -3,9 +3,10 @@ The following instructions only apply to the [release tarballs.](https://github.
 
 ## Unix Build
 
-Install the OpenSSL development package.  On Debian/Ubuntu use:
+Install pkgconf and the OpenSSL development package.
+On Debian/Ubuntu use:
 
-  sudo apt-get install libssl-dev
+  sudo apt install pkgconf libssl-dev
 
 Build and install libp11:
 
