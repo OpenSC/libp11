@@ -23,6 +23,7 @@
 #include "libp11-int.h"
 
 #ifndef _WIN32
+#include <unistd.h>
 
 #ifndef __STDC_VERSION__
 /* older than C90 */
