@@ -27,7 +27,7 @@ common_init
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
 echo -n $PIN > $outdir/pin.txt
-echo "#!/usr/bin/env bash" > $outdir/pin.sh
+echo "#!/bin/sh" > $outdir/pin.sh
 echo "cat $outdir/pin.txt" >> $outdir/pin.sh
 chmod +x $outdir/pin.sh
 
