@@ -407,10 +407,11 @@ static int read_from_command(ENGINE_CTX *ctx,
 	} else {
 		*field_len = 0;
 	}
+	fprintf(stderr, "hello %d [%s]\n", *field_len, field);
 
 	close(pdes[0]);
 
-	return 1;
+	return 0;
 }
 #endif
 
@@ -435,7 +436,6 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 		const char *attr, int attrlen, unsigned char *field,
 		size_t *field_len)
 {
-	FILE *in;
 	unsigned char *val;
 	int ret = 1;
 
