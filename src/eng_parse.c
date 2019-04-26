@@ -268,20 +268,20 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 static int read_from_file(ENGINE_CTX *ctx,
 	const char *path, unsigned char *field, size_t *field_len)
 {
-	FILE *fp;
+	BIO *fp;
 
-	fp = fopen(path, "r");
+	fp = BIO_new_file(path, "r");
 	if (fp == NULL) {
 		ctx_log(ctx, 0, "Could not open file %s\n", path);
 		return 0;
 	}
-	if (fgets(field, *field_len, fp) != NULL) {
+	if (BIO_gets(fp, field, *field_len) > 0) {
 		*field_len = strlen(field);
 	} else {
 		*field_len = 0;
 	}
 
-	fclose(fp);
+	BIO_free(fp);
 	return 1;
 }
 
@@ -393,7 +393,7 @@ static int read_from_command(ENGINE_CTX *ctx,
 			char *argv[2];
 			argv[0] = (char *) cmd;
 			argv[1] = NULL;
-			execve(cmd, argv, environ);
+			execv(cmd, argv);
 			_exit(127);
 			/* NOTREACHED */
 	}
@@ -407,11 +407,10 @@ static int read_from_command(ENGINE_CTX *ctx,
 	} else {
 		*field_len = 0;
 	}
-	fprintf(stderr, "hello %d [%s]\n", *field_len, field);
 
 	close(pdes[0]);
 
-	return 0;
+	return 1;
 }
 #endif
 
