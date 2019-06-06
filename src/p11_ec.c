@@ -558,6 +558,8 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_SENSITIVE, &false, sizeof(false) },
+		{CKA_EXTRACTABLE, &true, sizeof(true) },
 		{CKA_ENCRYPT, &true, sizeof(true)},
 		{CKA_DECRYPT, &true, sizeof(true)}
 	};
@@ -581,7 +583,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 			return -1;
 	}
 
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, 5, &newkey));
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, sizeof(newkey_template)/sizeof(*newkey_template), &newkey));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ECDH_DERIVE, rv);
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
