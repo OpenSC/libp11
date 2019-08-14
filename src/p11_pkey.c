@@ -545,7 +545,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	ossl_sig = ECDSA_SIG_new();
 	if (ossl_sig == NULL)
-		return-1;
+		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (pkey == NULL)
@@ -578,7 +578,6 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	if (!cpriv->sign_initialized) {
-		int padding;
 		CK_MECHANISM mechanism;
 		memset(&mechanism, 0, sizeof mechanism);
 
