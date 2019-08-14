@@ -60,6 +60,6 @@ build_script:
          Push-AppveyorArtifact src\pkcs11.pdb
       }
 
-cache:
-  - C:\OpenSSL-Win32 -> appveyor.yml
-  - C:\OpenSSL-Win64 -> appveyor.yml
+#cache:
+#  - C:\OpenSSL-Win32 -> appveyor.yml
+#  - C:\OpenSSL-Win64 -> appveyor.yml
