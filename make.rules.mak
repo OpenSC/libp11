@@ -30,7 +30,6 @@ OPENSSL_LIB = $(OPENSSL_DIR)\lib\libeay32.lib
 !ELSE
 !MESSAGE OpenSSL >= 1.1.0 detected (dynamic library)
 OPENSSL_LIB = $(OPENSSL_DIR)\lib\libcrypto.lib
-OPENSSL_EXTRA_LIBS = ws2_32.lib
 !ENDIF
 !ELSE
 OPENSSL_LIB = $(OPENSSL_DIR)\lib\VC\static\libeay32MT$(DEBUG_SUFFIX).lib
@@ -42,7 +41,7 @@ OPENSSL_LIB = $(OPENSSL_DIR)\lib\VC\static\libcryptoMT$(DEBUG_SUFFIX).lib
 !ENDIF
 !ENDIF
 
-LIBS = "$(OPENSSL_LIB)" $(OPENSSL_EXTRA_LIBS) user32.lib advapi32.lib crypt32.lib gdi32.lib
+LIBS = "$(OPENSSL_LIB)" ws2_32.lib user32.lib advapi32.lib crypt32.lib gdi32.lib
 
 CFLAGS =  /nologo /GS /W3 /D_CRT_SECURE_NO_DEPRECATE /MT$(DEBUG_SUFFIX) $(OPENSSL_INC) /D_WIN32_WINNT=0x0502 /DWIN32_LEAN_AND_MEAN $(DEBUG_COMPILE)
 
