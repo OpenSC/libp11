@@ -1,0 +1,106 @@
+#!/bin/sh
+
+# Copyright (C) 2015 Nikos Mavrogiannopoulos
+#
+# GnuTLS is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+# This test checks if the search for objects in tokens will continue past the
+# first token found.
+#
+# Generic PKCS#11 URIs are used to make the search to match more than one
+# token. The search should be able to find the objects in each device, which are
+# labeled differently per token.
+#
+# This test also contains a negative test to verify that the engine will not try
+# to login to a token if more than one token matched the search. This is why it
+# is required to have only one match to be able to use a private key.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+PIN=1234
+PUK=1234
+
+NUM_DEVICES=5
+
+# Initialize the SoftHSM DB
+init_db
+
+# Create some devices
+create_devices $NUM_DEVICES $PIN $PUK "libp11-test" "label"
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+export OPENSSL_CONF="${outdir}/engines.cnf"
+
+PRIVATE_KEY="pkcs11:token=libp11-test-3;object=label-3;type=private;pin-value=1234"
+PRIVATE_KEY_WITHOUT_TOKEN="pkcs11:object=label-3;type=private;pin-value=1234"
+PUBLIC_KEY_ANY="pkcs11:type=public"
+CERTIFICATE="pkcs11:object=label-3;type=cert;pin-value=1234"
+
+# Create input file
+echo "secret" > "${outdir}/in.txt"
+
+# Verify that it doesn't try to login if more than one token matched the search
+openssl pkeyutl -engine pkcs11 -keyform engine \
+	-inkey "${PRIVATE_KEY_WITHOUT_TOKEN}" \
+	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? = 0;then
+	echo "Did not fail when the PKCS#11 URI matched multiple tokens"
+fi
+
+# Generate signature specifying the token in the PKCS#11 URI
+openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
+	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to sign file using PKCS#11 URI ${PRIVATE_KEY}"
+	exit 1;
+fi
+
+# Verify the signature using the public key from each token
+i=0
+while [ $i -le ${NUM_DEVICES} ]; do
+	pubkey="pkcs11:object=label-$i;type=public;pin-value=1234"
+	openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${pubkey}" \
+		-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+	if test $? != 0;then
+		echo "Failed to verify the signature using the PKCS#11 URI ${pubkey}"
+		exit 1;
+	fi
+	i=$(($i + 1))
+done
+
+# Verify the signature using a certificate without specifying the token
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${CERTIFICATE}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to verify the signature using the PKCS#11 URI ${CERTIFICATE}"
+	exit 1;
+fi
+
+# Verify the signature using the first public key found
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_ANY}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to verify the signature using the PKCS#11 URI ${PUBLIC_KEY_ANY}."
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0
