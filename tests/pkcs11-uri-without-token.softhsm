@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# Copyright (C) 2015 Nikos Mavrogiannopoulos
+#
+# GnuTLS is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+# This test checks if it is possible to use the keys without specifying the
+# token if there is only one initialized token available.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+# Do the common test initialization
+common_init
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
+    "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" \
+    <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+export OPENSSL_CONF="${outdir}/engines.cnf"
+
+# These URIs don't contain the token specification
+PRIVATE_KEY="pkcs11:object=server-key;type=private;pin-value=1234"
+PUBLIC_KEY="pkcs11:object=server-key;type=public;pin-value=1234"
+
+# Create input file
+echo "secret" >"${outdir}/in.txt"
+
+# Generate signature without specifying the token in the PKCS#11 URI
+openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
+	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY}"
+	exit 1;
+fi
+
+# Verify the signature without specifying the token in the PKCS#11 URI
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0

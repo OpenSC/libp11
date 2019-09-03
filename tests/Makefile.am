@@ -28,7 +28,9 @@ dist_check_SCRIPTS = \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
 	case-insensitive.softhsm \
-	ec-check-privkey.softhsm
+	ec-check-privkey.softhsm \
+	pkcs11-uri-without-token.softhsm \
+	search-all-matching-tokens.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
 	ec-cert.der ec-prvkey.der ec-pubkey.der
