@@ -86,13 +86,13 @@ init_db () {
 
 # Create a new device
 init_card () {
-	PIN="$1"
-	PUK="$2"
-	DEV_LABEL="$3"
+	pin="$1"
+	puk="$2"
+	dev_label="$3"
 
-	echo -n "* Initializing smart card... "
-	${SOFTHSM_TOOL} --init-token ${SLOT} --label "${DEV_LABEL}" \
-		--so-pin "${PUK}" --pin "${PIN}" >/dev/null
+	echo -n "* Initializing smart card ${dev_label}..."
+	${SOFTHSM_TOOL} --init-token ${SLOT} --label "${dev_label}" \
+		--so-pin "${puk}" --pin "${pin}" >/dev/null
 	if test $? = 0; then
 		echo ok
 	else
@@ -103,22 +103,26 @@ init_card () {
 
 # Import objects to the token
 import_objects () {
-	ID=$1
-	OBJ_LABEL=$2
+	id=$1
+	obj_label=$2
+	token_label=$3
 
-	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${id} \
+		--token-label ${token_label} -a ${obj_label} -l -w \
 		${srcdir}/rsa-prvkey.der -y privkey >/dev/null
 	if test $? != 0;then
 		exit 1;
 	fi
 
-	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${id} \
+		--token-label ${token_label} -a ${obj_label} -l -w \
 		${srcdir}/rsa-pubkey.der -y pubkey >/dev/null
 	if test $? != 0;then
 		exit 1;
 	fi
 
-	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${ID} -a ${OBJ_LABEL} -l -w \
+	pkcs11-tool -p ${PIN} --module ${MODULE} -d ${id} \
+		--token-label ${token_label} -a ${obj_label} -l -w \
 		${srcdir}/rsa-cert.der -y cert >/dev/null
 	if test $? != 0;then
 		exit 1;
@@ -148,8 +152,34 @@ common_init () {
 
 	echo Importing
 	# Import the used objects (private key, public key, and certificate)
-	import_objects 01020304 "server-key"
+	import_objects 01020304 "server-key" "libp11-test"
 
 	# List the imported objects
 	list_objects
+}
+
+create_devices () {
+	num_devices=$1
+	pin="$2"
+	puk="$3"
+	common_label="$4"
+	object_label="$5"
+
+	i=0
+	while [ $i -le ${num_devices} ]; do
+		init_card ${pin} ${puk} "${common_label}-$i"
+
+		echo "Importing objects to token ${common_label}-$i"
+		# Import objects with different labels
+		import_objects 01020304 "${object_label}-$i" "${common_label}-$i"
+
+		pkcs11-tool -p ${pin} --module ${MODULE} -l -O --token-label \
+			"${common_label}-$i"
+		if test $? != 0;then
+			echo Failed!
+			exit 1;
+		fi
+
+		i=$(($i + 1))
+	done
 }
