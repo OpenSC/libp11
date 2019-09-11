@@ -30,6 +30,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#define strncasecmp _strnicmp
+#endif
+
 static int hex_to_bin(ENGINE_CTX *ctx,
 		const char *in, unsigned char *out, size_t *outlen)
 {
@@ -263,6 +267,51 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 	return ret;
 }
 
+static int read_from_file(ENGINE_CTX *ctx,
+	const char *path, char *field, size_t *field_len)
+{
+	BIO *fp;
+
+	fp = BIO_new_file(path, "r");
+	if (fp == NULL) {
+		ctx_log(ctx, 0, "Could not open file %s\n", path);
+		return 0;
+	}
+	if (BIO_gets(fp, field, *field_len) > 0) {
+		*field_len = strlen(field);
+	} else {
+		*field_len = 0;
+	}
+
+	BIO_free(fp);
+	return 1;
+}
+
+static int parse_pin_source(ENGINE_CTX *ctx,
+		const char *attr, int attrlen, unsigned char *field,
+		size_t *field_len)
+{
+	unsigned char *val;
+	int ret = 1;
+
+	if (!parse_uri_attr(ctx, attr, attrlen, &val, NULL)) {
+		return 0;
+	}
+
+	if (!strncasecmp((const char *)val, "file:", 5)) {
+		ret = read_from_file(ctx, (const char *)(val + 5), (char *)field, field_len);
+	} else if (*val == '|') {
+		ret = 0;
+		ctx_log(ctx, 0, "Unsupported pin-source syntax\n");
+	/* 'pin-source=/foo/bar' is commonly used */
+	} else {
+		ret = read_from_file(ctx, (const char *)val, (char *)field, field_len);
+	}
+	OPENSSL_free(val);
+
+	return ret;
+}
+
 int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		const char *uri, PKCS11_TOKEN **p_tok,
 		unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
@@ -309,7 +358,11 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
+			rv = pin_set ? 0 : parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
+			pin_set = 1;
+		} else if (!strncmp(p, "pin-source=", 11)) {
+			p += 11;
+			rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, (unsigned char *)pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
