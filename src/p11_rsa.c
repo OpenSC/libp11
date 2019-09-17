@@ -273,8 +273,14 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	}
 	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 
-	if (key->isPrivate)
+	if (key->isPrivate) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
+#else
+		rsa->flags |= RSA_FLAG_EXT_PKEY;
+#endif
+	}
 	/* TODO: Retrieve the RSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
