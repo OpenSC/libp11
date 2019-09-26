@@ -6,11 +6,15 @@ The following instructions only apply to the [release tarballs.](https://github.
 Install pkgconf and the OpenSSL development package.
 On Debian/Ubuntu use:
 
-  sudo apt install pkgconf libssl-dev
+    sudo apt install pkgconf libssl-dev autoconf
+  
+Use autotools to create configure and makefiles:
 
-Build and install libp11:
+    ./bootstrap
 
-  ./configure && make && sudo make install
+Then build and install libp11:
+
+    ./configure && make && sudo make install
 
 ## Windows Build
 
@@ -22,15 +26,15 @@ Download and install OpenSSL, for example the Windows builds available here:
 
 To build libp11, start a Visual Studio Command Prompt and use:
 
-  nmake -f Makefile.mak
+    nmake -f Makefile.mak
 
 In case your OpenSSL is installed in a different directory, use:
 
-  nmake -f Makefile.mak OPENSSL_DIR=\your\openssl\directory
+    nmake -f Makefile.mak OPENSSL_DIR=\your\openssl\directory
 
 For x64 bit builds, make sure you opened the Native x64 VS Command Prompt and run:
 
-  nmake /f Makefile.mak OPENSSL_DIR=c:\OpenSSL-Win64 BUILD_FOR=WIN64
+    nmake /f Makefile.mak OPENSSL_DIR=c:\OpenSSL-Win64 BUILD_FOR=WIN64
 
 If any of your builds fail for any reason, ensure you clean the src directory of obj files before re-making.
 
@@ -40,17 +44,17 @@ To build libp11, download and install msys2-i686-*.exe from https://msys2.github
 
 then start a MSYS2 MSYS console from the Start menu and use:
 
-  pacman -S git pkg-config libtool autoconf automake make gcc openssl-devel
+    pacman -S git pkg-config libtool autoconf automake make gcc openssl-devel
 
-  git clone https://github.com/OpenSC/libp11.git
+    git clone https://github.com/OpenSC/libp11.git
 
-  cd libp11
+    cd libp11
 
-  autoreconf -fi
+    autoreconf -fi
 
-  ./configure --prefix=/usr/local
+    ./configure --prefix=/usr/local
 
-  make && make install
+    make && make install
 
 ### Cygwin
 
@@ -78,34 +82,34 @@ https://www.openssl.org/source/
 
 You need to configure OpenSSL to replace very old mingw's version like this:
 
-  ./configure --prefix=/mingw threads shared mingw
+    ./configure --prefix=/mingw threads shared mingw
 
-  make depend && make && make install
+    make depend && make && make install
 
 Then download and unpack libp11, in its directory use:
 
-  libtoolize --force
+    libtoolize --force
 
-  aclocal -I m4 --install
+    aclocal -I m4 --install
 
-  autoheader
+    autoheader
 
-  automake --force-missing --add-missing
+    automake --force-missing --add-missing
 
-  autoconf
+    autoconf
 
-  ./configure --prefix=/usr/local
+    ./configure --prefix=/usr/local
 
-  make && make install
+    make && make install
 
 ### MinGW cross-compile on a Unix host
 
 We assume that OpenSSL is installed in /opt/openssl-mingw64.
 Update the paths to match your environment.
 
-  export PKG_CONFIG_PATH=/opt/openssl-mingw64/lib/pkgconfig
+    export PKG_CONFIG_PATH=/opt/openssl-mingw64/lib/pkgconfig
 
-  ./configure --host=x86_64-w64-mingw32 --prefix=/opt/libp11-mingw64
+    ./configure --host=x86_64-w64-mingw32 --prefix=/opt/libp11-mingw64
 
-  make && sudo make install
+    make && sudo make install
 
