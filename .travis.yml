@@ -22,6 +22,7 @@ compiler:
 
 os:
   - linux
+  - osx
 
 matrix:
   include:
