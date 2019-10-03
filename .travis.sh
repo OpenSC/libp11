@@ -37,7 +37,9 @@ install_from_github() {
     sudo -E make install
     cd ..
     echo "$2 installed"
-    sudo ldconfig
+    if [ $TRAVIS_OS_NAME != 'osx' ]; then
+        sudo ldconfig
+    fi
 }
 
 install_openssl() {
@@ -45,27 +47,46 @@ install_openssl() {
     fetch_from_github openssl openssl $1
     cd openssl
     OPENSSL_DIR=/usr/local
-    ./config shared -fPIC --openssldir=${OPENSSL_DIR} --prefix=${OPENSSL_DIR}
+
+    if [ $TRAVIS_OS_NAME == 'osx' ]; then
+        # To compile x86_64 version it is required to call
+        # './Configure darwin64-x86_64-cc' manually
+        ./Configure darwin64-x86_64-cc shared -fPIC \
+            --openssldir=${OPENSSL_DIR} --prefix=${OPENSSL_DIR}
+    else
+        ./config shared -fPIC --openssldir=${OPENSSL_DIR} --prefix=${OPENSSL_DIR}
+    fi
     make depend && make
     sudo make install_sw
     cd ..
     echo "$1 installed"
-    sudo ldconfig
+    if [ $TRAVIS_OS_NAME != 'osx' ]; then
+        sudo ldconfig
+    fi
     SOFTHSM_OPENSSL_DIR="--with-openssl=${OPENSSL_DIR}"
 }
 
-sudo apt-get update -qq
+if [ $TRAVIS_OS_NAME = 'osx' ]; then
+    brew update
+    brew install pcsc-lite
+    brew link --force pcsc-lite
+else
+    sudo apt-get update -qq
 
-# libpcsclite-dev is required for OpenSC
-sudo apt-get install -y libpcsclite-dev
+    # libpcsclite-dev is required for OpenSC
+    sudo apt-get install -y libpcsclite-dev
+fi
 
 export CC=`which $CC`
 mkdir prerequisites
 cd prerequisites
 
 if [ -n "${OPENSSL}" ]; then
-    # Remove pre-installed OpenSSL
-    sudo apt-get remove openssl libssl-dev
+
+    if [ $TRAVIS_OS_NAME != 'osx' ]; then
+        # Remove pre-installed OpenSSL
+        sudo apt-get remove openssl libssl-dev
+    fi
 
     install_openssl ${OPENSSL}
 fi
