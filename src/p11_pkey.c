@@ -90,6 +90,10 @@ typedef struct {
 	unsigned char *tbuf;
 } RSA_PKEY_CTX;
 
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3000100L )
+
 static int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
 {
 	RSA_PKEY_CTX *rctx = EVP_PKEY_CTX_get_data(ctx);
@@ -98,6 +102,10 @@ static int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
 	*pmd = rctx->md;
 	return 1;
 }
+
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
 
 static int EVP_PKEY_CTX_get_rsa_oaep_md(EVP_PKEY_CTX *ctx, const EVP_MD **pmd)
 {
