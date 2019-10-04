@@ -43,7 +43,17 @@ init_db
 # Create some devices
 create_devices $NUM_DEVICES $PIN $PUK "libp11-test" "label"
 
-sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+echo "Detected system: ${OSTYPE}"
+
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+    SHARED_EXT=.dylib
+else
+    SHARED_EXT=.so
+fi
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
+    "s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
+    <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
 export OPENSSL_ENGINES="../src/.libs/"
 export OPENSSL_CONF="${outdir}/engines.cnf"

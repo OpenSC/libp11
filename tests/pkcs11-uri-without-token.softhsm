@@ -27,8 +27,16 @@ outdir="output.$$"
 # Do the common test initialization
 common_init
 
+echo "Detected system: ${OSTYPE}"
+
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+    SHARED_EXT=.dylib
+else
+    SHARED_EXT=.so
+fi
+
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
-    "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" \
+    "s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
     <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
 export OPENSSL_ENGINES="../src/.libs/"
