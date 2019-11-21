@@ -378,7 +378,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	PKCS11_CERT *certs, *selected_cert = NULL;
-	X509 *x509;
+	X509 *x509 = NULL;
 	unsigned int cert_count, n, m;
 	unsigned char cert_id[MAX_VALUE_LEN / 2];
 	size_t cert_id_len = sizeof(cert_id);
