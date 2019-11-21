@@ -26,7 +26,7 @@ common_init
 
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
 
-echo -n $PIN > $outdir/pin.txt
+printf "$PIN" > $outdir/pin.txt
 
 export OPENSSL_ENGINES="../src/.libs/"
 
