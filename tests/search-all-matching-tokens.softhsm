@@ -72,6 +72,7 @@ openssl pkeyutl -engine pkcs11 -keyform engine \
 	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? = 0;then
 	echo "Did not fail when the PKCS#11 URI matched multiple tokens"
+	exit 1;
 fi
 
 # Generate signature specifying the token in the PKCS#11 URI
