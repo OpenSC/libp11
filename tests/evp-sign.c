@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	digest_algo = EVP_get_digestbyname("sha1");
+	digest_algo = EVP_get_digestbyname("sha256");
 
 	ctx = EVP_MD_CTX_create();
 	if (EVP_DigestInit(ctx, digest_algo) <= 0) {
