@@ -170,7 +170,7 @@ loggedin:
 		goto failed;
 	}
 
-	/* ask for a sha1 hash of the random data, signed by the key */
+	/* ask for a sha256 hash of the random data, signed by the key */
 	siglen = MAX_SIGSIZE;
 	signature = OPENSSL_malloc(MAX_SIGSIZE);
 	if (signature == NULL)
