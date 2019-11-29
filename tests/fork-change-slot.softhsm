@@ -42,7 +42,7 @@ export OPENSSL_ENGINES="../src/.libs/"
 
 # Generate a key pair in the second token
 pkcs11-tool --module ${MODULE} -l --pin $PIN --keypairgen --key-type \
-	rsa:1024 --id 01020304 --label pkey --token-label token2
+	rsa:2048 --id 01020304 --label pkey --token-label token2
 if test $? != 0;then
 	exit 1;
 fi
