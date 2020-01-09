@@ -578,7 +578,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			for (m = 0; m < cert_count; m++) {
 				PKCS11_CERT *k = certs + m;
 
-				if (cert_label != NULL && strcmp(k->label, cert_label) == 0)
+				if (cert_label && k->label && strcmp(k->label, cert_label) == 0)
 					selected_cert = k;
 				if (cert_id_len != 0 && k->id_len == cert_id_len &&
 						memcmp(k->id, cert_id, cert_id_len) == 0)
@@ -885,8 +885,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 				(char *)(isPrivate ? "private" : "public"),
 				(key_count == 1) ? "" : "s");
 
-		if (s_slot_key_id && *s_slot_key_id &&
-				(key_id_len != 0 || key_label != NULL)) {
+		if (s_slot_key_id && *s_slot_key_id && (key_id_len != 0 || key_label)) {
 			for (m = 0; m < key_count; m++) {
 				PKCS11_KEY *k = keys + m;
 
@@ -894,8 +893,8 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 						k->isPrivate ? 'P' : ' ',
 						k->needLogin ? 'L' : ' ');
 				dump_hex(ctx, 1, k->id, k->id_len);
-				ctx_log(ctx, 1, " label=%s\n", k->label);
-				if (key_label != NULL && strcmp(k->label, key_label) == 0)
+				ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
+				if (key_label && k->label && strcmp(k->label, key_label) == 0)
 					selected_key = k;
 				if (key_id_len != 0 && k->id_len == key_id_len
 						&& memcmp(k->id, key_id, key_id_len) == 0)
