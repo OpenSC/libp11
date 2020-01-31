@@ -2,8 +2,6 @@ Libp11 example code
 ===================
 
 This directory contains some example code how to use libp11.
-Feel free to use this code in any way, it is public domain,
-not copyrighted.
 
 auth.c		Example for authentication, i.e. get the first
 		token, get the first certificate, ask for pin,
