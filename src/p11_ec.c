@@ -535,6 +535,7 @@ static void pkcs11_ecdh_params_free(CK_ECDH1_DERIVE_PARAMS *parms)
  * could also be supported, and the secret key object could be returned.
  */
 static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
+		const int key_len,
 		const unsigned long ecdh_mechanism,
 		const void *ec_params,
 		void *outnewkey,
@@ -553,11 +554,13 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_ULONG newkey_len = key_len;
 	CK_OBJECT_HANDLE *tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
 	CK_ATTRIBUTE newkey_template[] = {
 		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
 		{CKA_SENSITIVE, &false, sizeof(false) },
 		{CKA_EXTRACTABLE, &true, sizeof(true) },
 		{CKA_ENCRYPT, &true, sizeof(true)},
@@ -583,7 +586,8 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 			return -1;
 	}
 
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object, newkey_template, sizeof(newkey_template)/sizeof(*newkey_template), &newkey));
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(spriv->session, &mechanism, kpriv->object,
+		newkey_template, sizeof(newkey_template)/sizeof(*newkey_template), &newkey));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ECDH_DERIVE, rv);
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
@@ -602,6 +606,22 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	return 0;
 }
 
+static int pkcs11_ecdh_compute_key(unsigned char **buf, size_t *buflen,
+		const EC_POINT *peer_point, const EC_KEY *ecdh, PKCS11_KEY *key)
+{
+	const EC_GROUP *group = EC_KEY_get0_group(ecdh);
+	const int key_len = (EC_GROUP_get_degree(group) + 7) / 8;
+	/* both peer and ecdh use same group parameters */
+	CK_ECDH1_DERIVE_PARAMS *parms = pkcs11_ecdh_params_alloc(group, peer_point);
+	int rv;
+
+	if (parms == NULL)
+		return -1;
+	rv = pkcs11_ecdh_derive(buf, buflen, key_len, CKM_ECDH1_DERIVE, parms, NULL, key);
+	pkcs11_ecdh_params_free(parms);
+	return rv;
+}
+
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
 
 /**
@@ -618,24 +638,14 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 		const EC_POINT *peer_point, const EC_KEY *ecdh)
 {
 	PKCS11_KEY *key;
-	CK_ECDH1_DERIVE_PARAMS *parms;
 	unsigned char *buf = NULL;
 	size_t buflen;
-	int rv;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
 	if (check_key_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
-
-	/* both peer and ecdh use same group parameters */
-	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
-	if (parms == NULL)
+	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return 0;
-	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE, parms, NULL, key);
-	pkcs11_ecdh_params_free(parms);
-	if (rv < 0)
-		return 0;
-
 	*out = buf;
 	*outlen = buflen;
 	return 1;
@@ -659,24 +669,14 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 		void *(*KDF)(const void *, size_t, void *, size_t *))
 {
 	PKCS11_KEY *key;
-	CK_ECDH1_DERIVE_PARAMS *parms;
 	unsigned char *buf = NULL;
 	size_t buflen;
-	int rv;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
 	if (check_key_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
-
-	/* both peer and ecdh use same group parameters */
-	parms = pkcs11_ecdh_params_alloc(EC_KEY_get0_group(ecdh), peer_point);
-	if (parms == NULL)
+	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return -1;
-	rv = pkcs11_ecdh_derive(&buf, &buflen, CKM_ECDH1_DERIVE, parms, NULL, key);
-	pkcs11_ecdh_params_free(parms);
-	if (rv < 0)
-		return -1;
-
 	if (KDF) {
 		if (KDF(buf, buflen, out, &outlen) == NULL) {
 			OPENSSL_free(buf);
