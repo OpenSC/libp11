@@ -63,11 +63,16 @@ int pkcs11_enumerate_slots(PKCS11_CTX *ctx, PKCS11_SLOT **slotp,
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 
 	alloc_size = nslots * sizeof(PKCS11_SLOT);
-	if (alloc_size / sizeof(PKCS11_SLOT) != nslots) /* integer overflow */
+	if (alloc_size / sizeof(PKCS11_SLOT) != nslots) { /* integer overflow */
+		OPENSSL_free(slotid);
 		return -1;
+	}
 	slots = OPENSSL_malloc(alloc_size);
-	if (!slots)
+	if (!slots) {
+		OPENSSL_free(slotid);
 		return -1;
+	}
+
 	memset(slots, 0, nslots * sizeof(PKCS11_SLOT));
 	for (n = 0; n < nslots; n++) {
 		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
