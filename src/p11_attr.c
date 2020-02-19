@@ -74,7 +74,7 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 	if (pkcs11_getattr_var(token, object, type, NULL, &len))
 		return -1;
 	data = OPENSSL_malloc(len+1);
-	if (data == NULL) {
+	if (!data) {
 		CKRerr(CKR_F_PKCS11_GETATTR_ALLOC, CKR_HOST_MEMORY);
 		return -1;
 	}
@@ -120,7 +120,7 @@ void pkcs11_addattr(CK_ATTRIBUTE_PTR ap, int type, const void *data, size_t size
 {
 	ap->type = type;
 	ap->pValue = OPENSSL_malloc(size);
-	if (ap->pValue == NULL)
+	if (!ap->pValue)
 		return;
 	memcpy(ap->pValue, data, size);
 	ap->ulValueLen = size;
@@ -161,7 +161,7 @@ void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR ap, int type, pkcs11_i2d_fn enc, void *
 	ap->type = type;
 	ap->ulValueLen = enc(obj, NULL);
 	ap->pValue = OPENSSL_malloc(ap->ulValueLen);
-	if (ap->pValue == NULL)
+	if (!ap->pValue)
 		return;
 	p = ap->pValue;
 	enc(obj, &p);

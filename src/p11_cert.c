@@ -210,13 +210,13 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	/* Allocate memory */
 	cpriv = OPENSSL_malloc(sizeof(PKCS11_CERT_private));
-	if (cpriv == NULL)
+	if (!cpriv)
 		return -1;
 	memset(cpriv, 0, sizeof(PKCS11_CERT_private));
 	tpriv = PRIVTOKEN(token);
 	tmp = OPENSSL_realloc(tpriv->certs,
 		(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
-	if (tmp == NULL)
+	if (!tmp)
 		return -1;
 	tpriv->certs = tmp;
 	cert = tpriv->certs + tpriv->ncerts++;
@@ -262,7 +262,7 @@ void pkcs11_destroy_certs(PKCS11_TOKEN *token)
 		OPENSSL_free(cert->label);
 		if (cert->id)
 			OPENSSL_free(cert->id);
-		if (cert->_private != NULL)
+		if (cert->_private)
 			OPENSSL_free(cert->_private);
 	}
 	if (tpriv->certs)

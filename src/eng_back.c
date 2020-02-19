@@ -99,7 +99,7 @@ static void dump_hex(ENGINE_CTX *ctx, int level,
 /* Free PIN storage in secure way. */
 static void ctx_destroy_pin(ENGINE_CTX *ctx)
 {
-	if (ctx->pin != NULL) {
+	if (ctx->pin) {
 		OPENSSL_cleanse(ctx->pin, ctx->pin_length);
 		OPENSSL_free(ctx->pin);
 		ctx->pin = NULL;
@@ -118,16 +118,16 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_m
 
 	/* call ui to ask for a pin */
 	ui = UI_new_method(ui_method);
-	if (ui == NULL) {
+	if (!ui) {
 		ctx_log(ctx, 0, "UI_new failed\n");
 		return 0;
 	}
-	if (callback_data != NULL)
+	if (callback_data)
 		UI_add_user_data(ui, callback_data);
 
 	ctx_destroy_pin(ctx);
 	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-	if (ctx->pin == NULL)
+	if (!ctx->pin)
 		return 0;
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
@@ -186,7 +186,7 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 		/* Free the PIN if it has already been
 		 * assigned (i.e, cached by ctx_get_pin) */
 		ctx_destroy_pin(ctx);
-	} else if (ctx->pin == NULL) {
+	} else if (!ctx->pin) {
 		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 		ctx->pin_length = MAX_PIN_LENGTH;
 		if (ctx->pin == NULL) {
@@ -221,7 +221,7 @@ ENGINE_CTX *ctx_new()
 	char *mod;
 
 	ctx = OPENSSL_malloc(sizeof(ENGINE_CTX));
-	if (ctx == NULL)
+	if (!ctx)
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
 
@@ -308,7 +308,7 @@ static int ctx_init_libp11(ENGINE_CTX *ctx)
 	if (ctx->rwlock)
 		CRYPTO_w_lock(ctx->rwlock);
 #endif
-	if (ctx->pkcs11_ctx == NULL || ctx->slot_list == NULL)
+	if (!ctx->pkcs11_ctx|| !ctx->slot_list)
 		ctx_init_libp11_unlocked(ctx);
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
 	CRYPTO_THREAD_unlock(ctx->rwlock);
@@ -407,7 +407,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				ctx_destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-				if (ctx->pin != NULL) {
+				if (ctx->pin) {
 					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
@@ -432,16 +432,16 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			ctx_log(ctx, 1, "id=");
 			dump_hex(ctx, 1, cert_id, cert_id_len);
 		}
-		if (cert_id_len != 0 && cert_label != NULL)
+		if (cert_id_len != 0 && cert_label)
 			ctx_log(ctx, 1, " ");
-		if (cert_label != NULL)
+		if (cert_label)
 			ctx_log(ctx, 1, "label=%s", cert_label);
 		ctx_log(ctx, 1, "\n");
 	}
 
 	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
 		sizeof(PKCS11_SLOT *));
-	if (matched_slots == NULL) {
+	if (!matched_slots) {
 		ctx_log(ctx, 0, "Could not allocate memory for matched slots\n");
 		goto error;
 	}
@@ -471,13 +471,13 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		}
 
 		if (match_tok && slot->token &&
-				(match_tok->label == NULL ||
+				(!match_tok->label ||
 					!strcmp(match_tok->label, slot->token->label)) &&
-				(match_tok->manufacturer == NULL ||
+				(!match_tok->manufacturer ||
 					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(match_tok->serialnr == NULL ||
+				(!match_tok->serialnr ||
 					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(match_tok->model == NULL ||
+				(!match_tok->model ||
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
@@ -530,7 +530,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 	for (n = 0; n < matched_count; n++) {
 		slot = matched_slots[n];
 		tok = slot->token;
-		if (tok == NULL) {
+		if (!tok) {
 			ctx_log(ctx, 0, "Empty token found\n");
 			break;
 		}
@@ -574,7 +574,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count,
 				(cert_count <= 1) ? "" : "s");
 		if ((s_slot_cert_id && *s_slot_cert_id) &&
-				(cert_id_len != 0 || cert_label != NULL)) {
+				(cert_id_len != 0 || cert_label)) {
 			for (m = 0; m < cert_count; m++) {
 				PKCS11_CERT *k = certs + m;
 
@@ -601,7 +601,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		}
 	}
 
-	if (selected_cert != NULL) {
+	if (selected_cert) {
 		x509 = X509_dup(selected_cert->x509);
 	} else {
 		if (login) /* Only print the error on the second attempt */
@@ -618,9 +618,9 @@ error:
 		OPENSSL_free(match_tok);
 	}
 
-	if (cert_label != NULL)
+	if (cert_label)
 		OPENSSL_free(cert_label);
-	if (matched_slots != NULL)
+	if (matched_slots)
 		free(matched_slots);
 	return x509;
 }
@@ -632,22 +632,22 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		X509 *cert;
 	} *parms = p;
 
-	if (parms == NULL) {
+	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
 		return 0;
 	}
-	if (parms->cert != NULL) {
+	if (parms->cert) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_INVALID_PARAMETER);
 		return 0;
 	}
 	ERR_clear_error();
 	if (!ctx->force_login)
 		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
-	if (parms->cert == NULL) { /* Try again with login */
+	if (!parms->cert) { /* Try again with login */
 		ERR_clear_error();
 		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 1);
 	}
-	if (parms->cert == NULL) {
+	if (!parms->cert) {
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
@@ -703,7 +703,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 					goto error; /* Process on second attempt */
 				ctx_destroy_pin(ctx);
 				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-				if (ctx->pin != NULL) {
+				if (ctx->pin) {
 					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
 					ctx->pin_length = tmp_pin_len;
@@ -728,16 +728,16 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			ctx_log(ctx, 1, "id=");
 			dump_hex(ctx, 1, key_id, key_id_len);
 		}
-		if (key_id_len != 0 && key_label != NULL)
+		if (key_id_len != 0 && key_label)
 			ctx_log(ctx, 1, " ");
-		if (key_label != NULL)
+		if (key_label)
 			ctx_log(ctx, 1, "label=%s", key_label);
 		ctx_log(ctx, 1, "\n");
 	}
 
 	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
 		sizeof(PKCS11_SLOT *));
-	if (matched_slots == NULL) {
+	if (!matched_slots) {
 		ctx_log(ctx, 0, "Could not allocate memory for matched slots\n");
 		goto error;
 	}
@@ -767,13 +767,13 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 
 		if (match_tok && slot->token &&
-				(match_tok->label == NULL ||
+				(!match_tok->label ||
 					!strcmp(match_tok->label, slot->token->label)) &&
-				(match_tok->manufacturer == NULL ||
+				(!match_tok->manufacturer ||
 					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(match_tok->serialnr == NULL ||
+				(!match_tok->serialnr ||
 					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(match_tok->model == NULL ||
+				(!match_tok->model ||
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
@@ -826,7 +826,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 	for (n = 0; n < matched_count; n++) {
 		slot = matched_slots[n];
 		tok = slot->token;
-		if (tok == NULL) {
+		if (!tok) {
 			ctx_log(ctx, 0, "Found empty token\n");
 			break;
 		}
@@ -909,7 +909,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		}
 	}
 
-	if (selected_key != NULL) {
+	if (selected_key) {
 		pk = isPrivate ?
 			PKCS11_get_private_key(selected_key) :
 			PKCS11_get_public_key(selected_key);
@@ -928,9 +928,9 @@ error:
 		OPENSSL_free(match_tok->label);
 		OPENSSL_free(match_tok);
 	}
-	if (key_label != NULL)
+	if (key_label)
 		OPENSSL_free(key_label);
-	if (matched_slots != NULL)
+	if (matched_slots)
 		free(matched_slots);
 	return pk;
 }
@@ -943,11 +943,11 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	ERR_clear_error();
 	if (!ctx->force_login)
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
-	if (pk == NULL) { /* Try again with login */
+	if (!pk) { /* Try again with login */
 		ERR_clear_error();
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 1);
 	}
-	if (pk == NULL) {
+	if (!pk) {
 		ctx_log(ctx, 0, "PKCS11_load_public_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PUBKEY, ENG_R_OBJECT_NOT_FOUND);
@@ -964,11 +964,11 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	ERR_clear_error();
 	if (!ctx->force_login)
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
-	if (pk == NULL) { /* Try again with login */
+	if (!pk) { /* Try again with login */
 		ERR_clear_error();
 		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 1);
 	}
-	if (pk == NULL) {
+	if (!pk) {
 		ctx_log(ctx, 0, "PKCS11_get_private_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PRIVKEY, ENG_R_OBJECT_NOT_FOUND);
@@ -1004,7 +1004,7 @@ static int ctx_ctrl_set_module(ENGINE_CTX *ctx, const char *modulename)
 static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 {
 	/* Pre-condition check */
-	if (pin == NULL) {
+	if (!pin) {
 		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_PASSED_NULL_PARAMETER);
 		errno = EINVAL;
 		return 0;
@@ -1014,7 +1014,7 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 	 * shall be returned and errno shall be set. */
 	ctx_destroy_pin(ctx);
 	ctx->pin = OPENSSL_strdup(pin);
-	if (ctx->pin == NULL) {
+	if (!ctx->pin) {
 		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_MALLOC_FAILURE);
 		errno = ENOMEM;
 		return 0;
@@ -1045,7 +1045,7 @@ static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 static int ctx_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
 {
 	ctx->ui_method = ui_method;
-	if (ctx->pkcs11_ctx != NULL) /* libp11 is already initialized */
+	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
 		PKCS11_set_ui_method(ctx->pkcs11_ctx,
 			ctx->ui_method, ctx->callback_data);
 	return 1;
@@ -1054,7 +1054,7 @@ static int ctx_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
 static int ctx_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
 {
 	ctx->callback_data = callback_data;
-	if (ctx->pkcs11_ctx != NULL) /* libp11 is already initialized */
+	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
 		PKCS11_set_ui_method(ctx->pkcs11_ctx,
 			ctx->ui_method, ctx->callback_data);
 	return 1;

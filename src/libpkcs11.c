@@ -52,11 +52,11 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	CK_RV (*c_get_function_list)(CK_FUNCTION_LIST_PTR_PTR);
 	int rv;
 
-	if (mspec == NULL)
+	if (!mspec)
 		return NULL;
 
 	mod = OPENSSL_malloc(sizeof(sc_pkcs11_module_t));
-	if (mod == NULL)
+	if (!mod)
 		return NULL;
 	memset(mod, 0, sizeof(sc_pkcs11_module_t));
 	mod->_magic = MAGIC;
@@ -67,7 +67,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	mod->handle = dlopen(mspec, RTLD_LAZY | RTLD_LOCAL);
 #endif
 
-	if (mod->handle == NULL) {
+	if (!mod->handle) {
 #ifndef WIN32
 		fprintf(stderr, "%s\n", dlerror());
 #endif
@@ -87,7 +87,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	}
 #endif
 
-	if (c_get_function_list == NULL) {
+	if (!c_get_function_list) {
 #ifndef WIN32
 		fprintf(stderr, "%s\n", dlerror());
 #endif
@@ -112,7 +112,7 @@ C_UnloadModule(void *module)
 {
 	sc_pkcs11_module_t *mod = (sc_pkcs11_module_t *) module;
 
-	if (mod == NULL || mod->_magic != MAGIC)
+	if (!mod || mod->_magic != MAGIC)
 		return CKR_ARGUMENTS_BAD;
 
 	if (mod->handle) {
