@@ -39,7 +39,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 {
 	size_t left, count = 0;
 
-	if (in == NULL || *in == '\0') {
+	if (!in || *in == '\0') {
 		*outlen = 0;
 		return 1;
 	}
@@ -223,7 +223,7 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 		max = *field_len;
 	} else {
 		out = OPENSSL_malloc(attrlen + 1);
-		if (out == NULL)
+		if (!out)
 			return 0;
 		max = attrlen + 1;
 	}
@@ -260,7 +260,7 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 			*field = out;
 		}
 	} else {
-		if (field_len == NULL)
+		if (!field_len)
 			OPENSSL_free(out);
 	}
 
@@ -273,7 +273,7 @@ static int read_from_file(ENGINE_CTX *ctx,
 	BIO *fp;
 
 	fp = BIO_new_file(path, "r");
-	if (fp == NULL) {
+	if (!fp) {
 		ctx_log(ctx, 0, "Could not open file %s\n", path);
 		return 0;
 	}
@@ -323,7 +323,7 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 	int rv = 1, id_set = 0, pin_set = 0;
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
-	if (tok == NULL) {
+	if (!tok) {
 		ctx_log(ctx, 0, "Could not allocate memory for token info\n");
 		return 0;
 	}
@@ -334,7 +334,7 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 	while (rv && end[0] && end[1]) {
 		p = end + 1;
 		end = strpbrk(p, ";?&");
-		if (end == NULL)
+		if (!end)
 			end = p + strlen(p);
 
 		if (!strncmp(p, "model=", 6)) {

@@ -43,7 +43,7 @@ int pkcs11_set_ui_method(PKCS11_CTX *ctx,
 		UI_METHOD *ui_method, void *ui_user_data)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
-	if (cpriv == NULL)
+	if (!cpriv)
 		return -1;
 	cpriv->ui_method = ui_method;
 	cpriv->ui_user_data = ui_user_data;
@@ -321,12 +321,12 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 {
 	if (key->isPrivate != isPrivate)
 		key = pkcs11_find_key_from_key(key);
-	if (key == NULL)
+	if (!key)
 		return NULL;
-	if (key->evp_key == NULL) {
+	if (!key->evp_key) {
 		PKCS11_KEY_private *kpriv = PRIVKEY(key);
 		key->evp_key = kpriv->ops->get_evp_key(key);
-		if (key->evp_key == NULL)
+		if (!key->evp_key)
 			return NULL;
 		kpriv->always_authenticate = CK_FALSE;
 		if (isPrivate && key_getattr_val(key, CKA_ALWAYS_AUTHENTICATE,
@@ -369,9 +369,9 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 
 	/* Call UI to ask for a PIN */
 	ui = UI_new_method(cpriv->ui_method);
-	if (ui == NULL)
+	if (!ui)
 		return P11_R_UI_FAILED;
-	if (cpriv->ui_user_data != NULL)
+	if (cpriv->ui_user_data)
 		UI_add_user_data(ui, cpriv->ui_user_data);
 	memset(pin, 0, MAX_PIN_LENGTH+1);
 	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
@@ -430,7 +430,7 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,
 	}
 
 	/* Always update key references if the keys pointer changed */
-	if (first_key_prev != NULL && first_key_prev != keys->keys) {
+	if (first_key_prev && first_key_prev != keys->keys) {
 		for (i = 0; i < keys->num; ++i) {
 			PKCS11_KEY *key = keys->keys + i;
 			PKCS11_KEY_private *kpriv = PRIVKEY(key);
@@ -566,7 +566,7 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		break;
 	case CKK_EC:
 		ops = pkcs11_ec_ops;
-		if (ops == NULL)
+		if (!ops)
 			return 0; /* not supported */
 		break;
 	default:
@@ -583,11 +583,11 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	/* Allocate memory */
 	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
-	if (kpriv == NULL)
+	if (!kpriv)
 		return -1;
 	memset(kpriv, 0, sizeof(PKCS11_KEY_private));
 	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
-	if (tmp == NULL)
+	if (!tmp)
 		return -1;
 	keys->keys = tmp;
 	key = keys->keys + keys->num++;
@@ -627,10 +627,11 @@ void pkcs11_destroy_keys(PKCS11_TOKEN *token, unsigned int type)
 
 		if (key->evp_key)
 			EVP_PKEY_free(key->evp_key);
-		OPENSSL_free(key->label);
+		if (key->label)
+			OPENSSL_free(key->label);
 		if (key->id)
 			OPENSSL_free(key->id);
-		if (key->_private != NULL)
+		if (key->_private)
 			OPENSSL_free(key->_private);
 	}
 	if (keys->keys)

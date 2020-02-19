@@ -33,7 +33,7 @@ static RSA *pkcs11_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->isPrivate);
 	RSA *rsa;
-	if (evp_key == NULL)
+	if (!evp_key)
 		return NULL;
 	rsa = EVP_PKEY_get0_RSA(evp_key);
 	EVP_PKEY_free(evp_key);
@@ -46,7 +46,7 @@ int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
-	if (rsa == NULL)
+	if (!rsa)
 		return -1;
 	return RSA_sign(type, m, m_len, sigret, siglen, rsa);
 }
@@ -221,7 +221,7 @@ failure:
 
 success:
 	rsa = RSA_new();
-	if (rsa == NULL)
+	if (!rsa)
 		goto failure;
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 	RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
@@ -246,7 +246,7 @@ static void pkcs11_update_ex_data_rsa(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp = key->evp_key;
 	RSA *rsa;
-	if (evp == NULL)
+	if (!evp)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA)
 		return;
@@ -264,10 +264,10 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	RSA *rsa;
 
 	rsa = pkcs11_get_rsa(key);
-	if (rsa == NULL)
+	if (!rsa)
 		return NULL;
 	pk = EVP_PKEY_new();
-	if (pk == NULL) {
+	if (!pk) {
 		RSA_free(rsa);
 		return NULL;
 	}
@@ -299,7 +299,7 @@ int pkcs11_get_key_modulus(PKCS11_KEY *key, BIGNUM **bn)
 	RSA *rsa = pkcs11_rsa(key);
 	const BIGNUM *rsa_n;
 
-	if (rsa == NULL)
+	if (!rsa)
 		return 0;
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 	RSA_get0_key(rsa, &rsa_n, NULL, NULL);
@@ -316,7 +316,7 @@ int pkcs11_get_key_exponent(PKCS11_KEY *key, BIGNUM **bn)
 	RSA *rsa = pkcs11_rsa(key);
 	const BIGNUM *rsa_e;
 
-	if (rsa == NULL)
+	if (!rsa)
 		return 0;
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 	RSA_get0_key(rsa, NULL, &rsa_e, NULL);
@@ -331,7 +331,7 @@ int pkcs11_get_key_exponent(PKCS11_KEY *key, BIGNUM **bn)
 int pkcs11_get_key_size(PKCS11_KEY *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
-	if (rsa == NULL)
+	if (!rsa)
 		return 0;
 	return RSA_size(rsa);
 }
@@ -413,11 +413,11 @@ static void free_rsa_ex_index()
 static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 {
 	RSA_METHOD *ret = OPENSSL_malloc(sizeof(RSA_METHOD));
-	if (ret == NULL)
+	if (!ret)
 		return NULL;
 	memcpy(ret, meth, sizeof(RSA_METHOD));
 	ret->name = OPENSSL_strdup(meth->name);
-	if (ret->name == NULL) {
+	if (!ret->name) {
 		OPENSSL_free(ret);
 		return NULL;
 	}
@@ -427,7 +427,7 @@ static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 static int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
 {
 	char *tmp = OPENSSL_strdup(name);
-	if (tmp == NULL)
+	if (!tmp)
 		return 0;
 	OPENSSL_free((char *)meth->name);
 	meth->name = tmp;
@@ -478,10 +478,10 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 {
 	static RSA_METHOD *ops = NULL;
 
-	if (ops == NULL) {
+	if (!ops) {
 		alloc_rsa_ex_index();
 		ops = RSA_meth_dup(RSA_get_default_method());
-		if (ops == NULL)
+		if (!ops)
 			return NULL;
 		RSA_meth_set1_name(ops, "libp11 RSA method");
 		RSA_meth_set_flags(ops, 0);

@@ -90,7 +90,7 @@ static ENGINE_CTX *get_ctx(ENGINE *engine)
 	} else {
 		ctx = ENGINE_get_ex_data(engine, pkcs11_idx);
 	}
-	if (ctx == NULL) {
+	if (!ctx) {
 		ctx = ctx_new();
 		ENGINE_set_ex_data(engine, pkcs11_idx, ctx);
 	}
@@ -104,7 +104,7 @@ static int engine_destroy(ENGINE *engine)
 	int rv = 1;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 
 	/* ENGINE_remove() invokes our engine_destroy() function with
@@ -129,7 +129,7 @@ static int engine_init(ENGINE *engine)
 	ENGINE_CTX *ctx;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 	return ctx_init(ctx);
 }
@@ -141,7 +141,7 @@ static int engine_finish(ENGINE *engine)
 	int rv = 1;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 
 	/* ENGINE_cleanup() used by OpenSSL versions before 1.1.0 invokes
@@ -168,7 +168,7 @@ static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
 	ENGINE_CTX *ctx;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 	return ctx_load_pubkey(ctx, s_key_id, ui_method, callback_data);
 }
@@ -180,7 +180,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 	EVP_PKEY *pkey;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 	pkey = ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
 #ifdef EVP_F_EVP_PKEY_SET1_ENGINE
@@ -199,7 +199,7 @@ static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
 	ENGINE_CTX *ctx;
 
 	ctx = get_ctx(engine);
-	if (ctx == NULL)
+	if (!ctx)
 		return 0;
 	return ctx_engine_ctrl(ctx, cmd, i, p, f);
 }

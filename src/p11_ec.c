@@ -82,7 +82,7 @@ ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
 {
 	ECDSA_METHOD *out;
 	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
-	if (out == NULL)
+	if (!out)
 		return NULL;
 	if (m)
 		memcpy(out, m, sizeof(ECDSA_METHOD));
@@ -124,7 +124,7 @@ ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
 {
 	ECDH_METHOD *out;
 	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
-	if (out == NULL)
+	if (!out)
 		return NULL;
 	if (m)
 		memcpy(out, m, sizeof(ECDH_METHOD));
@@ -213,8 +213,7 @@ static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY *key)
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
 
-	if (key == NULL ||
-			key_getattr_alloc(key, CKA_EC_POINT, &point, &point_len))
+	if (!key || key_getattr_alloc(key, CKA_EC_POINT, &point, &point_len))
 		return -1;
 
 	/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
@@ -242,20 +241,20 @@ static int pkcs11_get_point_cert(EC_KEY *ec, PKCS11_CERT *cert)
 	const EC_POINT *point;
 	int rv = -1;
 
-	if (cert == NULL)
+	if (!cert)
 		goto error;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	pubkey = X509_get0_pubkey(cert->x509);
 #else
 	pubkey = X509_get_pubkey(cert->x509);
 #endif
-	if (pubkey == NULL)
+	if (!pubkey)
 		goto error;
 	pubkey_ec = EVP_PKEY_get0_EC_KEY(pubkey);
-	if (pubkey_ec == NULL)
+	if (!pubkey_ec)
 		goto error;
 	point = EC_KEY_get0_public_key(pubkey_ec);
-	if (point == NULL)
+	if (!point)
 		goto error;
 	if (EC_KEY_set_public_key(ec, point) == 0)
 		goto error;
@@ -273,7 +272,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	int no_params, no_point;
 
 	ec = EC_KEY_new();
-	if (ec == NULL)
+	if (!ec)
 		return NULL;
 
 	/* For OpenSSL req we need at least the
@@ -325,7 +324,7 @@ static void pkcs11_update_ex_data_ec(PKCS11_KEY *key)
 {
 	EVP_PKEY *evp = key->evp_key;
 	EC_KEY *ec;
-	if (evp == NULL)
+	if (!evp)
 		return;
 	if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC)
 		return;
@@ -350,10 +349,10 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 	EC_KEY *ec;
 
 	ec = pkcs11_get_ec(key);
-	if (ec == NULL)
+	if (!ec)
 		return NULL;
 	pk = EVP_PKEY_new();
-	if (pk == NULL) {
+	if (!pk) {
 		EC_KEY_free(ec);
 		return NULL;
 	}
@@ -469,7 +468,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	r = BN_bin2bn(sigret, siglen/2, NULL);
 	s = BN_bin2bn(sigret + siglen/2, siglen/2, NULL);
 	sig = ECDSA_SIG_new();
-	if (sig == NULL)
+	if (!sig)
 		return NULL;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	ECDSA_SIG_set0(sig, r, s);
@@ -491,14 +490,14 @@ static CK_ECDH1_DERIVE_PARAMS *pkcs11_ecdh_params_alloc(
 	size_t len;
 	unsigned char *buf = NULL;
 
-	if (group == NULL || point == NULL)
+	if (!group || !point)
 		return NULL;
 	len = EC_POINT_point2oct(group, point,
 		POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
 	if (len == 0)
 		return NULL;
 	buf = OPENSSL_malloc(len);
-	if (buf == NULL)
+	if (!buf)
 		return NULL;
 	len = EC_POINT_point2oct(group, point,
 		POINT_CONVERSION_UNCOMPRESSED, buf, len, NULL);
@@ -508,7 +507,7 @@ static CK_ECDH1_DERIVE_PARAMS *pkcs11_ecdh_params_alloc(
 	}
 
 	parms = OPENSSL_malloc(sizeof(CK_ECDH1_DERIVE_PARAMS));
-	if (parms == NULL) {
+	if (!parms) {
 		OPENSSL_free(buf);
 		return NULL;
 	}
@@ -615,7 +614,7 @@ static int pkcs11_ecdh_compute_key(unsigned char **buf, size_t *buflen,
 	CK_ECDH1_DERIVE_PARAMS *parms = pkcs11_ecdh_params_alloc(group, peer_point);
 	int rv;
 
-	if (parms == NULL)
+	if (!parms)
 		return -1;
 	rv = pkcs11_ecdh_derive(buf, buflen, key_len, CKM_ECDH1_DERIVE, parms, NULL, key);
 	pkcs11_ecdh_params_free(parms);
@@ -713,7 +712,7 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
 	alloc_ec_ex_index();
-	if (ops == NULL) {
+	if (!ops) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
 		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
 		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
@@ -746,7 +745,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
 	static ECDSA_METHOD *ops = NULL;
 
-	if (ops == NULL) {
+	if (!ops) {
 		alloc_ec_ex_index();
 		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
 		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_sign_sig);
@@ -758,7 +757,7 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 {
 	static ECDH_METHOD *ops = NULL;
 
-	if (ops == NULL) {
+	if (!ops) {
 		alloc_ec_ex_index();
 		ops = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
 		ECDH_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);

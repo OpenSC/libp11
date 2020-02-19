@@ -31,11 +31,11 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	ERR_load_PKCS11_strings();
 
 	cpriv = OPENSSL_malloc(sizeof(PKCS11_CTX_private));
-	if (cpriv == NULL)
+	if (!cpriv)
 		goto fail;
 	memset(cpriv, 0, sizeof(PKCS11_CTX_private));
 	ctx = OPENSSL_malloc(sizeof(PKCS11_CTX));
-	if (ctx == NULL)
+	if (!ctx)
 		goto fail;
 	memset(ctx, 0, sizeof(PKCS11_CTX));
 	ctx->_private = cpriv;
@@ -75,7 +75,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	int rv;
 
 	cpriv->handle = C_LoadModule(name, &cpriv->method);
-	if (cpriv->handle == NULL) {
+	if (!cpriv->handle) {
 		P11err(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
 		return -1;
 	}
@@ -119,11 +119,11 @@ int pkcs11_CTX_reload(PKCS11_CTX *ctx)
 	CK_C_INITIALIZE_ARGS *args = NULL;
 	int rv;
 
-	if (cpriv->method == NULL) /* Module not loaded */
+	if (!cpriv->method) /* Module not loaded */
 		return 0;
 
 	/* Tell the PKCS11 to initialize itself */
-	if (cpriv->init_args != NULL) {
+	if (cpriv->init_args) {
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
 		args->pReserved = cpriv->init_args;
