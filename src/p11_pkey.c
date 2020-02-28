@@ -36,7 +36,6 @@ static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
 	const unsigned char *tbs, size_t tbslen);
 #endif /* OPENSSL_NO_EC */
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 struct evp_pkey_method_st {
 	int pkey_id;
 	int flags;
@@ -75,6 +74,9 @@ struct evp_pkey_method_st {
 	int (*ctrl) (EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
 	int (*ctrl_str) (EVP_PKEY_CTX *ctx, const char *type, const char *value);
 } /* EVP_PKEY_METHOD */ ;
+
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L
+#define EVP_PKEY_FLAG_DYNAMIC 1
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -516,6 +518,11 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa()
 	new_meth = EVP_PKEY_meth_new(EVP_PKEY_RSA,
 		EVP_PKEY_FLAG_AUTOARGLEN);
 
+#ifdef EVP_PKEY_FLAG_DYNAMIC
+	/* do not allow OpenSSL to free this object */
+	new_meth->flags &= ~EVP_PKEY_FLAG_DYNAMIC;
+#endif
+
 	EVP_PKEY_meth_copy(new_meth, orig_meth);
 
 	EVP_PKEY_meth_set_sign(new_meth,
@@ -654,6 +661,11 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ec()
 
 	new_meth = EVP_PKEY_meth_new(EVP_PKEY_EC,
 		EVP_PKEY_FLAG_AUTOARGLEN);
+
+#ifdef EVP_PKEY_FLAG_DYNAMIC
+	/* do not allow OpenSSL to free this object */
+	new_meth->flags &= ~EVP_PKEY_FLAG_DYNAMIC;
+#endif
 
 	EVP_PKEY_meth_copy(new_meth, orig_meth);
 
