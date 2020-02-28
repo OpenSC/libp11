@@ -284,6 +284,7 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
+	int signature_nid;
 	const EVP_MD* evp_md;
 	CK_MECHANISM_TYPE ckm_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
@@ -303,7 +304,12 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_issuer_name(x509));
 
 	/* Get digest algorithm from x509 certificate */
-	evp_md = EVP_get_digestbynid(X509_get_signature_nid(x509));
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L && !defined(LIBRESSL_VERSION_NUMBER)
+	signature_nid = X509_get_signature_nid(x509);
+#else
+	signature_nid = OBJ_obj2nid(x509->sig_alg->algorithm);
+#endif
+	evp_md = EVP_get_digestbynid(signature_nid);
 	switch (EVP_MD_type(evp_md)) {
 	default:
 	case NID_sha1:
