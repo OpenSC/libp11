@@ -673,8 +673,8 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		EVP_PKEY_EC,
 		0
 	};
-	EVP_PKEY_METHOD *pkey_method_rsa = NULL;
-	EVP_PKEY_METHOD *pkey_method_ec = NULL;
+	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
+	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */
@@ -687,14 +687,16 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 	/* get the EVP_PKEY_METHOD */
 	switch (nid) {
 	case EVP_PKEY_RSA:
-		pkey_method_rsa = pkcs11_pkey_method_rsa();
+		if (!pkey_method_rsa)
+			pkey_method_rsa = pkcs11_pkey_method_rsa();
 		if (!pkey_method_rsa)
 			return 0;
 		*pmeth = pkey_method_rsa;
 		return 1; /* success */
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
-		pkey_method_ec = pkcs11_pkey_method_ec();
+		if (!pkey_method_ec)
+			pkey_method_ec = pkcs11_pkey_method_ec();
 		if (!pkey_method_ec)
 			return 0;
 		*pmeth = pkey_method_ec;
