@@ -287,6 +287,54 @@ static int read_from_file(ENGINE_CTX *ctx,
 	return 1;
 }
 
+
+static int read_from_pipe(ENGINE_CTX *ctx,
+			  const char *path, char *field, size_t *field_len)
+{
+    /* Openssl BIOs, have no primitives to deal with piped execution */
+    /* we use popen()/pclose() calls from <stdio.h> */
+
+    FILE * pipe_fp = popen(path, "r");
+
+    if(!pipe_fp) {
+	ctx_log(ctx, 0, "Could not execute piped command %s\n", path);
+	return 0;
+    }
+
+    if(fgets(field, *field_len, pipe_fp) == NULL) {
+	if(ferror(pipe_fp)) {
+	    ctx_log(ctx,
+		    0,
+		    "Could not fetch output of piped command %s: %s\n",
+		    path,
+		    strerror(errno));
+	}
+
+	if(feof(pipe_fp)) {
+	    ctx_log(ctx,
+		    0,
+		    "Could not fetch output of piped command %s: "
+		    "end of file reached (broken pipe?)\n",
+		    path);
+	}
+
+	pclose(pipe_fp);	/* housekeeping */
+	*field_len = 0;		/* we have nothing */
+	return 0;
+    }
+
+    pclose(pipe_fp);
+
+    *field_len = strlen(field);
+
+    if(field[*field_len-1]=='\n') { /* 'chomp' line */
+	field[*field_len-1]=0x0;
+	--*field_len;
+    }
+
+    return 1;
+}
+
 static int parse_pin_source(ENGINE_CTX *ctx,
 		const char *attr, int attrlen, unsigned char *field,
 		size_t *field_len)
@@ -301,10 +349,9 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 	if (!strncasecmp((const char *)val, "file:", 5)) {
 		ret = read_from_file(ctx, (const char *)(val + 5), (char *)field, field_len);
 	} else if (*val == '|') {
-		ret = 0;
-		ctx_log(ctx, 0, "Unsupported pin-source syntax\n");
-	/* 'pin-source=/foo/bar' is commonly used */
+		ret = read_from_pipe(ctx, (const char *)(val + 1), (char *)field, field_len);
 	} else {
+	    /* 'pin-source=/foo/bar' is commonly used */
 		ret = read_from_file(ctx, (const char *)val, (char *)field, field_len);
 	}
 	OPENSSL_free(val);
