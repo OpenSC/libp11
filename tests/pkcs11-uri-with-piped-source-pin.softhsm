@@ -1,0 +1,117 @@
+#!/bin/sh
+
+# Copyright (C) 2015 Nikos Mavrogiannopoulos
+#
+# GnuTLS is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+# This test checks if it is possible to specify the PIN using the
+# pin-source directive with process redirection
+# e.g. pin-source=|process_yielding_the_pin_value.sh
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+cat >>${outdir}/getpin.sh <<EOF
+#!/bin/sh
+/usr/bin/env echo -n 1234
+EOF
+
+cat >>${outdir}/getpin-newline.sh <<EOF
+#!/bin/sh
+/usr/bin/env echo 1234
+EOF
+
+cat >>${outdir}/getpin-with-arg.sh <<EOF
+#!/bin/sh
+/usr/bin/env echo "\$1" | openssl base64 -d
+EOF
+
+chmod u+x ${outdir}/getpin.sh ${outdir}/getpin-newline.sh ${outdir}/getpin-with-arg.sh
+
+# Do the common test initialization
+common_init
+
+echo "Detected system: ${OSTYPE}"
+
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+    SHARED_EXT=.dylib
+else
+    SHARED_EXT=.so
+fi
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
+    "s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
+    <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+export OPENSSL_CONF="${outdir}/engines.cnf"
+
+# These URIs don't contain the token specification
+PRIVATE_KEY_URI_PIPED_COMMAND="pkcs11:token=libp11-test;object=server-key;type=private;pin-source=|${outdir}/getpin.sh"
+PUBLIC_KEY_URI_PIPED_COMMAND="pkcs11:token=libp11-test;object=server-key;type=public;pin-source=|${outdir}/getpin.sh"
+PUBLIC_KEY_URI_PIPED_COMMAND_NEWLINE="pkcs11:token=libp11-test;object=server-key;type=public;pin-source=|${outdir}/getpin-newline.sh"
+PUBLIC_KEY_URI_PIPED_COMMAND_ARG="pkcs11:token=libp11-test;object=server-key;type=public;pin-source=|${outdir}/getpin-with-arg.sh MTIzNA=="
+PUBLIC_KEY_URI_PIPED_COMMAND_WRONG="pkcs11:token=libp11-test;object=server-key;type=public;pin-source=|${outdir}/non-existing-script.sh"
+# Create input file
+echo "secret" >"${outdir}/in.txt"
+
+# Generate signature
+openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY_URI_PIPED_COMMAND}" \
+	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY_URI_PIPED_COMMAND}"
+	exit 1;
+fi
+
+# Verify the signature, fetching the PIN from a command
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_URI_PIPED_COMMAND}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+    echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_URI_PIPED_COMMAND}"
+    exit 1;
+fi
+
+# Verify the signature, fetching the PIN from a command
+# that adds a trailing line feed
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_URI_PIPED_COMMAND_NEWLINE}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+    echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_URI_PIPED_COMMAND_NEWLINE}"
+    exit 1;
+fi
+
+# Verify the signature, fetching the PIN from a command
+# that takes an argument
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_URI_PIPED_COMMAND_ARG}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? != 0;then
+    echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_URI_PIPED_COMMAND_ARG}"
+    exit 1;
+fi
+
+# Verify the signature, fetching the PIN from a command
+# that takes an argument
+openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_URI_PIPED_COMMAND_WRONG}" \
+	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if test $? == 0;then
+    echo "Unexpected success when verifying signature using PKCS#11 URI ${PUBLIC_KEY_URI_PIPED_COMMAND_WRONGa}"
+    exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0

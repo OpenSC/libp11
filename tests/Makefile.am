@@ -30,6 +30,7 @@ dist_check_SCRIPTS = \
 	case-insensitive.softhsm \
 	ec-check-privkey.softhsm \
 	pkcs11-uri-without-token.softhsm \
+	pkcs11-uri-with-piped-source-pin.softhsm \
 	search-all-matching-tokens.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
