@@ -94,6 +94,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	}
 
 	/* Get info on the library */
+	memset(&ck_info, 0, sizeof(ck_info));
 	rv = cpriv->method->C_GetInfo(&ck_info);
 	if (rv) {
 		cpriv->method->C_Finalize(NULL);
