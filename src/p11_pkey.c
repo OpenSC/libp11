@@ -542,7 +542,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	EC_KEY *eckey;
 	PKCS11_KEY *key;
-	int rv = 0;
+	int rv = -1;
 	CK_ULONG size = *siglen;
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
@@ -560,22 +560,22 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	ossl_sig = ECDSA_SIG_new();
 	if (!ossl_sig)
-		return -1;
+		goto error;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
-		return -1;
+		goto error;
 
 	eckey = (EC_KEY *)EVP_PKEY_get0_EC_KEY(pkey);
 	if (!eckey)
-		return -1;
+		goto error;
 
 	if (*siglen < (size_t)ECDSA_size(eckey))
-		return -1;
+		goto error;
 
 	key = pkcs11_get_ex_data_ec(eckey);
 	if (check_key_fork(key) < 0)
-		return -1;
+		goto error;
 
 	slot = KEY2SLOT(key);
 	ctx = KEY2CTX(key);
@@ -584,14 +584,15 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	cpriv = PRIVCTX(ctx);
 
 	if (!evp_pkey_ctx)
-		return -1;
+		goto error;
 
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
-		return -1;
+		goto error;
 
 	if (tbslen < (size_t)EVP_MD_size(sig_md))
-		return -1;
+		goto error;
 
+	rv = 0;
 	if (!cpriv->sign_initialized) {
 		CK_MECHANISM mechanism;
 		memset(&mechanism, 0, sizeof mechanism);
@@ -631,6 +632,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		*siglen = i2d_ECDSA_SIG(ossl_sig, &sig);
 	}
 
+error:
 	ECDSA_SIG_free(ossl_sig);
 
 	if (rv != CKR_OK)
