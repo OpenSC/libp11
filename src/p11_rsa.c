@@ -352,6 +352,11 @@ int (*RSA_meth_get_priv_dec(const RSA_METHOD *meth))
     return meth->rsa_priv_dec;
 }
 
+static int (*RSA_meth_get_finish(const RSA_METHOD *meth)) (RSA *rsa)
+{
+    return meth->finish;
+}
+
 #endif
 
 static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
@@ -383,6 +388,11 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 static int pkcs11_rsa_free_method(RSA *rsa)
 {
 	RSA_set_ex_data(rsa, rsa_ex_index, NULL);
+	int (*orig_rsa_free_method)(RSA *rsa) =
+		RSA_meth_get_finish(RSA_get_default_method());
+	if (orig_rsa_free_method) {
+		return orig_rsa_free_method(rsa);
+	}
 	return 1;
 }
 
