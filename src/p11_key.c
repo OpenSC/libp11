@@ -378,8 +378,8 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 	if (!prompt) {
 		return P11_R_UI_FAILED;
 	}
-	if (!UI_dup_input_string(ui, prompt,
-			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH)) {
+	if (UI_dup_input_string(ui, prompt,
+			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH) <= 0) {
 		UI_free(ui);
 		OPENSSL_free(prompt);
 		return P11_R_UI_FAILED;

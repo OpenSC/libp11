@@ -135,8 +135,8 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_m
 	if (!prompt) {
 		return 0;
 	}
-	if (!UI_dup_input_string(ui, prompt,
-			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH)) {
+	if (UI_dup_input_string(ui, prompt,
+			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH) <= 0) {
 		ctx_log(ctx, 0, "UI_dup_input_string failed\n");
 		UI_free(ui);
 		OPENSSL_free(prompt);
