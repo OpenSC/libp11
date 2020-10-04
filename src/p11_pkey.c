@@ -677,6 +677,9 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ec()
 
 #endif /* OPENSSL_NO_EC */
 
+	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
+	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
+
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid)
 {
@@ -685,8 +688,6 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		EVP_PKEY_EC,
 		0
 	};
-	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
-	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */
@@ -717,6 +718,21 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 	}
 	*pmeth = NULL;
 	return 0;
+}
+
+void PKCS11_pkey_meths_free()
+{
+	/* get OpenSSL to delete these */
+	if (pkey_method_rsa) {
+		pkey_method_rsa->flags |= EVP_PKEY_FLAG_DYNAMIC;
+		EVP_PKEY_meth_free(pkey_method_rsa);
+		pkey_method_rsa = NULL;
+	}
+	if (pkey_method_ec) {
+		pkey_method_ec->flags |= EVP_PKEY_FLAG_DYNAMIC;
+		EVP_PKEY_meth_free(pkey_method_ec);
+		pkey_method_ec = NULL;
+	}
 }
 
 /* vim: set noexpandtab: */

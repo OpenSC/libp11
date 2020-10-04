@@ -250,6 +250,14 @@ ENGINE_CTX *ctx_new()
 int ctx_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
+		PKCS11_rsa_method_free();
+#if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
+		PKCS11_ec_key_method_free();
+		PKCS11_pkey_meths_free();
+#else
+		PKCS11_ecdsa_method_free();
+		PKCS11_ecdh_method_free();
+#endif
 		ctx_destroy_pin(ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);

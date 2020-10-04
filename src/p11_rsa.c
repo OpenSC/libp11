@@ -26,6 +26,7 @@
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/crypto.h>
 
 static int rsa_ex_index = 0;
 
@@ -474,28 +475,37 @@ static int RSA_meth_set_finish(RSA_METHOD *meth, int (*finish)(RSA *rsa))
 /*
  * Overload the default OpenSSL methods for RSA
  */
+static RSA_METHOD *pkcs11_rsa_meth_ops = NULL;
+
 RSA_METHOD *PKCS11_get_rsa_method(void)
 {
-	static RSA_METHOD *ops = NULL;
-
-	if (!ops) {
+	if (!pkcs11_rsa_meth_ops) {
 		alloc_rsa_ex_index();
-		ops = RSA_meth_dup(RSA_get_default_method());
-		if (!ops)
+		pkcs11_rsa_meth_ops = RSA_meth_dup(RSA_get_default_method());
+		if (!pkcs11_rsa_meth_ops)
 			return NULL;
-		RSA_meth_set1_name(ops, "libp11 RSA method");
-		RSA_meth_set_flags(ops, 0);
-		RSA_meth_set_priv_enc(ops, pkcs11_rsa_priv_enc_method);
-		RSA_meth_set_priv_dec(ops, pkcs11_rsa_priv_dec_method);
-		RSA_meth_set_finish(ops, pkcs11_rsa_free_method);
+		RSA_meth_set1_name(pkcs11_rsa_meth_ops, "libp11 RSA method");
+		RSA_meth_set_flags(pkcs11_rsa_meth_ops, 0);
+		RSA_meth_set_priv_enc(pkcs11_rsa_meth_ops, pkcs11_rsa_priv_enc_method);
+		RSA_meth_set_priv_dec(pkcs11_rsa_meth_ops, pkcs11_rsa_priv_dec_method);
+		RSA_meth_set_finish(pkcs11_rsa_meth_ops, pkcs11_rsa_free_method);
 	}
-	return ops;
-}
+	return pkcs11_rsa_meth_ops;
+}	
 
 /* This function is *not* currently exported */
 void PKCS11_rsa_method_free(void)
 {
 	free_rsa_ex_index();
+	if (pkcs11_rsa_meth_ops) {
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
+		OPENSSL_free((char *)pkcs11_rsa_meth_ops->name);
+		OPENSSL_free((RSA_METHOD *)pkcs11_rsa_meth_ops);
+#else
+		RSA_meth_free(pkcs11_rsa_meth_ops);
+#endif
+		pkcs11_rsa_meth_ops = NULL;
+	}
 }
 
 PKCS11_KEY_ops pkcs11_rsa_ops = {
