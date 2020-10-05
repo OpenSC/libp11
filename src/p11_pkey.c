@@ -542,7 +542,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	EC_KEY *eckey;
 	PKCS11_KEY *key;
-	int rv = -1;
+	int rv = CKR_GENERAL_ERROR;
 	CK_ULONG size = *siglen;
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
