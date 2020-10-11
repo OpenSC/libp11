@@ -1,6 +1,20 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.11; unreleased
+New in 0.4.11; 2020-10-11; Michał Trojnara
+* Fixed "EVP_PKEY_derive:buffer too small" EC errors (Luka Logar)
+* Fixed various memory leaks (Mateusz Kwiatkowski)
+* Fixed Windows VERSIONINFO (Pavol Misik)
+* Fixed builds with OpenSSL older than 1.0.2 (Michał Trojnara)
+* Fixed a double free in EVP_PKEY_meth_free() (Mikhail Durnev)
+* Added CKA_VALUE_LEN to EC key derivation template (Michał Trojnara)
+* Fixed handling keys without label attribute (efternavn)
+* Updated the tests (Anderson Toshiyuki Sasaki)
+* Made ECDH-derived keys extractable (Bent Bisballe Nyeng)
+* Added support for pin-source within PKCS#11 URI (Stanislav Levin)
+* Improved LibreSSL compatibility (patchMonkey156)
+* Fixed handling RSA private keys in BIND (Stanislav Levin)
+* Added macOS testing support (Stanislav Levin)
+* Fixed engine object search algorithm (Anderson Toshiyuki Sasaki)
 
 New in 0.4.10; 2019-04-03; Michał Trojnara
 * Added EC signing through EVP API (Bryan Hunt)
