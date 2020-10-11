@@ -1,5 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.4.12; unreleased
+
 New in 0.4.11; 2020-10-11; Michał Trojnara
 * Fixed "EVP_PKEY_derive:buffer too small" EC errors (Luka Logar)
 * Fixed various memory leaks (Mateusz Kwiatkowski)
