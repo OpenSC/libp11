@@ -138,15 +138,6 @@ extern void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
 extern int PKCS11_CTX_load(PKCS11_CTX * ctx, const char * ident);
 
 /**
- * Reinitialize a PKCS#11 module (after a fork)
- *
- * @param ctx context allocated by PKCS11_CTX_new()
- * @retval 0 success
- * @retval -1 error
- */
-extern int PKCS11_CTX_reload(PKCS11_CTX * ctx);
-
-/**
  * Unload a PKCS#11 module
  *
  * @param ctx context allocated by PKCS11_CTX_new()
