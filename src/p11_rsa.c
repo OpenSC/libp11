@@ -336,7 +336,7 @@ int pkcs11_get_key_size(PKCS11_KEY *key)
 	return RSA_size(rsa);
 }
 
-#if OPENSSL_VERSION_NUMBER < 0x10100005L || defined(LIBRESSL_VERSION_NUMBER)
+#if ( ( defined (OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER < 0x10100005L ) || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3020199L ) )
 
 int (*RSA_meth_get_priv_enc(const RSA_METHOD *meth))
 		(int flen, const unsigned char *from,
