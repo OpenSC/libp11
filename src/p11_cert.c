@@ -80,7 +80,7 @@ int pkcs11_remove_certificate(PKCS11_CERT *cert){
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1)){
 		return -1;
 	}
-	
+
 	pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_CERTIFICATE);
 	if (cert->id && cert->id_len){
 		pkcs11_addattr(search_parameters + n++, CKA_ID, cert->id, cert->id_len);
@@ -92,7 +92,7 @@ int pkcs11_remove_certificate(PKCS11_CERT *cert){
 	rv = CRYPTOKI_call(ctx,
 		C_FindObjectsInit(spriv->session, search_parameters, n));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
-	
+
 	rv = CRYPTOKI_call(ctx, C_FindObjects(spriv->session, &obj, 1, &count));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
 
@@ -285,6 +285,7 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	unsigned int n = 0;
 	int rv;
 	int signature_nid;
+	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
 	CK_MECHANISM_TYPE ckm_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
@@ -309,9 +310,11 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 #else
 	signature_nid = OBJ_obj2nid(x509->sig_alg->algorithm);
 #endif
-	evp_md = EVP_get_digestbynid(signature_nid);
-	switch (EVP_MD_type(evp_md)) {
+	OBJ_find_sigid_algs(signature_nid, &evp_md_nid, NULL);
+	switch (evp_md_nid) {
 	default:
+		evp_md_nid = NID_sha1;
+		// fall through
 	case NID_sha1:
 		ckm_md = CKM_SHA_1;
 		break;
@@ -328,6 +331,8 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 		ckm_md = CKM_SHA384;
 		break;
 	}
+
+	evp_md = EVP_get_digestbynid(evp_md_nid);
 
 	/* Set hash algorithm; default is SHA-1 */
 	pkcs11_addattr_int(attrs + n++, CKA_NAME_HASH_ALGORITHM, ckm_md);
