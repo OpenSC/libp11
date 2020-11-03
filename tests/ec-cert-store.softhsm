@@ -1,0 +1,47 @@
+#!/bin/sh
+
+# Copyright (C) 2015 Nikos Mavrogiannopoulos
+# Copyright (C) 2019 Anderson Toshiyuki Sasaki
+# Copyright (C) 2019 Red Hat, Inc.
+# Copyright (C) 2020 Mateusz Kwiatkowski
+# Copyright (C) 2020 AVSystem
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/ec-no-pubkey.sh
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+CERTIFICATE="${outdir}/ec-cert.pem"
+CERTIFICATE_URL="pkcs11:token=libp11-test;object=stored-cert;pin-value=1234"
+
+./store-cert ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE} "${outdir}/engines.cnf"
+if test $? != 0;then
+	echo "The certificate storing couldn't be performed"
+	exit 1;
+fi
+
+pkcs11-tool -p 1234 --module ${MODULE} -l -O | grep -q stored-cert
+if test $? != 0;then
+	echo "The certificate was not properly stored"
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0
