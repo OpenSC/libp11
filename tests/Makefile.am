@@ -16,7 +16,8 @@ check_PROGRAMS = \
 	list-tokens \
 	rsa-pss-sign \
 	rsa-oaep \
-	check-privkey
+	check-privkey \
+	store-cert
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -30,7 +31,8 @@ dist_check_SCRIPTS = \
 	case-insensitive.softhsm \
 	ec-check-privkey.softhsm \
 	pkcs11-uri-without-token.softhsm \
-	search-all-matching-tokens.softhsm
+	search-all-matching-tokens.softhsm \
+	ec-cert-store.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
 	ec-cert.der ec-prvkey.der ec-pubkey.der
