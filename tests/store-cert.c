@@ -21,6 +21,7 @@
 #include <libp11.h>
 #include <openssl/conf.h>
 #include <openssl/engine.h>
+#include <openssl/pem.h>
 #include <string.h>
 
 static void
