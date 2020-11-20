@@ -39,7 +39,6 @@ int main(int argc, char *argv[])
 {
 	PKCS11_CTX *ctx;
 	PKCS11_SLOT *slots, *slot;
-	PKCS11_CERT *certs;
 
 	int rc = 0, token_found = 0;
 
