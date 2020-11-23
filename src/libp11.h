@@ -391,6 +391,7 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void);
 #endif
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid);
+void PKCS11_pkey_meths_free(void);
 
 /**
  * Load PKCS11 error strings

@@ -119,6 +119,17 @@ static int engine_destroy(ENGINE *engine)
 #endif
 
 	rv &= ctx_destroy(ctx);
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || \
+        (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L)
+#define	RSA_meth_free(ops) \
+        ( OPENSSL_free((char *)ops->name), OPENSSL_free((RSA_METHOD *)ops) )
+#endif
+	RSA_meth_free(PKCS11_get_rsa_method());
+#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
+#define EC_KEY_METHOD_free ECDSA_METHOD_free
+#endif
+	EC_KEY_METHOD_free(PKCS11_get_ec_key_method());
+	PKCS11_pkey_meths_free();
 	ENGINE_set_ex_data(engine, pkcs11_idx, NULL);
 	ERR_unload_ENG_strings();
 	return rv;

@@ -313,6 +313,7 @@ PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
 
 static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_KEY *key)
 {
+	/* maybe should free any pre-existing pkcs11_get_ex_data_ec(ec); */
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EC_KEY_set_ex_data(ec, ec_ex_index, key);
 #else

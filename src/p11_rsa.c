@@ -239,6 +239,7 @@ PKCS11_KEY *pkcs11_get_ex_data_rsa(const RSA *rsa)
 
 static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_KEY *key)
 {
+	/* maybe should free any pre-existing pkcs11_get_ex_data_rsa(rsa); */
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
 
@@ -387,7 +388,7 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 
 static int pkcs11_rsa_free_method(RSA *rsa)
 {
-	RSA_set_ex_data(rsa, rsa_ex_index, NULL);
+	pkcs11_set_ex_data_rsa(rsa, NULL);
 	int (*orig_rsa_free_method)(RSA *rsa) =
 		RSA_meth_get_finish(RSA_get_default_method());
 	if (orig_rsa_free_method) {
