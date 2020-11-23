@@ -114,6 +114,7 @@ static int engine_destroy(ENGINE *engine)
 	 * that use OpenSSL engines, causes a deadlock. */
 	/* Our workaround is to skip ctx_finish() entirely, as a memory
 	 * leak is better than a deadlock. */
+	/* Looks like the workaround is not needed (any more); TODO check */
 #if 0
 	rv &= ctx_finish(ctx);
 #endif

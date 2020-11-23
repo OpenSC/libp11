@@ -61,6 +61,7 @@ typedef struct PKCS11_key_st {
 	unsigned char isPrivate;	/**< private key present? */
 	unsigned char needLogin;	/**< login to read private key? */
 	EVP_PKEY *evp_key;		/**< initially NULL, need to call PKCS11_load_key */
+	int used;		        /**< indicate use via PKCS11_get_{private,public}_key() */
 	void *_private;
 } PKCS11_KEY;
 

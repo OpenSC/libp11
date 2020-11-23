@@ -168,6 +168,7 @@ extern int check_cert_fork(PKCS11_CERT *cert);
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
+extern void pkcs11_PKCS11_KEY_destroy(PKCS11_KEY *key);
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern int pkcs11_reload_key(PKCS11_KEY *);
@@ -279,7 +280,7 @@ extern int pkcs11_remove_key(PKCS11_KEY *key);
 extern int pkcs11_get_key_type(PKCS11_KEY *key);
 
 /* Returns a EVP_PKEY object with the private or public key */
-extern EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate);
+extern EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate, int up_ref);
 
 /* Find the corresponding certificate (if any) */
 extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY *key);

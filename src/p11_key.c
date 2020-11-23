@@ -317,7 +317,7 @@ int pkcs11_get_key_type(PKCS11_KEY *key)
  * Create an EVP_PKEY OpenSSL object for a given key
  * Returns private or public key depending on isPrivate
  */
-EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
+EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate, int up_ref)
 {
 	if (key->isPrivate != isPrivate)
 		key = pkcs11_find_key_from_key(key);
@@ -336,11 +336,17 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 #endif
 		}
 	}
+	if (up_ref) {
+		if (key->used) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	EVP_PKEY_up_ref(key->evp_key);
+			EVP_PKEY_up_ref(key->evp_key);
 #else
-	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
+			CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
 #endif
+		} else {
+			key->used = 1;
+		}
+        }
 	return key->evp_key;
 }
 
@@ -622,22 +628,23 @@ void pkcs11_destroy_keys(PKCS11_TOKEN *token, unsigned int type)
 	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &tpriv->prv : &tpriv->pub;
 
-	while (keys->num > 0) {
-		PKCS11_KEY *key = &keys->keys[--(keys->num)];
-
-		if (key->evp_key)
-			EVP_PKEY_free(key->evp_key);
-		if (key->label)
-			OPENSSL_free(key->label);
-		if (key->id)
-			OPENSSL_free(key->id);
-		if (key->_private)
-			OPENSSL_free(key->_private);
-	}
+	while (keys->num > 0)
+		pkcs11_PKCS11_KEY_destroy(&keys->keys[--(keys->num)]);
 	if (keys->keys)
 		OPENSSL_free(keys->keys);
 	keys->keys = NULL;
 	keys->num = 0;
+}
+
+void pkcs11_PKCS11_KEY_destroy(PKCS11_KEY *key)
+{
+	if (key != NULL) {
+		if (!key->used)
+			EVP_PKEY_free(key->evp_key);
+		OPENSSL_free(key->label);
+		OPENSSL_free(key->id);
+		OPENSSL_free(key->_private);
+	}
 }
 
 /* vim: set noexpandtab: */
