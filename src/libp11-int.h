@@ -29,6 +29,112 @@
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || defined(LIBRESSL_VERSION_NUMBER)
+#include <openssl/dso.h>
+inline const BIGNUM *RSA_get0_n(const RSA *r)
+{
+    return r->n;
+}
+inline const BIGNUM *RSA_get0_e(const RSA *r)
+{
+    return r->e;
+}
+inline const BIGNUM *RSA_get0_d(const RSA *r)
+{
+    return r->d;
+}
+inline const BIGNUM *RSA_get0_p(const RSA *r)
+{
+    return r->p;
+}
+inline const BIGNUM *RSA_get0_q(const RSA *r)
+{
+    return r->q;
+}
+inline const BIGNUM *RSA_get0_dmp1(const RSA *r)
+{
+    return r->dmp1;
+}
+inline const BIGNUM *RSA_get0_dmq1(const RSA *r)
+{
+    return r->dmq1;
+}
+inline const BIGNUM *RSA_get0_iqmp(const RSA *r)
+{
+    return r->iqmp;
+}
+inline int RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d)
+{
+    /* d is the private component and may be NULL */
+    if (n == NULL || e == NULL)
+        return 0;
+    BN_free(r->n);
+    BN_free(r->e);
+    BN_free(r->d);
+    r->n = n;
+    r->e = e;
+    r->d = d;
+    return 1;
+}
+inline void RSA_set_flags(RSA *r, int flags)
+{
+    r->flags |= flags;
+}
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100003L
+#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
+inline RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
+{
+    RSA_METHOD *ret = OPENSSL_malloc(sizeof(*ret));
+    if (ret != NULL) {
+        memcpy(ret, meth, sizeof(*meth));
+        ret->name = OPENSSL_strdup(meth->name);
+        if (ret->name != NULL)
+            return ret;
+        OPENSSL_free(ret);
+    }
+    return NULL;
+}
+inline int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
+{
+    char *tmpname = OPENSSL_strdup(name);
+    if (tmpname == NULL) {
+        return 0;
+    }
+    OPENSSL_free(meth->name);
+    meth->name = tmpname;
+    return 1;
+}
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
+inline int RSA_meth_set_priv_enc(RSA_METHOD *meth,
+                          int (*priv_enc) (int flen, const unsigned char *from,
+                                           unsigned char *to, RSA *rsa,
+                                           int padding))
+{
+    meth->rsa_priv_enc = priv_enc;
+    return 1;
+}
+inline int RSA_meth_set_priv_dec(RSA_METHOD *meth,
+                          int (*priv_dec) (int flen, const unsigned char *from,
+                                           unsigned char *to, RSA *rsa,
+                                           int padding))
+{
+    meth->rsa_priv_dec = priv_dec;
+    return 1;
+}
+inline int RSA_meth_set_finish(RSA_METHOD *meth, int (*finish) (RSA *rsa))
+{
+    meth->finish = finish;
+    return 1;
+}
+#endif
+
 #if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
 typedef int PKCS11_RWLOCK;
 #else

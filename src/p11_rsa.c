@@ -223,12 +223,7 @@ success:
 	rsa = RSA_new();
 	if (!rsa)
 		goto failure;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 	RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
-#else
-	rsa->n = rsa_n;
-	rsa->e = rsa_e;
-#endif
 	return rsa;
 }
 
@@ -275,18 +270,14 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 
 	if (key->isPrivate) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
-#else
-		rsa->flags |= RSA_FLAG_EXT_PKEY;
-#endif
 	}
 	/* TODO: Retrieve the RSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
 #if OPENSSL_VERSION_NUMBER < 0x01010000L
 	/* RSA_FLAG_SIGN_VER is no longer needed since OpenSSL 1.1 */
-	rsa->flags |= RSA_FLAG_SIGN_VER;
+	RSA_set_flags(rsa, RSA_FLAG_SIGN_VER);
 #endif
 	pkcs11_set_ex_data_rsa(rsa, key);
 	RSA_free(rsa); /* Drops our reference to it */
@@ -301,12 +292,7 @@ int pkcs11_get_key_modulus(PKCS11_KEY *key, BIGNUM **bn)
 
 	if (!rsa)
 		return 0;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
-	RSA_get0_key(rsa, &rsa_n, NULL, NULL);
-#else
-	rsa_n=rsa->n;
-#endif
-	*bn = BN_dup(rsa_n);
+	*bn = BN_dup(RSA_get0_n(rsa));
 	return *bn == NULL ? 0 : 1;
 }
 
@@ -318,12 +304,7 @@ int pkcs11_get_key_exponent(PKCS11_KEY *key, BIGNUM **bn)
 
 	if (!rsa)
 		return 0;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
-	RSA_get0_key(rsa, NULL, &rsa_e, NULL);
-#else
-	rsa_e=rsa->e;
-#endif
-	*bn = BN_dup(rsa_e);
+	*bn = BN_dup(RSA_get0_e(rsa));
 	return *bn == NULL ? 0 : 1;
 }
 
@@ -335,29 +316,6 @@ int pkcs11_get_key_size(PKCS11_KEY *key)
 		return 0;
 	return RSA_size(rsa);
 }
-
-#if ( ( defined (OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER < 0x10100005L ) || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3020199L ) )
-
-int (*RSA_meth_get_priv_enc(const RSA_METHOD *meth))
-		(int flen, const unsigned char *from,
-			unsigned char *to, RSA *rsa, int padding)
-{
-    return meth->rsa_priv_enc;
-}
-
-int (*RSA_meth_get_priv_dec(const RSA_METHOD *meth))
-		(int flen, const unsigned char *from,
-			unsigned char *to, RSA *rsa, int padding)
-{
-    return meth->rsa_priv_dec;
-}
-
-static int (*RSA_meth_get_finish(const RSA_METHOD *meth)) (RSA *rsa)
-{
-    return meth->finish;
-}
-
-#endif
 
 static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding)
@@ -417,69 +375,6 @@ static void free_rsa_ex_index()
 	}
 #endif
 }
-
-#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
-
-static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
-{
-	RSA_METHOD *ret = OPENSSL_malloc(sizeof(RSA_METHOD));
-	if (!ret)
-		return NULL;
-	memcpy(ret, meth, sizeof(RSA_METHOD));
-	ret->name = OPENSSL_strdup(meth->name);
-	if (!ret->name) {
-		OPENSSL_free(ret);
-		return NULL;
-	}
-	return ret;
-}
-
-static int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
-{
-	char *tmp = OPENSSL_strdup(name);
-	if (!tmp)
-		return 0;
-	OPENSSL_free((char *)meth->name);
-	meth->name = tmp;
-	return 1;
-}
-
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3000000L )
-
-static int RSA_meth_set_flags(RSA_METHOD *meth, int flags)
-{
-	meth->flags = flags;
-	return 1;
-}
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
-
-static int RSA_meth_set_priv_enc(RSA_METHOD *meth,
-		int (*priv_enc) (int flen, const unsigned char *from,
-		unsigned char *to, RSA *rsa, int padding))
-{
-	meth->rsa_priv_enc = priv_enc;
-	return 1;
-}
-
-static int RSA_meth_set_priv_dec(RSA_METHOD *meth,
-		int (*priv_dec) (int flen, const unsigned char *from,
-		unsigned char *to, RSA *rsa, int padding))
-{
-	meth->rsa_priv_dec = priv_dec;
-	return 1;
-}
-
-static int RSA_meth_set_finish(RSA_METHOD *meth, int (*finish)(RSA *rsa))
-{
-	meth->finish = finish;
-	return 1;
-}
-
-#endif
 
 /*
  * Overload the default OpenSSL methods for RSA

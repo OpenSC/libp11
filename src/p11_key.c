@@ -227,7 +227,6 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 	CK_ATTRIBUTE attrs[32];
 	unsigned int n = 0;
 	int rv;
-	const BIGNUM *rsa_n, *rsa_e, *rsa_d, *rsa_p, *rsa_q, *rsa_dmp1, *rsa_dmq1, *rsa_iqmp;
 
 	/* First, make sure we have a session */
 	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
@@ -251,40 +250,24 @@ static int pkcs11_store_key(PKCS11_TOKEN *token, EVP_PKEY *pk,
 		pkcs11_addattr_bool(attrs + n++, CKA_VERIFY, TRUE);
 		pkcs11_addattr_bool(attrs + n++, CKA_WRAP, TRUE);
 	}
-#if OPENSSL_VERSION_NUMBER >= 0x10100003L && !defined(LIBRESSL_VERSION_NUMBER)
 	if (EVP_PKEY_base_id(pk) == EVP_PKEY_RSA) {
 		RSA *rsa = EVP_PKEY_get1_RSA(pk);
+
 		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
-		RSA_get0_key(rsa, &rsa_n, &rsa_e, &rsa_d);
-		RSA_get0_factors(rsa, &rsa_p, &rsa_q);
-		RSA_get0_crt_params(rsa, &rsa_dmp1, &rsa_dmq1, &rsa_iqmp);
-		RSA_free(rsa);
-#else
-	if (pk->type == EVP_PKEY_RSA) {
-		RSA *rsa = pk->pkey.rsa;
-		pkcs11_addattr_int(attrs + n++, CKA_KEY_TYPE, CKK_RSA);
-		rsa_n=rsa->n;
-		rsa_e=rsa->e;
-		rsa_d=rsa->d;
-		rsa_p=rsa->p;
-		rsa_q=rsa->q;
-		rsa_dmp1=rsa->dmp1;
-		rsa_dmq1=rsa->dmq1;
-		rsa_iqmp=rsa->iqmp;
-#endif
-		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, rsa_n);
-		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, rsa_e);
+		pkcs11_addattr_bn(attrs + n++, CKA_MODULUS, RSA_get0_n(rsa));
+		pkcs11_addattr_bn(attrs + n++, CKA_PUBLIC_EXPONENT, RSA_get0_e(rsa));
 		if (type == CKO_PRIVATE_KEY) {
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIVATE_EXPONENT, rsa_d);
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_1, rsa_p);
-			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_2, rsa_q);
-			if (rsa_dmp1)
-				pkcs11_addattr_bn(attrs + n++, CKA_EXPONENT_1, rsa_dmp1);
-			if (rsa_dmq1)
-				pkcs11_addattr_bn(attrs + n++, CKA_EXPONENT_2, rsa_dmq1);
-			if (rsa_iqmp)
-				pkcs11_addattr_bn(attrs + n++, CKA_COEFFICIENT, rsa_iqmp);
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIVATE_EXPONENT, RSA_get0_d(rsa));
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_1, RSA_get0_p(rsa));
+			pkcs11_addattr_bn(attrs + n++, CKA_PRIME_2, RSA_get0_q(rsa));
+			if (RSA_get0_dmp1(rsa) != NULL)
+				pkcs11_addattr_bn(attrs + n++, CKA_EXPONENT_1, RSA_get0_dmp1(rsa));
+			if (RSA_get0_dmq1(rsa) != NULL)
+				pkcs11_addattr_bn(attrs + n++, CKA_EXPONENT_2, RSA_get0_dmq1(rsa));
+			if (RSA_get0_iqmp(rsa) != NULL)
+				pkcs11_addattr_bn(attrs + n++, CKA_COEFFICIENT, RSA_get0_iqmp(rsa));
 		}
+		RSA_free(rsa);
 	} else {
 		pkcs11_zap_attrs(attrs, n);
 		P11err(P11_F_PKCS11_STORE_KEY, P11_R_NOT_SUPPORTED);
