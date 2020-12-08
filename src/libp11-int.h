@@ -336,6 +336,10 @@ extern int pkcs11_generate_key(PKCS11_TOKEN * token,
 	int algorithm, unsigned int bits,
 	char *label, unsigned char* id, size_t id_len);
 
+/* Generate and store a private EC key on the token */
+extern int pkcs11_generate_ec_key(PKCS11_TOKEN * token, const char *curve,
+	char *label, unsigned char* id, size_t id_len);
+
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_KEY *);
 
