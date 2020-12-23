@@ -365,6 +365,22 @@ int ctx_finish(ENGINE_CTX *ctx)
 }
 
 /******************************************************************************/
+/* Common functions for object handling                                       */
+/******************************************************************************/
+
+static int match_token(const PKCS11_SLOT* slot, const PKCS11_TOKEN* match_tok) {
+	return (match_tok && slot->token &&
+				(!match_tok->label ||
+					!strcmp(match_tok->label, slot->token->label)) &&
+				(!match_tok->manufacturer ||
+					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
+				(!match_tok->serialnr ||
+					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
+				(!match_tok->model ||
+					!strcmp(match_tok->model, slot->token->model)));
+}
+
+/******************************************************************************/
 /* Certificate handling                                                       */
 /******************************************************************************/
 
@@ -396,7 +412,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 		if (!strncasecmp(s_slot_cert_id, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, s_slot_cert_id, &match_tok,
 				cert_id, &cert_id_len,
-				tmp_pin, &tmp_pin_len, &cert_label);
+				tmp_pin, &tmp_pin_len, &cert_label, &slot_nr);
 			if (!n) {
 				ctx_log(ctx, 0,
 					"The certificate ID is not a valid PKCS#11 URI\n"
@@ -470,15 +486,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			found_slot = slot;
 		}
 
-		if (match_tok && slot->token &&
-				(!match_tok->label ||
-					!strcmp(match_tok->label, slot->token->label)) &&
-				(!match_tok->manufacturer ||
-					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(!match_tok->serialnr ||
-					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(!match_tok->model ||
-					!strcmp(match_tok->model, slot->token->model))) {
+		if (match_token(slot, match_tok)) {
 			found_slot = slot;
 		}
 		ctx_log(ctx, 1, "[%lu] %-25.25s  %-16s",
@@ -688,7 +696,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		if (!strncasecmp(s_slot_key_id, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, s_slot_key_id, &match_tok,
 				key_id, &key_id_len,
-				tmp_pin, &tmp_pin_len, &key_label);
+				tmp_pin, &tmp_pin_len, &key_label, &slot_nr);
 			if (!n) {
 				ctx_log(ctx, 0,
 					"The key ID is not a valid PKCS#11 URI\n"
@@ -742,7 +750,26 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		goto error;
 	}
 
-	for (n = 0; n < ctx->slot_count; n++) {
+	if (slot_nr >= 0) {
+		slot = ctx->slot_list + slot_nr;
+		ctx_log(ctx, 0, "selecting slot %d...\n", slot_nr);
+		if (match_token(slot, match_tok)) {
+			found_slot = slot;
+			ctx_log(ctx, 0, "found new slot %d\n", (int)PKCS11_get_slotid_from_slot(slot));
+		}
+
+		if (found_slot && found_slot->token && !found_slot->token->initialized)
+			ctx_log(ctx, 0, "Found uninitialized token\n");
+
+		matched_count = 0;
+		/* Ignore slots without tokens or with uninitialized token */
+		if (found_slot && found_slot->token && found_slot->token->initialized) {
+			ctx_log(ctx, 0, "selected slot %d matched!\n", slot_nr);
+			matched_slots[0] = found_slot;
+			matched_count = 1;
+		}
+	}
+	else for (n = 0; n < ctx->slot_count; n++) {
 		slot = ctx->slot_list + n;
 		flags[0] = '\0';
 		if (slot->token) {
@@ -766,15 +793,7 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 			found_slot = slot;
 		}
 
-		if (match_tok && slot->token &&
-				(!match_tok->label ||
-					!strcmp(match_tok->label, slot->token->label)) &&
-				(!match_tok->manufacturer ||
-					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(!match_tok->serialnr ||
-					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(!match_tok->model ||
-					!strcmp(match_tok->model, slot->token->model))) {
+		if (match_token(slot, match_tok)) {
 			found_slot = slot;
 		}
 		ctx_log(ctx, 1, "[%lu] %-25.25s  %-16s",

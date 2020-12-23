@@ -315,10 +315,12 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		const char *uri, PKCS11_TOKEN **p_tok,
 		unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
-		char **label)
+		char **label, int* slot_num)
 {
 	PKCS11_TOKEN *tok;
 	char *newlabel = NULL;
+	char *slot_num_s = NULL;
+	int slot_num_i = -1;
 	const char *end, *p;
 	int rv = 1, id_set = 0, pin_set = 0;
 
@@ -364,6 +366,15 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 			p += 11;
 			rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, (unsigned char *)pin, pin_len);
 			pin_set = 1;
+		} else if (!strncmp(p, "slot-id=", 8)) {
+			p += 8;
+			rv = parse_uri_attr(ctx, p, end - p, (void *)&slot_num_s, NULL);
+			// update slot value if parsing succeded
+			if (rv) slot_num_i = strtoimax(slot_num_s, NULL, 10);
+			// free slot string immediately to prevent memory leaks
+			// (suppose URI consists of two 'slot-id')
+			if (slot_num_s) OPENSSL_free(slot_num_s);
+			slot_num_s = NULL;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
 
@@ -386,8 +397,9 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		*pin_len = 0;
 
 	if (rv) {
-		*label = newlabel;
-		*p_tok = tok;
+		if (label) *label = newlabel;
+		if (p_tok) *p_tok = tok;
+		if (slot_num) *slot_num = slot_num_i;
 	} else {
 		OPENSSL_free(tok);
 		tok = NULL;

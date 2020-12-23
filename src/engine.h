@@ -83,7 +83,7 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 int parse_pkcs11_uri(ENGINE_CTX *ctx,
 	const char *uri, PKCS11_TOKEN **p_tok,
 	unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
-	char **label);
+	char **label, int* slot_num);
 
 int parse_slot_id_string(ENGINE_CTX *ctx,
 	const char *slot_id, int *slot,
