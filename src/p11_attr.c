@@ -136,7 +136,9 @@ void pkcs11_addattr_int(CK_ATTRIBUTE_PTR ap, int type, unsigned long value)
 
 void pkcs11_addattr_bool(CK_ATTRIBUTE_PTR ap, int type, int value)
 {
-	pkcs11_addattr(ap, type, &value, sizeof(CK_BBOOL));
+	CK_BBOOL bValue = value;
+
+	pkcs11_addattr(ap, type, &bValue, sizeof(bValue));
 }
 
 void pkcs11_addattr_s(CK_ATTRIBUTE_PTR ap, int type, const char *s)
