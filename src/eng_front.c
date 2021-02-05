@@ -75,6 +75,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"FORCE_LOGIN",
 		"Force login to the PKCS#11 module",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_CLAIM_MODULE_TOKEN_FIPS,
+		"CLAIM_MODULE_TOKEN_FIPS",
+		"Take responsibility that Module and Token are FIPS complient",
+		ENGINE_CMD_FLAG_NO_INPUT},
 	{0, NULL, NULL, 0}
 };
 

@@ -28,6 +28,7 @@
 #include <openssl/rsa.h>
 
 static int rsa_ex_index = 0;
+static int claim_module_token_fips = 0;
 
 static RSA *pkcs11_rsa(PKCS11_KEY *key)
 {
@@ -453,6 +454,11 @@ static int RSA_meth_set_flags(RSA_METHOD *meth, int flags)
 	meth->flags = flags;
 	return 1;
 }
+
+static int RSA_meth_get_flags(RSA_METHOD *meth)
+{
+	return meth->flags;
+}
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2080000L )
@@ -482,6 +488,20 @@ static int RSA_meth_set_finish(RSA_METHOD *meth, int (*finish)(RSA *rsa))
 #endif
 
 /*
+ * Set claim_module_token_fips flag to claim to OpenSSL with FIPS that the
+ * PKCS11 module and tokens meet the FIPS standards.
+ * Has no effect when linked with non-FIPS OpenSSL.
+ * Called by engine when CLAIM_MODULE_TOKEN_FIPS is used when loading engine
+ * May be called by application when using libp11 without engine.
+ */
+
+void PKCS11_set_claim_module_token_fips(void)
+{
+	claim_module_token_fips = 1;
+	PKCS11_get_rsa_method(); /* force seting of claim_module_token_fips */
+}
+
+/*
  * Overload the default OpenSSL methods for RSA
  */
 RSA_METHOD *PKCS11_get_rsa_method(void)
@@ -499,6 +519,9 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		RSA_meth_set_priv_dec(ops, pkcs11_rsa_priv_dec_method);
 		RSA_meth_set_finish(ops, pkcs11_rsa_free_method);
 	}
+	/* do every time, because first called before engine has read the flag */
+	if (ops && claim_module_token_fips)
+		 RSA_meth_set_flags(ops,(RSA_meth_get_flags(ops) | RSA_FLAG_FIPS_METHOD));
 	return ops;
 }
 
