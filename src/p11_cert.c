@@ -166,7 +166,7 @@ static int pkcs11_next_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	CK_OBJECT_HANDLE obj;
 	CK_ULONG count;
 	int rv;
-
+	
 	/* Get the next matching object */
 	rv = CRYPTOKI_call(ctx, C_FindObjects(session, &obj, 1, &count));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_NEXT_CERT, rv);
@@ -234,6 +234,9 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	cert->id_len = 0;
 	pkcs11_getattr_alloc(token, obj, CKA_ID, &cert->id, &cert->id_len);
 
+	cert->serialNumber_len = 0;
+	pkcs11_getattr_alloc(token, obj, CKA_SERIAL_NUMBER, &cert->serialNumber, &cert->serialNumber_len);
+
 	/* Fill private properties */
 	cert->_private = cpriv;
 	cpriv->object = obj;
@@ -262,6 +265,8 @@ void pkcs11_destroy_certs(PKCS11_TOKEN *token)
 		OPENSSL_free(cert->label);
 		if (cert->id)
 			OPENSSL_free(cert->id);
+		if (cert->serialNumber)
+			OPENSSL_free(cert->serialNumber);
 		if (cert->_private)
 			OPENSSL_free(cert->_private);
 	}

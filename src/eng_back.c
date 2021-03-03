@@ -888,13 +888,29 @@ static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
 		if (s_slot_key_id && *s_slot_key_id && (key_id_len != 0 || key_label)) {
 			for (m = 0; m < key_count; m++) {
 				PKCS11_KEY *k = keys + m;
+				char* label = k->label;
+
+				PKCS11_CERT* cert = NULL;
+				
+				if (1 <= ctx->verbose || !label || strlen(label) == 0)
+					cert = PKCS11_find_certificate(k);
+
+				if (cert && (!label || strlen(label) == 0))
+					label = cert->label;
 
 				ctx_log(ctx, 1, "  %2u %c%c id=", m + 1,
 						k->isPrivate ? 'P' : ' ',
 						k->needLogin ? 'L' : ' ');
 				dump_hex(ctx, 1, k->id, k->id_len);
-				ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
-				if (key_label && k->label && strcmp(k->label, key_label) == 0)
+				ctx_log(ctx, 1, " label=%s", label ? label : "(null)");
+				if (cert && cert->serialNumber_len >= 2 && cert->serialNumber[0] == 2 && cert->serialNumber_len - 2 == cert->serialNumber[1]) //simple DER decoding....
+				{
+					ctx_log(ctx, 1, ", matching certificate serial number=");
+					dump_hex(ctx, 1, cert->serialNumber + 2, cert->serialNumber_len - 2);
+				}
+				ctx_log(ctx, 1, "\n");
+
+				if (key_label && label && strcmp(label, key_label) == 0)
 					selected_key = k;
 				if (key_id_len != 0 && k->id_len == key_id_len
 						&& memcmp(k->id, key_id, key_id_len) == 0)
