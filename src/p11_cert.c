@@ -149,12 +149,17 @@ static int pkcs11_find_certs(PKCS11_TOKEN *token)
 	/* Tell the PKCS11 lib to enumerate all matching objects */
 	cert_search_class = CKO_CERTIFICATE;
 	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(spriv->session, cert_search_attrs, 1));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_CERTS, rv);
+	if (rv) {
+		CKRerr(CKR_F_PKCS11_FIND_CERTS, rv);
+		goto out;
+	}
+	ERR_clear_error();
 
 	do {
 		res = pkcs11_next_cert(ctx, token, spriv->session);
 	} while (res == 0);
 
+out:
 	CRYPTOKI_call(ctx, C_FindObjectsFinal(spriv->session));
 
 	return (res < 0) ? -1 : 0;
