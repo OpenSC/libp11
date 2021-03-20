@@ -23,9 +23,10 @@
 #include "libp11-int.h"
 
 #ifndef _WIN32
-#include <unistd.h>
 
-#ifdef HAVE___REGISTER_ATFORK
+#ifdef HAVE_PTHREAD
+
+#include <pthread.h>
 
 static unsigned int P11_forkid = 0;
 
@@ -41,23 +42,22 @@ static int _P11_detect_fork(unsigned int forkid)
 	return 1;
 }
 
-static void fork_handler(void)
+static void _P11_atfork_child(void)
 {
 	P11_forkid++;
 }
 
-extern int __register_atfork(void (*)(void), void(*)(void), void (*)(void), void *);
-extern void *__dso_handle;
-
 __attribute__((constructor))
 int _P11_register_fork_handler(void)
 {
-	if (__register_atfork(0, 0, fork_handler, __dso_handle) != 0)
+	if (pthread_atfork(0, 0, _P11_atfork_child) != 0)
 		return -1;
 	return 0;
 }
 
-#else /* HAVE___REGISTER_ATFORK */
+#else /* HAVE_PTHREAD */
+
+#include <unistd.h>
 
 static unsigned int _P11_get_forkid(void)
 {
@@ -71,7 +71,7 @@ static int _P11_detect_fork(unsigned int forkid)
 	return 1;
 }
 
-#endif /* HAVE___REGISTER_ATFORK */
+#endif /* HAVE_PTHREAD */
 
 #else /* !_WIN32 */
 
