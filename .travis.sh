@@ -91,7 +91,9 @@ if [ -n "${OPENSSL}" ]; then
     install_openssl ${OPENSSL}
 fi
 
-install_from_github OpenSC OpenSC master
+# sometimes git master has compile warnings in it
+install_from_github OpenSC OpenSC master --disable-strict
+
 # softhsm is required for "make check"
 install_from_github opendnssec SoftHSMv2 master --disable-gost \
     ${SOFTHSM_OPENSSL_DIR}
