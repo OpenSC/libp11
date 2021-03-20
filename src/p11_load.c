@@ -41,7 +41,6 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	ctx->_private = cpriv;
 	cpriv->forkid = get_forkid();
 	cpriv->rwlock = CRYPTO_THREAD_lock_new();
-	cpriv->sign_initialized = 0;
 
 	return ctx;
 fail:
