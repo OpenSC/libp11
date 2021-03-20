@@ -67,7 +67,8 @@ install_openssl() {
 }
 
 if [ $TRAVIS_OS_NAME = 'osx' ]; then
-    brew update
+    export HOMEBREW_NO_AUTO_UPDATE=1
+    export HOMEBREW_NO_INSTALL_CLEANUP=1
     brew install pcsc-lite
     brew link --force pcsc-lite
 else
