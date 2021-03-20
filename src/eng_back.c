@@ -1066,6 +1066,12 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 	return 1;
 }
 
+static int ctx_ctrl_claim_module_token_fips(ENGINE_CTX *ctx)
+{
+	PKCS11_set_claim_module_token_fips();
+	return 1;
+}
+
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -1092,6 +1098,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_set_callback_data(ctx, p);
 	case CMD_FORCE_LOGIN:
 		return ctx_ctrl_force_login(ctx);
+	case CMD_CLAIM_MODULE_TOKEN_FIPS:
+		return ctx_ctrl_claim_module_token_fips(ctx);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
