@@ -298,7 +298,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	RSA *rsa;
 	PKCS11_KEY *key;
-	int rv = 0;
+	int rv = 0, padding;
 	CK_ULONG size = *siglen;
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
@@ -306,12 +306,19 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_SLOT_private *spriv;
 	PKCS11_CTX_private *cpriv;
 	const EVP_MD *sig_md;
+	CK_MECHANISM mechanism;
+	CK_RSA_PKCS_PSS_PARAMS pss_params;
 
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_sign() "
 		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
 		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
 #endif
+	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
+	 * the size inquiry internally. */
+	 if (!sig)
+		return -1;
+
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
 		return -1;
@@ -334,45 +341,37 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (tbslen != (size_t)EVP_MD_size(sig_md))
 		return -1;
 
-	if (!cpriv->sign_initialized) {
-		int padding;
-		CK_MECHANISM mechanism;
-		CK_RSA_PKCS_PSS_PARAMS pss_params;
-
-		memset(&mechanism, 0, sizeof mechanism);
-		EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-		switch (padding) {
-		case RSA_PKCS1_PSS_PADDING:
+	memset(&mechanism, 0, sizeof mechanism);
+	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
+	switch (padding) {
+	case RSA_PKCS1_PSS_PADDING:
 #ifdef DEBUG
-			fprintf(stderr, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
-				__FILE__, __LINE__);
+		fprintf(stderr, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
+			__FILE__, __LINE__);
 #endif
-			if (pkcs11_params_pss(&pss_params, evp_pkey_ctx) < 0)
-				return -1;
-			mechanism.mechanism = CKM_RSA_PKCS_PSS;
-			mechanism.pParameter = &pss_params;
-			mechanism.ulParameterLen = sizeof pss_params;
-			break;
-		default:
-#ifdef DEBUG
-			fprintf(stderr, "%s:%d unsupported padding: %d\n",
-				__FILE__, __LINE__, padding);
-#endif
+		if (pkcs11_params_pss(&pss_params, evp_pkey_ctx) < 0)
 			return -1;
-		} /* end switch(padding) */
+		mechanism.mechanism = CKM_RSA_PKCS_PSS;
+		mechanism.pParameter = &pss_params;
+		mechanism.ulParameterLen = sizeof pss_params;
+		break;
+	default:
+#ifdef DEBUG
+		fprintf(stderr, "%s:%d unsupported padding: %d\n",
+			__FILE__, __LINE__, padding);
+#endif
+		return -1;
+	} /* end switch(padding) */
 
-		CRYPTO_THREAD_write_lock(cpriv->rwlock);
-		rv = CRYPTOKI_call(ctx,
-			C_SignInit(spriv->session, &mechanism, kpriv->object));
-		if (!rv && kpriv->always_authenticate == CK_TRUE)
-			rv = pkcs11_authenticate(key);
-	}
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	rv = CRYPTOKI_call(ctx,
+		C_SignInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
-	cpriv->sign_initialized = !rv && sig == NULL;
-	if (!cpriv->sign_initialized)
-		CRYPTO_THREAD_unlock(cpriv->rwlock);
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
 		__FILE__, __LINE__, rv);
