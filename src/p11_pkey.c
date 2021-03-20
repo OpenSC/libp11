@@ -549,6 +549,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_CTX_private *cpriv;
 	const EVP_MD *sig_md;
 	ECDSA_SIG *ossl_sig;
+	CK_MECHANISM mechanism;
 
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() "
@@ -567,6 +568,12 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	eckey = (EC_KEY *)EVP_PKEY_get0_EC_KEY(pkey);
 	if (!eckey)
 		goto error;
+
+	if (!sig) {
+		*siglen = (size_t)ECDSA_size(eckey);
+		rv = CKR_OK;
+		goto error;
+	}
 
 	if (*siglen < (size_t)ECDSA_size(eckey))
 		goto error;
@@ -591,25 +598,19 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		goto error;
 
 	rv = 0;
-	if (!cpriv->sign_initialized) {
-		CK_MECHANISM mechanism;
-		memset(&mechanism, 0, sizeof mechanism);
+	memset(&mechanism, 0, sizeof mechanism);
+	mechanism.mechanism = CKM_ECDSA;
 
-		mechanism.mechanism = CKM_ECDSA;
-
-		CRYPTO_THREAD_write_lock(cpriv->rwlock);
-		rv = CRYPTOKI_call(ctx,
-			C_SignInit(spriv->session, &mechanism, kpriv->object));
-		if (!rv && kpriv->always_authenticate == CK_TRUE)
-			rv = pkcs11_authenticate(key);
-	}
+	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	rv = CRYPTOKI_call(ctx,
+		C_SignInit(spriv->session, &mechanism, kpriv->object));
+	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		rv = pkcs11_authenticate(key);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+	CRYPTO_THREAD_unlock(cpriv->rwlock);
 
-	cpriv->sign_initialized = !rv && sig == NULL;
-	if (!cpriv->sign_initialized)
-		CRYPTO_THREAD_unlock(cpriv->rwlock);
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
 		__FILE__, __LINE__, rv);
