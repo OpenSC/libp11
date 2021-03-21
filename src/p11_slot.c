@@ -149,23 +149,78 @@ PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots,
  */
 int pkcs11_open_session(PKCS11_SLOT *slot, int rw)
 {
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	int rv;
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
-	if (spriv->haveSession) {
-		CRYPTOKI_call(ctx, C_CloseSession(spriv->session));
-		spriv->haveSession = 0;
+	pthread_mutex_lock(&spriv->lock);
+	/* If different mode requested, flush pool */
+	if (rw != spriv->rw_mode) {
+		CRYPTOKI_call(ctx, C_CloseAllSessions(spriv->id));
+		spriv->rw_mode = rw;
 	}
-	rv = CRYPTOKI_call(ctx,
-		C_OpenSession(spriv->id,
-			CKF_SERIAL_SESSION | (rw ? CKF_RW_SESSION : 0),
-			NULL, NULL, &spriv->session));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_OPEN_SESSION, rv);
-	spriv->haveSession = 1;
-	spriv->prev_rw = rw;
+	spriv->num_sessions = 0;
+	spriv->session_head = spriv->session_tail = 0;
+	pthread_mutex_unlock(&spriv->lock);
 
 	return 0;
+}
+
+int pkcs11_get_session(PKCS11_SLOT * slot, int rw, CK_SESSION_HANDLE *sessionp)
+{
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	int rv = CKR_OK;
+
+	if (rw < 0)
+		return -1;
+
+	pthread_mutex_lock(&spriv->lock);
+	if (spriv->rw_mode < 0)
+		spriv->rw_mode = rw;
+	rw = spriv->rw_mode;
+	do {
+		/* Get session from the pool */
+		if (spriv->session_head != spriv->session_tail) {
+			*sessionp = spriv->session_pool[spriv->session_head];
+			spriv->session_head = (spriv->session_head + 1) % spriv->session_poolsize;
+			break;
+		}
+
+		/* Check if new can be instantiated */
+		if (spriv->num_sessions < spriv->max_sessions) {
+			rv = CRYPTOKI_call(ctx,
+				C_OpenSession(spriv->id,
+					CKF_SERIAL_SESSION | (rw ? CKF_RW_SESSION : 0),
+					NULL, NULL, sessionp));
+			if (rv == CKR_OK) {
+				spriv->num_sessions++;
+				break;
+			}
+
+			/* Remember the maximum session count */
+			if (rv == CKR_SESSION_COUNT)
+				spriv->max_sessions = spriv->num_sessions;
+		}
+
+		/* Wait for a session to become available */
+		pthread_cond_wait(&spriv->cond, &spriv->lock);
+	} while (1);
+	pthread_mutex_unlock(&spriv->lock);
+
+	return 0;
+}
+
+void pkcs11_put_session(PKCS11_SLOT * slot, CK_SESSION_HANDLE session)
+{
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+
+	pthread_mutex_lock(&spriv->lock);
+
+	spriv->session_pool[spriv->session_tail] = session;
+	spriv->session_tail = (spriv->session_tail + 1) % spriv->session_poolsize;
+	pthread_cond_signal(&spriv->cond);
+
+	pthread_mutex_unlock(&spriv->lock);
 }
 
 /*
@@ -173,30 +228,9 @@ int pkcs11_open_session(PKCS11_SLOT *slot, int rw)
  */
 int pkcs11_is_logged_in(PKCS11_SLOT *slot, int so, int *res)
 {
-	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	CK_SESSION_INFO session_info;
-	int rv;
 
-	if (spriv->loggedIn) {
-		*res = 1;
-		return 0;
-	}
-	if (!spriv->haveSession) {
-		/* SO gets a r/w session by default,
-		 * user gets a r/o session by default. */
-		if (PKCS11_open_session(slot, so))
-			return -1;
-	}
-
-	rv = CRYPTOKI_call(ctx, C_GetSessionInfo(spriv->session, &session_info));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_IS_LOGGED_IN, rv);
-	if (so) {
-		*res = session_info.state == CKS_RW_SO_FUNCTIONS;
-	} else {
-		*res = session_info.state == CKS_RO_USER_FUNCTIONS ||
-			session_info.state == CKS_RW_USER_FUNCTIONS;
-	}
+	*res = spriv->logged_in == so;
 	return 0;
 }
 
@@ -207,25 +241,24 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (spriv->loggedIn)
+	if (spriv->logged_in >= 0)
 		return 0; /* Nothing to do */
 
-	if (!spriv->haveSession) {
-		/* SO gets a r/w session by default,
-		 * user gets a r/o session by default. */
-		if (pkcs11_open_session(slot, so))
-			return -1;
-	}
+	/* SO needs a r/w session, user can be checked with a r/o session. */
+	if (pkcs11_get_session(slot, so, &session))
+		return -1;
 
 	rv = CRYPTOKI_call(ctx,
-		C_Login(spriv->session, so ? CKU_SO : CKU_USER,
+		C_Login(session, so ? CKU_SO : CKU_USER,
 			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
-	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) /* logged in -> OK */
-		CRYPTOKI_checkerr(CKR_F_PKCS11_LOGIN, rv);
-	spriv->loggedIn = 1;
+	pkcs11_put_session(slot, session);
 
+	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) { /* logged in -> OK */
+		CRYPTOKI_checkerr(CKR_F_PKCS11_LOGIN, rv);
+	}
 	if (spriv->prev_pin != pin) {
 		if (spriv->prev_pin) {
 			OPENSSL_cleanse(spriv->prev_pin, strlen(spriv->prev_pin));
@@ -233,7 +266,7 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin)
 		}
 		spriv->prev_pin = OPENSSL_strdup(pin);
 	}
-	spriv->prev_so = so;
+	spriv->logged_in = so;
 	return 0;
 }
 
@@ -243,15 +276,13 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin)
 int pkcs11_reload_slot(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	int logged_in = spriv->logged_in;
 
-	if (spriv->haveSession) {
-		spriv->haveSession = 0;
-		if (pkcs11_open_session(slot, spriv->prev_rw))
-			return -1;
-	}
-	if (spriv->loggedIn) {
-		spriv->loggedIn = 0;
-		if (pkcs11_login(slot, spriv->prev_so, spriv->prev_pin))
+	spriv->num_sessions = 0;
+	spriv->session_head = spriv->session_tail = 0;
+	if (logged_in >= 0) {
+		spriv->logged_in = -1;
+		if (pkcs11_login(slot, logged_in, spriv->prev_pin))
 			return -1;
 	}
 
@@ -265,7 +296,8 @@ int pkcs11_logout(PKCS11_SLOT *slot)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	int rv;
+	CK_SESSION_HANDLE session;
+	int rv = CKR_OK;
 
 	/* Calling PKCS11_logout invalidates all cached
 	 * keys we have */
@@ -274,14 +306,13 @@ int pkcs11_logout(PKCS11_SLOT *slot)
 		pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
 		pkcs11_destroy_certs(slot->token);
 	}
-	if (!spriv->haveSession) {
-		P11err(P11_F_PKCS11_LOGOUT, P11_R_NO_SESSION);
-		return -1;
-	}
 
-	rv = CRYPTOKI_call(ctx, C_Logout(spriv->session));
+	if (pkcs11_get_session(slot, spriv->logged_in, &session) == 0) {
+		rv = CRYPTOKI_call(ctx, C_Logout(session));
+		pkcs11_put_session(slot, session);
+	}
 	CRYPTOKI_checkerr(CKR_F_PKCS11_LOGOUT, rv);
-	spriv->loggedIn = 0;
+	spriv->logged_in = -1;
 	return 0;
 }
 
@@ -323,16 +354,17 @@ int pkcs11_init_pin(PKCS11_TOKEN *token, const char *pin)
 {
 	PKCS11_SLOT *slot = TOKEN2SLOT(token);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_OBJECT_HANDLE session;
 	int len, rv;
 
-	if (!spriv->haveSession) {
+	if (pkcs11_get_session(slot, 1, &session)) {
 		P11err(P11_F_PKCS11_INIT_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	len = pin ? (int) strlen(pin) : 0;
-	rv = CRYPTOKI_call(ctx, C_InitPIN(spriv->session, (CK_UTF8CHAR *) pin, len));
+	rv = CRYPTOKI_call(ctx, C_InitPIN(session, (CK_UTF8CHAR *) pin, len));
+	pkcs11_put_session(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_PIN, rv);
 
 	return pkcs11_check_token(ctx, TOKEN2SLOT(token));
@@ -345,10 +377,10 @@ int pkcs11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 		const char *new_pin)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_SESSION_HANDLE session;
 	int old_len, new_len, rv;
 
-	if (!spriv->haveSession) {
+	if (pkcs11_get_session(slot, 1, &session)) {
 		P11err(P11_F_PKCS11_CHANGE_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
@@ -356,8 +388,9 @@ int pkcs11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 	old_len = old_pin ? (int) strlen(old_pin) : 0;
 	new_len = new_pin ? (int) strlen(new_pin) : 0;
 	rv = CRYPTOKI_call(ctx,
-		C_SetPIN(spriv->session, (CK_UTF8CHAR *) old_pin, old_len,
+		C_SetPIN(session, (CK_UTF8CHAR *) old_pin, old_len,
 			(CK_UTF8CHAR *) new_pin, new_len));
+	pkcs11_put_session(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_CHANGE_PIN, rv);
 
 	return pkcs11_check_token(ctx, slot);
@@ -370,16 +403,17 @@ int pkcs11_seed_random(PKCS11_SLOT *slot, const unsigned char *s,
 		unsigned int s_len)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (!spriv->haveSession && PKCS11_open_session(slot, 0)) {
+	if (pkcs11_get_session(slot, 0, &session)) {
 		P11err(P11_F_PKCS11_SEED_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
-		C_SeedRandom(spriv->session, (CK_BYTE_PTR) s, s_len));
+		C_SeedRandom(session, (CK_BYTE_PTR) s, s_len));
+	pkcs11_put_session(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_SEED_RANDOM, rv);
 
 	return pkcs11_check_token(ctx, slot);
@@ -392,16 +426,18 @@ int pkcs11_generate_random(PKCS11_SLOT *slot, unsigned char *r,
 		unsigned int r_len)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (!spriv->haveSession && PKCS11_open_session(slot, 0)) {
+	if (pkcs11_get_session(slot, 0, &session)) {
 		P11err(P11_F_PKCS11_GENERATE_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
-		C_GenerateRandom(spriv->session, (CK_BYTE_PTR) r, r_len));
+		C_GenerateRandom(session, (CK_BYTE_PTR) r, r_len));
+	pkcs11_put_session(slot, session);
+
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_RANDOM, rv);
 
 	return pkcs11_check_token(ctx, slot);
@@ -427,9 +463,14 @@ static int pkcs11_init_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot, CK_SLOT_ID id)
 	spriv->parent = ctx;
 	spriv->id = id;
 	spriv->forkid = PRIVCTX(ctx)->forkid;
-	spriv->prev_rw = 0;
 	spriv->prev_pin = NULL;
-	spriv->prev_so = 0;
+	spriv->logged_in = -1;
+	spriv->rw_mode = -1;
+	spriv->max_sessions = 16;
+	spriv->session_poolsize = spriv->max_sessions + 1;
+	spriv->session_pool = OPENSSL_malloc(spriv->session_poolsize * sizeof(CK_SESSION_HANDLE));
+	pthread_mutex_init(&spriv->lock, 0);
+	pthread_cond_init(&spriv->cond, 0);
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
@@ -462,6 +503,9 @@ static void pkcs11_release_slot(PKCS11_CTX *ctx, PKCS11_SLOT *slot)
 			OPENSSL_free(spriv->prev_pin);
 		}
 		CRYPTOKI_call(ctx, C_CloseAllSessions(spriv->id));
+		OPENSSL_free(spriv->session_pool);
+		pthread_mutex_destroy(&spriv->lock);
+		pthread_cond_destroy(&spriv->cond);
 	}
 	OPENSSL_free(slot->_private);
 	OPENSSL_free(slot->description);
