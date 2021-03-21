@@ -52,7 +52,6 @@ static ERR_STRING_DATA CKR_str_functs[] = {
 	{ERR_FUNC(CKR_F_PKCS11_PRIVATE_DECRYPT), "pkcs11_private_decrypt"},
 	{ERR_FUNC(CKR_F_PKCS11_PRIVATE_ENCRYPT), "pkcs11_private_encrypt"},
 	{ERR_FUNC(CKR_F_PKCS11_RELOAD_KEY), "pkcs11_reload_key"},
-	{ERR_FUNC(CKR_F_PKCS11_REOPEN_SESSION), "pkcs11_reopen_session"},
 	{ERR_FUNC(CKR_F_PKCS11_SEED_RANDOM), "pkcs11_seed_random"},
 	{ERR_FUNC(CKR_F_PKCS11_STORE_CERTIFICATE), "pkcs11_store_certificate"},
 	{ERR_FUNC(CKR_F_PKCS11_STORE_KEY), "pkcs11_store_key"},

@@ -169,8 +169,7 @@ extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern int pkcs11_reload_key(PKCS11_KEY *);
-extern int pkcs11_reopen_session(PKCS11_SLOT * slot);
-extern int pkcs11_relogin(PKCS11_SLOT * slot);
+extern int pkcs11_reload_slot(PKCS11_SLOT * slot);
 
 /* Managing object attributes */
 extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
@@ -232,7 +231,7 @@ extern void pkcs11_CTX_unload(PKCS11_CTX * ctx);
 extern void pkcs11_CTX_free(PKCS11_CTX * ctx);
 
 /* Open a session in RO or RW mode */
-extern int pkcs11_open_session(PKCS11_SLOT * slot, int rw, int relogin);
+extern int pkcs11_open_session(PKCS11_SLOT * slot, int rw);
 
 /* Get a list of all slots */
 extern int pkcs11_enumerate_slots(PKCS11_CTX * ctx,
@@ -258,7 +257,7 @@ extern PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX * ctx,
 extern int pkcs11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
 
 /* Authenticate to the card */
-extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin, int relogin);
+extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin);
 
 /* De-authenticate from the card */
 extern int pkcs11_logout(PKCS11_SLOT * slot);
