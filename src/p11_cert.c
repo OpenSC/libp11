@@ -66,47 +66,20 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN *token,
 /**
  * Remove a certificate from the associated token
  */
-int pkcs11_remove_certificate(PKCS11_CERT *cert){
+int pkcs11_remove_certificate(PKCS11_CERT *cert)
+{
 	PKCS11_SLOT *slot = CERT2SLOT(cert);
 	PKCS11_CTX *ctx = CERT2CTX(cert);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	CK_OBJECT_HANDLE obj;
-	CK_ULONG count;
-	CK_ATTRIBUTE search_parameters[32];
-	unsigned int n = 0;
+	PKCS11_CERT_private *cpriv = PRIVCERT(cert);
 	int rv;
 
 	/* First, make sure we have a session */
-	if (!spriv->haveSession && PKCS11_open_session(slot, 1)){
+	if (!spriv->haveSession && PKCS11_open_session(slot, 1))
 		return -1;
-	}
 
-	pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_CERTIFICATE);
-	if (cert->id && cert->id_len){
-		pkcs11_addattr(search_parameters + n++, CKA_ID, cert->id, cert->id_len);
-	}
-	if (cert->label){
-	 	pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, cert->label);
-	}
-
-	rv = CRYPTOKI_call(ctx,
-		C_FindObjectsInit(spriv->session, search_parameters, n));
+	rv = CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, cpriv->object));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
-
-	rv = CRYPTOKI_call(ctx, C_FindObjects(spriv->session, &obj, 1, &count));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
-
-	CRYPTOKI_call(ctx, C_FindObjectsFinal(spriv->session));
-	if (count!=1){
-		pkcs11_zap_attrs(search_parameters, n);
-		return -1;
-	}
-	rv = CRYPTOKI_call(ctx, C_DestroyObject(spriv->session, obj));
-	if (rv != CKR_OK){
-		pkcs11_zap_attrs(search_parameters, n);
-		return -1;
-	}
-	pkcs11_zap_attrs(search_parameters, n);
 	return 0;
 }
 
@@ -244,6 +217,48 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	if (ret)
 		*ret = cert;
+	return 0;
+}
+
+/*
+ * Reload certificate object handle
+ */
+int pkcs11_reload_certificate(PKCS11_CERT *cert)
+{
+	PKCS11_SLOT *slot = CERT2SLOT(cert);
+	PKCS11_CTX *ctx = CERT2CTX(cert);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_CERT_private *cpriv = PRIVCERT(cert);
+	CK_ULONG count = 0;
+	CK_ATTRIBUTE search_parameters[32];
+	unsigned int n = 0;
+	int rv;
+
+	/* First, make sure we have a session */
+	if (!spriv->haveSession && PKCS11_open_session(slot, 0)) {
+		return -1;
+	}
+
+	pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_CERTIFICATE);
+	if (cert->id && cert->id_len) {
+		pkcs11_addattr(search_parameters + n++, CKA_ID, cert->id, cert->id_len);
+	}
+	if (cert->label) {
+		pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, cert->label);
+	}
+
+	rv = CRYPTOKI_call(ctx,
+		C_FindObjectsInit(spriv->session, search_parameters, n));
+	if (rv == CKR_OK) {
+		rv = CRYPTOKI_call(ctx,
+			C_FindObjects(spriv->session, &cpriv->object, 1, &count));
+		CRYPTOKI_call(ctx, C_FindObjectsFinal(spriv->session));
+	}
+	pkcs11_zap_attrs(search_parameters, n);
+	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_CERTIFICATE, rv);
+
+	if (count != 1)
+		return -1;
 	return 0;
 }
 

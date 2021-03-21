@@ -106,6 +106,7 @@ typedef struct pkcs11_cert_private {
 	CK_OBJECT_HANDLE object;
 	unsigned char id[255];
 	size_t id_len;
+	unsigned int forkid;
 } PKCS11_CERT_private;
 #define PRIVCERT(cert)		((PKCS11_CERT_private *) (cert)->_private)
 #define CERT2SLOT(cert)		TOKEN2SLOT(CERT2TOKEN(cert))
@@ -169,6 +170,7 @@ extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_TOKEN *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_TOKEN *);
 extern int pkcs11_reload_key(PKCS11_KEY *);
+extern int pkcs11_reload_certificate(PKCS11_CERT *cert);
 extern int pkcs11_reload_slot(PKCS11_SLOT * slot);
 
 /* Managing object attributes */
