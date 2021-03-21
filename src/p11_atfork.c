@@ -144,6 +144,27 @@ static int check_key_fork_int(PKCS11_KEY *key)
 }
 
 /*
+ * PKCS#11 reinitialization after fork
+ * Also reloads the key
+ */
+static int check_cert_fork_int(PKCS11_CERT *cert)
+{
+	PKCS11_SLOT *slot = CERT2SLOT(cert);
+	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_CERT_private *cpriv = PRIVCERT(cert);
+
+	if (check_slot_fork_int(slot) < 0)
+		return -1;
+
+	if (spriv->forkid != cpriv->forkid) {
+		if (pkcs11_reload_certificate(cert) < 0)
+			return -1;
+		cpriv->forkid = spriv->forkid;
+	}
+	return 0;
+}
+
+/*
  * Locking interface to check_fork_int()
  */
 int check_fork(PKCS11_CTX *ctx)
@@ -186,13 +207,14 @@ int check_key_fork(PKCS11_KEY *key)
 }
 
 /*
- * Reinitialize cert (just its token)
+ * Locking interface to check_cert_fork_int()
  */
 int check_cert_fork(PKCS11_CERT *cert)
 {
 	if (!cert)
 		return -1;
-	return check_token_fork(CERT2TOKEN(cert));
+	CHECK_FORKID(CERT2CTX(cert), PRIVCERT(cert)->forkid,
+		check_cert_fork_int(cert));
 }
 
 /* vim: set noexpandtab: */
