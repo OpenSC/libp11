@@ -116,19 +116,8 @@ static int check_slot_fork_int(PKCS11_SLOT *slot)
 	if (check_fork_int(SLOT2CTX(slot)) < 0)
 		return -1;
 	if (spriv->forkid != cpriv->forkid) {
-		if (spriv->loggedIn) {
-			int saved = spriv->haveSession;
-			spriv->haveSession = 0;
-			spriv->loggedIn = 0;
-			if (pkcs11_relogin(slot) < 0)
-				return -1;
-			spriv->haveSession = saved;
-		}
-		if (spriv->haveSession) {
-			spriv->haveSession = 0;
-			if (pkcs11_reopen_session(slot) < 0)
-				return -1;
-		}
+		if (pkcs11_reload_slot(slot) < 0)
+			return -1;
 		spriv->forkid = cpriv->forkid;
 	}
 	return 0;
@@ -147,7 +136,8 @@ static int check_key_fork_int(PKCS11_KEY *key)
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
 	if (spriv->forkid != kpriv->forkid) {
-		pkcs11_reload_key(key);
+		if (pkcs11_reload_key(key) < 0)
+			return -1;
 		kpriv->forkid = spriv->forkid;
 	}
 	return 0;

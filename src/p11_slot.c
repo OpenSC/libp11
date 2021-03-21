@@ -147,17 +147,15 @@ PKCS11_SLOT *pkcs11_find_next_token(PKCS11_CTX *ctx, PKCS11_SLOT *slots,
 /*
  * Open a session with this slot
  */
-int pkcs11_open_session(PKCS11_SLOT *slot, int rw, int relogin)
+int pkcs11_open_session(PKCS11_SLOT *slot, int rw)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	int rv;
 
-	if (relogin == 0) {
-		if (spriv->haveSession) {
-			CRYPTOKI_call(ctx, C_CloseSession(spriv->session));
-			spriv->haveSession = 0;
-		}
+	if (spriv->haveSession) {
+		CRYPTOKI_call(ctx, C_CloseSession(spriv->session));
+		spriv->haveSession = 0;
 	}
 	rv = CRYPTOKI_call(ctx,
 		C_OpenSession(spriv->id,
@@ -166,22 +164,6 @@ int pkcs11_open_session(PKCS11_SLOT *slot, int rw, int relogin)
 	CRYPTOKI_checkerr(CKR_F_PKCS11_OPEN_SESSION, rv);
 	spriv->haveSession = 1;
 	spriv->prev_rw = rw;
-
-	return 0;
-}
-
-int pkcs11_reopen_session(PKCS11_SLOT *slot)
-{
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	int rv;
-
-	rv = CRYPTOKI_call(ctx,
-		C_OpenSession(spriv->id,
-			CKF_SERIAL_SESSION | (spriv->prev_rw ? CKF_RW_SESSION : 0),
-			NULL, NULL, &spriv->session));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_REOPEN_SESSION, rv);
-	spriv->haveSession = 1;
 
 	return 0;
 }
@@ -219,22 +201,21 @@ int pkcs11_is_logged_in(PKCS11_SLOT *slot, int so, int *res)
 }
 
 /*
- * Authenticate with the card. relogin should be set if we automatically
- * relogin after a fork.
+ * Authenticate with the card.
  */
-int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
+int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin)
 {
 	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	int rv;
 
-	if (!relogin && spriv->loggedIn)
+	if (spriv->loggedIn)
 		return 0; /* Nothing to do */
 
 	if (!spriv->haveSession) {
 		/* SO gets a r/w session by default,
 		 * user gets a r/o session by default. */
-		if (pkcs11_open_session(slot, so, relogin))
+		if (pkcs11_open_session(slot, so))
 			return -1;
 	}
 
@@ -257,13 +238,24 @@ int pkcs11_login(PKCS11_SLOT *slot, int so, const char *pin, int relogin)
 }
 
 /*
- * Authenticate with the card
+ * Reopens the slot by creating a session and logging in if needed.
  */
-int pkcs11_relogin(PKCS11_SLOT *slot)
+int pkcs11_reload_slot(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
-	return pkcs11_login(slot, spriv->prev_so, spriv->prev_pin, 1);
+	if (spriv->haveSession) {
+		spriv->haveSession = 0;
+		if (pkcs11_open_session(slot, spriv->prev_rw))
+			return -1;
+	}
+	if (spriv->loggedIn) {
+		spriv->loggedIn = 0;
+		if (pkcs11_login(slot, spriv->prev_so, spriv->prev_pin))
+			return -1;
+	}
+
+	return 0;
 }
 
 /*

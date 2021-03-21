@@ -64,7 +64,7 @@ int PKCS11_open_session(PKCS11_SLOT *slot, int rw)
 {
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_open_session(slot, rw, 0);
+	return pkcs11_open_session(slot, rw);
 }
 
 int PKCS11_enumerate_slots(PKCS11_CTX *ctx,
@@ -118,7 +118,7 @@ int PKCS11_login(PKCS11_SLOT *slot, int so, const char *pin)
 {
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_login(slot, so, pin, 0);
+	return pkcs11_login(slot, so, pin);
 }
 
 int PKCS11_logout(PKCS11_SLOT *slot)
