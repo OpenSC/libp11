@@ -184,11 +184,14 @@ defaults to loading the p11-kit proxy module.
 
 ## Thread safety in libp11
 
-Thread-safety requires dynamic callbacks to be registered by the calling
-application with the following OpenSSL functions:
-* CRYPTO_set_dynlock_create_callback
-* CRYPTO_set_dynlock_destroy_callback
-* CRYPTO_set_dynlock_lock_callback
+libp11 internally uses OS locking, and configures the PKCS#11 module to do
+the same.
+
+Access to the the PKCS#11 tokens and objects is via a pool of PKCS#11 sessions.
+This allows concurrent usage of crypto operations in thread safe manner.
+
+However, many of the main PKCS11_* API functions are currently not fully thread
+safe. Work to fix this is pending.
 
 ## Submitting pull requests
 

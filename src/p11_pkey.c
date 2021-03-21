@@ -303,9 +303,8 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
 	PKCS11_KEY_private *kpriv;
-	PKCS11_SLOT_private *spriv;
-	PKCS11_CTX_private *cpriv;
 	const EVP_MD *sig_md;
+	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 
@@ -331,8 +330,6 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	slot = KEY2SLOT(key);
 	ctx = KEY2CTX(key);
 	kpriv = PRIVKEY(key);
-	spriv = PRIVSLOT(slot);
-	cpriv = PRIVCTX(ctx);
 
 	if (!evp_pkey_ctx)
 		return -1;
@@ -363,15 +360,17 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 	} /* end switch(padding) */
 
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
+
 	rv = CRYPTOKI_call(ctx,
-		C_SignInit(spriv->session, &mechanism, kpriv->object));
+		C_SignInit(session, &mechanism, kpriv->object));
 	if (!rv && kpriv->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key);
+		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
-			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
+			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+	pkcs11_put_session(slot, session);
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
 		__FILE__, __LINE__, rv);
@@ -407,8 +406,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
 	PKCS11_KEY_private *kpriv;
-	PKCS11_SLOT_private *spriv;
-	PKCS11_CTX_private *cpriv;
+	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
@@ -434,8 +432,6 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	slot = KEY2SLOT(key);
 	ctx = KEY2CTX(key);
 	kpriv = PRIVKEY(key);
-	spriv = PRIVSLOT(slot);
-	cpriv = PRIVCTX(ctx);
 
 	if (!evp_pkey_ctx)
 		return -1;
@@ -470,15 +466,17 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 	} /* end switch(padding) */
 
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
+
 	rv = CRYPTOKI_call(ctx,
-		C_DecryptInit(spriv->session, &mechanism, kpriv->object));
+		C_DecryptInit(session, &mechanism, kpriv->object));
 	if (!rv && kpriv->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key);
+		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(spriv->session, (CK_BYTE_PTR)in, inlen, out, &size));
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
+			C_Decrypt(session, (CK_BYTE_PTR)in, inlen, out, &size));
+	pkcs11_put_session(slot, session);
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d C_DecryptInit or C_Decrypt rv=%d\n",
 		__FILE__, __LINE__, rv);
@@ -545,8 +543,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_SLOT *slot;
 	PKCS11_CTX *ctx;
 	PKCS11_KEY_private *kpriv;
-	PKCS11_SLOT_private *spriv;
-	PKCS11_CTX_private *cpriv;
+	CK_SESSION_HANDLE session;
 	const EVP_MD *sig_md;
 	ECDSA_SIG *ossl_sig;
 	CK_MECHANISM mechanism;
@@ -575,6 +572,12 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		goto error;
 	}
 
+	if (sig == NULL) {
+		*siglen = (size_t)ECDSA_size(eckey);
+		rv = CKR_OK;
+		goto error;
+	}
+
 	if (*siglen < (size_t)ECDSA_size(eckey))
 		goto error;
 
@@ -585,8 +588,6 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	slot = KEY2SLOT(key);
 	ctx = KEY2CTX(key);
 	kpriv = PRIVKEY(key);
-	spriv = PRIVSLOT(slot);
-	cpriv = PRIVCTX(ctx);
 
 	if (!evp_pkey_ctx)
 		goto error;
@@ -601,15 +602,16 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	memset(&mechanism, 0, sizeof mechanism);
 	mechanism.mechanism = CKM_ECDSA;
 
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
 	rv = CRYPTOKI_call(ctx,
-		C_SignInit(spriv->session, &mechanism, kpriv->object));
+		C_SignInit(session, &mechanism, kpriv->object));
 	if (!rv && kpriv->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key);
+		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
-			C_Sign(spriv->session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
+			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+	pkcs11_put_session(slot, session);
 
 #ifdef DEBUG
 	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",

@@ -29,6 +29,8 @@
 #define CRYPTOKI_EXPORTS
 #include "pkcs11.h"
 
+#include "p11_pthread.h"
+
 #if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
 typedef int PKCS11_RWLOCK;
 #else
@@ -53,15 +55,17 @@ typedef struct pkcs11_ctx_private {
 
 typedef struct pkcs11_slot_private {
 	PKCS11_CTX *parent;
-	unsigned char haveSession, loggedIn;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+	int8_t rw_mode, logged_in;
 	CK_SLOT_ID id;
-	CK_SESSION_HANDLE session;
+	CK_SESSION_HANDLE *session_pool;
+	unsigned int session_head, session_tail, session_poolsize;
+	unsigned int num_sessions, max_sessions;
 	unsigned int forkid;
-	int prev_rw; /* the rw status the session was open */
 
 	/* options used in last PKCS11_login */
 	char *prev_pin;
-	int prev_so;
 } PKCS11_SLOT_private;
 #define PRIVSLOT(slot)		((PKCS11_SLOT_private *) ((slot)->_private))
 #define SLOT2CTX(slot)		(PRIVSLOT(slot)->parent)
@@ -235,6 +239,12 @@ extern void pkcs11_CTX_free(PKCS11_CTX * ctx);
 /* Open a session in RO or RW mode */
 extern int pkcs11_open_session(PKCS11_SLOT * slot, int rw);
 
+/* Acquire a session from the slot specific session pool */
+extern int pkcs11_get_session(PKCS11_SLOT * slot, int rw, CK_SESSION_HANDLE *sessionp);
+
+/* Return a session the the slot specific session pool */
+extern void pkcs11_put_session(PKCS11_SLOT * slot, CK_SESSION_HANDLE session);
+
 /* Get a list of all slots */
 extern int pkcs11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
@@ -265,7 +275,7 @@ extern int pkcs11_login(PKCS11_SLOT * slot, int so, const char *pin);
 extern int pkcs11_logout(PKCS11_SLOT * slot);
 
 /* Authenticate a private the key operation if needed */
-int pkcs11_authenticate(PKCS11_KEY *key);
+int pkcs11_authenticate(PKCS11_KEY *key, CK_SESSION_HANDLE session);
 
 /* Get a list of keys associated with this token */
 extern int pkcs11_enumerate_keys(PKCS11_TOKEN *token, unsigned int type,

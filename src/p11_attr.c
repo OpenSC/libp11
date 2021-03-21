@@ -33,20 +33,26 @@
 /*
  * Query pkcs11 attributes
  */
-static int pkcs11_getattr_int(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
-		CK_OBJECT_HANDLE o, CK_ATTRIBUTE_TYPE type, CK_BYTE *value,
-		size_t *size)
+static int pkcs11_getattr_int(PKCS11_TOKEN *token, CK_OBJECT_HANDLE o,
+		CK_ATTRIBUTE_TYPE type, CK_BYTE *value, size_t *size)
 {
+	PKCS11_SLOT *slot = TOKEN2SLOT(token);
+	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	CK_ATTRIBUTE templ;
+	CK_SESSION_HANDLE session;
 	int rv;
 
 	templ.type = type;
 	templ.pValue = value;
 	templ.ulValueLen = *size;
 
-	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, o, &templ, 1));
-	CRYPTOKI_checkerr(CKR_F_PKCS11_GETATTR_INT, rv);
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
 
+	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, o, &templ, 1));
+	pkcs11_put_session(slot, session);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GETATTR_INT, rv);
 	*size = templ.ulValueLen;
 	return 0;
 }
@@ -54,9 +60,7 @@ static int pkcs11_getattr_int(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
 int pkcs11_getattr_var(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		unsigned int type, CK_BYTE *value, size_t *size)
 {
-	return pkcs11_getattr_int(TOKEN2CTX(token),
-		PRIVSLOT(TOKEN2SLOT(token))->session,
-		object, type, value, size);
+	return pkcs11_getattr_int(token, object, type, value, size);
 }
 
 int pkcs11_getattr_val(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
