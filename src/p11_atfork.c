@@ -24,23 +24,11 @@
 
 #ifndef _WIN32
 
+static unsigned int P11_forkid = 0;
+
 #ifdef HAVE_PTHREAD
 
 #include <pthread.h>
-
-static unsigned int P11_forkid = 0;
-
-static unsigned int _P11_get_forkid(void)
-{
-	return P11_forkid;
-}
-
-static int _P11_detect_fork(unsigned int forkid)
-{
-	if (forkid == P11_forkid)
-		return 0;
-	return 1;
-}
 
 static void _P11_atfork_child(void)
 {
@@ -55,34 +43,47 @@ int _P11_register_fork_handler(void)
 	return 0;
 }
 
+static unsigned int  _P11_update_forkid(void)
+{
+	return P11_forkid;
+}
+
 #else /* HAVE_PTHREAD */
 
 #include <unistd.h>
 
-static unsigned int _P11_get_forkid(void)
+static unsigned int _P11_update_forkid(void)
 {
-	return getpid();
-}
-
-static int _P11_detect_fork(unsigned int forkid)
-{
-	if (getpid() == forkid)
-		return 0;
-	return 1;
+	P11_forkid = (unsigned int)getpid();
+	return P11_forkid;
 }
 
 #endif /* HAVE_PTHREAD */
 
+#define CHECK_FORKID(ctx, forkid, function_call) \
+	do { \
+		int rv = 0; \
+		_P11_update_forkid(); \
+		if (forkid != P11_forkid) { \
+			CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock); \
+			function_call; \
+			CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock); \
+		} \
+		return rv; \
+	} while (0)
+
 #else /* !_WIN32 */
 
-#define _P11_get_forkid() 0
-#define _P11_detect_fork(x) 0
+#define P11_forkid 0
+#define _P11_update_forkid() 0
+#define CHECK_FORKID(ctx, forkid, function_call) return 0
 
 #endif /* !_WIN32 */
 
 unsigned int get_forkid()
 {
-	return _P11_get_forkid();
+	_P11_update_forkid();
+	return P11_forkid;
 }
 
 /*
@@ -94,10 +95,10 @@ static int check_fork_int(PKCS11_CTX *ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	if (_P11_detect_fork(cpriv->forkid)) {
+	if (cpriv->forkid != P11_forkid) {
 		if (pkcs11_CTX_reload(ctx) < 0)
 			return -1;
-		cpriv->forkid = _P11_get_forkid();
+		cpriv->forkid = P11_forkid;
 	}
 	return 0;
 }
@@ -157,16 +158,9 @@ static int check_key_fork_int(PKCS11_KEY *key)
  */
 int check_fork(PKCS11_CTX *ctx)
 {
-	PKCS11_CTX_private *cpriv;
-	int rv;
-
 	if (!ctx)
 		return -1;
-	cpriv = PRIVCTX(ctx);
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
-	rv = check_fork_int(ctx);
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
-	return rv;
+	CHECK_FORKID(ctx, PRIVCTX(ctx)->forkid, check_fork_int(ctx));
 }
 
 /*
@@ -174,16 +168,10 @@ int check_fork(PKCS11_CTX *ctx)
  */
 int check_slot_fork(PKCS11_SLOT *slot)
 {
-	PKCS11_CTX_private *cpriv;
-	int rv;
-
 	if (!slot)
 		return -1;
-	cpriv = PRIVCTX(SLOT2CTX(slot));
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
-	rv = check_slot_fork_int(slot);
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
-	return rv;
+	CHECK_FORKID(SLOT2CTX(slot), PRIVSLOT(slot)->forkid,
+		check_slot_fork_int(slot));
 }
 
 /*
@@ -201,16 +189,10 @@ int check_token_fork(PKCS11_TOKEN *token)
  */
 int check_key_fork(PKCS11_KEY *key)
 {
-	PKCS11_CTX_private *cpriv;
-	int rv;
-
 	if (!key)
 		return -1;
-	cpriv = PRIVCTX(KEY2CTX(key));
-	CRYPTO_THREAD_write_lock(cpriv->rwlock);
-	rv = check_key_fork_int(key);
-	CRYPTO_THREAD_unlock(cpriv->rwlock);
-	return rv;
+	CHECK_FORKID(KEY2CTX(key), PRIVKEY(key)->forkid,
+		check_key_fork_int(key));
 }
 
 /*
