@@ -49,7 +49,7 @@ typedef struct pkcs11_ctx_private {
 	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
 	void *ui_user_data;
 	unsigned int forkid;
-	PKCS11_RWLOCK rwlock;
+	pthread_mutex_t fork_lock;
 } PKCS11_CTX_private;
 #define PRIVCTX(ctx)		((PKCS11_CTX_private *) ((ctx)->_private))
 
