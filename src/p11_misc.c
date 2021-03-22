@@ -39,32 +39,4 @@ char *pkcs11_strdup(char *mem, size_t size)
 	return res;
 }
 
-/*
- * CRYPTO dynlock wrappers: 0 is an invalid dynamic lock ID
- */
-
-#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
-
-int CRYPTO_THREAD_lock_new()
-{
-	int i;
-
-	if (CRYPTO_get_dynlock_create_callback() == NULL ||
-			CRYPTO_get_dynlock_lock_callback() == NULL ||
-			CRYPTO_get_dynlock_destroy_callback() == NULL)
-		return 0; /* Dynamic callbacks not set */
-	i = CRYPTO_get_new_dynlockid();
-	if (i == 0)
-		ERR_clear_error(); /* Dynamic locks are optional -> ignore */
-	return i;
-}
-
-void CRYPTO_THREAD_lock_free(int i)
-{
-	if (i)
-		CRYPTO_destroy_dynlockid(i);
-}
-
-#endif
-
 /* vim: set noexpandtab: */

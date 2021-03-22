@@ -31,12 +31,6 @@
 
 #include "p11_pthread.h"
 
-#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
-typedef int PKCS11_RWLOCK;
-#else
-typedef CRYPTO_RWLOCK *PKCS11_RWLOCK;
-#endif
-
 /* get private implementations of PKCS11 structures */
 
 /*
@@ -139,20 +133,6 @@ extern int ERR_load_CKR_strings(void);
 #define PKCS11_DUP(s) \
 	pkcs11_strdup((char *) s, sizeof(s))
 extern char *pkcs11_strdup(char *, size_t);
-
-/* Emulate the OpenSSL 1.1 locking API for older OpenSSL versions */
-#if OPENSSL_VERSION_NUMBER < 0x10100004L || defined(LIBRESSL_VERSION_NUMBER)
-int CRYPTO_THREAD_lock_new();
-void CRYPTO_THREAD_lock_free(int);
-#define CRYPTO_THREAD_write_lock(type) \
-	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
-#define CRYPTO_THREAD_unlock(type) \
-	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_WRITE,type,__FILE__,__LINE__)
-#define CRYPTO_THREAD_read_lock(type) \
-	if(type) CRYPTO_lock(CRYPTO_LOCK|CRYPTO_READ,type,__FILE__,__LINE__)
-#define CRYPTO_THREAD_read_unlock(type) \
-	if(type) CRYPTO_lock(CRYPTO_UNLOCK|CRYPTO_READ,type,__FILE__,__LINE__)
-#endif
 
 /* Emulate the OpenSSL 1.1 getters */
 #if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
