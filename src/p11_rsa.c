@@ -179,17 +179,24 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
  */
 static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 {
-	RSA *rsa;
+	PKCS11_CTX *ctx = KEY2CTX(key);
+	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_KEY *keys;
+	CK_OBJECT_HANDLE object = PRIVKEY(key)->object;
+	CK_SESSION_HANDLE session;
+	RSA *rsa;
 	unsigned int i, count;
 	BIGNUM *rsa_n = NULL, *rsa_e = NULL;
 
-	/* Retrieve the modulus */
-	if (key_getattr_bn(key, CKA_MODULUS, &rsa_n))
+	if (pkcs11_get_session(slot, 0, &session))
 		return NULL;
 
+	/* Retrieve the modulus */
+	if (pkcs11_getattr_bn(ctx, session, object, CKA_MODULUS, &rsa_n))
+		goto failure;
+
 	/* Retrieve the public exponent */
-	if (!key_getattr_bn(key, CKA_PUBLIC_EXPONENT, &rsa_e)) {
+	if (!pkcs11_getattr_bn(ctx, session, object, CKA_PUBLIC_EXPONENT, &rsa_e)) {
 		if (!BN_is_zero(rsa_e)) /* A valid public exponent */
 			goto success;
 		BN_clear_free(rsa_e);
@@ -201,10 +208,12 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 	if (!PKCS11_enumerate_public_keys(KEY2TOKEN(key), &keys, &count)) {
 		for (i = 0; i < count; i++) {
 			BIGNUM *pubmod = NULL;
-			if (!key_getattr_bn(&keys[i], CKA_MODULUS, &pubmod)) {
+			if (!pkcs11_getattr_bn(ctx, session, PRIVKEY(&keys[i])->object,
+					CKA_MODULUS, &pubmod)) {
 				int found = BN_cmp(rsa_n, pubmod) == 0;
 				BN_clear_free(pubmod);
-				if (found && !key_getattr_bn(&keys[i],
+				if (found && !pkcs11_getattr_bn(ctx, session,
+						PRIVKEY(&keys[i])->object,
 						CKA_PUBLIC_EXPONENT, &rsa_e))
 					goto success;
 			}
@@ -217,6 +226,7 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY *key)
 		goto success;
 
 failure:
+	pkcs11_put_session(slot, session);
 	if (rsa_n)
 		BN_clear_free(rsa_n);
 	if (rsa_e)
@@ -224,6 +234,7 @@ failure:
 	return NULL;
 
 success:
+	pkcs11_put_session(slot, session);
 	rsa = RSA_new();
 	if (!rsa)
 		goto failure;

@@ -158,34 +158,18 @@ extern int pkcs11_reload_certificate(PKCS11_CERT *cert);
 extern int pkcs11_reload_slot(PKCS11_SLOT * slot);
 
 /* Managing object attributes */
-extern int pkcs11_getattr_var(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, CK_BYTE *, size_t *);
-extern int pkcs11_getattr_val(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, void *, size_t);
-extern int pkcs11_getattr_alloc(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, CK_BYTE **, size_t *);
+extern int pkcs11_getattr_var(PKCS11_CTX *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
+	CK_ATTRIBUTE_TYPE, CK_BYTE *, size_t *);
+extern int pkcs11_getattr_val(PKCS11_CTX *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
+	CK_ATTRIBUTE_TYPE, void *, size_t);
+extern int pkcs11_getattr_alloc(PKCS11_CTX *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
+	CK_ATTRIBUTE_TYPE, CK_BYTE **, size_t *);
 /*
  * Caution: the BIGNUM ** shall reference either a NULL pointer or a
  * pointer to a valid BIGNUM.
  */
-extern int pkcs11_getattr_bn(PKCS11_TOKEN *, CK_OBJECT_HANDLE,
-	unsigned int, BIGNUM **);
-
-#define key_getattr_var(key, t, p, s) \
-	pkcs11_getattr_var(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
-
-#define key_getattr_val(key, t, p, s) \
-	pkcs11_getattr_val(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
-
-#define key_getattr_alloc(key, t, p, s) \
-	pkcs11_getattr_alloc(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (p), (s))
-
-/*
- * Caution: bn shall reference either a NULL pointer or a pointer to
- * a valid BIGNUM.
- */
-#define key_getattr_bn(key, t, bn) \
-	pkcs11_getattr_bn(KEY2TOKEN((key)), PRIVKEY((key))->object, (t), (bn))
+extern int pkcs11_getattr_bn(PKCS11_CTX *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
+	CK_ATTRIBUTE_TYPE, BIGNUM **);
 
 typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
 extern void pkcs11_addattr(CK_ATTRIBUTE_PTR, int, const void *, size_t);
