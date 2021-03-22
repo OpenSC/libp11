@@ -333,13 +333,6 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY *key, int isPrivate)
 		key->evp_key = kpriv->ops->get_evp_key(key);
 		if (!key->evp_key)
 			return NULL;
-		kpriv->always_authenticate = CK_FALSE;
-		if (isPrivate && key_getattr_val(key, CKA_ALWAYS_AUTHENTICATE,
-				&kpriv->always_authenticate, sizeof(CK_BBOOL))) {
-#ifdef DEBUG
-			fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
-#endif
-		}
 	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EVP_PKEY_up_ref(key->evp_key);
@@ -531,7 +524,7 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 
 	/* Ignore unknown key types */
 	size = sizeof(CK_KEY_TYPE);
-	if (pkcs11_getattr_var(token, obj, CKA_KEY_TYPE, (CK_BYTE *)&key_type, &size))
+	if (pkcs11_getattr_var(ctx, session, obj, CKA_KEY_TYPE, (CK_BYTE *)&key_type, &size))
 		return -1;
 	switch (key_type) {
 	case CKK_RSA:
@@ -567,17 +560,24 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	memset(key, 0, sizeof(PKCS11_KEY));
 
 	/* Fill public properties */
-	pkcs11_getattr_alloc(token, obj, CKA_LABEL, (CK_BYTE **)&key->label, NULL);
+	pkcs11_getattr_alloc(ctx, session, obj, CKA_LABEL, (CK_BYTE **)&key->label, NULL);
 	key->id_len = 0;
-	pkcs11_getattr_alloc(token, obj, CKA_ID, &key->id, &key->id_len);
+	pkcs11_getattr_alloc(ctx, session, obj, CKA_ID, &key->id, &key->id_len);
 	key->isPrivate = (type == CKO_PRIVATE_KEY);
+	if (key->isPrivate && pkcs11_getattr_val(ctx, session, obj,
+			CKA_ALWAYS_AUTHENTICATE,
+			&kpriv->always_authenticate, sizeof(CK_BBOOL))) {
+#ifdef DEBUG
+		fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
+#endif
+	}
 
 	/* Fill private properties */
 	key->_private = kpriv;
 	kpriv->object = obj;
 	kpriv->parent = token;
 	kpriv->id_len = sizeof kpriv->id;
-	if (pkcs11_getattr_var(token, obj, CKA_ID, kpriv->id, &kpriv->id_len))
+	if (pkcs11_getattr_var(ctx, session, obj, CKA_ID, kpriv->id, &kpriv->id_len))
 		kpriv->id_len = 0;
 	kpriv->ops = ops;
 	kpriv->forkid = get_forkid();

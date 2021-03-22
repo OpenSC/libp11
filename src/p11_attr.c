@@ -33,49 +33,37 @@
 /*
  * Query pkcs11 attributes
  */
-static int pkcs11_getattr_int(PKCS11_TOKEN *token, CK_OBJECT_HANDLE o,
-		CK_ATTRIBUTE_TYPE type, CK_BYTE *value, size_t *size)
+int pkcs11_getattr_var(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
+		CK_BYTE *value, size_t *size)
 {
-	PKCS11_SLOT *slot = TOKEN2SLOT(token);
-	PKCS11_CTX *ctx = SLOT2CTX(slot);
 	CK_ATTRIBUTE templ;
-	CK_SESSION_HANDLE session;
 	int rv;
 
 	templ.type = type;
 	templ.pValue = value;
 	templ.ulValueLen = *size;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, o, &templ, 1));
-	pkcs11_put_session(slot, session);
-
+	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, object, &templ, 1));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GETATTR_INT, rv);
 	*size = templ.ulValueLen;
 	return 0;
 }
 
-int pkcs11_getattr_var(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
-		unsigned int type, CK_BYTE *value, size_t *size)
+int pkcs11_getattr_val(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
+		void *value, size_t size)
 {
-	return pkcs11_getattr_int(token, object, type, value, size);
+	return pkcs11_getattr_var(ctx, session, object, type, value, &size);
 }
 
-int pkcs11_getattr_val(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
-		unsigned int type, void *value, size_t size)
-{
-	return pkcs11_getattr_var(token, object, type, value, &size);
-}
-
-int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
-		unsigned int type, CK_BYTE **value, size_t *size)
+int pkcs11_getattr_alloc(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
+		CK_BYTE **value, size_t *size)
 {
 	CK_BYTE *data;
 	size_t len = 0;
 
-	if (pkcs11_getattr_var(token, object, type, NULL, &len))
+	if (pkcs11_getattr_var(ctx, session, object, type, NULL, &len))
 		return -1;
 	data = OPENSSL_malloc(len+1);
 	if (!data) {
@@ -83,7 +71,7 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 		return -1;
 	}
 	memset(data, 0, len+1); /* also null-terminate the allocated data */
-	if (pkcs11_getattr_var(token, object, type, data, &len)) {
+	if (pkcs11_getattr_var(ctx, session, object, type, data, &len)) {
 		OPENSSL_free(data);
 		return -1;
 	}
@@ -94,14 +82,14 @@ int pkcs11_getattr_alloc(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
 	return 0;
 }
 
-int pkcs11_getattr_bn(PKCS11_TOKEN *token, CK_OBJECT_HANDLE object,
-		unsigned int type, BIGNUM **bn)
+int pkcs11_getattr_bn(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type, BIGNUM **bn)
 {
 	CK_BYTE *binary;
 	size_t size;
 
 	size = 0;
-	if (pkcs11_getattr_alloc(token, object, type, &binary, &size))
+	if (pkcs11_getattr_alloc(ctx, session, object, type, &binary, &size))
 		return -1;
 	/*
 	 * @ALON: invalid object,

@@ -187,14 +187,15 @@ static void free_ec_ex_index()
 
 /* Retrieve EC parameters from key into ec
  * return nonzero on error */
-static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY *key)
+static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY *key, CK_SESSION_HANDLE session)
 {
 	CK_BYTE *params;
 	size_t params_len = 0;
 	const unsigned char *a;
 	int rv;
 
-	if (key_getattr_alloc(key, CKA_EC_PARAMS, &params, &params_len))
+	if (pkcs11_getattr_alloc(KEY2CTX(key), session, PRIVKEY(key)->object,
+			CKA_EC_PARAMS, &params, &params_len))
 		return -1;
 
 	a = params;
@@ -205,7 +206,7 @@ static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY *key)
 
 /* Retrieve EC point from key into ec
  * return nonzero on error */
-static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY *key)
+static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY *key, CK_SESSION_HANDLE session)
 {
 	CK_BYTE *point;
 	size_t point_len = 0;
@@ -213,7 +214,8 @@ static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY *key)
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
 
-	if (!key || key_getattr_alloc(key, CKA_EC_POINT, &point, &point_len))
+	if (!key || pkcs11_getattr_alloc(KEY2CTX(key), session, PRIVKEY(key)->object,
+			CKA_EC_POINT, &point, &point_len))
 		return -1;
 
 	/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
@@ -268,6 +270,8 @@ error:
 
 static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 {
+	PKCS11_SLOT *slot = KEY2SLOT(key);
+	CK_SESSION_HANDLE session;
 	EC_KEY *ec;
 	int no_params, no_point;
 
@@ -280,12 +284,17 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	 * Continue even if it fails, as the sign operation does not need
 	 * it if the PKCS#11 module or the hardware can figure this out
 	 */
-	no_params = pkcs11_get_params(ec, key);
-	no_point = pkcs11_get_point_key(ec, key);
+	if (pkcs11_get_session(slot, 0, &session)) {
+		EC_KEY_free(ec);
+		return NULL;
+	}
+	no_params = pkcs11_get_params(ec, key, session);
+	no_point = pkcs11_get_point_key(ec, key, session);
 	if (no_point && key->isPrivate) /* Retry with the public key */
-		no_point = pkcs11_get_point_key(ec, pkcs11_find_key_from_key(key));
+		no_point = pkcs11_get_point_key(ec, pkcs11_find_key_from_key(key), session);
 	if (no_point && key->isPrivate) /* Retry with the certificate */
 		no_point = pkcs11_get_point_cert(ec, pkcs11_find_certificate(key));
+	pkcs11_put_session(slot, session);
 
 	if (key->isPrivate && EC_KEY_get0_private_key(ec) == NULL) {
 		BIGNUM *bn = BN_new();
@@ -544,7 +553,6 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 {
 	PKCS11_SLOT *slot = KEY2SLOT(key);
 	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_TOKEN *token = KEY2TOKEN(key);
 	PKCS11_KEY_private *kpriv = PRIVKEY(key);
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
@@ -597,7 +605,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 
 	/* Return the value of the secret key and/or the object handle of the secret key */
 	if (out && outlen) { /* pkcs11_ec_ckey only asks for the value */
-		if (pkcs11_getattr_alloc(token, newkey, CKA_VALUE, out, outlen)) {
+		if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE, out, outlen)) {
 			CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 			goto error;
 		}
