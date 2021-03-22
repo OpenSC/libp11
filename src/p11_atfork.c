@@ -65,9 +65,9 @@ static unsigned int _P11_update_forkid(void)
 		int rv = 0; \
 		_P11_update_forkid(); \
 		if (forkid != P11_forkid) { \
-			CRYPTO_THREAD_write_lock(PRIVCTX(ctx)->rwlock); \
+			pthread_mutex_lock(&PRIVCTX(ctx)->fork_lock); \
 			function_call; \
-			CRYPTO_THREAD_unlock(PRIVCTX(ctx)->rwlock); \
+			pthread_mutex_unlock(&PRIVCTX(ctx)->fork_lock); \
 		} \
 		return rv; \
 	} while (0)
