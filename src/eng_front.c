@@ -75,6 +75,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"FORCE_LOGIN",
 		"Force login to the PKCS#11 module",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_RE_ENUMERATE,
+		"RE_ENUMERATE",
+		"re enumerate slots",
+		ENGINE_CMD_FLAG_NO_INPUT},
 	{0, NULL, NULL, 0}
 };
 
