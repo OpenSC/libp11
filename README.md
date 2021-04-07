@@ -168,6 +168,7 @@ The supported engine controls are the following.
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
 * **FORCE_LOGIN**: Force login to the PKCS#11 module
+* **RE_ENUMERATE**: re-enumerate the slots/tokens, required when adding/removing tokens/slots
 
 An example code snippet setting specific module is shown below.
 
