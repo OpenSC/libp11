@@ -553,8 +553,10 @@ static int pkcs11_init_key(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 		return -1;
 	memset(kpriv, 0, sizeof(PKCS11_KEY_private));
 	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
-	if (!tmp)
+	if (!tmp) {
+		OPENSSL_free(kpriv);
 		return -1;
+	}
 	keys->keys = tmp;
 	key = keys->keys + keys->num++;
 	memset(key, 0, sizeof(PKCS11_KEY));

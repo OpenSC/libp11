@@ -185,8 +185,10 @@ static int pkcs11_init_cert(PKCS11_CTX *ctx, PKCS11_TOKEN *token,
 	tpriv = PRIVTOKEN(token);
 	tmp = OPENSSL_realloc(tpriv->certs,
 		(tpriv->ncerts + 1) * sizeof(PKCS11_CERT));
-	if (!tmp)
+	if (!tmp) {
+		OPENSSL_free(cpriv);
 		return -1;
+	}
 	tpriv->certs = tmp;
 	cert = tpriv->certs + tpriv->ncerts++;
 	memset(cert, 0, sizeof(PKCS11_CERT));
