@@ -65,10 +65,6 @@
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 1024
 
-#if OPENSSL_VERSION_NUMBER < 0x10100003L
-#define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
-#endif
-
 static int do_wait(pid_t pids[], int num)
 {
     int i;
