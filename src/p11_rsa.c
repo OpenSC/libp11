@@ -286,8 +286,6 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 		RSA_free(rsa);
 		return NULL;
 	}
-	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
-
 	if (key->isPrivate) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -304,6 +302,8 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY *key)
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 #endif
 	pkcs11_set_ex_data_rsa(rsa, key);
+
+	EVP_PKEY_set1_RSA(pk, rsa); /* Also increments the rsa ref count */
 	RSA_free(rsa); /* Drops our reference to it */
 	return pk;
 }
