@@ -365,7 +365,6 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 		EC_KEY_free(ec);
 		return NULL;
 	}
-	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
 
 	if (key->isPrivate) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -379,6 +378,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 	 * unless the key has the "sensitive" attribute set */
 
 	pkcs11_set_ex_data_ec(ec, key);
+	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
 	EC_KEY_free(ec); /* Drops our reference to it */
 	return pk;
 }
