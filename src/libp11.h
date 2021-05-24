@@ -69,6 +69,8 @@ typedef struct PKCS11_cert_st {
 	char *label;
 	unsigned char *id;
 	size_t id_len;
+	unsigned char* serialNumber;
+	size_t serialNumber_len;
 	X509 *x509;
 	void *_private;
 } PKCS11_CERT;
