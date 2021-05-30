@@ -280,9 +280,12 @@ static int ctx_enumerate_slots(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 
 
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
-static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
+static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 {
 	PKCS11_CTX *pkcs11_ctx;
+
+	if (ctx->pkcs11_ctx && ctx->slot_list)
+		return 0;
 
 	ctx_log(ctx, 1, "PKCS#11: Initializing the engine\n");
 
@@ -291,23 +294,9 @@ static void ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	if (ctx_enumerate_slots(ctx, pkcs11_ctx) != 1)
-		return;
+		return -1;
 
 	ctx->pkcs11_ctx = pkcs11_ctx;
-}
-
-
-
-static int ctx_init_libp11(ENGINE_CTX *ctx)
-{
-	if (ctx->pkcs11_ctx && ctx->slot_list)
-		return 0;
-
-	pthread_mutex_lock(&ctx->lock);
-	if (!ctx->pkcs11_ctx || !ctx->slot_list)
-		ctx_init_libp11_unlocked(ctx);
-	pthread_mutex_unlock(&ctx->lock);
-
 	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
 }
 
@@ -343,40 +332,40 @@ int ctx_finish(ENGINE_CTX *ctx)
 }
 
 /******************************************************************************/
-/* Certificate handling                                                       */
+/* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-/* prototype for OpenSSL ENGINE_load_cert */
-/* used by load_cert_ctrl via ENGINE_ctrl for now */
-
-static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
-		const int login)
+static void *ctx_try_load_object(ENGINE_CTX *ctx,
+		const char *object_typestr,
+		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
+				const unsigned char *, size_t, const char *),
+		const char *object_uri, const int login,
+		UI_METHOD *ui_method, void *callback_data)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
-	PKCS11_CERT *certs, *selected_cert = NULL;
-	X509 *x509 = NULL;
-	unsigned int cert_count, n, m;
-	unsigned char cert_id[MAX_VALUE_LEN / 2];
-	size_t cert_id_len = sizeof(cert_id);
-	char *cert_label = NULL;
+	unsigned int n, m;
+	unsigned char obj_id[MAX_VALUE_LEN / 2];
+	size_t obj_id_len = sizeof(obj_id);
+	char *obj_label = NULL;
 	char tmp_pin[MAX_PIN_LENGTH+1];
 	size_t tmp_pin_len = MAX_PIN_LENGTH;
 	int slot_nr = -1;
 	char flags[64];
 	size_t matched_count = 0;
+	void *object = NULL;
 
-	if (s_slot_cert_id && *s_slot_cert_id) {
-		if (!strncasecmp(s_slot_cert_id, "pkcs11:", 7)) {
-			n = parse_pkcs11_uri(ctx, s_slot_cert_id, &match_tok,
-				cert_id, &cert_id_len,
-				tmp_pin, &tmp_pin_len, &cert_label);
+	if (object_uri && *object_uri) {
+		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
+			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
+				obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
 			if (!n) {
 				ctx_log(ctx, 0,
-					"The certificate ID is not a valid PKCS#11 URI\n"
-					"The PKCS#11 URI format is defined by RFC7512\n");
-				ENGerr(ENG_F_CTX_LOAD_CERT, ENG_R_INVALID_ID);
+					"The %s ID is not a valid PKCS#11 URI\n"
+					"The PKCS#11 URI format is defined by RFC7512\n",
+					object_typestr);
+				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto error;
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
@@ -389,28 +378,29 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 				}
 			}
 		} else {
-			n = parse_slot_id_string(ctx, s_slot_cert_id, &slot_nr,
-				cert_id, &cert_id_len, &cert_label);
+			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
+				obj_id, &obj_id_len, &obj_label);
 			if (!n) {
 				ctx_log(ctx, 0,
-					"The certificate ID is not a valid PKCS#11 URI\n"
+					"The %s ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
-					"still accepted for now\n");
-				ENGerr(ENG_F_CTX_LOAD_CERT, ENG_R_INVALID_ID);
+					"still accepted for now\n",
+					object_typestr);
+				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto error;
 			}
 		}
-		ctx_log(ctx, 1, "Looking in slot %d for certificate: ",
-			slot_nr);
-		if (cert_id_len != 0) {
+		ctx_log(ctx, 1, "Looking in slot %d for %s: ",
+			slot_nr, object_typestr);
+		if (obj_id_len != 0) {
 			ctx_log(ctx, 1, "id=");
-			dump_hex(ctx, 1, cert_id, cert_id_len);
+			dump_hex(ctx, 1, obj_id, obj_id_len);
 		}
-		if (cert_id_len != 0 && cert_label)
+		if (obj_id_len != 0 && obj_label)
 			ctx_log(ctx, 1, " ");
-		if (cert_label)
-			ctx_log(ctx, 1, "label=%s", cert_label);
+		if (obj_label)
+			ctx_log(ctx, 1, "label=%s", obj_label);
 		ctx_log(ctx, 1, "\n");
 	}
 
@@ -521,7 +511,7 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 				 * the PIN against all matching slots */
 				if (matched_count == 1) {
 					if (!ctx_login(ctx, slot, tok,
-							ctx->ui_method, ctx->callback_data)) {
+							ui_method, callback_data)) {
 						ctx_log(ctx, 0, "Login to token failed, returning NULL...\n");
 						goto error;
 					}
@@ -541,48 +531,11 @@ static X509 *ctx_load_cert(ENGINE_CTX *ctx, const char *s_slot_cert_id,
 			}
 		}
 
-		if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
-			ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-			continue;
-		}
-
-		ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count,
-				(cert_count <= 1) ? "" : "s");
-		if ((s_slot_cert_id && *s_slot_cert_id) &&
-				(cert_id_len != 0 || cert_label)) {
-			for (m = 0; m < cert_count; m++) {
-				PKCS11_CERT *k = certs + m;
-
-				if (cert_label && k->label && strcmp(k->label, cert_label) == 0)
-					selected_cert = k;
-				if (cert_id_len != 0 && k->id_len == cert_id_len &&
-						memcmp(k->id, cert_id, cert_id_len) == 0)
-					selected_cert = k;
-			}
-		} else {
-			for (m = 0; m < cert_count; m++) {
-				PKCS11_CERT *k = certs + m;
-				if (k->id && *(k->id)) {
-					selected_cert = k; /* Use the first certificate with nonempty id */
-					break;
-				}
-			}
-			if (!selected_cert)
-				selected_cert = certs; /* Use the first certificate */
-		}
-
-		if (selected_cert) {
+		object = match_func(ctx, tok, obj_id, obj_id_len, obj_label);
+		if (object)
 			break;
-		}
 	}
 
-	if (selected_cert) {
-		x509 = X509_dup(selected_cert->x509);
-	} else {
-		if (login) /* Only print the error on the second attempt */
-			ctx_log(ctx, 0, "Certificate not found.\n");
-		x509 = NULL;
-	}
 error:
 	/* Free the searched token data */
 	if (match_tok) {
@@ -593,11 +546,90 @@ error:
 		OPENSSL_free(match_tok);
 	}
 
-	if (cert_label)
-		OPENSSL_free(cert_label);
+	if (obj_label)
+		OPENSSL_free(obj_label);
 	if (matched_slots)
 		free(matched_slots);
-	return x509;
+	return object;
+}
+
+static void *ctx_load_object(ENGINE_CTX *ctx,
+		const char *object_typestr,
+		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
+				const unsigned char *, size_t, const char *),
+		const char *object_uri, UI_METHOD *ui_method, void *callback_data)
+{
+	void *obj = NULL;
+
+	pthread_mutex_lock(&ctx->lock);
+
+	/* Delayed libp11 initialization */
+	if (ctx_init_libp11_unlocked(ctx)) {
+		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
+		pthread_mutex_unlock(&ctx->lock);
+		return NULL;
+	}
+
+	if (!ctx->force_login) {
+		ERR_clear_error();
+		obj = ctx_try_load_object(ctx, object_typestr, match_func,
+			object_uri, 0, ui_method, callback_data);
+	}
+
+	if (!obj) {
+		/* Try again with login */
+		ERR_clear_error();
+		obj = ctx_try_load_object(ctx, object_typestr, match_func,
+			object_uri, 1, ui_method, callback_data);
+		if (!obj) {
+			ctx_log(ctx, 0, "The %s was not found.\n", object_typestr);
+		}
+	}
+
+	pthread_mutex_unlock(&ctx->lock);
+	return obj;
+}
+
+/******************************************************************************/
+/* Certificate handling                                                       */
+/******************************************************************************/
+
+static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+{
+	PKCS11_CERT *certs, *selected_cert = NULL;
+	unsigned int m, cert_count;
+
+	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
+		return NULL;
+	}
+	if (cert_count == 0)
+		return NULL;
+
+	ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count, cert_count <= 1 ? "s" : "");
+	if (obj_id && *obj_id && (obj_id_len != 0 || obj_label)) {
+		for (m = 0; m < cert_count; m++) {
+			PKCS11_CERT *k = certs + m;
+
+			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
+				selected_cert = k;
+			if (obj_id_len != 0 && k->id_len == obj_id_len &&
+					memcmp(k->id, obj_id, obj_id_len) == 0)
+				selected_cert = k;
+		}
+	} else {
+		for (m = 0; m < cert_count; m++) {
+			PKCS11_CERT *k = certs + m;
+			if (k->id && *k->id) {
+				selected_cert = k; /* Use the first certificate with nonempty id */
+				break;
+			}
+		}
+		if (!selected_cert)
+			selected_cert = certs; /* Use the first certificate */
+	}
+	return selected_cert;
 }
 
 static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
@@ -606,6 +638,7 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		const char *s_slot_cert_id;
 		X509 *cert;
 	} *parms = p;
+	PKCS11_CERT *cert;
 
 	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
@@ -616,25 +649,14 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		return 0;
 	}
 
-	if (ctx_init_libp11(ctx)) { /* Delayed libp11 initialization */
-		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_INVALID_PARAMETER);
-		return 0;
-	}
-
-	ERR_clear_error();
-	pthread_mutex_lock(&ctx->lock);
-	if (!ctx->force_login)
-		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 0);
-	if (!parms->cert) { /* Try again with login */
-		ERR_clear_error();
-		parms->cert = ctx_load_cert(ctx, parms->s_slot_cert_id, 1);
-	}
-	pthread_mutex_unlock(&ctx->lock);
-	if (!parms->cert) {
+	cert = ctx_load_object(ctx, "certificate", match_cert, parms->s_slot_cert_id,
+		ctx->ui_method, ctx->callback_data);
+	if (!cert) {
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
 	}
+	parms->cert = X509_dup(cert->x509);
 	return 1;
 }
 
@@ -642,331 +664,98 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 /* Private and public key handling                                            */
 /******************************************************************************/
 
-static EVP_PKEY *ctx_load_key(ENGINE_CTX *ctx, const char *s_slot_key_id,
-		UI_METHOD *ui_method, void *callback_data,
-		const int isPrivate, const int login)
+static void *match_key(ENGINE_CTX *ctx, const char *key_type,
+		PKCS11_KEY *keys, unsigned int key_count,
+		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
 {
-	PKCS11_SLOT *slot;
-	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
-	PKCS11_TOKEN *tok, *match_tok = NULL;
-	PKCS11_KEY *keys, *selected_key = NULL;
-	EVP_PKEY *pk = NULL;
-	unsigned int key_count, n, m;
-	unsigned char key_id[MAX_VALUE_LEN / 2];
-	size_t key_id_len = sizeof(key_id);
-	char *key_label = NULL;
-	int slot_nr = -1;
-	char tmp_pin[MAX_PIN_LENGTH+1];
-	size_t tmp_pin_len = MAX_PIN_LENGTH;
-	char flags[64];
-	size_t matched_count = 0;
+	PKCS11_KEY *selected_key = NULL;
+	unsigned int m;
 
-	ctx_log(ctx, 1, "Loading %s key \"%s\"\n",
-		(char *)(isPrivate ? "private" : "public"),
-		s_slot_key_id);
-	if (s_slot_key_id && *s_slot_key_id) {
-		if (!strncasecmp(s_slot_key_id, "pkcs11:", 7)) {
-			n = parse_pkcs11_uri(ctx, s_slot_key_id, &match_tok,
-				key_id, &key_id_len,
-				tmp_pin, &tmp_pin_len, &key_label);
-			if (!n) {
-				ctx_log(ctx, 0,
-					"The key ID is not a valid PKCS#11 URI\n"
-					"The PKCS#11 URI format is defined by RFC7512\n");
-				ENGerr(ENG_F_CTX_LOAD_KEY, ENG_R_INVALID_ID);
-				goto error;
-			}
-			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
-				/* If the searched key is public, try without login once even
-				 * when the PIN is provided */
-				if (!login && isPrivate)
-					goto error; /* Process on second attempt */
-				ctx_destroy_pin(ctx);
-				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-				if (ctx->pin) {
-					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
-					ctx->pin_length = tmp_pin_len;
-				}
-			}
-		} else {
-			n = parse_slot_id_string(ctx, s_slot_key_id, &slot_nr,
-				key_id, &key_id_len, &key_label);
-			if (!n) {
-				ctx_log(ctx, 0,
-					"The key ID is not a valid PKCS#11 URI\n"
-					"The PKCS#11 URI format is defined by RFC7512\n"
-					"The legacy ENGINE_pkcs11 ID format is also "
-					"still accepted for now\n");
-				ENGerr(ENG_F_CTX_LOAD_KEY, ENG_R_INVALID_ID);
-				goto error;
-			}
+	if (key_count == 0)
+		return NULL;
+
+	ctx_log(ctx, 1, "Found %u %s key%s:\n", key_count, key_type,
+		key_count <= 1 ? "" : "s");
+
+	if (obj_id && *obj_id && (obj_id_len != 0 || obj_label)) {
+		for (m = 0; m < key_count; m++) {
+			PKCS11_KEY *k = keys + m;
+
+			ctx_log(ctx, 1, "  %2u %c%c id=", m + 1,
+					k->isPrivate ? 'P' : ' ',
+					k->needLogin ? 'L' : ' ');
+			dump_hex(ctx, 1, k->id, k->id_len);
+			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
+			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
+				selected_key = k;
+			if (obj_id_len != 0 && k->id_len == obj_id_len
+					&& memcmp(k->id, obj_id, obj_id_len) == 0)
+				selected_key = k;
 		}
-		ctx_log(ctx, 1, "Looking in slot %d for key: ",
-			slot_nr);
-		if (key_id_len != 0) {
-			ctx_log(ctx, 1, "id=");
-			dump_hex(ctx, 1, key_id, key_id_len);
-		}
-		if (key_id_len != 0 && key_label)
-			ctx_log(ctx, 1, " ");
-		if (key_label)
-			ctx_log(ctx, 1, "label=%s", key_label);
-		ctx_log(ctx, 1, "\n");
-	}
-
-	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
-		sizeof(PKCS11_SLOT *));
-	if (!matched_slots) {
-		ctx_log(ctx, 0, "Could not allocate memory for matched slots\n");
-		goto error;
-	}
-
-	for (n = 0; n < ctx->slot_count; n++) {
-		slot = ctx->slot_list + n;
-		flags[0] = '\0';
-		if (slot->token) {
-			if (!slot->token->initialized)
-				strcat(flags, "uninitialized, ");
-			else if (!slot->token->userPinSet)
-				strcat(flags, "no pin, ");
-			if (slot->token->loginRequired)
-				strcat(flags, "login, ");
-			if (slot->token->readOnly)
-				strcat(flags, "ro, ");
-		} else {
-			strcpy(flags, "no token");
-		}
-		if ((m = strlen(flags)) != 0) {
-			flags[m - 2] = '\0';
-		}
-
-		if (slot_nr != -1 &&
-			slot_nr == (int)PKCS11_get_slotid_from_slot(slot)) {
-			found_slot = slot;
-		}
-
-		if (match_tok && slot->token &&
-				(!match_tok->label ||
-					!strcmp(match_tok->label, slot->token->label)) &&
-				(!match_tok->manufacturer ||
-					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(!match_tok->serialnr ||
-					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(!match_tok->model ||
-					!strcmp(match_tok->model, slot->token->model))) {
-			found_slot = slot;
-		}
-		ctx_log(ctx, 1, "[%lu] %-25.25s  %-16s",
-			PKCS11_get_slotid_from_slot(slot),
-			slot->description, flags);
-		if (slot->token) {
-			ctx_log(ctx, 1, "  (%s)",
-				slot->token->label[0] ?
-				slot->token->label : "no label");
-		}
-		ctx_log(ctx, 1, "\n");
-
-		if (found_slot && found_slot->token && !found_slot->token->initialized)
-			ctx_log(ctx, 0, "Found uninitialized token\n");
-
-		/* Ignore slots without tokens or with uninitialized token */
-		if (found_slot && found_slot->token && found_slot->token->initialized) {
-			matched_slots[matched_count] = found_slot;
-			matched_count++;
-		}
-		found_slot = NULL;
-	}
-
-	if (matched_count == 0) {
-		if (match_tok) {
-			ctx_log(ctx, 0, "Specified object not found\n");
-			goto error;
-		}
-
-		/* If the legacy slot ID format was used */
-		if (slot_nr != -1) {
-			ctx_log(ctx, 0, "Invalid slot number: %d\n", slot_nr);
-			goto error;
-		} else {
-			found_slot = PKCS11_find_token(ctx->pkcs11_ctx,
-								ctx->slot_list, ctx->slot_count);
-			/* Ignore if the the token is not initialized */
-			if (found_slot && found_slot->token &&
-					found_slot->token->initialized) {
-				matched_slots[matched_count] = found_slot;
-				matched_count++;
-			} else {
-				ctx_log(ctx, 0, "No tokens found\n");
-				goto error;
-			}
-		}
-	}
-
-	for (n = 0; n < matched_count; n++) {
-		slot = matched_slots[n];
-		tok = slot->token;
-		if (!tok) {
-			ctx_log(ctx, 0, "Found empty token\n");
-			break;
-		}
-
-		ctx_log(ctx, 1, "Found slot:  %s\n", slot->description);
-		ctx_log(ctx, 1, "Found token: %s\n", slot->token->label);
-
-		/* Both private and public keys can have the CKA_PRIVATE attribute
-		 * set and thus require login (even to retrieve attributes!) */
-		if (login) {
-			/* Try to login only if login is required */
-			if (tok->loginRequired) {
-				/* Try to login only if a single slot matched to avoiding trying
-				 * the PIN against all matching slots */
-				if (matched_count == 1) {
-					if (!ctx_login(ctx, slot, tok, ui_method, callback_data)) {
-						ctx_log(ctx, 0, "Login to token failed, returning NULL...\n");
-						goto error;
-					}
-				} else {
-					ctx_log(ctx, 0, "Multiple matching slots (%lu); will not try to"
-						" login\n", matched_count);
-					for (m = 0; m < matched_count; m++){
-						slot = matched_slots[m];
-						ctx_log(ctx, 1, "[%u] %s: %s\n", m + 1,
-								slot->description? slot->description:
-								"(no description)",
-								(slot->token && slot->token->label)?
-								slot->token->label: "no label");
-					}
-					goto error;
-				}
-			}
-		}
-
-		if (isPrivate) {
-			/* Make sure there is at least one private key on the token */
-			if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
-				ctx_log(ctx, 0, "Unable to enumerate private keys\n");
-				continue;
-			}
-		} else {
-			/* Make sure there is at least one public key on the token */
-			if (PKCS11_enumerate_public_keys(tok, &keys, &key_count)) {
-				ctx_log(ctx, 0, "Unable to enumerate public keys\n");
-				continue;
-			}
-		}
-		if (key_count == 0) {
-			if (login) /* Only print the error on the second attempt */
-				ctx_log(ctx, 0, "No %s keys found.\n",
-						(char *)(isPrivate ? "private" : "public"));
-			continue;
-		}
-		ctx_log(ctx, 1, "Found %u %s key%s:\n", key_count,
-				(char *)(isPrivate ? "private" : "public"),
-				(key_count == 1) ? "" : "s");
-
-		if (s_slot_key_id && *s_slot_key_id && (key_id_len != 0 || key_label)) {
-			for (m = 0; m < key_count; m++) {
-				PKCS11_KEY *k = keys + m;
-
-				ctx_log(ctx, 1, "  %2u %c%c id=", m + 1,
-						k->isPrivate ? 'P' : ' ',
-						k->needLogin ? 'L' : ' ');
-				dump_hex(ctx, 1, k->id, k->id_len);
-				ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
-				if (key_label && k->label && strcmp(k->label, key_label) == 0)
-					selected_key = k;
-				if (key_id_len != 0 && k->id_len == key_id_len
-						&& memcmp(k->id, key_id, key_id_len) == 0)
-					selected_key = k;
-			}
-		} else {
-			selected_key = keys; /* Use the first key */
-		}
-
-		if (selected_key) {
-			break;
-		}
-	}
-
-	if (selected_key) {
-		pk = isPrivate ?
-			PKCS11_get_private_key(selected_key) :
-			PKCS11_get_public_key(selected_key);
 	} else {
-		if (login) /* Only print the error on the second attempt */
-			ctx_log(ctx, 0, "Key not found.\n");
-		pk = NULL;
+		selected_key = keys; /* Use the first key */
 	}
+	return selected_key;
+}
 
-error:
-	/* Free the searched token data */
-	if (match_tok) {
-		OPENSSL_free(match_tok->model);
-		OPENSSL_free(match_tok->manufacturer);
-		OPENSSL_free(match_tok->serialnr);
-		OPENSSL_free(match_tok->label);
-		OPENSSL_free(match_tok);
+static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+{
+	PKCS11_KEY *keys;
+	unsigned int key_count;
+
+	/* Make sure there is at least one public key on the token */
+	if (PKCS11_enumerate_public_keys(tok, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
+		return 0;
 	}
-	if (key_label)
-		OPENSSL_free(key_label);
-	if (matched_slots)
-		free(matched_slots);
-	return pk;
+	return match_key(ctx, "public", keys, key_count, obj_id, obj_id_len, obj_label);
+}
+
+static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+{
+	PKCS11_KEY *keys;
+	unsigned int key_count;
+
+	/* Make sure there is at least one private key on the token */
+	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
+		return 0;
+	}
+	return match_key(ctx, "private", keys, key_count, obj_id, obj_id_len, obj_label);
 }
 
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	EVP_PKEY *pk = NULL;
+	PKCS11_KEY *key;
 
-	ERR_clear_error();
-
-	if (ctx_init_libp11(ctx)) /* Delayed libp11 initialization */
-		return NULL;
-
-	pthread_mutex_lock(&ctx->lock);
-	if (!ctx->force_login)
-		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 0);
-	if (!pk) { /* Try again with login */
-		ERR_clear_error();
-		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 0, 1);
-	}
-	pthread_mutex_unlock(&ctx->lock);
-	if (!pk) {
+	key = ctx_load_object(ctx, "public key", match_public_key, s_key_id,
+		ui_method, callback_data);
+	if (!key) {
 		ctx_log(ctx, 0, "PKCS11_load_public_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PUBKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
-	return pk;
+	return PKCS11_get_public_key(key);
 }
 
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	EVP_PKEY *pk = NULL;
+	PKCS11_KEY *key;
 
-	ERR_clear_error();
-
-	if (ctx_init_libp11(ctx)) /* Delayed libp11 initialization */
-		return NULL;
-
-	pthread_mutex_lock(&ctx->lock);
-	if (!ctx->force_login)
-		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 0);
-	if (!pk) { /* Try again with login */
-		ERR_clear_error();
-		pk = ctx_load_key(ctx, s_key_id, ui_method, callback_data, 1, 1);
-	}
-	pthread_mutex_unlock(&ctx->lock);
-	if (!pk) {
+	key = ctx_load_object(ctx, "private key", match_private_key, s_key_id,
+		ui_method, callback_data);
+	if (!key) {
 		ctx_log(ctx, 0, "PKCS11_get_private_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PRIVKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
-	return pk;
+	return PKCS11_get_private_key(key);
 }
 
 /******************************************************************************/

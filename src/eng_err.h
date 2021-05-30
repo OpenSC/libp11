@@ -31,6 +31,7 @@ void ERR_ENG_error(int function, int reason, char *file, int line);
 # define ENG_F_CTX_CTRL_LOAD_CERT                         102
 # define ENG_F_CTX_CTRL_SET_PIN                           106
 # define ENG_F_CTX_ENGINE_CTRL                            105
+# define ENG_F_CTX_LOAD_OBJECT                            107
 # define ENG_F_CTX_LOAD_CERT                              100
 # define ENG_F_CTX_LOAD_KEY                               101
 # define ENG_F_CTX_LOAD_PRIVKEY                           103
