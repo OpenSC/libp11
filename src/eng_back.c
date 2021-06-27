@@ -272,6 +272,8 @@ static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 	ctx_log(ctx, 1, "Found %u slot%s\n", slot_count,
 		slot_count <= 1 ? "" : "s");
 
+	/* The ctx->lock mutex ensures thread safety for this operation */
+	OPENSSL_free(ctx->slot_list);
 	ctx->slot_list = slot_list;
 	ctx->slot_count = slot_count;
 
