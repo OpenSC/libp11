@@ -248,7 +248,7 @@ int ctx_destroy(ENGINE_CTX *ctx)
 	return 1;
 }
 
-static int ctx_enumerate_slots(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
+static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 {
 	PKCS11_SLOT *slot_list = NULL;
 	unsigned int slot_count = 0;
@@ -278,6 +278,15 @@ static int ctx_enumerate_slots(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 	return 1;
 }
 
+static int ctx_enumerate_slots(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
+{
+	int rv;
+
+	pthread_mutex_lock(&ctx->lock);
+	rv = ctx_enumerate_slots_unlocked(ctx, pkcs11_ctx);
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
+}
 
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
 static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
@@ -293,7 +302,7 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
-	if (ctx_enumerate_slots(ctx, pkcs11_ctx) != 1)
+	if (ctx_enumerate_slots_unlocked(ctx, pkcs11_ctx) != 1)
 		return -1;
 
 	ctx->pkcs11_ctx = pkcs11_ctx;
