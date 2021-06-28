@@ -111,23 +111,22 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 /*
  * Reinitialize (e.g., after a fork).
  */
-int pkcs11_CTX_reload(PKCS11_CTX *ctx)
+int pkcs11_CTX_reload(PKCS11_CTX_private *ctx)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 	CK_C_INITIALIZE_ARGS _args;
 	CK_C_INITIALIZE_ARGS *args = NULL;
 	int rv;
 
-	if (!cpriv->method) /* Module not loaded */
+	if (!ctx->method) /* Module not loaded */
 		return 0;
 
 	/* Tell the PKCS11 to initialize itself */
-	if (cpriv->init_args) {
+	if (ctx->init_args) {
 		memset(&_args, 0, sizeof(_args));
 		args = &_args;
-		args->pReserved = cpriv->init_args;
+		args->pReserved = ctx->init_args;
 	}
-	rv = cpriv->method->C_Initialize(args);
+	rv = ctx->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		CKRerr(P11_F_PKCS11_CTX_RELOAD, rv);
 		return -1;
