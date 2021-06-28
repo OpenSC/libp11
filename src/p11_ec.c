@@ -787,16 +787,13 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 
 #endif /* OPENSSL_VERSION_NUMBER */
 
-PKCS11_KEY_ops pkcs11_ec_ops_s = {
+PKCS11_KEY_ops pkcs11_ec_ops = {
 	EVP_PKEY_EC,
 	pkcs11_get_evp_key_ec,
 	pkcs11_update_ex_data_ec,
 };
-PKCS11_KEY_ops *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
 #else /* OPENSSL_NO_EC */
-
-PKCS11_KEY_ops *pkcs11_ec_ops = {NULL};
 
 /* if not built with EC or OpenSSL does not support ECDSA
  * add these routines so engine_pkcs11 can be built now and not

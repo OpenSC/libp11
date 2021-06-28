@@ -112,7 +112,7 @@ typedef struct pkcs11_cert_private {
 #define CERT2CTX(cert)		TOKEN2CTX(CERT2TOKEN(cert))
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
-extern PKCS11_KEY_ops *pkcs11_ec_ops;
+extern PKCS11_KEY_ops pkcs11_ec_ops;
 
 /*
  * Internal functions
