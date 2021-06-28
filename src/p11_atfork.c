@@ -65,9 +65,9 @@ static unsigned int _P11_update_forkid(void)
 		int rv = 0; \
 		_P11_update_forkid(); \
 		if (forkid != P11_forkid) { \
-			pthread_mutex_lock(&PRIVCTX(ctx)->fork_lock); \
+			pthread_mutex_lock(&ctx->fork_lock); \
 			function_call; \
-			pthread_mutex_unlock(&PRIVCTX(ctx)->fork_lock); \
+			pthread_mutex_unlock(&ctx->fork_lock); \
 		} \
 		return rv; \
 	} while (0)
@@ -91,14 +91,12 @@ unsigned int get_forkid()
  * It wipes out the internal state of the PKCS#11 library
  * Any libp11 references to this state are no longer valid
  */
-static int check_fork_int(PKCS11_CTX *ctx)
+static int check_fork_int(PKCS11_CTX_private *ctx)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
-
-	if (cpriv->forkid != P11_forkid) {
+	if (ctx->forkid != P11_forkid) {
 		if (pkcs11_CTX_reload(ctx) < 0)
 			return -1;
-		cpriv->forkid = P11_forkid;
+		ctx->forkid = P11_forkid;
 	}
 	return 0;
 }
@@ -107,18 +105,16 @@ static int check_fork_int(PKCS11_CTX *ctx)
  * PKCS#11 reinitialization after fork
  * Also relogins and reopens the session if needed
  */
-static int check_slot_fork_int(PKCS11_SLOT *slot)
+static int check_slot_fork_int(PKCS11_SLOT_private *slot)
 {
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	PKCS11_CTX *ctx = SLOT2CTX(slot);
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *ctx = slot->ctx;
 
-	if (check_fork_int(SLOT2CTX(slot)) < 0)
+	if (check_fork_int(ctx) < 0)
 		return -1;
-	if (spriv->forkid != cpriv->forkid) {
+	if (slot->forkid != ctx->forkid) {
 		if (pkcs11_reload_slot(slot) < 0)
 			return -1;
-		spriv->forkid = cpriv->forkid;
+		slot->forkid = ctx->forkid;
 	}
 	return 0;
 }
@@ -127,18 +123,16 @@ static int check_slot_fork_int(PKCS11_SLOT *slot)
  * PKCS#11 reinitialization after fork
  * Also reloads the key
  */
-static int check_key_fork_int(PKCS11_KEY *key)
+static int check_key_fork_int(PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT *slot = KEY2SLOT(key);
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_SLOT_private *slot = key->token->slot;
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
-	if (spriv->forkid != kpriv->forkid) {
+	if (slot->forkid != key->forkid) {
 		if (pkcs11_reload_key(key) < 0)
 			return -1;
-		kpriv->forkid = spriv->forkid;
+		key->forkid = slot->forkid;
 	}
 	return 0;
 }
@@ -147,19 +141,17 @@ static int check_key_fork_int(PKCS11_KEY *key)
  * PKCS#11 reinitialization after fork
  * Also reloads the key
  */
-static int check_cert_fork_int(PKCS11_CERT *cert)
+static int check_cert_fork_int(PKCS11_CERT_private *cert)
 {
-	PKCS11_SLOT *slot = CERT2SLOT(cert);
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
-	PKCS11_CERT_private *cpriv = PRIVCERT(cert);
+	PKCS11_SLOT_private *slot = cert->token->slot;
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
 
-	if (spriv->forkid != cpriv->forkid) {
+	if (slot->forkid != cert->forkid) {
 		if (pkcs11_reload_certificate(cert) < 0)
 			return -1;
-		cpriv->forkid = spriv->forkid;
+		cert->forkid = slot->forkid;
 	}
 	return 0;
 }
@@ -167,54 +159,51 @@ static int check_cert_fork_int(PKCS11_CERT *cert)
 /*
  * Locking interface to check_fork_int()
  */
-int check_fork(PKCS11_CTX *ctx)
+int check_fork(PKCS11_CTX_private *ctx)
 {
 	if (!ctx)
 		return -1;
-	CHECK_FORKID(ctx, PRIVCTX(ctx)->forkid, check_fork_int(ctx));
+	CHECK_FORKID(ctx, ctx->forkid, check_fork_int(ctx));
 }
 
 /*
  * Locking interface to check_slot_fork_int()
  */
-int check_slot_fork(PKCS11_SLOT *slot)
+int check_slot_fork(PKCS11_SLOT_private *slot)
 {
 	if (!slot)
 		return -1;
-	CHECK_FORKID(SLOT2CTX(slot), PRIVSLOT(slot)->forkid,
-		check_slot_fork_int(slot));
+	CHECK_FORKID(slot->ctx, slot->forkid, check_slot_fork_int(slot));
 }
 
 /*
  * Reinitialize token (just its slot)
  */
-int check_token_fork(PKCS11_TOKEN *token)
+int check_token_fork(PKCS11_TOKEN_private *token)
 {
 	if (!token)
 		return -1;
-	return check_slot_fork(TOKEN2SLOT(token));
+	return check_slot_fork(token->slot);
 }
 
 /*
  * Locking interface to check_key_fork_int()
  */
-int check_key_fork(PKCS11_KEY *key)
+int check_key_fork(PKCS11_KEY_private *key)
 {
 	if (!key)
 		return -1;
-	CHECK_FORKID(KEY2CTX(key), PRIVKEY(key)->forkid,
-		check_key_fork_int(key));
+	CHECK_FORKID(key->token->slot->ctx, key->forkid, check_key_fork_int(key));
 }
 
 /*
  * Locking interface to check_cert_fork_int()
  */
-int check_cert_fork(PKCS11_CERT *cert)
+int check_cert_fork(PKCS11_CERT_private *cert)
 {
 	if (!cert)
 		return -1;
-	CHECK_FORKID(CERT2CTX(cert), PRIVCERT(cert)->forkid,
-		check_cert_fork_int(cert));
+	CHECK_FORKID(cert->token->slot->ctx, cert->forkid, check_cert_fork_int(cert));
 }
 
 /* vim: set noexpandtab: */

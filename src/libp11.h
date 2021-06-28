@@ -60,7 +60,6 @@ typedef struct PKCS11_key_st {
 	size_t id_len;
 	unsigned char isPrivate;	/**< private key present? */
 	unsigned char needLogin;	/**< login to read private key? */
-	EVP_PKEY *evp_key;		/**< initially NULL, need to call PKCS11_load_key */
 	void *_private;
 } PKCS11_KEY;
 
@@ -93,7 +92,7 @@ typedef struct PKCS11_token_st {
 	unsigned char soPinFinalTry;
 	unsigned char soPinLocked;
 	unsigned char soPinToBeChanged;
-	void *_private;
+	struct PKCS11_slot_st *slot;
 } PKCS11_TOKEN;
 
 /** PKCS11 slot: card reader */

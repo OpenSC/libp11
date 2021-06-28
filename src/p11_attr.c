@@ -33,7 +33,7 @@
 /*
  * Query pkcs11 attributes
  */
-int pkcs11_getattr_var(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+int pkcs11_getattr_var(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
 		CK_BYTE *value, size_t *size)
 {
@@ -49,14 +49,14 @@ int pkcs11_getattr_var(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
 	return 0;
 }
 
-int pkcs11_getattr_val(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+int pkcs11_getattr_val(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
 		void *value, size_t size)
 {
 	return pkcs11_getattr_var(ctx, session, object, type, value, &size);
 }
 
-int pkcs11_getattr_alloc(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+int pkcs11_getattr_alloc(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type,
 		CK_BYTE **value, size_t *size)
 {
@@ -82,7 +82,7 @@ int pkcs11_getattr_alloc(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
 	return 0;
 }
 
-int pkcs11_getattr_bn(PKCS11_CTX *ctx, CK_SESSION_HANDLE session,
+int pkcs11_getattr_bn(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
 		CK_OBJECT_HANDLE object, CK_ATTRIBUTE_TYPE type, BIGNUM **bn)
 {
 	CK_BYTE *binary;
