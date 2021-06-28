@@ -111,7 +111,7 @@ struct pkcs11_key_ops {
 };
 
 extern PKCS11_KEY_ops pkcs11_rsa_ops;
-extern PKCS11_KEY_ops *pkcs11_ec_ops;
+extern PKCS11_KEY_ops pkcs11_ec_ops;
 
 /*
  * Internal functions
