@@ -227,6 +227,13 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 	return 0;
 }
 
+static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
+{
+	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
+	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
+	pkcs11_destroy_certs(slot);
+}
+
 /*
  * Log out
  */
@@ -238,11 +245,7 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 
 	/* Calling PKCS11_logout invalidates all cached
 	 * keys we have */
-	if (slot->token) {
-		pkcs11_destroy_keys(slot->token, CKO_PRIVATE_KEY);
-		pkcs11_destroy_keys(slot->token, CKO_PUBLIC_KEY);
-		pkcs11_destroy_certs(slot->token);
-	}
+	pkcs11_wipe_cache(slot);
 
 	if (pkcs11_get_session(slot, slot->logged_in, &session) == 0) {
 		rv = CRYPTOKI_call(ctx, C_Logout(session));
@@ -256,9 +259,8 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 /*
  * Initialize the token
  */
-int pkcs11_init_token(PKCS11_TOKEN_private *token, const char *pin, const char *label)
+int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	int rv;
 
@@ -286,9 +288,8 @@ int pkcs11_init_token(PKCS11_TOKEN_private *token, const char *pin, const char *
 /*
  * Set the User PIN
  */
-int pkcs11_init_pin(PKCS11_TOKEN_private *token, const char *pin)
+int pkcs11_init_pin(PKCS11_SLOT_private *slot, const char *pin)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_OBJECT_HANDLE session;
 	int len, rv;
@@ -434,7 +435,12 @@ static void pkcs11_release_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
+	if (slot->token) {
+		pkcs11_destroy_token(slot->token);
+		OPENSSL_free(slot->token);
+	}
 	if (spriv) {
+		pkcs11_wipe_cache(spriv);
 		if (spriv->prev_pin) {
 			OPENSSL_cleanse(spriv->prev_pin, strlen(spriv->prev_pin));
 			OPENSSL_free(spriv->prev_pin);
@@ -444,13 +450,9 @@ static void pkcs11_release_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot)
 		pthread_mutex_destroy(&spriv->lock);
 		pthread_cond_destroy(&spriv->cond);
 	}
-	OPENSSL_free(slot->_private);
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);
-	if (slot->token) {
-		pkcs11_destroy_token(slot->token);
-		OPENSSL_free(slot->token);
-	}
+	OPENSSL_free(slot->_private);
 
 	memset(slot, 0, sizeof(*slot));
 }
@@ -459,7 +461,6 @@ int pkcs11_refresh_token(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 	PKCS11_CTX_private *ctx = spriv->ctx;
-	PKCS11_TOKEN_private *tpriv;
 	CK_TOKEN_INFO info;
 	int rv;
 
@@ -482,17 +483,6 @@ int pkcs11_refresh_token(PKCS11_SLOT *slot)
 		memset(slot->token, 0, sizeof(PKCS11_TOKEN));
 	}
 
-	if (!spriv->token) {
-		tpriv = OPENSSL_malloc(sizeof(PKCS11_TOKEN_private));
-		if (!tpriv)
-			return -1;
-		memset(tpriv, 0, sizeof(PKCS11_TOKEN_private));
-		tpriv->slot = spriv;
-		spriv->token = tpriv;
-	} else {
-		tpriv = spriv->token;
-	}
-
 	slot->token->label = PKCS11_DUP(info.label);
 	slot->token->manufacturer = PKCS11_DUP(info.manufacturerID);
 	slot->token->model = PKCS11_DUP(info.model);
@@ -513,19 +503,14 @@ int pkcs11_refresh_token(PKCS11_SLOT *slot)
 	slot->token->soPinToBeChanged = (info.flags & CKF_SO_PIN_TO_BE_CHANGED) ? 1 : 0;
 	slot->token->slot = slot;
 
-	tpriv->secure_login = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
+	spriv->secure_login = (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) ? 1 : 0;
 
 	return 0;
 }
 
 static void pkcs11_destroy_token(PKCS11_TOKEN *token)
 {
-	PKCS11_TOKEN_private *tpriv = PRIVTOKEN(token);
-
-	pkcs11_destroy_keys(tpriv, CKO_PRIVATE_KEY);
-	pkcs11_destroy_keys(tpriv, CKO_PUBLIC_KEY);
-	pkcs11_destroy_certs(tpriv);
-
+	pkcs11_wipe_cache(PRIVSLOT(token->slot));
 	OPENSSL_free(token->label);
 	OPENSSL_free(token->manufacturer);
 	OPENSSL_free(token->model);

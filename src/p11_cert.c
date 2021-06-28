@@ -26,35 +26,33 @@
 #include "libp11-int.h"
 #include <string.h>
 
-static int pkcs11_find_certs(PKCS11_TOKEN_private *, CK_SESSION_HANDLE);
-static int pkcs11_next_cert(PKCS11_CTX_private *, PKCS11_TOKEN_private *, CK_SESSION_HANDLE);
-static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_find_certs(PKCS11_SLOT_private *, CK_SESSION_HANDLE);
+static int pkcs11_next_cert(PKCS11_CTX_private *, PKCS11_SLOT_private *, CK_SESSION_HANDLE);
+static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *token,
 	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o, PKCS11_CERT **);
 
 /*
  * Enumerate all certs on the card
  */
-int pkcs11_enumerate_certs(PKCS11_TOKEN_private *token,
-		PKCS11_CERT **certp, unsigned int *countp)
+int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, PKCS11_CERT **certp, unsigned int *countp)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	CK_SESSION_HANDLE session;
 	int rv;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = pkcs11_find_certs(token, session);
+	rv = pkcs11_find_certs(slot, session);
 	pkcs11_put_session(slot, session);
 	if (rv < 0) {
-		pkcs11_destroy_certs(token);
+		pkcs11_destroy_certs(slot);
 		return -1;
 	}
 
 	if (certp)
-		*certp = token->certs;
+		*certp = slot->certs;
 	if (countp)
-		*countp = token->ncerts;
+		*countp = slot->ncerts;
 	return 0;
 }
 
@@ -63,7 +61,7 @@ int pkcs11_enumerate_certs(PKCS11_TOKEN_private *token,
  */
 int pkcs11_remove_certificate(PKCS11_CERT_private *cert)
 {
-	PKCS11_SLOT_private *slot = cert->token->slot;
+	PKCS11_SLOT_private *slot = cert->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	int rv;
@@ -87,7 +85,7 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY_private *key)
 	PKCS11_CERT *cert;
 	unsigned int n, count;
 
-	if (pkcs11_enumerate_certs(key->token, &cert, &count))
+	if (pkcs11_enumerate_certs(key->slot, &cert, &count))
 		return NULL;
 	for (n = 0; n < count; n++, cert++) {
 		cpriv = PRIVCERT(cert);
@@ -101,9 +99,8 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY_private *key)
 /*
  * Find all certs of a given type (public or private)
  */
-static int pkcs11_find_certs(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE session)
+static int pkcs11_find_certs(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_OBJECT_CLASS cert_search_class;
 	CK_ATTRIBUTE cert_search_attrs[] = {
@@ -117,7 +114,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE sess
 	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_CERTS, rv);
 
 	do {
-		res = pkcs11_next_cert(ctx, token, session);
+		res = pkcs11_next_cert(ctx, slot, session);
 	} while (res == 0);
 
 	CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
@@ -125,7 +122,7 @@ static int pkcs11_find_certs(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE sess
 	return (res < 0) ? -1 : 0;
 }
 
-static int pkcs11_next_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_next_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session)
 {
 	CK_OBJECT_HANDLE obj;
@@ -139,13 +136,13 @@ static int pkcs11_next_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token
 	if (count == 0)
 		return 1;
 
-	if (pkcs11_init_cert(ctx, token, session, obj, NULL))
+	if (pkcs11_init_cert(ctx, slot, session, obj, NULL))
 		return -1;
 
 	return 0;
 }
 
-static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
 {
 	PKCS11_CERT_private *cpriv;
@@ -168,8 +165,8 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token
 	/* Prevent re-adding existing PKCS#11 object handles */
 	/* TODO: Rewrite the O(n) algorithm as O(log n),
 	 * or it may be too slow with a large number of certificates */
-	for (i=0; i < token->ncerts; ++i)
-		if (PRIVCERT(&token->certs[i])->object == obj)
+	for (i=0; i < slot->ncerts; ++i)
+		if (PRIVCERT(&slot->certs[i])->object == obj)
 			return 0;
 
 	/* Allocate memory */
@@ -177,19 +174,19 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token
 	if (!cpriv)
 		return -1;
 	memset(cpriv, 0, sizeof(PKCS11_CERT_private));
-	tmp = OPENSSL_realloc(token->certs, (token->ncerts + 1) * sizeof(PKCS11_CERT));
+	tmp = OPENSSL_realloc(slot->certs, (slot->ncerts + 1) * sizeof(PKCS11_CERT));
 	if (!tmp) {
 		OPENSSL_free(cpriv);
 		return -1;
 	}
-	token->certs = tmp;
-	cert = token->certs + token->ncerts++;
+	slot->certs = tmp;
+	cert = slot->certs + slot->ncerts++;
 	memset(cert, 0, sizeof(PKCS11_CERT));
 
 	/* Fill private properties */
 	cert->_private = cpriv;
 	cpriv->object = obj;
-	cpriv->token = token;
+	cpriv->slot = slot;
 	cpriv->id_len = sizeof cpriv->id;
 	if (pkcs11_getattr_var(ctx, session, obj, CKA_ID, cpriv->id, &cpriv->id_len))
 		cpriv->id_len = 0;
@@ -217,7 +214,7 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token
  */
 int pkcs11_reload_certificate(PKCS11_CERT_private *cert)
 {
-	PKCS11_SLOT_private *slot = cert->token->slot;
+	PKCS11_SLOT_private *slot = cert->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_ULONG count = 0;
 	CK_ATTRIBUTE search_parameters[32];
@@ -255,10 +252,10 @@ int pkcs11_reload_certificate(PKCS11_CERT_private *cert)
 /*
  * Destroy all certs
  */
-void pkcs11_destroy_certs(PKCS11_TOKEN_private *token)
+void pkcs11_destroy_certs(PKCS11_SLOT_private *slot)
 {
-	while (token->ncerts > 0) {
-		PKCS11_CERT *cert = &token->certs[--token->ncerts];
+	while (slot->ncerts > 0) {
+		PKCS11_CERT *cert = &slot->certs[--slot->ncerts];
 
 		if (cert->x509)
 			X509_free(cert->x509);
@@ -268,19 +265,18 @@ void pkcs11_destroy_certs(PKCS11_TOKEN_private *token)
 			OPENSSL_free(cpriv);
 		}
 	}
-	if (token->certs)
-		OPENSSL_free(token->certs);
-	token->certs = NULL;
-	token->ncerts = 0;
+	if (slot->certs)
+		OPENSSL_free(slot->certs);
+	slot->certs = NULL;
+	slot->ncerts = 0;
 }
 
 /*
  * Store certificate
  */
-int pkcs11_store_certificate(PKCS11_TOKEN_private *token, X509 *x509, char *label,
+int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 		unsigned char *id, size_t id_len, PKCS11_CERT **ret_cert)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
@@ -368,7 +364,7 @@ int pkcs11_store_certificate(PKCS11_TOKEN_private *token, X509 *x509, char *labe
 
 	/* Gobble the key object */
 	if (rv == CKR_OK) {
-		r = pkcs11_init_cert(ctx, token, session, object, ret_cert);
+		r = pkcs11_init_cert(ctx, slot, session, object, ret_cert);
 	}
 	pkcs11_put_session(slot, session);
 
