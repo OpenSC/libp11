@@ -29,13 +29,13 @@
 /* The maximum length of PIN */
 #define MAX_PIN_LENGTH   32
 
-static int pkcs11_find_keys(PKCS11_TOKEN_private *, CK_SESSION_HANDLE, unsigned int);
-static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int);
+static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
-static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o,
 	CK_OBJECT_CLASS type, PKCS11_KEY **);
-static int pkcs11_store_key(PKCS11_TOKEN_private *, EVP_PKEY *, unsigned int,
+static int pkcs11_store_key(PKCS11_SLOT_private *, EVP_PKEY *, unsigned int,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
@@ -57,7 +57,7 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert)
 	PKCS11_KEY *keys;
 	unsigned int n, count;
 
-	if (pkcs11_enumerate_keys(cert->token, CKO_PRIVATE_KEY, &keys, &count))
+	if (pkcs11_enumerate_keys(cert->slot, CKO_PRIVATE_KEY, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
 		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
@@ -77,7 +77,7 @@ PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *keyin)
 	unsigned int n, count, type =
 		keyin->is_private ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY;
 
-	if (pkcs11_enumerate_keys(keyin->token, type, &keys, &count))
+	if (pkcs11_enumerate_keys(keyin->slot, type, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
 		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
@@ -93,7 +93,7 @@ PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *keyin)
  */
 int pkcs11_reload_key(PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_CLASS key_search_class =
@@ -123,10 +123,9 @@ int pkcs11_reload_key(PKCS11_KEY_private *key)
 /**
  * Generate a key pair directly on token
  */
-int pkcs11_generate_key(PKCS11_TOKEN_private *token, int algorithm, unsigned int bits,
+int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int bits,
 		char *label, unsigned char* id, size_t id_len) {
 
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_ATTRIBUTE pubkey_attrs[32];
@@ -192,18 +191,18 @@ int pkcs11_generate_key(PKCS11_TOKEN_private *token, int algorithm, unsigned int
 /*
  * Store a private key on the token
  */
-int pkcs11_store_private_key(PKCS11_TOKEN_private *token, EVP_PKEY *pk,
+int pkcs11_store_private_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		char *label, unsigned char *id, size_t id_len)
 {
-	if (pkcs11_store_key(token, pk, CKO_PRIVATE_KEY, label, id, id_len, NULL))
+	if (pkcs11_store_key(slot, pk, CKO_PRIVATE_KEY, label, id, id_len, NULL))
 		return -1;
 	return 0;
 }
 
-int pkcs11_store_public_key(PKCS11_TOKEN_private *token, EVP_PKEY *pk,
+int pkcs11_store_public_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		char *label, unsigned char *id, size_t id_len)
 {
-	if (pkcs11_store_key(token, pk, CKO_PUBLIC_KEY, label, id, id_len, NULL))
+	if (pkcs11_store_key(slot, pk, CKO_PUBLIC_KEY, label, id, id_len, NULL))
 		return -1;
 	return 0;
 }
@@ -211,11 +210,10 @@ int pkcs11_store_public_key(PKCS11_TOKEN_private *token, EVP_PKEY *pk,
 /*
  * Store private key
  */
-static int pkcs11_store_key(PKCS11_TOKEN_private *token, EVP_PKEY *pk,
+static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		unsigned int type, char *label, unsigned char *id, size_t id_len,
 		PKCS11_KEY ** ret_key)
 {
-	PKCS11_SLOT_private *slot = token->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
@@ -295,7 +293,7 @@ static int pkcs11_store_key(PKCS11_TOKEN_private *token, EVP_PKEY *pk,
 
 	if (rv == CKR_OK) {
 		/* Gobble the key object */
-		r = pkcs11_init_key(ctx, token, session, object, type, ret_key);
+		r = pkcs11_init_key(ctx, slot, session, object, type, ret_key);
 	}
 	pkcs11_put_session(slot, session);
 
@@ -341,8 +339,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY_private *key, int isPrivate)
  */
 int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session)
 {
-	PKCS11_TOKEN_private *token = key->token;
-	PKCS11_SLOT_private *slot = token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	char pin[MAX_PIN_LENGTH+1];
 	char* prompt;
@@ -350,7 +347,7 @@ int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session)
 	int rv;
 
 	/* Handle CKF_PROTECTED_AUTHENTICATION_PATH */
-	if (token->secure_login) {
+	if (slot->secure_login) {
 		rv = CRYPTOKI_call(ctx,
 			C_Login(session, CKU_CONTEXT_SPECIFIC, NULL, 0));
 		return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
@@ -393,21 +390,20 @@ int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session)
  * Return keys of a given type (public or private)
  * Use the cached values if available
  */
-int pkcs11_enumerate_keys(PKCS11_TOKEN_private *token, unsigned int type,
+int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type,
 		PKCS11_KEY **keyp, unsigned int *countp)
 {
-	PKCS11_SLOT_private *slot = token->slot;
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &token->prv : &token->pub;
+	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 	CK_SESSION_HANDLE session;
 	int rv;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = pkcs11_find_keys(token, session, type);
+	rv = pkcs11_find_keys(slot, session, type);
 	pkcs11_put_session(slot, session);
 	if (rv < 0) {
-		pkcs11_destroy_keys(token, type);
+		pkcs11_destroy_keys(slot, type);
 		return -1;
 	}
 
@@ -423,7 +419,7 @@ int pkcs11_enumerate_keys(PKCS11_TOKEN_private *token, unsigned int type,
  */
 int pkcs11_remove_key(PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	int rv;
@@ -441,9 +437,9 @@ int pkcs11_remove_key(PKCS11_KEY_private *key)
 /*
  * Find all keys of a given type (public or private)
  */
-static int pkcs11_find_keys(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE session, unsigned int type)
+static int pkcs11_find_keys(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session, unsigned int type)
 {
-	PKCS11_CTX_private *ctx = token->slot->ctx;
+	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_OBJECT_CLASS key_search_class;
 	CK_ATTRIBUTE key_search_attrs[1] = {
 		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
@@ -457,7 +453,7 @@ static int pkcs11_find_keys(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE sessi
 	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_KEYS, rv);
 
 	do {
-		res = pkcs11_next_key(ctx, token, session, type);
+		res = pkcs11_next_key(ctx, slot, session, type);
 	} while (res == 0);
 
 	CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
@@ -465,7 +461,7 @@ static int pkcs11_find_keys(PKCS11_TOKEN_private *token, CK_SESSION_HANDLE sessi
 	return (res < 0) ? -1 : 0;
 }
 
-static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session, CK_OBJECT_CLASS type)
 {
 	CK_OBJECT_HANDLE obj;
@@ -479,17 +475,17 @@ static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
 	if (count == 0)
 		return 1;
 
-	if (pkcs11_init_key(ctx, token, session, obj, type, NULL))
+	if (pkcs11_init_key(ctx, slot, session, obj, type, NULL))
 		return -1;
 
 	return 0;
 }
 
-static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
+static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj,
 		CK_OBJECT_CLASS type, PKCS11_KEY **ret)
 {
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &token->prv : &token->pub;
+	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 	PKCS11_KEY_private *kpriv;
 	PKCS11_KEY *key, *tmp;
 	CK_KEY_TYPE key_type;
@@ -542,7 +538,7 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
 	/* Fill private properties */
 	key->_private = kpriv;
 	kpriv->object = obj;
-	kpriv->token = token;
+	kpriv->slot = slot;
 	kpriv->id_len = sizeof kpriv->id;
 	if (pkcs11_getattr_var(ctx, session, obj, CKA_ID, kpriv->id, &kpriv->id_len))
 		kpriv->id_len = 0;
@@ -572,9 +568,9 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_TOKEN_private *token,
 /*
  * Destroy all keys of a given type (public or private)
  */
-void pkcs11_destroy_keys(PKCS11_TOKEN_private *token, unsigned int type)
+void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 {
-	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &token->prv : &token->pub;
+	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 
 	while (keys->num > 0) {
 		PKCS11_KEY *key = &keys->keys[--keys->num];

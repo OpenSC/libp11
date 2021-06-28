@@ -34,7 +34,6 @@
 /* forward and type declarations */
 typedef struct pkcs11_ctx_private PKCS11_CTX_private;
 typedef struct pkcs11_slot_private PKCS11_SLOT_private;
-typedef struct pkcs11_token_private PKCS11_TOKEN_private;
 typedef struct pkcs11_key_private PKCS11_KEY_private;
 typedef struct pkcs11_cert_private PKCS11_CERT_private;
 typedef struct pkcs11_key_ops PKCS11_KEY_ops;
@@ -55,9 +54,13 @@ struct pkcs11_ctx_private {
 };
 #define PRIVCTX(_ctx)		((PKCS11_CTX_private *) ((_ctx)->_private))
 
+typedef struct pkcs11_keys {
+	int num;
+	PKCS11_KEY *keys;
+} PKCS11_keys;
+
 struct pkcs11_slot_private {
 	PKCS11_CTX_private *ctx;
-	PKCS11_TOKEN_private *token;
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	int8_t rw_mode, logged_in;
@@ -69,25 +72,17 @@ struct pkcs11_slot_private {
 
 	/* options used in last PKCS11_login */
 	char *prev_pin;
-};
-#define PRIVSLOT(_slot)		((PKCS11_SLOT_private *) ((_slot)->_private))
 
-typedef struct pkcs11_keys {
-	int num;
-	PKCS11_KEY *keys;
-} PKCS11_keys;
-
-struct pkcs11_token_private {
-	PKCS11_SLOT_private *slot;
+	/* members concerning the token */
 	CK_BBOOL secure_login;
 	PKCS11_keys prv, pub;
 	int ncerts;
 	PKCS11_CERT *certs;
 };
-#define PRIVTOKEN(_token)	((PKCS11_TOKEN_private *) (PRIVSLOT((_token)->slot)->token))
+#define PRIVSLOT(_slot)		((PKCS11_SLOT_private *) ((_slot)->_private))
 
 struct pkcs11_key_private {
-	PKCS11_TOKEN_private *token;
+	PKCS11_SLOT_private *slot;
 	CK_OBJECT_HANDLE object;
 	CK_BBOOL always_authenticate;
 	CK_BBOOL is_private;
@@ -101,7 +96,7 @@ struct pkcs11_key_private {
 #define PRIVKEY(_key)		((PKCS11_KEY_private *) (_key)->_private)
 
 struct pkcs11_cert_private {
-	PKCS11_TOKEN_private *token;
+	PKCS11_SLOT_private *slot;
 	CK_OBJECT_HANDLE object;
 	unsigned char id[255];
 	size_t id_len;
@@ -148,18 +143,17 @@ extern char *pkcs11_strdup(char *, size_t);
 extern unsigned int get_forkid();
 extern int check_fork(PKCS11_CTX_private *ctx);
 extern int check_slot_fork(PKCS11_SLOT_private *slot);
-extern int check_token_fork(PKCS11_TOKEN_private *token);
 extern int check_key_fork(PKCS11_KEY_private *key);
 extern int check_cert_fork(PKCS11_CERT_private *cert);
 
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
-extern void pkcs11_destroy_keys(PKCS11_TOKEN_private *, unsigned int);
-extern void pkcs11_destroy_certs(PKCS11_TOKEN_private *);
+extern void pkcs11_destroy_keys(PKCS11_SLOT_private *, unsigned int);
+extern void pkcs11_destroy_certs(PKCS11_SLOT_private *);
 extern int pkcs11_reload_key(PKCS11_KEY_private *);
 extern int pkcs11_reload_certificate(PKCS11_CERT_private *cert);
-extern int pkcs11_reload_slot(PKCS11_SLOT_private *spriv);
+extern int pkcs11_reload_slot(PKCS11_SLOT_private *);
 
 /* Managing object attributes */
 extern int pkcs11_getattr_var(PKCS11_CTX_private *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
@@ -205,20 +199,20 @@ extern void pkcs11_CTX_unload(PKCS11_CTX *ctx);
 extern void pkcs11_CTX_free(PKCS11_CTX *ctx);
 
 /* Open a session in RO or RW mode */
-extern int pkcs11_open_session(PKCS11_SLOT_private *spriv, int rw);
+extern int pkcs11_open_session(PKCS11_SLOT_private *, int rw);
 
 /* Acquire a session from the slot specific session pool */
-extern int pkcs11_get_session(PKCS11_SLOT_private *spriv, int rw, CK_SESSION_HANDLE *sessionp);
+extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw, CK_SESSION_HANDLE *sessionp);
 
 /* Return a session the the slot specific session pool */
-extern void pkcs11_put_session(PKCS11_SLOT_private *spriv, CK_SESSION_HANDLE session);
+extern void pkcs11_put_session(PKCS11_SLOT_private *, CK_SESSION_HANDLE session);
 
 /* Get a list of all slots */
 extern int pkcs11_enumerate_slots(PKCS11_CTX_private * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /* Get the slot_id from a slot as it is stored in private */
-extern unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT_private *spriv);
+extern unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT_private *);
 
 /* Free the list of slots allocated by PKCS11_enumerate_slots() */
 extern void pkcs11_release_all_slots(PKCS11_CTX_private *ctx,
@@ -228,19 +222,19 @@ extern void pkcs11_release_all_slots(PKCS11_CTX_private *ctx,
 extern int pkcs11_refresh_token(PKCS11_SLOT *slot);
 
 /* Check if user is already authenticated to a card */
-extern int pkcs11_is_logged_in(PKCS11_SLOT_private *spriv, int so, int *res);
+extern int pkcs11_is_logged_in(PKCS11_SLOT_private *, int so, int *res);
 
 /* Authenticate to the card */
-extern int pkcs11_login(PKCS11_SLOT_private *spriv, int so, const char *pin);
+extern int pkcs11_login(PKCS11_SLOT_private *, int so, const char *pin);
 
 /* De-authenticate from the card */
-extern int pkcs11_logout(PKCS11_SLOT_private *spriv);
+extern int pkcs11_logout(PKCS11_SLOT_private *);
 
 /* Authenticate a private the key operation if needed */
 int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session);
 
 /* Get a list of keys associated with this token */
-extern int pkcs11_enumerate_keys(PKCS11_TOKEN_private *tpriv, unsigned int type,
+extern int pkcs11_enumerate_keys(PKCS11_SLOT_private *, unsigned int type,
 	PKCS11_KEY **keys, unsigned int *nkeys);
 
 /* Remove a key from the token */
@@ -262,7 +256,7 @@ extern PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert);
 extern PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *key);
 
 /* Get a list of all certificates associated with this token */
-extern int pkcs11_enumerate_certs(PKCS11_TOKEN_private *tpriv,
+extern int pkcs11_enumerate_certs(PKCS11_SLOT_private *,
 	PKCS11_CERT **certs, unsigned int *ncerts);
 
 /* Remove a certificate from the token */
@@ -273,26 +267,26 @@ extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
 
 /* Initialize a token */
-extern int pkcs11_init_token(PKCS11_TOKEN_private *token, const char *pin,
+extern int pkcs11_init_token(PKCS11_SLOT_private *, const char *pin,
 	const char *label);
 
 /* Initialize the user PIN on a token */
-extern int pkcs11_init_pin(PKCS11_TOKEN_private *token, const char *pin);
+extern int pkcs11_init_pin(PKCS11_SLOT_private *, const char *pin);
 
 /* Change the user PIN on a token */
-extern int pkcs11_change_pin(PKCS11_SLOT_private *spriv,
+extern int pkcs11_change_pin(PKCS11_SLOT_private *,
 	const char *old_pin, const char *new_pin);
 
 /* Store private key on a token */
-extern int pkcs11_store_private_key(PKCS11_TOKEN_private *token,
+extern int pkcs11_store_private_key(PKCS11_SLOT_private *,
 	EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len);
 
 /* Store public key on a token */
-extern int pkcs11_store_public_key(PKCS11_TOKEN_private *token,
+extern int pkcs11_store_public_key(PKCS11_SLOT_private *,
 	EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len);
 
 /* Store certificate on a token */
-extern int pkcs11_store_certificate(PKCS11_TOKEN_private *token, X509 * x509,
+extern int pkcs11_store_certificate(PKCS11_SLOT_private *, X509 * x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert);
 
@@ -303,7 +297,7 @@ extern int pkcs11_generate_random(PKCS11_SLOT_private *, unsigned char *r, unsig
 /* Internal implementation of deprecated features */
 
 /* Generate and store a private key on the token */
-extern int pkcs11_generate_key(PKCS11_TOKEN_private *tpriv,
+extern int pkcs11_generate_key(PKCS11_SLOT_private *tpriv,
 	int algorithm, unsigned int bits,
 	char *label, unsigned char* id, size_t id_len);
 

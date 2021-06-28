@@ -125,7 +125,7 @@ static int check_slot_fork_int(PKCS11_SLOT_private *slot)
  */
 static int check_key_fork_int(PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
@@ -143,7 +143,7 @@ static int check_key_fork_int(PKCS11_KEY_private *key)
  */
 static int check_cert_fork_int(PKCS11_CERT_private *cert)
 {
-	PKCS11_SLOT_private *slot = cert->token->slot;
+	PKCS11_SLOT_private *slot = cert->slot;
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
@@ -177,23 +177,13 @@ int check_slot_fork(PKCS11_SLOT_private *slot)
 }
 
 /*
- * Reinitialize token (just its slot)
- */
-int check_token_fork(PKCS11_TOKEN_private *token)
-{
-	if (!token)
-		return -1;
-	return check_slot_fork(token->slot);
-}
-
-/*
  * Locking interface to check_key_fork_int()
  */
 int check_key_fork(PKCS11_KEY_private *key)
 {
 	if (!key)
 		return -1;
-	CHECK_FORKID(key->token->slot->ctx, key->forkid, check_key_fork_int(key));
+	CHECK_FORKID(key->slot->ctx, key->forkid, check_key_fork_int(key));
 }
 
 /*
@@ -203,7 +193,7 @@ int check_cert_fork(PKCS11_CERT_private *cert)
 {
 	if (!cert)
 		return -1;
-	CHECK_FORKID(cert->token->slot->ctx, cert->forkid, check_cert_fork_int(cert));
+	CHECK_FORKID(cert->slot->ctx, cert->forkid, check_cert_fork_int(cert));
 }
 
 /* vim: set noexpandtab: */
