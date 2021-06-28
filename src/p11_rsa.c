@@ -78,7 +78,7 @@ int pkcs11_private_encrypt(int flen,
 		const unsigned char *from, unsigned char *to,
 		PKCS11_KEY_private *key, int padding)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_MECHANISM mechanism;
 	CK_ULONG size;
@@ -125,7 +125,7 @@ int pkcs11_private_encrypt(int flen,
 int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY_private *key, int padding)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
@@ -177,8 +177,7 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
  */
 static RSA *pkcs11_get_rsa(PKCS11_KEY_private *key)
 {
-	PKCS11_TOKEN_private *token = key->token;
-	PKCS11_SLOT_private *slot = token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	PKCS11_KEY *keys;
 	CK_OBJECT_HANDLE object = key->object;
@@ -204,7 +203,7 @@ static RSA *pkcs11_get_rsa(PKCS11_KEY_private *key)
 
 	/* The public exponent was not found in the private key:
 	 * retrieve it from the corresponding public key */
-	if (!pkcs11_enumerate_keys(token, CKO_PUBLIC_KEY, &keys, &count)) {
+	if (!pkcs11_enumerate_keys(slot, CKO_PUBLIC_KEY, &keys, &count)) {
 		for (i = 0; i < count; i++) {
 			BIGNUM *pubmod = NULL;
 			if (!pkcs11_getattr_bn(ctx, session, PRIVKEY(&keys[i])->object,

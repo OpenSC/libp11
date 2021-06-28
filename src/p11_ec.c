@@ -194,7 +194,7 @@ static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY_private *key, CK_SESSION_HAN
 	const unsigned char *a;
 	int rv;
 
-	if (pkcs11_getattr_alloc(key->token->slot->ctx, session, key->object,
+	if (pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_PARAMS, &params, &params_len))
 		return -1;
 
@@ -214,7 +214,7 @@ static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY_private *key, CK_SESSION_
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
 
-	if (!key || pkcs11_getattr_alloc(key->token->slot->ctx, session, key->object,
+	if (!key || pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_POINT, &point, &point_len))
 		return -1;
 
@@ -270,7 +270,7 @@ error:
 
 static EC_KEY *pkcs11_get_ec(PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	CK_SESSION_HANDLE session;
 	EC_KEY *ec;
 	int no_params, no_point;
@@ -377,7 +377,7 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY_private *key)
 {
 	int rv;
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
@@ -536,7 +536,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		void *outnewkey,
 		PKCS11_KEY_private *key)
 {
-	PKCS11_SLOT_private *slot = key->token->slot;
+	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
