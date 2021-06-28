@@ -504,11 +504,11 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 	case CKK_RSA:
 		ops = &pkcs11_rsa_ops;
 		break;
+#ifndef OPENSSL_NO_EC
 	case CKK_EC:
-		ops = pkcs11_ec_ops;
-		if (!ops)
-			return 0; /* not supported */
+		ops = &pkcs11_ec_ops;
 		break;
+#endif /* OPENSSL_NO_EC */
 	default:
 		/* Ignore any keys we don't understand */
 		return 0;
