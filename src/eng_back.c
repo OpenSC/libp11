@@ -273,7 +273,7 @@ static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 		slot_count <= 1 ? "" : "s");
 
 	/* The ctx->lock mutex ensures thread safety for this operation */
-	OPENSSL_free(ctx->slot_list);
+	PKCS11_release_all_slots(pkcs11_ctx, ctx->slot_list, ctx->slot_count);
 	ctx->slot_list = slot_list;
 	ctx->slot_count = slot_count;
 
