@@ -167,6 +167,15 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	return obj;
 }
 
+PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
+	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class)
+{
+	PKCS11_TEMPLATE tmpl = {0};
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
+	pkcs11_addattr(&tmpl, CKA_ID, obj->id, obj->id_len);
+	return pkcs11_object_from_template(obj->slot, session, &tmpl);
+}
+
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
 	if (obj->x509)
@@ -210,7 +219,7 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert)
 /*
  * Find key matching a key of the other type (public vs private)
  */
-PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
+static PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
 {
 	PKCS11_KEY *keys;
 	unsigned int n, count, type =
