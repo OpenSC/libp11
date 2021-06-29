@@ -37,6 +37,30 @@ static int pkcs11_init_key(PKCS11_SLOT_private *, CK_SESSION_HANDLE session,
 static int pkcs11_store_key(PKCS11_SLOT_private *, EVP_PKEY *, CK_OBJECT_CLASS,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
 
+/* Helper to acquire object handle from given template */
+static CK_OBJECT_HANDLE pkcs11_handle_from_template(PKCS11_SLOT_private *slot,
+	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_OBJECT_HANDLE object;
+	CK_ULONG count;
+	CK_RV rv;
+
+	rv = CRYPTOKI_call(ctx,
+		C_FindObjectsInit(session, tmpl->attrs, tmpl->nattr));
+	if (rv == CKR_OK) {
+		rv = CRYPTOKI_call(ctx,
+			C_FindObjects(session, &object, 1, &count));
+		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
+	}
+	pkcs11_zap_attrs(tmpl);
+
+	if (rv == CKR_OK && count == 1)
+		return object;
+
+	return CK_INVALID_HANDLE;
+}
+
 /* Get object from a handle */
 PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE object)
@@ -121,6 +145,28 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	return obj;
 }
 
+/* Get object based on template */
+PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
+	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
+{
+	PKCS11_OBJECT_private *obj;
+	int release = 0;
+
+	if (session == CK_INVALID_HANDLE) {
+		if (pkcs11_get_session(slot, 0, &session))
+			return NULL;
+		release = 1;
+	}
+
+	obj = pkcs11_object_from_handle(slot, session,
+		pkcs11_handle_from_template(slot, session, tmpl));
+
+	if (release)
+		pkcs11_put_session(slot, session);
+
+	return obj;
+}
+
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
 	if (obj->x509)
@@ -187,11 +233,8 @@ PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
 int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 {
 	PKCS11_SLOT_private *slot = obj->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	PKCS11_TEMPLATE tmpl = {0};
-	CK_ULONG count;
-	int rv;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
@@ -202,19 +245,12 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 	if (obj->label)
 		pkcs11_addattr_s(&tmpl, CKA_LABEL, obj->label);
 
-	rv = CRYPTOKI_call(ctx,
-		C_FindObjectsInit(session, tmpl.attrs, tmpl.nattr));
-	if (rv == CKR_OK) {
-		rv = CRYPTOKI_call(ctx,
-			C_FindObjects(session, &obj->object, 1, &count));
-		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
-	}
+	obj->object = pkcs11_handle_from_template(slot, session, &tmpl);
 	pkcs11_put_session(slot, session);
-	pkcs11_zap_attrs(&tmpl);
-	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, rv);
 
-	if (count != 1)
-		return -1;
+	if (obj->object == CK_INVALID_HANDLE)
+		CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, CKR_OBJECT_HANDLE_INVALID);
+
 	return 0;
 }
 
