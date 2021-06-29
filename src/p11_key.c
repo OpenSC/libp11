@@ -178,10 +178,15 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
-	if (obj->x509)
-		X509_free(obj->x509);
-	if (obj->evp_key)
-		EVP_PKEY_free(obj->evp_key);
+	if (obj->evp_key) {
+		/* When the EVP object is reference count goes to zero,
+		 * it will call this function again. */
+		EVP_PKEY *pkey = obj->evp_key;
+		obj->evp_key = NULL;
+		EVP_PKEY_free(pkey);
+		return;
+	}
+	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
 	OPENSSL_free(obj);
 }
@@ -212,26 +217,6 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert)
 		if (kpriv && cert->id_len == kpriv->id_len
 				&& !memcmp(cert->id, kpriv->id, cert->id_len))
 			return &keys[n];
-	}
-	return NULL;
-}
-
-/*
- * Find key matching a key of the other type (public vs private)
- */
-static PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
-{
-	PKCS11_KEY *keys;
-	unsigned int n, count, type =
-		(keyin->object_class == CKO_PRIVATE_KEY) ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY;
-
-	if (pkcs11_enumerate_keys(keyin->slot, type, &keys, &count))
-		return NULL;
-	for (n = 0; n < count; n++) {
-		PKCS11_OBJECT_private *kpriv = PRIVKEY(&keys[n]);
-		if (kpriv && keyin->id_len == kpriv->id_len
-				&& !memcmp(keyin->id, kpriv->id, keyin->id_len))
-			return PRIVKEY(&keys[n]);
 	}
 	return NULL;
 }
@@ -449,25 +434,32 @@ int pkcs11_get_key_type(PKCS11_OBJECT_private *key)
 
 /*
  * Create an EVP_PKEY OpenSSL object for a given key
- * Returns private or public key depending on isPrivate
+ * Returns the key type specified in object_class.
  */
-EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key, CK_OBJECT_CLASS obj_class)
+EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_class)
 {
-	if (key->object_class != obj_class)
-		key = pkcs11_find_key_from_key(key);
+	PKCS11_OBJECT_private *key = key0;
+	EVP_PKEY *ret = NULL;
+
+	if (key->object_class != object_class)
+		key = pkcs11_object_from_object(key, CK_INVALID_HANDLE, object_class);
 	if (!key || !key->ops)
-		return NULL;
+		goto err;
 	if (!key->evp_key) {
 		key->evp_key = key->ops->get_evp_key(key);
 		if (!key->evp_key)
-			return NULL;
+			goto err;
 	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EVP_PKEY_up_ref(key->evp_key);
 #else
 	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
 #endif
-	return key->evp_key;
+	ret = key->evp_key;
+err:
+	if (key != key0)
+		pkcs11_object_free(key);
+	return ret;
 }
 
 /*

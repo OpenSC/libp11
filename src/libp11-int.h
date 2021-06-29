@@ -245,7 +245,7 @@ extern PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *o
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class);
 
 /* Free an object */
-void pkcs11_object_free(PKCS11_OBJECT_private *obj);
+extern void pkcs11_object_free(PKCS11_OBJECT_private *obj);
 
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int pkcs11_get_key_type(PKCS11_OBJECT_private *key);
