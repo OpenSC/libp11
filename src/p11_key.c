@@ -89,33 +89,40 @@ PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
 }
 
 /*
- * Reopens the object associated with the key
+ * Reopens the object by refresing the object handle
  */
-int pkcs11_reload_key(PKCS11_OBJECT_private *key)
+int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 {
-	PKCS11_SLOT_private *slot = key->slot;
+	PKCS11_SLOT_private *slot = obj->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
-	CK_OBJECT_CLASS key_search_class = key->object_class;
-	CK_ATTRIBUTE key_search_attrs[2] = {
-		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
-		{CKA_ID, key->id, key->id_len},
-	};
+	CK_ATTRIBUTE search_parameters[4];
 	CK_ULONG count;
+	unsigned int n = 0;
 	int rv;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
+	pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, obj->object_class);
+	if (obj->id_len)
+		pkcs11_addattr(search_parameters + n++, CKA_ID, obj->id, obj->id_len);
+	if (obj->label)
+		pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, obj->label);
+
 	rv = CRYPTOKI_call(ctx,
-		C_FindObjectsInit(session, key_search_attrs, 2));
+		C_FindObjectsInit(session, search_parameters, n));
 	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
-			C_FindObjects(session, &key->object, 1, &count));
+			C_FindObjects(session, &obj->object, 1, &count));
 		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
 	}
+	pkcs11_put_session(slot, session);
+	pkcs11_zap_attrs(search_parameters, n);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, rv);
 
+	if (count != 1)
+		return -1;
 	return 0;
 }
 
@@ -416,11 +423,11 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type,
 }
 
 /**
- * Remove a key from the associated token
+ * Remove an object from the associated token
  */
-int pkcs11_remove_key(PKCS11_OBJECT_private *key)
+int pkcs11_remove_object(PKCS11_OBJECT_private *obj)
 {
-	PKCS11_SLOT_private *slot = key->slot;
+	PKCS11_SLOT_private *slot = obj->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	int rv;
@@ -428,7 +435,7 @@ int pkcs11_remove_key(PKCS11_OBJECT_private *key)
 	if (pkcs11_get_session(slot, 1, &session))
 		return -1;
 
-	rv = CRYPTOKI_call(ctx, C_DestroyObject(session, key->object));
+	rv = CRYPTOKI_call(ctx, C_DestroyObject(session, obj->object));
 	pkcs11_put_session(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_KEY, rv);
 

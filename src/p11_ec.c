@@ -432,7 +432,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
 	key = pkcs11_get_ex_data_ec(ec);
-	if (check_key_fork(key) < 0) {
+	if (check_object_fork(key) < 0) {
 		sign_sig_fn orig_sign_sig;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 		const EC_KEY_METHOD *meth = EC_KEY_OpenSSL();
@@ -644,7 +644,7 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 	size_t buflen;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
 	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return 0;
@@ -675,7 +675,7 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 	size_t buflen;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
 	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return -1;

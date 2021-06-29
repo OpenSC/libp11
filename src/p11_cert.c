@@ -56,26 +56,6 @@ int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, PKCS11_CERT **certp, unsig
 	return 0;
 }
 
-/**
- * Remove a certificate from the associated token
- */
-int pkcs11_remove_certificate(PKCS11_OBJECT_private *cert)
-{
-	PKCS11_SLOT_private *slot = cert->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_SESSION_HANDLE session;
-	int rv;
-
-	if (pkcs11_get_session(slot, 1, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx, C_DestroyObject(session, cert->object));
-	pkcs11_put_session(slot, session);
-
-	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_CERTIFICATE, rv);
-	return 0;
-}
-
 /*
  * Find certificate matching a key
  */
@@ -206,46 +186,6 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 
 	if (ret)
 		*ret = cert;
-	return 0;
-}
-
-/*
- * Reload certificate object handle
- */
-int pkcs11_reload_certificate(PKCS11_OBJECT_private *cert)
-{
-	PKCS11_SLOT_private *slot = cert->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_ULONG count = 0;
-	CK_ATTRIBUTE search_parameters[32];
-	CK_SESSION_HANDLE session;
-	unsigned int n = 0;
-	int rv;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	pkcs11_addattr_int(search_parameters + n++, CKA_CLASS, CKO_CERTIFICATE);
-	if (cert->id && cert->id_len) {
-		pkcs11_addattr(search_parameters + n++, CKA_ID, cert->id, cert->id_len);
-	}
-	if (cert->label) {
-		pkcs11_addattr_s(search_parameters + n++, CKA_LABEL, cert->label);
-	}
-
-	rv = CRYPTOKI_call(ctx,
-		C_FindObjectsInit(session, search_parameters, n));
-	if (rv == CKR_OK) {
-		rv = CRYPTOKI_call(ctx,
-			C_FindObjects(session, &cert->object, 1, &count));
-		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
-	}
-	pkcs11_put_session(slot, session);
-	pkcs11_zap_attrs(search_parameters, n);
-	CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_CERTIFICATE, rv);
-
-	if (count != 1)
-		return -1;
 	return 0;
 }
 

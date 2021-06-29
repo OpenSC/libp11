@@ -325,7 +325,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return -1;
 
 	slot = key->slot;
@@ -426,7 +426,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return -1;
 
 	slot = key->slot;
@@ -580,7 +580,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		goto error;
 
 	key = pkcs11_get_ex_data_ec(eckey);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		goto error;
 
 	slot = key->slot;
