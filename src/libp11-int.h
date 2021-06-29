@@ -90,6 +90,7 @@ struct pkcs11_object_private {
 	char *label;
 	PKCS11_OBJECT_ops *ops;
 	EVP_PKEY *evp_key;
+	X509 *x509;
 	unsigned int forkid;
 };
 #define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
@@ -230,6 +231,13 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 /* Get a list of keys associated with this token */
 extern int pkcs11_enumerate_keys(PKCS11_SLOT_private *, unsigned int type,
 	PKCS11_KEY **keys, unsigned int *nkeys);
+
+/* Create an object from a handle */
+extern PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
+	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE object);
+
+/* Free an object */
+void pkcs11_object_free(PKCS11_OBJECT_private *obj);
 
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int pkcs11_get_key_type(PKCS11_OBJECT_private *key);

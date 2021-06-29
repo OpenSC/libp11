@@ -32,11 +32,104 @@
 static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int);
 static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
-static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
-	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE o,
-	CK_OBJECT_CLASS type, PKCS11_KEY **);
+static int pkcs11_init_key(PKCS11_SLOT_private *, CK_SESSION_HANDLE session,
+	CK_OBJECT_HANDLE o, CK_OBJECT_CLASS type, PKCS11_KEY **);
 static int pkcs11_store_key(PKCS11_SLOT_private *, EVP_PKEY *, CK_OBJECT_CLASS,
 	char *, unsigned char *, size_t, PKCS11_KEY **);
+
+/* Get object from a handle */
+PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
+		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE object)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	PKCS11_OBJECT_private *obj;
+	PKCS11_OBJECT_ops *ops = NULL;
+	CK_OBJECT_CLASS object_class = -1;
+	CK_KEY_TYPE key_type = -1;
+	CK_CERTIFICATE_TYPE cert_type = -1;
+	CK_ULONG size;
+	unsigned char *data;
+
+	if (pkcs11_getattr_val(ctx, session, object, CKA_CLASS,
+			(CK_BYTE *) &object_class, sizeof(object_class)))
+		return NULL;
+
+	switch (object_class) {
+	case CKO_PUBLIC_KEY:
+	case CKO_PRIVATE_KEY:
+		if (pkcs11_getattr_val(ctx, session, object, CKA_KEY_TYPE,
+				(CK_BYTE *)&key_type, sizeof(key_type)))
+			return NULL;
+		switch (key_type) {
+		case CKK_RSA:
+			ops = &pkcs11_rsa_ops;
+			break;
+#ifndef OPENSSL_NO_EC
+		case CKK_EC:
+			ops = &pkcs11_ec_ops;
+			break;
+#endif
+		default:
+			/* Ignore any keys we don't understand */
+			return 0;
+		}
+		break;
+	case CKO_CERTIFICATE:
+		if (pkcs11_getattr_val(ctx, session, object, CKA_CERTIFICATE_TYPE,
+				(CK_BYTE *)&cert_type, sizeof(cert_type)))
+			return NULL;
+		/* Ignore unknown certificate types */
+		if (cert_type != CKC_X_509)
+			return 0;
+		break;
+	default:
+		return NULL;
+	}
+
+	obj = OPENSSL_malloc(sizeof(*obj));
+	if (!obj)
+		return NULL;
+
+	memset(obj, 0, sizeof(*obj));
+	obj->object_class = object_class;
+	obj->object = object;
+	obj->slot = slot;
+	obj->id_len = sizeof(obj->id);
+	if (pkcs11_getattr_var(ctx, session, object, CKA_ID, obj->id, &obj->id_len))
+		obj->id_len = 0;
+	pkcs11_getattr_alloc(ctx, session, object, CKA_LABEL, (CK_BYTE **)&obj->label, NULL);
+	obj->ops = ops;
+	obj->forkid = get_forkid();
+	switch (object_class) {
+	case CKO_PRIVATE_KEY:
+		if (pkcs11_getattr_val(ctx, session, object, CKA_ALWAYS_AUTHENTICATE,
+				&obj->always_authenticate, sizeof(CK_BBOOL))) {
+#ifdef DEBUG
+			fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
+#endif
+		}
+		break;
+	case CKO_CERTIFICATE:
+		if (!pkcs11_getattr_alloc(ctx, session, object, CKA_VALUE,
+				&data, &size)) {
+			const unsigned char *p = data;
+			obj->x509 = d2i_X509(NULL, &p, (long)size);
+			OPENSSL_free(data);
+		}
+		break;
+	}
+	return obj;
+}
+
+void pkcs11_object_free(PKCS11_OBJECT_private *obj)
+{
+	if (obj->x509)
+		X509_free(obj->x509);
+	if (obj->evp_key)
+		EVP_PKEY_free(obj->evp_key);
+	OPENSSL_free(obj->label);
+	OPENSSL_free(obj);
+}
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
@@ -290,7 +383,7 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 
 	if (rv == CKR_OK) {
 		/* Gobble the key object */
-		r = pkcs11_init_key(ctx, slot, session, object, type, ret_key);
+		r = pkcs11_init_key(slot, session, object, type, ret_key);
 	}
 	pkcs11_put_session(slot, session);
 
@@ -474,86 +567,47 @@ static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 	if (count == 0)
 		return 1;
 
-	if (pkcs11_init_key(ctx, slot, session, obj, type, NULL))
+	if (pkcs11_init_key(slot, session, obj, type, NULL))
 		return -1;
 
 	return 0;
 }
 
-static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
-		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj,
-		CK_OBJECT_CLASS type, PKCS11_KEY **ret)
+static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
+	CK_OBJECT_HANDLE object, CK_OBJECT_CLASS type, PKCS11_KEY **ret)
 {
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 	PKCS11_OBJECT_private *kpriv;
 	PKCS11_KEY *key, *tmp;
-	CK_KEY_TYPE key_type;
-	PKCS11_OBJECT_ops *ops;
-	size_t size;
 	int i;
-
-	(void)ctx;
-	(void)session;
-
-	/* Ignore unknown key types */
-	size = sizeof(CK_KEY_TYPE);
-	if (pkcs11_getattr_var(ctx, session, obj, CKA_KEY_TYPE, (CK_BYTE *)&key_type, &size))
-		return -1;
-	switch (key_type) {
-	case CKK_RSA:
-		ops = &pkcs11_rsa_ops;
-		break;
-#ifndef OPENSSL_NO_EC
-	case CKK_EC:
-		ops = &pkcs11_ec_ops;
-		break;
-#endif /* OPENSSL_NO_EC */
-	default:
-		/* Ignore any keys we don't understand */
-		return 0;
-	}
 
 	/* Prevent re-adding existing PKCS#11 object handles */
 	/* TODO: Rewrite the O(n) algorithm as O(log n),
 	 * or it may be too slow with a large number of keys */
-	for (i=0; i < keys->num; ++i)
-		if (PRIVKEY(keys->keys + i)->object == obj)
+	for (i = 0; i < keys->num; ++i) {
+		if (PRIVKEY(&keys->keys[i])->object == object) {
+			if (ret)
+				*ret = &keys->keys[i];
 			return 0;
+		}
+	}
 
-	/* Allocate memory */
-	kpriv = OPENSSL_malloc(sizeof(PKCS11_OBJECT_private));
+	kpriv = pkcs11_object_from_handle(slot, session, object);
 	if (!kpriv)
 		return -1;
-	memset(kpriv, 0, sizeof(PKCS11_OBJECT_private));
+
+	/* Allocate memory */
 	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
 	if (!tmp) {
-		OPENSSL_free(kpriv);
+		pkcs11_object_free(kpriv);
 		return -1;
 	}
 	keys->keys = tmp;
 	key = keys->keys + keys->num++;
 	memset(key, 0, sizeof(PKCS11_KEY));
 
-	/* Fill private properties */
-	key->_private = kpriv;
-	kpriv->object = obj;
-	kpriv->slot = slot;
-	kpriv->id_len = sizeof kpriv->id;
-	if (pkcs11_getattr_var(ctx, session, obj, CKA_ID, kpriv->id, &kpriv->id_len))
-		kpriv->id_len = 0;
-	pkcs11_getattr_alloc(ctx, session, obj, CKA_LABEL, (CK_BYTE **)&kpriv->label, NULL);
-	kpriv->ops = ops;
-	kpriv->object_class = type;
-	kpriv->forkid = get_forkid();
-	if ((type == CKO_PRIVATE_KEY) && pkcs11_getattr_val(ctx, session, obj,
-			CKA_ALWAYS_AUTHENTICATE,
-			&kpriv->always_authenticate, sizeof(CK_BBOOL))) {
-#ifdef DEBUG
-		fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
-#endif
-	}
-
 	/* Fill public properties */
+	key->_private = kpriv;
 	key->id = kpriv->id;
 	key->id_len = kpriv->id_len;
 	key->label = kpriv->label;
@@ -573,12 +627,8 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 
 	while (keys->num > 0) {
 		PKCS11_KEY *key = &keys->keys[--keys->num];
-		if (key->_private) {
-			PKCS11_OBJECT_private *kpriv = PRIVKEY(key);
-			EVP_PKEY_free(kpriv->evp_key);
-			OPENSSL_free(kpriv->label);
-			OPENSSL_free(kpriv);
-		}
+		if (key->_private)
+			pkcs11_object_free(PRIVKEY(key));
 	}
 	if (keys->keys)
 		OPENSSL_free(keys->keys);
