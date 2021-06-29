@@ -108,65 +108,68 @@ int pkcs11_getattr_bn(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
 /*
  * Add attributes to template
  */
-void pkcs11_addattr(CK_ATTRIBUTE_PTR ap, int type, const void *data, size_t size)
+unsigned int pkcs11_addattr(PKCS11_TEMPLATE *tmpl, int type, void *data, size_t size)
 {
+	unsigned int n = tmpl->nattr;
+	CK_ATTRIBUTE_PTR ap;
+
+	assert(tmpl->nattr < sizeof(tmpl->attrs)/sizeof(tmpl->attrs[0]));
+	ap = &tmpl->attrs[tmpl->nattr++];
 	ap->type = type;
-	ap->pValue = OPENSSL_malloc(size);
-	if (!ap->pValue)
-		return;
-	memcpy(ap->pValue, data, size);
+	ap->pValue = data;
 	ap->ulValueLen = size;
+	return n;
 }
 
-/* In PKCS11, virtually every integer is a CK_ULONG */
-void pkcs11_addattr_int(CK_ATTRIBUTE_PTR ap, int type, unsigned long value)
+void pkcs11_addattr_bool(PKCS11_TEMPLATE *tmpl, int type, int value)
 {
-	CK_ULONG ulValue = value;
-
-	pkcs11_addattr(ap, type, &ulValue, sizeof(ulValue));
+	static CK_BBOOL true = CK_TRUE;
+	static CK_BBOOL false = CK_FALSE;
+	pkcs11_addattr(tmpl, type, value ? &true : &false, sizeof(CK_BBOOL));
 }
 
-void pkcs11_addattr_bool(CK_ATTRIBUTE_PTR ap, int type, int value)
+void pkcs11_addattr_s(PKCS11_TEMPLATE *tmpl, int type, const char *s)
 {
-	CK_BBOOL bValue = value;
-
-	pkcs11_addattr(ap, type, &bValue, sizeof(bValue));
+	pkcs11_addattr(tmpl, type, (void*) s, s ? strlen(s) : 0);
 }
 
-void pkcs11_addattr_s(CK_ATTRIBUTE_PTR ap, int type, const char *s)
+void pkcs11_addattr_bn(PKCS11_TEMPLATE *tmpl, int type, const BIGNUM *bn)
 {
-	pkcs11_addattr(ap, type, s, s ? strlen(s) : 0); /* RFC2279 string an unpadded string of CK_UTF8CHARs with no null-termination */
-}
+	int n = BN_num_bytes(bn);
+	uint8_t *buf = OPENSSL_malloc(n);
+	unsigned int i;
 
-void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR ap, int type, const BIGNUM *bn)
-{
-	unsigned char temp[1024];
-	unsigned int n;
-
-	assert((size_t)BN_num_bytes(bn) <= sizeof(temp));
-	n = BN_bn2bin(bn, temp);
-	pkcs11_addattr(ap, type, temp, n);
-}
-
-void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR ap, int type, pkcs11_i2d_fn enc, void *obj)
-{
-	unsigned char *p;
-
-	ap->type = type;
-	ap->ulValueLen = enc(obj, NULL);
-	ap->pValue = OPENSSL_malloc(ap->ulValueLen);
-	if (!ap->pValue)
-		return;
-	p = ap->pValue;
-	enc(obj, &p);
-}
-
-void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR ap, unsigned int n)
-{
-	while (n--) {
-		if (ap[n].pValue)
-			OPENSSL_free(ap[n].pValue);
+	if (buf && BN_bn2bin(bn, buf) == n) {
+		i = pkcs11_addattr(tmpl, type, buf, n);
+		tmpl->allocated |= 1<<i;
 	}
+}
+
+void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, void *obj)
+{
+	unsigned char *buf, *p;
+	unsigned int i;
+	size_t n;
+
+	n = enc(obj, NULL);
+	buf = p = OPENSSL_malloc(n);
+	if (n && p) {
+		enc(obj, &p);
+		i = pkcs11_addattr(tmpl, type, buf, n);
+		tmpl->allocated |= 1<<i;
+	}
+}
+
+void pkcs11_zap_attrs(PKCS11_TEMPLATE *tmpl)
+{
+	if (!tmpl->allocated)
+		return;
+	for (unsigned i = 0; i < 32; i++) {
+		if (tmpl->allocated & (1<<i))
+			OPENSSL_free(tmpl->attrs[i].pValue);
+	}
+	tmpl->allocated = 0;
+	tmpl->nattr = 0;
 }
 
 /* vim: set noexpandtab: */
