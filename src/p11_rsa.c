@@ -387,7 +387,11 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 
 static int pkcs11_rsa_free_method(RSA *rsa)
 {
-	RSA_set_ex_data(rsa, rsa_ex_index, NULL);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
+	if (key) {
+		pkcs11_set_ex_data_rsa(rsa, NULL);
+		pkcs11_object_free(key);
+	}
 	int (*orig_rsa_free_method)(RSA *rsa) =
 		RSA_meth_get_finish(RSA_get_default_method());
 	if (orig_rsa_free_method) {
