@@ -59,7 +59,7 @@ int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, PKCS11_CERT **certp, unsig
 /**
  * Remove a certificate from the associated token
  */
-int pkcs11_remove_certificate(PKCS11_CERT_private *cert)
+int pkcs11_remove_certificate(PKCS11_OBJECT_private *cert)
 {
 	PKCS11_SLOT_private *slot = cert->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -79,9 +79,9 @@ int pkcs11_remove_certificate(PKCS11_CERT_private *cert)
 /*
  * Find certificate matching a key
  */
-PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY_private *key)
+PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key)
 {
-	PKCS11_CERT_private *cpriv;
+	PKCS11_OBJECT_private *cpriv;
 	PKCS11_CERT *cert;
 	unsigned int n, count;
 
@@ -145,7 +145,7 @@ static int pkcs11_next_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, PKCS11_CERT ** ret)
 {
-	PKCS11_CERT_private *cpriv;
+	PKCS11_OBJECT_private *cpriv;
 	PKCS11_CERT *cert, *tmp;
 	unsigned char *data;
 	CK_CERTIFICATE_TYPE cert_type;
@@ -170,10 +170,10 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 			return 0;
 
 	/* Allocate memory */
-	cpriv = OPENSSL_malloc(sizeof(PKCS11_CERT_private));
+	cpriv = OPENSSL_malloc(sizeof(PKCS11_OBJECT_private));
 	if (!cpriv)
 		return -1;
-	memset(cpriv, 0, sizeof(PKCS11_CERT_private));
+	memset(cpriv, 0, sizeof(PKCS11_OBJECT_private));
 	tmp = OPENSSL_realloc(slot->certs, (slot->ncerts + 1) * sizeof(PKCS11_CERT));
 	if (!tmp) {
 		OPENSSL_free(cpriv);
@@ -212,7 +212,7 @@ static int pkcs11_init_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 /*
  * Reload certificate object handle
  */
-int pkcs11_reload_certificate(PKCS11_CERT_private *cert)
+int pkcs11_reload_certificate(PKCS11_OBJECT_private *cert)
 {
 	PKCS11_SLOT_private *slot = cert->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -260,7 +260,7 @@ void pkcs11_destroy_certs(PKCS11_SLOT_private *slot)
 		if (cert->x509)
 			X509_free(cert->x509);
 		if (cert->_private) {
-			PKCS11_CERT_private *cpriv = PRIVCERT(cert);
+			PKCS11_OBJECT_private *cpriv = PRIVCERT(cert);
 			OPENSSL_free(cpriv->label);
 			OPENSSL_free(cpriv);
 		}

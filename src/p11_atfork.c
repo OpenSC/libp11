@@ -123,7 +123,7 @@ static int check_slot_fork_int(PKCS11_SLOT_private *slot)
  * PKCS#11 reinitialization after fork
  * Also reloads the key
  */
-static int check_key_fork_int(PKCS11_KEY_private *key)
+static int check_key_fork_int(PKCS11_OBJECT_private *key)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 
@@ -141,7 +141,7 @@ static int check_key_fork_int(PKCS11_KEY_private *key)
  * PKCS#11 reinitialization after fork
  * Also reloads the key
  */
-static int check_cert_fork_int(PKCS11_CERT_private *cert)
+static int check_cert_fork_int(PKCS11_OBJECT_private *cert)
 {
 	PKCS11_SLOT_private *slot = cert->slot;
 
@@ -179,7 +179,7 @@ int check_slot_fork(PKCS11_SLOT_private *slot)
 /*
  * Locking interface to check_key_fork_int()
  */
-int check_key_fork(PKCS11_KEY_private *key)
+int check_key_fork(PKCS11_OBJECT_private *key)
 {
 	if (!key)
 		return -1;
@@ -189,7 +189,7 @@ int check_key_fork(PKCS11_KEY_private *key)
 /*
  * Locking interface to check_cert_fork_int()
  */
-int check_cert_fork(PKCS11_CERT_private *cert)
+int check_cert_fork(PKCS11_OBJECT_private *cert)
 {
 	if (!cert)
 		return -1;

@@ -52,7 +52,7 @@ int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 /*
  * Find private key matching a certificate
  */
-PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert)
+PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert)
 {
 	PKCS11_KEY *keys;
 	unsigned int n, count;
@@ -60,7 +60,7 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert)
 	if (pkcs11_enumerate_keys(cert->slot, CKO_PRIVATE_KEY, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
-		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
+		PKCS11_OBJECT_private *kpriv = PRIVKEY(&keys[n]);
 		if (kpriv && cert->id_len == kpriv->id_len
 				&& !memcmp(cert->id, kpriv->id, cert->id_len))
 			return &keys[n];
@@ -71,16 +71,16 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert)
 /*
  * Find key matching a key of the other type (public vs private)
  */
-PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *keyin)
+PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *keyin)
 {
 	PKCS11_KEY *keys;
 	unsigned int n, count, type =
-		keyin->is_private ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY;
+		(keyin->object_class == CKO_PRIVATE_KEY) ? CKO_PUBLIC_KEY : CKO_PRIVATE_KEY;
 
 	if (pkcs11_enumerate_keys(keyin->slot, type, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
-		PKCS11_KEY_private *kpriv = PRIVKEY(&keys[n]);
+		PKCS11_OBJECT_private *kpriv = PRIVKEY(&keys[n]);
 		if (kpriv && keyin->id_len == kpriv->id_len
 				&& !memcmp(keyin->id, kpriv->id, keyin->id_len))
 			return PRIVKEY(&keys[n]);
@@ -91,13 +91,12 @@ PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *keyin)
 /*
  * Reopens the object associated with the key
  */
-int pkcs11_reload_key(PKCS11_KEY_private *key)
+int pkcs11_reload_key(PKCS11_OBJECT_private *key)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
-	CK_OBJECT_CLASS key_search_class =
-		key->is_private ? CKO_PRIVATE_KEY : CKO_PUBLIC_KEY;
+	CK_OBJECT_CLASS key_search_class = key->object_class;
 	CK_ATTRIBUTE key_search_attrs[2] = {
 		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
 		{CKA_ID, key->id, key->id_len},
@@ -305,20 +304,22 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 /*
  * Get the key type
  */
-int pkcs11_get_key_type(PKCS11_KEY_private *key)
+int pkcs11_get_key_type(PKCS11_OBJECT_private *key)
 {
-	return key->ops->type;
+	if (key->ops)
+		return key->ops->pkey_type;
+	return EVP_PKEY_NONE;
 }
 
 /*
  * Create an EVP_PKEY OpenSSL object for a given key
  * Returns private or public key depending on isPrivate
  */
-EVP_PKEY *pkcs11_get_key(PKCS11_KEY_private *key, int isPrivate)
+EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key, CK_OBJECT_CLASS obj_class)
 {
-	if (key->is_private != isPrivate)
+	if (key->object_class != obj_class)
 		key = pkcs11_find_key_from_key(key);
-	if (!key)
+	if (!key || !key->ops)
 		return NULL;
 	if (!key->evp_key) {
 		key->evp_key = key->ops->get_evp_key(key);
@@ -337,7 +338,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_KEY_private *key, int isPrivate)
  * Authenticate a private the key operation if needed
  * This function *only* handles CKU_CONTEXT_SPECIFIC logins.
  */
-int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session)
+int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -417,7 +418,7 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type,
 /**
  * Remove a key from the associated token
  */
-int pkcs11_remove_key(PKCS11_KEY_private *key)
+int pkcs11_remove_key(PKCS11_OBJECT_private *key)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -486,10 +487,10 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		CK_OBJECT_CLASS type, PKCS11_KEY **ret)
 {
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
-	PKCS11_KEY_private *kpriv;
+	PKCS11_OBJECT_private *kpriv;
 	PKCS11_KEY *key, *tmp;
 	CK_KEY_TYPE key_type;
-	PKCS11_KEY_ops *ops;
+	PKCS11_OBJECT_ops *ops;
 	size_t size;
 	int i;
 
@@ -522,10 +523,10 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 			return 0;
 
 	/* Allocate memory */
-	kpriv = OPENSSL_malloc(sizeof(PKCS11_KEY_private));
+	kpriv = OPENSSL_malloc(sizeof(PKCS11_OBJECT_private));
 	if (!kpriv)
 		return -1;
-	memset(kpriv, 0, sizeof(PKCS11_KEY_private));
+	memset(kpriv, 0, sizeof(PKCS11_OBJECT_private));
 	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
 	if (!tmp) {
 		OPENSSL_free(kpriv);
@@ -544,9 +545,9 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		kpriv->id_len = 0;
 	pkcs11_getattr_alloc(ctx, session, obj, CKA_LABEL, (CK_BYTE **)&kpriv->label, NULL);
 	kpriv->ops = ops;
-	kpriv->is_private = (type == CKO_PRIVATE_KEY);
+	kpriv->object_class = type;
 	kpriv->forkid = get_forkid();
-	if (kpriv->is_private && pkcs11_getattr_val(ctx, session, obj,
+	if ((type == CKO_PRIVATE_KEY) && pkcs11_getattr_val(ctx, session, obj,
 			CKA_ALWAYS_AUTHENTICATE,
 			&kpriv->always_authenticate, sizeof(CK_BBOOL))) {
 #ifdef DEBUG
@@ -558,7 +559,7 @@ static int pkcs11_init_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 	key->id = kpriv->id;
 	key->id_len = kpriv->id_len;
 	key->label = kpriv->label;
-	key->isPrivate = kpriv->is_private;
+	key->isPrivate = (type == CKO_PRIVATE_KEY);
 
 	if (ret)
 		*ret = key;
@@ -575,7 +576,7 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 	while (keys->num > 0) {
 		PKCS11_KEY *key = &keys->keys[--keys->num];
 		if (key->_private) {
-			PKCS11_KEY_private *kpriv = PRIVKEY(key);
+			PKCS11_OBJECT_private *kpriv = PRIVKEY(key);
 			EVP_PKEY_free(kpriv->evp_key);
 			OPENSSL_free(kpriv->label);
 			OPENSSL_free(kpriv);
