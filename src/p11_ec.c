@@ -49,6 +49,7 @@ typedef int (*compute_key_fn)(void *, size_t,
 	void *(*)(const void *, size_t, void *, size_t *));
 #endif
 static compute_key_fn ossl_ecdh_compute_key;
+static void (*ossl_ec_finish)(EC_KEY *);
 
 static int ec_ex_index = 0;
 
@@ -423,6 +424,19 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	return ck_sigsize;
 }
 
+static void pkcs11_ec_finish(EC_KEY *ec)
+{
+	PKCS11_OBJECT_private *key;
+
+	key = pkcs11_get_ex_data_ec(ec);
+	if (key) {
+		pkcs11_set_ex_data_ec(ec, NULL);
+		pkcs11_object_free(key);
+	}
+	if (ossl_ec_finish)
+		ossl_ec_finish(ec);
+}
+
 /**
  * ECDSA signing method (replaces ossl_ecdsa_sign_sig)
  *
@@ -725,12 +739,21 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
 	static EC_KEY_METHOD *ops = NULL;
+	int (*orig_init)(EC_KEY *);
+	int (*orig_copy)(EC_KEY *, const EC_KEY *);
+	int (*orig_set_group)(EC_KEY *, const EC_GROUP *);
+	int (*orig_set_private)(EC_KEY *, const BIGNUM *);
+	int (*orig_set_public)(EC_KEY *, const EC_POINT *);
 	int (*orig_sign)(int, const unsigned char *, int, unsigned char *,
 		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
 	alloc_ec_ex_index();
 	if (!ops) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
+		EC_KEY_METHOD_get_init(ops, &orig_init, &ossl_ec_finish, &orig_copy,
+			&orig_set_group, &orig_set_private, &orig_set_public);
+		EC_KEY_METHOD_set_init(ops, orig_init, pkcs11_ec_finish, orig_copy,
+			orig_set_group, orig_set_private, orig_set_public);
 		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
 		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
 		EC_KEY_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
