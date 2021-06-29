@@ -36,6 +36,9 @@ static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 	if (!evp_key)
 		return NULL;
 	rsa = EVP_PKEY_get0_RSA(evp_key);
+	/* Danger: this assumes evp_key returned above has at least reference
+	 * count of 2. Which is true in current code as long as key->object_class
+	 * is used for the object_class. */
 	EVP_PKEY_free(evp_key);
 	return rsa;
 }
@@ -177,13 +180,14 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
  */
 static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 {
+	CK_OBJECT_CLASS class_public_key = CKO_PUBLIC_KEY;
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
-	PKCS11_KEY *keys;
+	PKCS11_OBJECT_private *pubkey;
+	PKCS11_TEMPLATE tmpl = {0};
 	CK_OBJECT_HANDLE object = key->object;
 	CK_SESSION_HANDLE session;
 	RSA *rsa;
-	unsigned int i, count;
 	BIGNUM *rsa_n = NULL, *rsa_e = NULL;
 
 	if (pkcs11_get_session(slot, 0, &session))
@@ -203,20 +207,15 @@ static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 
 	/* The public exponent was not found in the private key:
 	 * retrieve it from the corresponding public key */
-	if (!pkcs11_enumerate_keys(slot, CKO_PUBLIC_KEY, &keys, &count)) {
-		for (i = 0; i < count; i++) {
-			BIGNUM *pubmod = NULL;
-			if (!pkcs11_getattr_bn(ctx, session, PRIVKEY(&keys[i])->object,
-					CKA_MODULUS, &pubmod)) {
-				int found = BN_cmp(rsa_n, pubmod) == 0;
-				BN_clear_free(pubmod);
-				if (found && !pkcs11_getattr_bn(ctx, session,
-						PRIVKEY(&keys[i])->object,
-						CKA_PUBLIC_EXPONENT, &rsa_e))
-					goto success;
-			}
-		}
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, class_public_key);
+	pkcs11_addattr_bn(&tmpl, CKA_MODULUS, rsa_n);
+	pubkey = pkcs11_object_from_template(slot, session, &tmpl);
+	if (pubkey && !pkcs11_getattr_bn(ctx, session, pubkey->object,
+			CKA_PUBLIC_EXPONENT, &rsa_e)) {
+		pkcs11_object_free(pubkey);
+		goto success;
 	}
+	pkcs11_object_free(pubkey);
 
 	/* Last resort: use the most common default */
 	rsa_e = BN_new();
