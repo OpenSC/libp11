@@ -157,14 +157,20 @@ extern int pkcs11_getattr_alloc(PKCS11_CTX_private *, CK_SESSION_HANDLE, CK_OBJE
 extern int pkcs11_getattr_bn(PKCS11_CTX_private *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
 	CK_ATTRIBUTE_TYPE, BIGNUM **);
 
+typedef struct pkcs11_template_st {
+	unsigned long allocated;
+	unsigned int nattr;
+	CK_ATTRIBUTE attrs[32];
+} PKCS11_TEMPLATE;
+
 typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
-extern void pkcs11_addattr(CK_ATTRIBUTE_PTR, int, const void *, size_t);
-extern void pkcs11_addattr_int(CK_ATTRIBUTE_PTR, int, unsigned long);
-extern void pkcs11_addattr_bool(CK_ATTRIBUTE_PTR, int, int);
-extern void pkcs11_addattr_s(CK_ATTRIBUTE_PTR, int, const char *);
-extern void pkcs11_addattr_bn(CK_ATTRIBUTE_PTR, int, const BIGNUM *);
-extern void pkcs11_addattr_obj(CK_ATTRIBUTE_PTR, int, pkcs11_i2d_fn, void *);
-extern void pkcs11_zap_attrs(CK_ATTRIBUTE_PTR, unsigned int);
+extern unsigned int pkcs11_addattr(PKCS11_TEMPLATE *, int, void *, size_t);
+#define pkcs11_addattr_var(_tmpl, _type, _var) pkcs11_addattr(_tmpl, _type, &(_var), sizeof(_var))
+extern void pkcs11_addattr_bool(PKCS11_TEMPLATE *, int, int);
+extern void pkcs11_addattr_s(PKCS11_TEMPLATE *, int, const char *);
+extern void pkcs11_addattr_bn(PKCS11_TEMPLATE *, int, const BIGNUM *);
+extern void pkcs11_addattr_obj(PKCS11_TEMPLATE *, int, pkcs11_i2d_fn, void *);
+extern void pkcs11_zap_attrs(PKCS11_TEMPLATE *);
 
 /* Internal implementation of current features */
 

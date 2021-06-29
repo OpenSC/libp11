@@ -220,27 +220,28 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
-	CK_ATTRIBUTE attrs[32];
-	unsigned int n = 0, r = -1;
-	int rv;
+	int rv, r = -1;
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
-	CK_MECHANISM_TYPE ckm_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
 	unsigned int md_len;
+	PKCS11_TEMPLATE tmpl = {0};
+	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
+	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
+	CK_MECHANISM_TYPE ckm_md;
 
 	/* First, make sure we have a session */
 	if (pkcs11_get_session(slot, 1, &session))
 		return -1;
 
 	/* Now build the template */
-	pkcs11_addattr_int(attrs + n++, CKA_CLASS, CKO_CERTIFICATE);
-	pkcs11_addattr_bool(attrs + n++, CKA_TOKEN, TRUE);
-	pkcs11_addattr_int(attrs + n++, CKA_CERTIFICATE_TYPE, CKC_X_509);
-	pkcs11_addattr_obj(attrs + n++, CKA_SUBJECT,
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, class_certificate);
+	pkcs11_addattr_bool(&tmpl, CKA_TOKEN, TRUE);
+	pkcs11_addattr_var(&tmpl, CKA_CERTIFICATE_TYPE, certificate_x509);
+	pkcs11_addattr_obj(&tmpl, CKA_SUBJECT,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_subject_name(x509));
-	pkcs11_addattr_obj(attrs + n++, CKA_ISSUER,
+	pkcs11_addattr_obj(&tmpl, CKA_ISSUER,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_issuer_name(x509));
 
 	/* Get digest algorithm from x509 certificate */
@@ -286,21 +287,21 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	evp_md = EVP_get_digestbynid(evp_md_nid);
 
 	/* Set hash algorithm; default is SHA-1 */
-	pkcs11_addattr_int(attrs + n++, CKA_NAME_HASH_ALGORITHM, ckm_md);
-	if(X509_pubkey_digest(x509,evp_md,md,&md_len))
-		pkcs11_addattr(attrs + n++, CKA_HASH_OF_SUBJECT_PUBLIC_KEY,md,md_len);
+	pkcs11_addattr_var(&tmpl, CKA_NAME_HASH_ALGORITHM, ckm_md);
+	if (X509_pubkey_digest(x509,evp_md,md,&md_len))
+		pkcs11_addattr(&tmpl, CKA_HASH_OF_SUBJECT_PUBLIC_KEY, md, md_len);
 
-	pkcs11_addattr_obj(attrs + n++, CKA_VALUE, (pkcs11_i2d_fn)i2d_X509, x509);
+	pkcs11_addattr_obj(&tmpl, CKA_VALUE, (pkcs11_i2d_fn)i2d_X509, x509);
 	if (label)
-		pkcs11_addattr_s(attrs + n++, CKA_LABEL, label);
+		pkcs11_addattr_s(&tmpl, CKA_LABEL, label);
 	if (id && id_len)
-		pkcs11_addattr(attrs + n++, CKA_ID, id, id_len);
+		pkcs11_addattr(&tmpl, CKA_ID, id, id_len);
 
 	/* Now call the pkcs11 module to create the object */
-	rv = CRYPTOKI_call(ctx, C_CreateObject(session, attrs, n, &object));
+	rv = CRYPTOKI_call(ctx, C_CreateObject(session, tmpl.attrs, tmpl.nattr, &object));
 
 	/* Zap all memory allocated when building the template */
-	pkcs11_zap_attrs(attrs, n);
+	pkcs11_zap_attrs(&tmpl);
 
 	/* Gobble the key object */
 	if (rv == CKR_OK) {
