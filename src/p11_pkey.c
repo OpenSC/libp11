@@ -315,7 +315,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	RSA *rsa;
 	int rv = 0, padding;
 	CK_ULONG size = *siglen;
-	PKCS11_KEY_private *key;
+	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	const EVP_MD *sig_md;
@@ -417,7 +417,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	RSA *rsa;
 	int rv = 0, padding;
 	CK_ULONG size = *outlen;
-	PKCS11_KEY_private *key;
+	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
@@ -554,7 +554,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EC_KEY *eckey;
 	int rv = CKR_GENERAL_ERROR;
 	CK_ULONG size = *siglen;
-	PKCS11_KEY_private *key;
+	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
