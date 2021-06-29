@@ -204,15 +204,50 @@ static int pkcs11_get_params(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_
 	return rv;
 }
 
+/* Retrieve EC point from x509 certificate into ec
+ * return nonzero on error */
+static int pkcs11_get_point_x509(EC_KEY *ec, X509 *x509)
+{
+	EVP_PKEY *pubkey = NULL;
+	EC_KEY *pubkey_ec;
+	const EC_POINT *point;
+	int rv = -1;
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+	pubkey = X509_get0_pubkey(x509);
+#else
+	pubkey = X509_get_pubkey(x509);
+#endif
+	if (!pubkey)
+		goto error;
+	pubkey_ec = EVP_PKEY_get0_EC_KEY(pubkey);
+	if (!pubkey_ec)
+		goto error;
+	point = EC_KEY_get0_public_key(pubkey_ec);
+	if (!point)
+		goto error;
+	if (EC_KEY_set_public_key(ec, point) == 0)
+		goto error;
+	rv = 0;
+error:
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+	EVP_PKEY_free(pubkey);
+#endif
+	return rv;
+}
+
 /* Retrieve EC point from key into ec
  * return nonzero on error */
-static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
+static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 {
 	CK_BYTE *point;
 	size_t point_len = 0;
 	const unsigned char *a;
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
+
+	if (key->x509 && pkcs11_get_point_x509(ec, key->x509) == 0)
+		return 0;
 
 	if (!key || pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_POINT, &point, &point_len))
@@ -234,38 +269,17 @@ static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSI
 	return rv;
 }
 
-/* Retrieve EC point from cert into ec
- * return nonzero on error */
-static int pkcs11_get_point_cert(EC_KEY *ec, PKCS11_CERT *cert)
+static int pkcs11_get_point_associated(EC_KEY *ec, PKCS11_OBJECT_private *key,
+	CK_OBJECT_CLASS object_class, CK_SESSION_HANDLE session)
 {
-	EVP_PKEY *pubkey = NULL;
-	EC_KEY *pubkey_ec;
-	const EC_POINT *point;
-	int rv = -1;
+	int r;
+	PKCS11_OBJECT_private *obj = pkcs11_object_from_object(key, session, object_class);
 
-	if (!cert)
-		goto error;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	pubkey = X509_get0_pubkey(cert->x509);
-#else
-	pubkey = X509_get_pubkey(cert->x509);
-#endif
-	if (!pubkey)
-		goto error;
-	pubkey_ec = EVP_PKEY_get0_EC_KEY(pubkey);
-	if (!pubkey_ec)
-		goto error;
-	point = EC_KEY_get0_public_key(pubkey_ec);
-	if (!point)
-		goto error;
-	if (EC_KEY_set_public_key(ec, point) == 0)
-		goto error;
-	rv = 0;
-error:
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-	EVP_PKEY_free(pubkey);
-#endif
-	return rv;
+	if (!obj)
+		return -1;
+	r = pkcs11_get_point(ec, obj, session);
+	pkcs11_object_free(obj);
+	return r;
 }
 
 static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
@@ -289,11 +303,11 @@ static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
 		return NULL;
 	}
 	no_params = pkcs11_get_params(ec, key, session);
-	no_point = pkcs11_get_point_key(ec, key, session);
+	no_point = pkcs11_get_point(ec, key, session);
 	if (no_point && key->object_class == CKO_PRIVATE_KEY) /* Retry with the public key */
-		no_point = pkcs11_get_point_key(ec, pkcs11_find_key_from_key(key), session);
+		no_point = pkcs11_get_point_associated(ec, key, CKO_PUBLIC_KEY, session);
 	if (no_point && key->object_class == CKO_PRIVATE_KEY) /* Retry with the certificate */
-		no_point = pkcs11_get_point_cert(ec, pkcs11_find_certificate(key));
+		no_point = pkcs11_get_point_associated(ec, key, CKO_CERTIFICATE, session);
 	pkcs11_put_session(slot, session);
 
 	if (key->object_class == CKO_PRIVATE_KEY && EC_KEY_get0_private_key(ec) == NULL) {
