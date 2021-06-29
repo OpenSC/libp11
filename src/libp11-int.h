@@ -240,6 +240,10 @@ extern PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slo
 extern PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl);
 
+/* Get the corresponding object (same ID, given different object type) */
+extern PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
+	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class);
+
 /* Free an object */
 void pkcs11_object_free(PKCS11_OBJECT_private *obj);
 
@@ -254,9 +258,6 @@ extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key);
 
 /* Find the corresponding key (if any) */
 extern PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert);
-
-/* Find the corresponding key (if any)  pub <-> priv base on ID */
-extern PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *key);
 
 /* Get a list of all certificates associated with this token */
 extern int pkcs11_enumerate_certs(PKCS11_SLOT_private *,
