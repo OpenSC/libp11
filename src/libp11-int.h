@@ -133,16 +133,14 @@ extern char *pkcs11_strdup(char *, size_t);
 extern unsigned int get_forkid();
 extern int check_fork(PKCS11_CTX_private *ctx);
 extern int check_slot_fork(PKCS11_SLOT_private *slot);
-extern int check_key_fork(PKCS11_OBJECT_private *key);
-extern int check_cert_fork(PKCS11_OBJECT_private *cert);
+extern int check_object_fork(PKCS11_OBJECT_private *key);
 
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_SLOT_private *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_SLOT_private *);
-extern int pkcs11_reload_key(PKCS11_OBJECT_private *);
-extern int pkcs11_reload_certificate(PKCS11_OBJECT_private *cert);
+extern int pkcs11_reload_object(PKCS11_OBJECT_private *);
 extern int pkcs11_reload_slot(PKCS11_SLOT_private *);
 
 /* Managing object attributes */
@@ -227,9 +225,6 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 extern int pkcs11_enumerate_keys(PKCS11_SLOT_private *, unsigned int type,
 	PKCS11_KEY **keys, unsigned int *nkeys);
 
-/* Remove a key from the token */
-extern int pkcs11_remove_key(PKCS11_OBJECT_private *key);
-
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int pkcs11_get_key_type(PKCS11_OBJECT_private *key);
 
@@ -249,8 +244,8 @@ extern PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *ke
 extern int pkcs11_enumerate_certs(PKCS11_SLOT_private *,
 	PKCS11_CERT **certs, unsigned int *ncerts);
 
-/* Remove a certificate from the token */
-extern int pkcs11_remove_certificate(PKCS11_OBJECT_private *key);
+/* Remove an object from the token */
+extern int pkcs11_remove_object(PKCS11_OBJECT_private *object);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,

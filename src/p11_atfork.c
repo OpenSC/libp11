@@ -121,37 +121,19 @@ static int check_slot_fork_int(PKCS11_SLOT_private *slot)
 
 /*
  * PKCS#11 reinitialization after fork
- * Also reloads the key
+ * Also reloads the object
  */
-static int check_key_fork_int(PKCS11_OBJECT_private *key)
+static int check_object_fork_int(PKCS11_OBJECT_private *obj)
 {
-	PKCS11_SLOT_private *slot = key->slot;
-
-	if (check_slot_fork_int(slot) < 0)
-		return -1;
-	if (slot->forkid != key->forkid) {
-		if (pkcs11_reload_key(key) < 0)
-			return -1;
-		key->forkid = slot->forkid;
-	}
-	return 0;
-}
-
-/*
- * PKCS#11 reinitialization after fork
- * Also reloads the key
- */
-static int check_cert_fork_int(PKCS11_OBJECT_private *cert)
-{
-	PKCS11_SLOT_private *slot = cert->slot;
+	PKCS11_SLOT_private *slot = obj->slot;
 
 	if (check_slot_fork_int(slot) < 0)
 		return -1;
 
-	if (slot->forkid != cert->forkid) {
-		if (pkcs11_reload_certificate(cert) < 0)
+	if (slot->forkid != obj->forkid) {
+		if (pkcs11_reload_object(obj) < 0)
 			return -1;
-		cert->forkid = slot->forkid;
+		obj->forkid = slot->forkid;
 	}
 	return 0;
 }
@@ -177,23 +159,13 @@ int check_slot_fork(PKCS11_SLOT_private *slot)
 }
 
 /*
- * Locking interface to check_key_fork_int()
+ * Locking interface to check_object_fork_int()
  */
-int check_key_fork(PKCS11_OBJECT_private *key)
+int check_object_fork(PKCS11_OBJECT_private *obj)
 {
-	if (!key)
+	if (!obj)
 		return -1;
-	CHECK_FORKID(key->slot->ctx, key->forkid, check_key_fork_int(key));
-}
-
-/*
- * Locking interface to check_cert_fork_int()
- */
-int check_cert_fork(PKCS11_OBJECT_private *cert)
-{
-	if (!cert)
-		return -1;
-	CHECK_FORKID(cert->slot->ctx, cert->forkid, check_cert_fork_int(cert));
+	CHECK_FORKID(obj->slot->ctx, obj->forkid, check_object_fork_int(obj));
 }
 
 /* vim: set noexpandtab: */

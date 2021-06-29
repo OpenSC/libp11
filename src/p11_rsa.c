@@ -365,7 +365,7 @@ static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
 	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_dec) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
-	if (check_key_fork(key) < 0) {
+	if (check_object_fork(key) < 0) {
 		priv_dec = RSA_meth_get_priv_dec(RSA_get_default_method());
 		return priv_dec(flen, from, to, rsa, padding);
 	}
@@ -378,7 +378,7 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_enc) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
-	if (check_key_fork(key) < 0) {
+	if (check_object_fork(key) < 0) {
 		priv_enc = RSA_meth_get_priv_enc(RSA_get_default_method());
 		return priv_enc(flen, from, to, rsa, padding);
 	}
