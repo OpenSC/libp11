@@ -34,9 +34,8 @@
 /* forward and type declarations */
 typedef struct pkcs11_ctx_private PKCS11_CTX_private;
 typedef struct pkcs11_slot_private PKCS11_SLOT_private;
-typedef struct pkcs11_key_private PKCS11_KEY_private;
-typedef struct pkcs11_cert_private PKCS11_CERT_private;
-typedef struct pkcs11_key_ops PKCS11_KEY_ops;
+typedef struct pkcs11_object_private PKCS11_OBJECT_private;
+typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
 
 /* get private implementations of PKCS11 structures */
 
@@ -81,37 +80,28 @@ struct pkcs11_slot_private {
 };
 #define PRIVSLOT(_slot)		((PKCS11_SLOT_private *) ((_slot)->_private))
 
-struct pkcs11_key_private {
+struct pkcs11_object_private {
 	PKCS11_SLOT_private *slot;
+	CK_OBJECT_CLASS object_class;
 	CK_OBJECT_HANDLE object;
 	CK_BBOOL always_authenticate;
-	CK_BBOOL is_private;
 	unsigned char id[255];
 	size_t id_len;
 	char *label;
-	PKCS11_KEY_ops *ops;
+	PKCS11_OBJECT_ops *ops;
 	EVP_PKEY *evp_key;
 	unsigned int forkid;
 };
-#define PRIVKEY(_key)		((PKCS11_KEY_private *) (_key)->_private)
+#define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
+#define PRIVCERT(_cert)		((PKCS11_OBJECT_private *) (_cert)->_private)
 
-struct pkcs11_cert_private {
-	PKCS11_SLOT_private *slot;
-	CK_OBJECT_HANDLE object;
-	unsigned char id[255];
-	size_t id_len;
-	char *label;
-	unsigned int forkid;
-};
-#define PRIVCERT(_cert)		((PKCS11_CERT_private *) (_cert)->_private)
-
-struct pkcs11_key_ops {
-	int type; /* EVP_PKEY_xxx */
-	EVP_PKEY *(*get_evp_key) (PKCS11_KEY_private *);
+struct pkcs11_object_ops {
+	int pkey_type; /* EVP_PKEY_xxx */
+	EVP_PKEY *(*get_evp_key) (PKCS11_OBJECT_private *);
 };
 
-extern PKCS11_KEY_ops pkcs11_rsa_ops;
-extern PKCS11_KEY_ops pkcs11_ec_ops;
+extern PKCS11_OBJECT_ops pkcs11_rsa_ops;
+extern PKCS11_OBJECT_ops pkcs11_ec_ops;
 
 /*
  * Internal functions
@@ -143,16 +133,16 @@ extern char *pkcs11_strdup(char *, size_t);
 extern unsigned int get_forkid();
 extern int check_fork(PKCS11_CTX_private *ctx);
 extern int check_slot_fork(PKCS11_SLOT_private *slot);
-extern int check_key_fork(PKCS11_KEY_private *key);
-extern int check_cert_fork(PKCS11_CERT_private *cert);
+extern int check_key_fork(PKCS11_OBJECT_private *key);
+extern int check_cert_fork(PKCS11_OBJECT_private *cert);
 
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_SLOT_private *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_SLOT_private *);
-extern int pkcs11_reload_key(PKCS11_KEY_private *);
-extern int pkcs11_reload_certificate(PKCS11_CERT_private *cert);
+extern int pkcs11_reload_key(PKCS11_OBJECT_private *);
+extern int pkcs11_reload_certificate(PKCS11_OBJECT_private *cert);
 extern int pkcs11_reload_slot(PKCS11_SLOT_private *);
 
 /* Managing object attributes */
@@ -231,36 +221,36 @@ extern int pkcs11_login(PKCS11_SLOT_private *, int so, const char *pin);
 extern int pkcs11_logout(PKCS11_SLOT_private *);
 
 /* Authenticate a private the key operation if needed */
-int pkcs11_authenticate(PKCS11_KEY_private *key, CK_SESSION_HANDLE session);
+int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 
 /* Get a list of keys associated with this token */
 extern int pkcs11_enumerate_keys(PKCS11_SLOT_private *, unsigned int type,
 	PKCS11_KEY **keys, unsigned int *nkeys);
 
 /* Remove a key from the token */
-extern int pkcs11_remove_key(PKCS11_KEY_private *key);
+extern int pkcs11_remove_key(PKCS11_OBJECT_private *key);
 
 /* Get the key type (as EVP_PKEY_XXX) */
-extern int pkcs11_get_key_type(PKCS11_KEY_private *key);
+extern int pkcs11_get_key_type(PKCS11_OBJECT_private *key);
 
-/* Returns a EVP_PKEY object with the private or public key */
-extern EVP_PKEY *pkcs11_get_key(PKCS11_KEY_private *key, int isPrivate);
+/* Returns a EVP_PKEY object with the given key type */
+extern EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key, CK_OBJECT_CLASS obj_class);
 
 /* Find the corresponding certificate (if any) */
-extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_KEY_private *key);
+extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key);
 
 /* Find the corresponding key (if any) */
-extern PKCS11_KEY *pkcs11_find_key(PKCS11_CERT_private *cert);
+extern PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert);
 
 /* Find the corresponding key (if any)  pub <-> priv base on ID */
-extern PKCS11_KEY_private *pkcs11_find_key_from_key(PKCS11_KEY_private *key);
+extern PKCS11_OBJECT_private *pkcs11_find_key_from_key(PKCS11_OBJECT_private *key);
 
 /* Get a list of all certificates associated with this token */
 extern int pkcs11_enumerate_certs(PKCS11_SLOT_private *,
 	PKCS11_CERT **certs, unsigned int *ncerts);
 
 /* Remove a certificate from the token */
-extern int pkcs11_remove_certificate(PKCS11_CERT_private *key);
+extern int pkcs11_remove_certificate(PKCS11_OBJECT_private *key);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
@@ -302,39 +292,39 @@ extern int pkcs11_generate_key(PKCS11_SLOT_private *tpriv,
 	char *label, unsigned char* id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
-extern int pkcs11_get_key_size(PKCS11_KEY_private *);
+extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);
 
 /* Get the RSA key modules as BIGNUM */
-extern int pkcs11_get_key_modulus(PKCS11_KEY_private *, BIGNUM **);
+extern int pkcs11_get_key_modulus(PKCS11_OBJECT_private *, BIGNUM **);
 
 /* Get the RSA key public exponent as BIGNUM */
-extern int pkcs11_get_key_exponent(PKCS11_KEY_private *, BIGNUM **);
+extern int pkcs11_get_key_exponent(PKCS11_OBJECT_private *, BIGNUM **);
 
 /* Sign with the RSA private key */
 extern int pkcs11_sign(int type,
 	const unsigned char *m, unsigned int m_len,
-	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY_private *key);
+	unsigned char *sigret, unsigned int *siglen, PKCS11_OBJECT_private *key);
 
 /* This function has never been implemented */
 extern int pkcs11_verify(int type,
 	const unsigned char *m, unsigned int m_len,
-	unsigned char *signature, unsigned int siglen, PKCS11_KEY_private *key);
+	unsigned char *signature, unsigned int siglen, PKCS11_OBJECT_private *key);
 
 /* Encrypts data using the private key */
 extern int pkcs11_private_encrypt(
 	int flen, const unsigned char *from,
-	unsigned char *to, PKCS11_KEY_private *rsa, int padding);
+	unsigned char *to, PKCS11_OBJECT_private *rsa, int padding);
 
 /* Decrypts data using the private key */
 extern int pkcs11_private_decrypt(
 	int flen, const unsigned char *from,
-	unsigned char *to, PKCS11_KEY_private *key, int padding);
+	unsigned char *to, PKCS11_OBJECT_private *key, int padding);
 
 /* Retrieve PKCS11_KEY from an RSA key */
-extern PKCS11_KEY_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
+extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
 /* Retrieve PKCS11_KEY from an EC_KEY */
-extern PKCS11_KEY_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
+extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 
 #endif
 

@@ -29,9 +29,9 @@
 
 static int rsa_ex_index = 0;
 
-static RSA *pkcs11_rsa(PKCS11_KEY_private *key)
+static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 {
-	EVP_PKEY *evp_key = pkcs11_get_key(key, key->is_private);
+	EVP_PKEY *evp_key = pkcs11_get_key(key, key->object_class);
 	RSA *rsa;
 	if (!evp_key)
 		return NULL;
@@ -43,7 +43,7 @@ static RSA *pkcs11_rsa(PKCS11_KEY_private *key)
 /* PKCS#1 v1.5 RSA signature */
 /* TODO: remove this function in libp11 0.5.0 */
 int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY_private *key)
+		unsigned char *sigret, unsigned int *siglen, PKCS11_OBJECT_private *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
 	if (!rsa)
@@ -76,7 +76,7 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 /* OpenSSL assumes that the output buffer is always big enough */
 int pkcs11_private_encrypt(int flen,
 		const unsigned char *from, unsigned char *to,
-		PKCS11_KEY_private *key, int padding)
+		PKCS11_OBJECT_private *key, int padding)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -123,7 +123,7 @@ int pkcs11_private_encrypt(int flen,
 
 /* RSA private key decryption */
 int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
-		PKCS11_KEY_private *key, int padding)
+		PKCS11_OBJECT_private *key, int padding)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -158,7 +158,7 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 
 /* TODO: remove this function in libp11 0.5.0 */
 int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
-		unsigned char *signature, unsigned int siglen, PKCS11_KEY_private *key)
+		unsigned char *signature, unsigned int siglen, PKCS11_OBJECT_private *key)
 {
 	(void)type;
 	(void)m;
@@ -175,7 +175,7 @@ int pkcs11_verify(int type, const unsigned char *m, unsigned int m_len,
 /*
  * Get RSA key material
  */
-static RSA *pkcs11_get_rsa(PKCS11_KEY_private *key)
+static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -245,12 +245,12 @@ success:
 	return rsa;
 }
 
-PKCS11_KEY_private *pkcs11_get_ex_data_rsa(const RSA *rsa)
+PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa)
 {
 	return RSA_get_ex_data(rsa, rsa_ex_index);
 }
 
-static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_KEY_private *key)
+static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key)
 {
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
@@ -258,7 +258,7 @@ static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_KEY_private *key)
 /*
  * Build an EVP_PKEY object
  */
-static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY_private *key)
+static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 {
 	EVP_PKEY *pk;
 	RSA *rsa;
@@ -271,7 +271,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY_private *key)
 		RSA_free(rsa);
 		return NULL;
 	}
-	if (key->is_private) {
+	if (key->object_class == CKO_PRIVATE_KEY) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
@@ -294,7 +294,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_KEY_private *key)
 }
 
 /* TODO: remove this function in libp11 0.5.0 */
-int pkcs11_get_key_modulus(PKCS11_KEY_private *key, BIGNUM **bn)
+int pkcs11_get_key_modulus(PKCS11_OBJECT_private *key, BIGNUM **bn)
 {
 	RSA *rsa = pkcs11_rsa(key);
 	const BIGNUM *rsa_n;
@@ -311,7 +311,7 @@ int pkcs11_get_key_modulus(PKCS11_KEY_private *key, BIGNUM **bn)
 }
 
 /* TODO: remove this function in libp11 0.5.0 */
-int pkcs11_get_key_exponent(PKCS11_KEY_private *key, BIGNUM **bn)
+int pkcs11_get_key_exponent(PKCS11_OBJECT_private *key, BIGNUM **bn)
 {
 	RSA *rsa = pkcs11_rsa(key);
 	const BIGNUM *rsa_e;
@@ -328,7 +328,7 @@ int pkcs11_get_key_exponent(PKCS11_KEY_private *key, BIGNUM **bn)
 }
 
 /* TODO: make this function static in libp11 0.5.0 */
-int pkcs11_get_key_size(PKCS11_KEY_private *key)
+int pkcs11_get_key_size(PKCS11_OBJECT_private *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
 	if (!rsa)
@@ -362,7 +362,7 @@ static int (*RSA_meth_get_finish(const RSA_METHOD *meth)) (RSA *rsa)
 static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding)
 {
-	PKCS11_KEY_private *key = pkcs11_get_ex_data_rsa(rsa);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_dec) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
 	if (check_key_fork(key) < 0) {
@@ -375,7 +375,7 @@ static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
 static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding)
 {
-	PKCS11_KEY_private *key = pkcs11_get_ex_data_rsa(rsa);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_enc) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
 	if (check_key_fork(key) < 0) {
@@ -508,7 +508,7 @@ void PKCS11_rsa_method_free(void)
 	free_rsa_ex_index();
 }
 
-PKCS11_KEY_ops pkcs11_rsa_ops = {
+PKCS11_OBJECT_ops pkcs11_rsa_ops = {
 	EVP_PKEY_RSA,
 	pkcs11_get_evp_key_rsa,
 };

@@ -176,7 +176,7 @@ int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 
 int PKCS11_remove_key(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_remove_key(key);
@@ -193,7 +193,7 @@ int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
 
 int PKCS11_get_key_type(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_type(key);
@@ -201,23 +201,23 @@ int PKCS11_get_key_type(PKCS11_KEY *pkey)
 
 EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return NULL;
-	return pkcs11_get_key(key, 1);
+	return pkcs11_get_key(key, CKO_PRIVATE_KEY);
 }
 
 EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return NULL;
-	return pkcs11_get_key(key, 0);
+	return pkcs11_get_key(key, CKO_PUBLIC_KEY);
 }
 
 PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return NULL;
 	return pkcs11_find_certificate(key);
@@ -225,7 +225,7 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *pkey)
 
 PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *pcert)
 {
-	PKCS11_CERT_private *cert = PRIVCERT(pcert);
+	PKCS11_OBJECT_private *cert = PRIVCERT(pcert);
 	if (check_cert_fork(cert) < 0)
 		return NULL;
 	return pkcs11_find_key(cert);
@@ -242,7 +242,7 @@ int PKCS11_enumerate_certs(PKCS11_TOKEN *token,
 
 int PKCS11_remove_certificate(PKCS11_CERT *pcert)
 {
-	PKCS11_CERT_private *cert = PRIVCERT(pcert);
+	PKCS11_OBJECT_private *cert = PRIVCERT(pcert);
 	if (check_cert_fork(cert) < 0)
 		return -1;
 	return pkcs11_remove_certificate(cert);
@@ -364,7 +364,7 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 
 int PKCS11_get_key_size(PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_size(key);
@@ -372,7 +372,7 @@ int PKCS11_get_key_size(PKCS11_KEY *pkey)
 
 int PKCS11_get_key_modulus(PKCS11_KEY *pkey, BIGNUM **bn)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_modulus(key, bn);
@@ -380,7 +380,7 @@ int PKCS11_get_key_modulus(PKCS11_KEY *pkey, BIGNUM **bn)
 
 int PKCS11_get_key_exponent(PKCS11_KEY *pkey, BIGNUM **bn)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_exponent(key, bn);
@@ -389,7 +389,7 @@ int PKCS11_get_key_exponent(PKCS11_KEY *pkey, BIGNUM **bn)
 int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *pkey)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_sign(type, m, m_len, sigret, siglen, key);
@@ -398,7 +398,7 @@ int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *pkey, int padding)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_private_encrypt(flen, from, to, key, padding);
@@ -407,7 +407,7 @@ int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *t
 int PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *pkey, int padding)
 {
-	PKCS11_KEY_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
 	if (check_key_fork(key) < 0)
 		return -1;
 	return pkcs11_private_decrypt(flen, from, to, key, padding);
