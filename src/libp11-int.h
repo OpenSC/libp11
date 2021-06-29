@@ -236,6 +236,10 @@ extern int pkcs11_enumerate_keys(PKCS11_SLOT_private *, unsigned int type,
 extern PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE object);
 
+/* Get an object based on template */
+extern PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
+	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl);
+
 /* Free an object */
 void pkcs11_object_free(PKCS11_OBJECT_private *obj);
 
