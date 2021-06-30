@@ -22,7 +22,7 @@
 #include <openssl/buffer.h>
 
 static int pkcs11_init_slot(PKCS11_CTX_private *, PKCS11_SLOT *, CK_SLOT_ID);
-static void pkcs11_release_slot(PKCS11_CTX_private *, PKCS11_SLOT *);
+static void pkcs11_release_slot(PKCS11_SLOT *);
 static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
 /*
@@ -73,7 +73,7 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 	for (n = 0; n < nslots; n++) {
 		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
 			while (n--)
-				pkcs11_release_slot(ctx, &slots[n]);
+				pkcs11_release_slot(&slots[n]);
 			OPENSSL_free(slotid);
 			OPENSSL_free(slots);
 			return -1;
@@ -383,36 +383,65 @@ int pkcs11_generate_random(PKCS11_SLOT_private *slot, unsigned char *r,
 /*
  * Helper functions
  */
+static PKCS11_SLOT_private *pkcs11_slot_new(PKCS11_CTX_private *ctx, CK_SLOT_ID id)
+{
+	PKCS11_SLOT_private *slot;
+
+	slot = OPENSSL_malloc(sizeof(*slot));
+	if (!slot)
+		return NULL;
+	memset(slot, 0, sizeof(*slot));
+	slot->refcnt = 1;
+	slot->ctx = ctx;
+	slot->id = id;
+	slot->forkid = ctx->forkid;
+	slot->logged_in = -1;
+	slot->rw_mode = -1;
+	slot->max_sessions = 16;
+	slot->session_poolsize = slot->max_sessions + 1;
+	slot->session_pool = OPENSSL_malloc(slot->session_poolsize * sizeof(CK_SESSION_HANDLE));
+	pthread_mutex_init(&slot->lock, 0);
+	pthread_cond_init(&slot->cond, 0);
+	return slot;
+}
+
+PKCS11_SLOT_private *pkcs11_slot_ref(PKCS11_SLOT_private *slot)
+{
+	pkcs11_atomic_add(&slot->refcnt, 1, &slot->lock);
+	return slot;
+}
+
+void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
+{
+	if (pkcs11_atomic_add(&slot->refcnt, -1, &slot->lock) != 0)
+		return;
+
+	pkcs11_wipe_cache(slot);
+	if (slot->prev_pin) {
+		OPENSSL_cleanse(slot->prev_pin, strlen(slot->prev_pin));
+		OPENSSL_free(slot->prev_pin);
+	}
+	CRYPTOKI_call(slot->ctx, C_CloseAllSessions(slot->id));
+	OPENSSL_free(slot->session_pool);
+	pthread_mutex_destroy(&slot->lock);
+	pthread_cond_destroy(&slot->cond);
+}
+
 static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, CK_SLOT_ID id)
 {
-	PKCS11_SLOT_private *spriv;
 	CK_SLOT_INFO info;
 	int rv;
 
 	rv = CRYPTOKI_call(ctx, C_GetSlotInfo(id, &info));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_SLOT, rv);
 
-	spriv = OPENSSL_malloc(sizeof(PKCS11_SLOT_private));
-	if (!spriv)
+	slot->_private = pkcs11_slot_new(ctx, id);
+	if (!slot->_private)
 		return -1;
-	memset(spriv, 0, sizeof(PKCS11_SLOT_private));
-
-	spriv->ctx = ctx;
-	spriv->id = id;
-	spriv->forkid = ctx->forkid;
-	spriv->prev_pin = NULL;
-	spriv->logged_in = -1;
-	spriv->rw_mode = -1;
-	spriv->max_sessions = 16;
-	spriv->session_poolsize = spriv->max_sessions + 1;
-	spriv->session_pool = OPENSSL_malloc(spriv->session_poolsize * sizeof(CK_SESSION_HANDLE));
-	pthread_mutex_init(&spriv->lock, 0);
-	pthread_cond_init(&spriv->cond, 0);
 
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
 	slot->removable = (info.flags & CKF_REMOVABLE_DEVICE) ? 1 : 0;
-	slot->_private = spriv;
 
 	if (info.flags & CKF_TOKEN_PRESENT) {
 		if (pkcs11_refresh_token(slot))
@@ -421,17 +450,16 @@ static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, CK_SLOT_
 	return 0;
 }
 
-void pkcs11_release_all_slots(PKCS11_CTX_private *ctx,  PKCS11_SLOT *slots,
-		unsigned int nslots)
+void pkcs11_release_all_slots(PKCS11_SLOT *slots, unsigned int nslots)
 {
 	unsigned int i;
 
 	for (i=0; i < nslots; i++)
-		pkcs11_release_slot(ctx, &slots[i]);
+		pkcs11_release_slot(&slots[i]);
 	OPENSSL_free(slots);
 }
 
-static void pkcs11_release_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot)
+static void pkcs11_release_slot(PKCS11_SLOT *slot)
 {
 	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
 
@@ -439,17 +467,8 @@ static void pkcs11_release_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot)
 		pkcs11_destroy_token(slot->token);
 		OPENSSL_free(slot->token);
 	}
-	if (spriv) {
-		pkcs11_wipe_cache(spriv);
-		if (spriv->prev_pin) {
-			OPENSSL_cleanse(spriv->prev_pin, strlen(spriv->prev_pin));
-			OPENSSL_free(spriv->prev_pin);
-		}
-		CRYPTOKI_call(ctx, C_CloseAllSessions(spriv->id));
-		OPENSSL_free(spriv->session_pool);
-		pthread_mutex_destroy(&spriv->lock);
-		pthread_cond_destroy(&spriv->cond);
-	}
+	if (spriv)
+		pkcs11_slot_unref(spriv);
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);
 	OPENSSL_free(slot->_private);

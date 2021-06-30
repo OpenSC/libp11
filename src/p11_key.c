@@ -117,7 +117,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	memset(obj, 0, sizeof(*obj));
 	obj->object_class = object_class;
 	obj->object = object;
-	obj->slot = slot;
+	obj->slot = pkcs11_slot_ref(slot);
 	obj->id_len = sizeof(obj->id);
 	if (pkcs11_getattr_var(ctx, session, object, CKA_ID, obj->id, &obj->id_len))
 		obj->id_len = 0;
@@ -186,6 +186,7 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 		EVP_PKEY_free(pkey);
 		return;
 	}
+	pkcs11_slot_unref(obj->slot);
 	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
 	OPENSSL_free(obj);
