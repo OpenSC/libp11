@@ -39,4 +39,24 @@ char *pkcs11_strdup(char *mem, size_t size)
 	return res;
 }
 
+int pkcs11_atomic_add(int *value, int amount, pthread_mutex_t *lock)
+{
+#if defined( _WIN32)
+	(void) lock;
+	return InterlockedExchangeAdd(value, amount) + amount;
+#elif defined(__GNUC__) && defined(__ATOMIC_ACQ_REL)
+	(void) lock;
+	return __atomic_add_fetch(value, amount, __ATOMIC_ACQ_REL);
+#else
+	int ret;
+
+	pthread_mutex_lock(lock);
+	*value += amount;
+	ret = *value;
+	pthread_mutex_unlock(lock);
+
+	return ret;
+#endif
+}
+
 /* vim: set noexpandtab: */

@@ -49,6 +49,7 @@ typedef int (*compute_key_fn)(void *, size_t,
 	void *(*)(const void *, size_t, void *, size_t *));
 #endif
 static compute_key_fn ossl_ecdh_compute_key;
+static void (*ossl_ec_finish)(EC_KEY *);
 
 static int ec_ex_index = 0;
 
@@ -187,14 +188,14 @@ static void free_ec_ex_index()
 
 /* Retrieve EC parameters from key into ec
  * return nonzero on error */
-static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY *key, CK_SESSION_HANDLE session)
+static int pkcs11_get_params(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 {
 	CK_BYTE *params;
 	size_t params_len = 0;
 	const unsigned char *a;
 	int rv;
 
-	if (pkcs11_getattr_alloc(KEY2CTX(key), session, PRIVKEY(key)->object,
+	if (pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_PARAMS, &params, &params_len))
 		return -1;
 
@@ -204,51 +205,19 @@ static int pkcs11_get_params(EC_KEY *ec, PKCS11_KEY *key, CK_SESSION_HANDLE sess
 	return rv;
 }
 
-/* Retrieve EC point from key into ec
+/* Retrieve EC point from x509 certificate into ec
  * return nonzero on error */
-static int pkcs11_get_point_key(EC_KEY *ec, PKCS11_KEY *key, CK_SESSION_HANDLE session)
-{
-	CK_BYTE *point;
-	size_t point_len = 0;
-	const unsigned char *a;
-	ASN1_OCTET_STRING *os;
-	int rv = -1;
-
-	if (!key || pkcs11_getattr_alloc(KEY2CTX(key), session, PRIVKEY(key)->object,
-			CKA_EC_POINT, &point, &point_len))
-		return -1;
-
-	/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
-	a = point;
-	os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
-	if (os) {
-		a = os->data;
-		rv = o2i_ECPublicKey(&ec, &a, os->length) == NULL;
-		ASN1_STRING_free(os);
-	}
-	if (rv) { /* Workaround for broken PKCS#11 modules */
-		a = point;
-		rv = o2i_ECPublicKey(&ec, &a, (long)point_len) == NULL;
-	}
-	OPENSSL_free(point);
-	return rv;
-}
-
-/* Retrieve EC point from cert into ec
- * return nonzero on error */
-static int pkcs11_get_point_cert(EC_KEY *ec, PKCS11_CERT *cert)
+static int pkcs11_get_point_x509(EC_KEY *ec, X509 *x509)
 {
 	EVP_PKEY *pubkey = NULL;
 	EC_KEY *pubkey_ec;
 	const EC_POINT *point;
 	int rv = -1;
 
-	if (!cert)
-		goto error;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	pubkey = X509_get0_pubkey(cert->x509);
+	pubkey = X509_get0_pubkey(x509);
 #else
-	pubkey = X509_get_pubkey(cert->x509);
+	pubkey = X509_get_pubkey(x509);
 #endif
 	if (!pubkey)
 		goto error;
@@ -268,9 +237,55 @@ error:
 	return rv;
 }
 
-static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
+/* Retrieve EC point from key into ec
+ * return nonzero on error */
+static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 {
-	PKCS11_SLOT *slot = KEY2SLOT(key);
+	CK_BYTE *point;
+	size_t point_len = 0;
+	const unsigned char *a;
+	ASN1_OCTET_STRING *os;
+	int rv = -1;
+
+	if (key->x509 && pkcs11_get_point_x509(ec, key->x509) == 0)
+		return 0;
+
+	if (!key || pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
+			CKA_EC_POINT, &point, &point_len))
+		return -1;
+
+	/* PKCS#11-compliant modules should return ASN1_OCTET_STRING */
+	a = point;
+	os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
+	if (os) {
+		a = os->data;
+		rv = o2i_ECPublicKey(&ec, &a, os->length) == NULL;
+		ASN1_STRING_free(os);
+	}
+	if (rv) { /* Workaround for broken PKCS#11 modules */
+		a = point;
+		rv = o2i_ECPublicKey(&ec, &a, (long)point_len) == NULL;
+	}
+	OPENSSL_free(point);
+	return rv;
+}
+
+static int pkcs11_get_point_associated(EC_KEY *ec, PKCS11_OBJECT_private *key,
+	CK_OBJECT_CLASS object_class, CK_SESSION_HANDLE session)
+{
+	int r;
+	PKCS11_OBJECT_private *obj = pkcs11_object_from_object(key, session, object_class);
+
+	if (!obj)
+		return -1;
+	r = pkcs11_get_point(ec, obj, session);
+	pkcs11_object_free(obj);
+	return r;
+}
+
+static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
+{
+	PKCS11_SLOT_private *slot = key->slot;
 	CK_SESSION_HANDLE session;
 	EC_KEY *ec;
 	int no_params, no_point;
@@ -289,21 +304,21 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 		return NULL;
 	}
 	no_params = pkcs11_get_params(ec, key, session);
-	no_point = pkcs11_get_point_key(ec, key, session);
-	if (no_point && key->isPrivate) /* Retry with the public key */
-		no_point = pkcs11_get_point_key(ec, pkcs11_find_key_from_key(key), session);
-	if (no_point && key->isPrivate) /* Retry with the certificate */
-		no_point = pkcs11_get_point_cert(ec, pkcs11_find_certificate(key));
+	no_point = pkcs11_get_point(ec, key, session);
+	if (no_point && key->object_class == CKO_PRIVATE_KEY) /* Retry with the public key */
+		no_point = pkcs11_get_point_associated(ec, key, CKO_PUBLIC_KEY, session);
+	if (no_point && key->object_class == CKO_PRIVATE_KEY) /* Retry with the certificate */
+		no_point = pkcs11_get_point_associated(ec, key, CKO_CERTIFICATE, session);
 	pkcs11_put_session(slot, session);
 
-	if (key->isPrivate && EC_KEY_get0_private_key(ec) == NULL) {
+	if (key->object_class == CKO_PRIVATE_KEY && EC_KEY_get0_private_key(ec) == NULL) {
 		BIGNUM *bn = BN_new();
 		EC_KEY_set_private_key(ec, bn);
 		BN_free(bn);
 	}
 
 	/* A public keys requires both the params and the point to be present */
-	if (!key->isPrivate && (no_params || no_point)) {
+	if (key->object_class == CKO_PUBLIC_KEY && (no_params || no_point)) {
 		EC_KEY_free(ec);
 		return NULL;
 	}
@@ -311,7 +326,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_KEY *key)
 	return ec;
 }
 
-PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
+PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	return EC_KEY_get_ex_data(ec, ec_ex_index);
@@ -320,27 +335,13 @@ PKCS11_KEY *pkcs11_get_ex_data_ec(const EC_KEY *ec)
 #endif
 }
 
-static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_KEY *key)
+static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	EC_KEY_set_ex_data(ec, ec_ex_index, key);
 #else
 	ECDSA_set_ex_data(ec, ec_ex_index, key);
 #endif
-}
-
-static void pkcs11_update_ex_data_ec(PKCS11_KEY *key)
-{
-	EVP_PKEY *evp = key->evp_key;
-	EC_KEY *ec;
-	if (!evp)
-		return;
-	if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC)
-		return;
-
-	ec = EVP_PKEY_get1_EC_KEY(evp);
-	pkcs11_set_ex_data_ec(ec, key);
-	EC_KEY_free(ec);
 }
 
 /*
@@ -352,7 +353,7 @@ static void pkcs11_update_ex_data_ec(PKCS11_KEY *key)
  * is not in the private key, and the params may or may not be.
  *
  */
-static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
+static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 {
 	EVP_PKEY *pk;
 	EC_KEY *ec;
@@ -366,7 +367,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 		return NULL;
 	}
 
-	if (key->isPrivate) {
+	if (key->object_class == CKO_PRIVATE_KEY) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 		EC_KEY_set_method(ec, PKCS11_get_ec_key_method());
 #else
@@ -388,12 +389,11 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_KEY *key)
 /* Signature size is the issue, will assume the caller has a big buffer! */
 /* No padding or other stuff needed.  We can call PKCS11 from here */
 static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
-		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key)
+		unsigned char *sigret, unsigned int *siglen, PKCS11_OBJECT_private *key)
 {
 	int rv;
-	PKCS11_SLOT *slot = KEY2SLOT(key);
-	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *slot = key->slot;
+	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
 	CK_ULONG ck_sigsize;
@@ -407,8 +407,8 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 		return -1;
 
 	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, kpriv->object));
-	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		C_SignInit(session, &mechanism, key->object));
+	if (!rv && key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
@@ -422,6 +422,19 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	*siglen = ck_sigsize;
 
 	return ck_sigsize;
+}
+
+static void pkcs11_ec_finish(EC_KEY *ec)
+{
+	PKCS11_OBJECT_private *key;
+
+	key = pkcs11_get_ex_data_ec(ec);
+	if (key) {
+		pkcs11_set_ex_data_ec(ec, NULL);
+		pkcs11_object_free(key);
+	}
+	if (ossl_ec_finish)
+		ossl_ec_finish(ec);
 }
 
 /**
@@ -439,7 +452,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 {
 	unsigned char sigret[512]; /* HACK for now */
 	ECDSA_SIG *sig;
-	PKCS11_KEY *key;
+	PKCS11_OBJECT_private *key;
 	unsigned int siglen;
 	BIGNUM *r, *s, *order;
 
@@ -447,7 +460,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	(void)rp; /* Precomputed values are not used for PKCS#11 */
 
 	key = pkcs11_get_ex_data_ec(ec);
-	if (check_key_fork(key) < 0) {
+	if (check_object_fork(key) < 0) {
 		sign_sig_fn orig_sign_sig;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 		const EC_KEY_METHOD *meth = EC_KEY_OpenSSL();
@@ -549,11 +562,10 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		const unsigned long ecdh_mechanism,
 		const void *ec_params,
 		void *outnewkey,
-		PKCS11_KEY *key)
+		PKCS11_OBJECT_private *key)
 {
-	PKCS11_SLOT *slot = KEY2SLOT(key);
-	PKCS11_CTX *ctx = KEY2CTX(key);
-	PKCS11_KEY_private *kpriv = PRIVKEY(key);
+	PKCS11_SLOT_private *slot = key->slot;
+	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
 	int rv;
@@ -598,7 +610,7 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, kpriv->object,
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, key->object,
 		newkey_template, sizeof(newkey_template)/sizeof(*newkey_template), &newkey));
 	if (rv != CKR_OK)
 		goto error;
@@ -625,7 +637,7 @@ error:
 }
 
 static int pkcs11_ecdh_compute_key(unsigned char **buf, size_t *buflen,
-		const EC_POINT *peer_point, const EC_KEY *ecdh, PKCS11_KEY *key)
+		const EC_POINT *peer_point, const EC_KEY *ecdh, PKCS11_OBJECT_private *key)
 {
 	const EC_GROUP *group = EC_KEY_get0_group(ecdh);
 	const int key_len = (EC_GROUP_get_degree(group) + 7) / 8;
@@ -655,12 +667,12 @@ static int pkcs11_ecdh_compute_key(unsigned char **buf, size_t *buflen,
 static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 		const EC_POINT *peer_point, const EC_KEY *ecdh)
 {
-	PKCS11_KEY *key;
+	PKCS11_OBJECT_private *key;
 	unsigned char *buf = NULL;
 	size_t buflen;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh);
 	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return 0;
@@ -686,12 +698,12 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 		const EC_POINT *peer_point, const EC_KEY *ecdh,
 		void *(*KDF)(const void *, size_t, void *, size_t *))
 {
-	PKCS11_KEY *key;
+	PKCS11_OBJECT_private *key;
 	unsigned char *buf = NULL;
 	size_t buflen;
 
 	key = pkcs11_get_ex_data_ec(ecdh);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return ossl_ecdh_compute_key(out, outlen, peer_point, ecdh, KDF);
 	if (pkcs11_ecdh_compute_key(&buf, &buflen, peer_point, ecdh, key) < 0)
 		return -1;
@@ -727,12 +739,21 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
 	static EC_KEY_METHOD *ops = NULL;
+	int (*orig_init)(EC_KEY *);
+	int (*orig_copy)(EC_KEY *, const EC_KEY *);
+	int (*orig_set_group)(EC_KEY *, const EC_GROUP *);
+	int (*orig_set_private)(EC_KEY *, const BIGNUM *);
+	int (*orig_set_public)(EC_KEY *, const EC_POINT *);
 	int (*orig_sign)(int, const unsigned char *, int, unsigned char *,
 		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
 	alloc_ec_ex_index();
 	if (!ops) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
+		EC_KEY_METHOD_get_init(ops, &orig_init, &ossl_ec_finish, &orig_copy,
+			&orig_set_group, &orig_set_private, &orig_set_public);
+		EC_KEY_METHOD_set_init(ops, orig_init, pkcs11_ec_finish, orig_copy,
+			orig_set_group, orig_set_private, orig_set_public);
 		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
 		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
 		EC_KEY_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
@@ -787,16 +808,12 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 
 #endif /* OPENSSL_VERSION_NUMBER */
 
-PKCS11_KEY_ops pkcs11_ec_ops_s = {
+PKCS11_OBJECT_ops pkcs11_ec_ops = {
 	EVP_PKEY_EC,
 	pkcs11_get_evp_key_ec,
-	pkcs11_update_ex_data_ec,
 };
-PKCS11_KEY_ops *pkcs11_ec_ops = {&pkcs11_ec_ops_s};
 
 #else /* OPENSSL_NO_EC */
-
-PKCS11_KEY_ops *pkcs11_ec_ops = {NULL};
 
 /* if not built with EC or OpenSSL does not support ECDSA
  * add these routines so engine_pkcs11 can be built now and not

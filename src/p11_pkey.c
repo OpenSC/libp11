@@ -297,12 +297,11 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	RSA *rsa;
-	PKCS11_KEY *key;
 	int rv = 0, padding;
 	CK_ULONG size = *siglen;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	PKCS11_KEY_private *kpriv;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
 	const EVP_MD *sig_md;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
@@ -324,13 +323,13 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
-	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_key_fork(key) < 0)
-		return -1;
-	slot = KEY2SLOT(key);
-	ctx = KEY2CTX(key);
-	kpriv = PRIVKEY(key);
 
+	key = pkcs11_get_ex_data_rsa(rsa);
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	slot = key->slot;
+	ctx = slot->ctx;
 	if (!evp_pkey_ctx)
 		return -1;
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
@@ -364,8 +363,8 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, kpriv->object));
-	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		C_SignInit(session, &mechanism, key->object));
+	if (!rv && key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
@@ -400,12 +399,11 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	RSA *rsa;
-	PKCS11_KEY *key;
 	int rv = 0, padding;
 	CK_ULONG size = *outlen;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	PKCS11_KEY_private *kpriv;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
 	CK_MECHANISM mechanism;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
@@ -426,12 +424,13 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
+
 	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		return -1;
-	slot = KEY2SLOT(key);
-	ctx = KEY2CTX(key);
-	kpriv = PRIVKEY(key);
+
+	slot = key->slot;
+	ctx = slot->ctx;
 
 	if (!evp_pkey_ctx)
 		return -1;
@@ -470,8 +469,8 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	rv = CRYPTOKI_call(ctx,
-		C_DecryptInit(session, &mechanism, kpriv->object));
-	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		C_DecryptInit(session, &mechanism, key->object));
+	if (!rv && key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,
@@ -537,12 +536,11 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	EC_KEY *eckey;
-	PKCS11_KEY *key;
 	int rv = CKR_GENERAL_ERROR;
 	CK_ULONG size = *siglen;
-	PKCS11_SLOT *slot;
-	PKCS11_CTX *ctx;
-	PKCS11_KEY_private *kpriv;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
 	const EVP_MD *sig_md;
 	ECDSA_SIG *ossl_sig;
@@ -582,12 +580,11 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		goto error;
 
 	key = pkcs11_get_ex_data_ec(eckey);
-	if (check_key_fork(key) < 0)
+	if (check_object_fork(key) < 0)
 		goto error;
 
-	slot = KEY2SLOT(key);
-	ctx = KEY2CTX(key);
-	kpriv = PRIVKEY(key);
+	slot = key->slot;
+	ctx = slot->ctx;
 
 	if (!evp_pkey_ctx)
 		goto error;
@@ -605,8 +602,8 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, kpriv->object));
-	if (!rv && kpriv->always_authenticate == CK_TRUE)
+		C_SignInit(session, &mechanism, key->object));
+	if (!rv && key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
 	if (!rv)
 		rv = CRYPTOKI_call(ctx,

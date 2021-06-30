@@ -60,7 +60,6 @@ typedef struct PKCS11_key_st {
 	size_t id_len;
 	unsigned char isPrivate;	/**< private key present? */
 	unsigned char needLogin;	/**< login to read private key? */
-	EVP_PKEY *evp_key;		/**< initially NULL, need to call PKCS11_load_key */
 	void *_private;
 } PKCS11_KEY;
 
@@ -93,7 +92,7 @@ typedef struct PKCS11_token_st {
 	unsigned char soPinFinalTry;
 	unsigned char soPinLocked;
 	unsigned char soPinToBeChanged;
-	void *_private;
+	struct PKCS11_slot_st *slot;
 } PKCS11_TOKEN;
 
 /** PKCS11 slot: card reader */
@@ -173,6 +172,18 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /**
+ * Get or update a list of all slots
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slotsp pointer on a list of slots
+ * @param nslotsp pointer to size of the allocated list
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_update_slots(PKCS11_CTX * ctx,
+			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
+
+/**
  * Get the slot_id from a slot as it is stored in private
  *
  * @param slotp pointer on a slot
@@ -246,6 +257,10 @@ extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
  * @retval -1 error
  */
 extern int PKCS11_logout(PKCS11_SLOT * slot);
+
+extern EVP_PKEY *PKCS11_get_key_from_template(PKCS11_TOKEN *, PKCS11_KEY *);
+
+extern X509 *PKCS11_get_x509_from_template(PKCS11_TOKEN *, PKCS11_CERT *);
 
 /* Get a list of private keys associated with this token */
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
