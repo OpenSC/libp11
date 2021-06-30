@@ -21,7 +21,8 @@
 #include <string.h>
 #include <openssl/buffer.h>
 
-static int pkcs11_init_slot(PKCS11_CTX_private *, PKCS11_SLOT *, CK_SLOT_ID);
+static PKCS11_SLOT_private *pkcs11_slot_new(PKCS11_CTX_private *, CK_SLOT_ID);
+static int pkcs11_init_slot(PKCS11_CTX_private *, PKCS11_SLOT *, PKCS11_SLOT_private *);
 static void pkcs11_release_slot(PKCS11_SLOT *);
 static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
@@ -40,30 +41,32 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 		unsigned int *countp)
 {
 	CK_SLOT_ID *slotid;
-	CK_ULONG nslots, n;
+	CK_ULONG nslots, n, i;
 	PKCS11_SLOT *slots;
-	size_t alloc_size;
 	int rv;
 
 	rv = ctx->method->C_GetSlotList(FALSE, NULL_PTR, &nslots);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
-
-	alloc_size = nslots * sizeof(CK_SLOT_ID);
-	if (alloc_size / sizeof(CK_SLOT_ID) != nslots) /* integer overflow */
+	if (nslots > 0x10000)
 		return -1;
-	slotid = OPENSSL_malloc(alloc_size);
+
+	if (!slotp) {
+		/* Fast path for size inquiry */
+		*countp = nslots;
+		return 0;
+	}
+
+	slotid = OPENSSL_malloc(nslots * sizeof(*slotid));
 	if (!slotid)
 		return -1;
 
 	rv = ctx->method->C_GetSlotList(FALSE, slotid, &nslots);
-	CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
-
-	alloc_size = nslots * sizeof(PKCS11_SLOT);
-	if (alloc_size / sizeof(PKCS11_SLOT) != nslots) { /* integer overflow */
+	if (rv != CKR_OK) {
 		OPENSSL_free(slotid);
-		return -1;
+		CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_SLOTS, rv);
 	}
-	slots = OPENSSL_malloc(alloc_size);
+
+	slots = OPENSSL_malloc(nslots * sizeof(*slots));
 	if (!slots) {
 		OPENSSL_free(slotid);
 		return -1;
@@ -71,22 +74,28 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 
 	memset(slots, 0, nslots * sizeof(PKCS11_SLOT));
 	for (n = 0; n < nslots; n++) {
-		if (pkcs11_init_slot(ctx, &slots[n], slotid[n])) {
-			while (n--)
-				pkcs11_release_slot(&slots[n]);
+		PKCS11_SLOT_private *slot = NULL;
+		for (i = 0; i < *countp; i++) {
+			if (PRIVSLOT(slotp[i])->id != slotid[n])
+				continue;
+			slot = pkcs11_slot_ref(PRIVSLOT(slotp[i]));
+			break;
+		}
+		if (!slot)
+			slot = pkcs11_slot_new(ctx, slotid[n]);
+
+		if (pkcs11_init_slot(ctx, &slots[n], slot)) {
+			pkcs11_slot_unref(slot);
+			pkcs11_release_all_slots(slots, n);
 			OPENSSL_free(slotid);
-			OPENSSL_free(slots);
 			return -1;
 		}
 	}
 
-	if (slotp)
-		*slotp = slots;
-	else
-		OPENSSL_free(slots);
-	if (countp)
-		*countp = nslots;
 	OPENSSL_free(slotid);
+	pkcs11_release_all_slots(*slotp, *countp);
+	*slotp = slots;
+	*countp = nslots;
 	return 0;
 }
 
@@ -427,18 +436,15 @@ void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 	pthread_cond_destroy(&slot->cond);
 }
 
-static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, CK_SLOT_ID id)
+static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, PKCS11_SLOT_private *spriv)
 {
 	CK_SLOT_INFO info;
 	int rv;
 
-	rv = CRYPTOKI_call(ctx, C_GetSlotInfo(id, &info));
+	rv = CRYPTOKI_call(ctx, C_GetSlotInfo(spriv->id, &info));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_SLOT, rv);
 
-	slot->_private = pkcs11_slot_new(ctx, id);
-	if (!slot->_private)
-		return -1;
-
+	slot->_private = spriv;
 	slot->description = PKCS11_DUP(info.slotDescription);
 	slot->manufacturer = PKCS11_DUP(info.manufacturerID);
 	slot->removable = (info.flags & CKF_REMOVABLE_DEVICE) ? 1 : 0;

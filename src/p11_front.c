@@ -74,6 +74,23 @@ int PKCS11_enumerate_slots(PKCS11_CTX *pctx,
 	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
 	if (check_fork(ctx) < 0)
 		return -1;
+	if (!nslotsp)
+		return -1;
+	if (slotsp)
+		*slotsp = 0;
+	if (nslotsp)
+		*nslotsp = 0;
+	return pkcs11_enumerate_slots(ctx, slotsp, nslotsp);
+}
+
+int PKCS11_update_slots(PKCS11_CTX *pctx,
+		PKCS11_SLOT **slotsp, unsigned int *nslotsp)
+{
+	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+	if (check_fork(ctx) < 0)
+		return -1;
+	if (!nslotsp)
+		return -1;
 	return pkcs11_enumerate_slots(ctx, slotsp, nslotsp);
 }
 
