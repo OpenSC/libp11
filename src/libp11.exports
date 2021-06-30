@@ -5,6 +5,7 @@ PKCS11_CTX_unload
 PKCS11_CTX_free
 PKCS11_open_session
 PKCS11_enumerate_slots
+PKCS11_update_slots
 PKCS11_release_all_slots
 PKCS11_find_token
 PKCS11_find_next_token

@@ -172,6 +172,23 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /**
+ * Get or update a list of all slots
+ *
+ * The difference to PKCS11_enumerate_slots() is that this will
+ * expect as input previous slot list (or zero initialized count
+ * and null pointer) for the list. This function always reuses the
+ * slots found from the previous list to avoid unexpected slot
+ * and key object destructon.
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param slotsp pointer on a list of slots
+ * @param nslotsp pointer to size of the allocated list
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_update_slots(PKCS11_CTX * ctx,
+			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
+
+/**
  * Get the slot_id from a slot as it is stored in private
  *
  * @param slotp pointer on a slot
