@@ -282,33 +282,13 @@ int ctx_destroy(ENGINE_CTX *ctx)
 
 static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
 {
-	PKCS11_SLOT *slot_list = NULL;
-	unsigned int slot_count = 0;
-
-
-	/* PKCS11_CTX_load() uses C_GetSlotList() via p11-kit */
-	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
-		ctx_log(ctx, 0, "Unable to load module %s\n", ctx->module);
-		PKCS11_CTX_free(pkcs11_ctx);
-		return 0;
-	}
-
-	/* PKCS11_enumerate_slots() uses C_GetSlotList() via libp11 */
-	if (PKCS11_enumerate_slots(pkcs11_ctx, &slot_list, &slot_count) < 0) {
+	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
+	if (PKCS11_update_slots(pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
 		ctx_log(ctx, 0, "Failed to enumerate slots\n");
-		PKCS11_CTX_unload(pkcs11_ctx);
-		PKCS11_CTX_free(pkcs11_ctx);
 		return 0;
 	}
-
-	ctx_log(ctx, 1, "Found %u slot%s\n", slot_count,
-		slot_count <= 1 ? "" : "s");
-
-	/* The ctx->lock mutex ensures thread safety for this operation */
-	PKCS11_release_all_slots(pkcs11_ctx, ctx->slot_list, ctx->slot_count);
-	ctx->slot_list = slot_list;
-	ctx->slot_count = slot_count;
-
+	ctx_log(ctx, 1, "Found %u slot%s\n", ctx->slot_count,
+		ctx->slot_count <= 1 ? "" : "s");
 	return 1;
 }
 
@@ -335,11 +315,16 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	pkcs11_ctx = PKCS11_CTX_new();
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
+	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
+		ctx_log(ctx, 0, "Unable to load module %s\n", ctx->module);
+		PKCS11_CTX_free(pkcs11_ctx);
+		return -1;
+	}
+	ctx->pkcs11_ctx = pkcs11_ctx;
 
 	if (ctx_enumerate_slots_unlocked(ctx, pkcs11_ctx) != 1)
 		return -1;
 
-	ctx->pkcs11_ctx = pkcs11_ctx;
 	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
 }
 
