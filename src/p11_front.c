@@ -182,6 +182,54 @@ int PKCS11_logout(PKCS11_SLOT *pslot)
 	return pkcs11_logout(slot);
 }
 
+EVP_PKEY *PKCS11_get_key_from_template(PKCS11_TOKEN *token, PKCS11_KEY *key_tmpl)
+{
+	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_TEMPLATE tmpl = {0};
+	PKCS11_OBJECT_private *key;
+	EVP_PKEY *pkey = NULL;
+	CK_OBJECT_CLASS object_class = key_tmpl->isPrivate ? CKO_PRIVATE_KEY : CKO_PUBLIC_KEY;
+
+	if (check_slot_fork(slot) < 0)
+		return NULL;
+
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
+	if (key_tmpl->label)
+		pkcs11_addattr_s(&tmpl, CKA_LABEL, key_tmpl->label);
+	if (key_tmpl->id_len)
+		pkcs11_addattr(&tmpl, CKA_ID, key_tmpl->id, key_tmpl->id_len);
+	key = pkcs11_object_from_template(slot, CK_INVALID_HANDLE, &tmpl);
+	if (key) {
+		pkey = pkcs11_get_key(key, object_class);
+		pkcs11_object_free(key);
+	}
+	return pkey;
+}
+
+X509 *PKCS11_get_x509_from_template(PKCS11_TOKEN *token, PKCS11_CERT *cert_tmpl)
+{
+	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_TEMPLATE tmpl = {0};
+	PKCS11_OBJECT_private *cert;
+	X509 *x509 = NULL;
+	CK_OBJECT_CLASS object_class = CKO_CERTIFICATE;
+
+	if (check_slot_fork(slot) < 0)
+		return NULL;
+
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
+	if (cert_tmpl->label)
+		pkcs11_addattr_s(&tmpl, CKA_LABEL, cert_tmpl->label);
+	if (cert_tmpl->id_len)
+		pkcs11_addattr(&tmpl, CKA_ID, cert_tmpl->id, cert_tmpl->id_len);
+	cert = pkcs11_object_from_template(slot, CK_INVALID_HANDLE, &tmpl);
+	if (cert) {
+		x509 = X509_dup(cert->x509);
+		pkcs11_object_free(cert);
+	}
+	return x509;
+}
+
 int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
