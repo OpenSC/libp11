@@ -91,7 +91,7 @@ void PKCS11_release_all_slots(PKCS11_CTX *pctx,
 	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
 	if (check_fork(ctx) < 0)
 		return;
-	pkcs11_release_all_slots(ctx, slots, nslots);
+	pkcs11_release_all_slots(slots, nslots);
 }
 
 PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *ctx,

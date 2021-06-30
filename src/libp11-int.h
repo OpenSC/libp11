@@ -59,6 +59,7 @@ typedef struct pkcs11_keys {
 } PKCS11_keys;
 
 struct pkcs11_slot_private {
+	int refcnt;
 	PKCS11_CTX_private *ctx;
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
@@ -175,6 +176,9 @@ extern void pkcs11_zap_attrs(PKCS11_TEMPLATE *);
 
 /* Internal implementation of current features */
 
+/* Atomic reference counting */
+extern int pkcs11_atomic_add(int *, int, pthread_mutex_t *);
+
 /* Allocate the context */
 extern PKCS11_CTX *pkcs11_CTX_new(void);
 
@@ -209,9 +213,14 @@ extern int pkcs11_enumerate_slots(PKCS11_CTX_private * ctx,
 /* Get the slot_id from a slot as it is stored in private */
 extern unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT_private *);
 
+/* Increment slot reference count */
+extern PKCS11_SLOT_private *pkcs11_slot_ref(PKCS11_SLOT_private *slot);
+
+/* Decrement slot reference count, free if it becomes zero */
+extern void pkcs11_slot_unref(PKCS11_SLOT_private *slot);
+
 /* Free the list of slots allocated by PKCS11_enumerate_slots() */
-extern void pkcs11_release_all_slots(PKCS11_CTX_private *ctx,
-			PKCS11_SLOT *slots, unsigned int nslots);
+extern void pkcs11_release_all_slots(PKCS11_SLOT *slots, unsigned int nslots);
 
 /* Refresh the slot's token status */
 extern int pkcs11_refresh_token(PKCS11_SLOT *slot);
