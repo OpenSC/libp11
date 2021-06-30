@@ -331,16 +331,35 @@ int ctx_finish(ENGINE_CTX *ctx)
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
+typedef enum {
+	OBJ_PRIVATE_KEY,
+	OBJ_PUBLIC_KEY,
+	OBJ_CERTIFICATE,
+} OBJET_TYPE;
+
+static const char *object_type_str(OBJET_TYPE type)
+{
+	switch (type) {
+	case OBJ_PRIVATE_KEY:
+		return "private key";
+	case OBJ_PUBLIC_KEY:
+		return "public key";
+	case OBJ_CERTIFICATE:
+		return "certificate";
+	default:
+		return "unknown";
+	}
+}
+
 static void *ctx_try_load_object(ENGINE_CTX *ctx,
-		const char *object_typestr,
-		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
-		const char *object_uri, const int login,
+		OBJET_TYPE type, const char *object_uri, const int login,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
+	PKCS11_KEY key_tmpl;
+	PKCS11_CERT cert_tmpl;
 	unsigned int n, m;
 	unsigned char obj_id[MAX_VALUE_LEN / 2];
 	size_t obj_id_len = sizeof(obj_id);
@@ -360,7 +379,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				ctx_log(ctx, 0,
 					"The %s ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n",
-					object_typestr);
+					object_type_str(type));
 				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto error;
 			}
@@ -382,22 +401,38 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
 					"still accepted for now\n",
-					object_typestr);
+					object_type_str(type));
 				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto error;
 			}
 		}
-		ctx_log(ctx, 1, "Looking in slot %d for %s: ",
-			slot_nr, object_typestr);
-		if (obj_id_len != 0) {
-			ctx_log(ctx, 1, "id=");
+		ctx_log(ctx, 1, "Looking in slot %d for %s:",
+			slot_nr, object_type_str(type));
+		if (obj_id_len) {
+			ctx_log(ctx, 1, " id=");
 			dump_hex(ctx, 1, obj_id, obj_id_len);
 		}
-		if (obj_id_len != 0 && obj_label)
-			ctx_log(ctx, 1, " ");
-		if (obj_label)
-			ctx_log(ctx, 1, "label=%s", obj_label);
+		if (obj_label) {
+			ctx_log(ctx, 1, " label=%s", obj_label);
+		}
 		ctx_log(ctx, 1, "\n");
+	}
+
+	switch (type) {
+	case OBJ_PUBLIC_KEY:
+	case OBJ_PRIVATE_KEY:
+		memset(&key_tmpl, 0, sizeof(key_tmpl));
+		key_tmpl.isPrivate = (type == OBJ_PRIVATE_KEY);
+		key_tmpl.label = obj_label;
+		key_tmpl.id = obj_id;
+		key_tmpl.id_len = obj_id_len;
+		break;
+	case OBJ_CERTIFICATE:
+		memset(&cert_tmpl, 0, sizeof(cert_tmpl));
+		cert_tmpl.label = obj_label;
+		cert_tmpl.id = obj_id;
+		cert_tmpl.id_len = obj_id_len;
+		break;
 	}
 
 	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
@@ -527,7 +562,15 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			}
 		}
 
-		object = match_func(ctx, tok, obj_id, obj_id_len, obj_label);
+		switch (type) {
+		case OBJ_PUBLIC_KEY:
+		case OBJ_PRIVATE_KEY:
+			object = PKCS11_get_key_from_template(tok, &key_tmpl);
+			break;
+		case OBJ_CERTIFICATE:
+			object = PKCS11_get_x509_from_template(tok, &cert_tmpl);
+			break;
+		}
 		if (object)
 			break;
 	}
@@ -541,7 +584,6 @@ error:
 		OPENSSL_free(match_tok->label);
 		OPENSSL_free(match_tok);
 	}
-
 	if (obj_label)
 		OPENSSL_free(obj_label);
 	if (matched_slots)
@@ -549,10 +591,7 @@ error:
 	return object;
 }
 
-static void *ctx_load_object(ENGINE_CTX *ctx,
-		const char *object_typestr,
-		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
+static void *ctx_load_object(ENGINE_CTX *ctx, OBJET_TYPE type,
 		const char *object_uri, UI_METHOD *ui_method, void *callback_data)
 {
 	void *obj = NULL;
@@ -568,17 +607,17 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 
 	if (!ctx->force_login) {
 		ERR_clear_error();
-		obj = ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 0, ui_method, callback_data);
+		obj = ctx_try_load_object(ctx, type, object_uri,
+			0, ui_method, callback_data);
 	}
 
 	if (!obj) {
 		/* Try again with login */
 		ERR_clear_error();
-		obj = ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 1, ui_method, callback_data);
+		obj = ctx_try_load_object(ctx, type, object_uri,
+			1, ui_method, callback_data);
 		if (!obj) {
-			ctx_log(ctx, 0, "The %s was not found.\n", object_typestr);
+			ctx_log(ctx, 0, "The %s was not found.\n", object_type_str(type));
 		}
 	}
 
@@ -590,51 +629,12 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 /* Certificate handling                                                       */
 /******************************************************************************/
 
-static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
-{
-	PKCS11_CERT *certs, *selected_cert = NULL;
-	unsigned int m, cert_count;
-
-	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-		return NULL;
-	}
-	if (cert_count == 0)
-		return NULL;
-
-	ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count, cert_count <= 1 ? "s" : "");
-	if (obj_id && *obj_id && (obj_id_len != 0 || obj_label)) {
-		for (m = 0; m < cert_count; m++) {
-			PKCS11_CERT *k = certs + m;
-
-			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
-				selected_cert = k;
-			if (obj_id_len != 0 && k->id_len == obj_id_len &&
-					memcmp(k->id, obj_id, obj_id_len) == 0)
-				selected_cert = k;
-		}
-	} else {
-		for (m = 0; m < cert_count; m++) {
-			PKCS11_CERT *k = certs + m;
-			if (k->id && *k->id) {
-				selected_cert = k; /* Use the first certificate with nonempty id */
-				break;
-			}
-		}
-		if (!selected_cert)
-			selected_cert = certs; /* Use the first certificate */
-	}
-	return selected_cert;
-}
-
 static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 {
 	struct {
 		const char *s_slot_cert_id;
 		X509 *cert;
 	} *parms = p;
-	PKCS11_CERT *cert;
 
 	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
@@ -645,14 +645,14 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		return 0;
 	}
 
-	cert = ctx_load_object(ctx, "certificate", match_cert, parms->s_slot_cert_id,
+	parms->cert = ctx_load_object(ctx, OBJ_CERTIFICATE, parms->s_slot_cert_id,
 		ctx->ui_method, ctx->callback_data);
-	if (!cert) {
+	if (!parms->cert) {
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
 	}
-	parms->cert = X509_dup(cert->x509);
+
 	return 1;
 }
 
@@ -660,98 +660,36 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 /* Private and public key handling                                            */
 /******************************************************************************/
 
-static void *match_key(ENGINE_CTX *ctx, const char *key_type,
-		PKCS11_KEY *keys, unsigned int key_count,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
-{
-	PKCS11_KEY *selected_key = NULL;
-	unsigned int m;
-
-	if (key_count == 0)
-		return NULL;
-
-	ctx_log(ctx, 1, "Found %u %s key%s:\n", key_count, key_type,
-		key_count <= 1 ? "" : "s");
-
-	if (obj_id && *obj_id && (obj_id_len != 0 || obj_label)) {
-		for (m = 0; m < key_count; m++) {
-			PKCS11_KEY *k = keys + m;
-
-			ctx_log(ctx, 1, "  %2u %c%c id=", m + 1,
-					k->isPrivate ? 'P' : ' ',
-					k->needLogin ? 'L' : ' ');
-			dump_hex(ctx, 1, k->id, k->id_len);
-			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
-			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
-				selected_key = k;
-			if (obj_id_len != 0 && k->id_len == obj_id_len
-					&& memcmp(k->id, obj_id, obj_id_len) == 0)
-				selected_key = k;
-		}
-	} else {
-		selected_key = keys; /* Use the first key */
-	}
-	return selected_key;
-}
-
-static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
-{
-	PKCS11_KEY *keys;
-	unsigned int key_count;
-
-	/* Make sure there is at least one public key on the token */
-	if (PKCS11_enumerate_public_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
-		return 0;
-	}
-	return match_key(ctx, "public", keys, key_count, obj_id, obj_id_len, obj_label);
-}
-
-static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
-{
-	PKCS11_KEY *keys;
-	unsigned int key_count;
-
-	/* Make sure there is at least one private key on the token */
-	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
-		return 0;
-	}
-	return match_key(ctx, "private", keys, key_count, obj_id, obj_id_len, obj_label);
-}
-
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	PKCS11_KEY *key;
+	EVP_PKEY *pkey;
 
-	key = ctx_load_object(ctx, "public key", match_public_key, s_key_id,
-		ui_method, callback_data);
-	if (!key) {
-		ctx_log(ctx, 0, "PKCS11_load_public_key returned NULL\n");
+	pkey = ctx_load_object(ctx, OBJ_PUBLIC_KEY, s_key_id, ui_method, callback_data);
+	if (!pkey) {
+		ctx_log(ctx, 0, "ctx_load_object returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PUBKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
-	return PKCS11_get_public_key(key);
+
+	return pkey;
 }
 
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	PKCS11_KEY *key;
+	EVP_PKEY *pkey;
 
-	key = ctx_load_object(ctx, "private key", match_private_key, s_key_id,
-		ui_method, callback_data);
-	if (!key) {
-		ctx_log(ctx, 0, "PKCS11_get_private_key returned NULL\n");
+	pkey = ctx_load_object(ctx, OBJ_PRIVATE_KEY, s_key_id, ui_method, callback_data);
+	if (!pkey) {
+		ctx_log(ctx, 0, "ctx_load_object returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PRIVKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
 	}
-	return PKCS11_get_private_key(key);
+
+	return pkey;
 }
 
 /******************************************************************************/
