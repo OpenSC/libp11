@@ -290,6 +290,14 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 	return pkcs11_generate_key(token, algorithm, bits, label, id, id_len);
 }
 
+int PKCS11_generate_ec_key(PKCS11_TOKEN *token, const char *curve,
+		char *label, unsigned char *id, size_t id_len)
+{
+    if (check_token_fork(token) < 0)
+        return -1;
+    return pkcs11_generate_ec_key(token, curve, label, id, id_len);
+}
+
 int PKCS11_get_key_size(PKCS11_KEY *key)
 {
 	if (check_key_fork(key) < 0)

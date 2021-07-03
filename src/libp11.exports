@@ -29,6 +29,7 @@ PKCS11_init_token
 PKCS11_init_pin
 PKCS11_change_pin
 PKCS11_generate_key
+PKCS11_generate_ec_key
 PKCS11_store_private_key
 PKCS11_store_public_key
 PKCS11_store_certificate
