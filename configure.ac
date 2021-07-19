@@ -76,7 +76,7 @@ test -z "${CYGWIN}" && CYGWIN="no"
 case "${host}" in
 	*-mingw*|*-winnt*)
 		WIN32="yes"
-		CPPFLAGS="${CPPFLAGS} -DWIN32_LEAN_AND_MEAN"
+		CPPFLAGS="${CPPFLAGS} -D_WIN32_WINNT=0x0600 -DWIN32_LEAN_AND_MEAN"
 		WIN_LIBPREFIX="lib"
 	;;
 	*-cygwin*)
