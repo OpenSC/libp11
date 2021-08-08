@@ -688,7 +688,7 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	ctx_log(ctx, 1, "Found %u %s key%s:\n", key_count, key_type,
 		key_count <= 1 ? "" : "s");
 
-	if (obj_id && *obj_id && (obj_id_len != 0 || obj_label)) {
+	if ((obj_id && *obj_id && (obj_id_len != 0)) || obj_label) {
 		for (m = 0; m < key_count; m++) {
 			PKCS11_KEY *k = keys + m;
 
