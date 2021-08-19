@@ -29,6 +29,7 @@ dist_check_SCRIPTS = \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
 	case-insensitive.softhsm \
+	rsa-check-privkey.softhsm \
 	ec-check-privkey.softhsm \
 	pkcs11-uri-without-token.softhsm \
 	search-all-matching-tokens.softhsm \
