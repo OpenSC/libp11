@@ -299,7 +299,7 @@ nolib:
 	if (rc)
 		printf("decryption failed.\n");
 	else
-		printf("decryption successfull.\n");
+		printf("decryption successful.\n");
 	return rc;
 }
 

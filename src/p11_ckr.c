@@ -69,7 +69,7 @@ static ERR_STRING_DATA CKR_str_reasons[] = {
 	{CKR_ARGUMENTS_BAD, "Invalid arguments"},
 	{CKR_NO_EVENT, "No event"},
 	{CKR_NEED_TO_CREATE_THREADS, "Need to create threads"},
-	{CKR_CANT_LOCK, "Cannott lock"},
+	{CKR_CANT_LOCK, "Cannot lock"},
 	{CKR_ATTRIBUTE_READ_ONLY, "Attribute read only"},
 	{CKR_ATTRIBUTE_SENSITIVE, "Attribute sensitive"},
 	{CKR_ATTRIBUTE_TYPE_INVALID, "Attribute type invalid"},

@@ -302,7 +302,7 @@ nolib:
 	if (rc)
 		printf("authentication failed.\n");
 	else
-		printf("authentication successfull.\n");
+		printf("authentication successful.\n");
 	return rc;
 }
 

@@ -230,7 +230,7 @@ int main(int argc, char **argv)
 	/* Compare output */
 
 	if (!memcmp(dec, data, data_len)) {
-		printf("Sucessfuly decrypted\n");
+		printf("Successfully decrypted\n");
 	}
 	else {
 		printf("Decrypted data does not match original data\n");
