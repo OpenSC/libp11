@@ -140,7 +140,7 @@ extern char *pkcs11_strdup(char *, size_t);
 #define EVP_PKEY_get0_EC_KEY(key) ((key)->pkey.ec)
 #endif
 
-/* Reinitializing the module afer fork (if detected) */
+/* Reinitializing the module after fork (if detected) */
 extern unsigned int get_forkid();
 extern int check_fork(PKCS11_CTX *ctx);
 extern int check_slot_fork(PKCS11_SLOT *slot);

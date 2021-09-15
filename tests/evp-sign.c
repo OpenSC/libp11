@@ -88,7 +88,7 @@ static int ui_write(UI *ui, UI_STRING *uis)
 		case UIT_VERIFY:
 		{
 			/* If there is a default PIN, just
-			 * return without outputing any prompt */
+			 * return without outputting any prompt */
 			const char *password =
 				((const char *)UI_get0_user_data(ui));
 			if (password && password[0] != '\0')

@@ -125,7 +125,7 @@ int pkcs11_reload_key(PKCS11_KEY *key)
 }
 
 /**
- * Generate a keyPair directly on token
+ * Generate a key pair directly on token
  */
 int pkcs11_generate_key(PKCS11_TOKEN *token, int algorithm, unsigned int bits,
 		char *label, unsigned char* id, size_t id_len) {

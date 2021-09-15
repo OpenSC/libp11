@@ -32,13 +32,13 @@ CERTIFICATE_URL="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type
 
 ./check-privkey ${CERTIFICATE} ${PRIVATE_KEY} ${MODULE} "${outdir}/engines.cnf"
 if test $? != 0;then
-	echo "The private key loading couln't get the public key from the certificate"
+	echo "The private key loading couldn't get the public key from the certificate"
 	exit 1;
 fi
 
 ./check-privkey ${CERTIFICATE_URL} ${PRIVATE_KEY} ${MODULE} "${outdir}/engines.cnf"
 if test $? != 0;then
-	echo "The private key loading couln't get the public key from the certificate URL"
+	echo "The private key loading couldn't get the public key from the certificate URL"
 	exit 1;
 fi
 
