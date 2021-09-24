@@ -80,6 +80,15 @@ before any sections are defined:
 openssl_conf = openssl_init
 ```
 
+WARNING: There must be only a single ``openssl_conf = `` line because the later
+will override former.  If there's an existing ``openssl_conf`` directive either
+edit it or commment out the previous definition:
+
+```
+# System default
+# openssl_conf = default_conf
+```
+
 This should be added to the bottom of the file:
 
 ```
