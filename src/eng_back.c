@@ -617,6 +617,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 {
 	PKCS11_CERT *certs, *selected_cert = NULL;
 	unsigned int m, cert_count;
+	const char *which;
 
 	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
 		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
@@ -627,8 +628,13 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 
 	ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
+		which = "last matching";
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
+
+			ctx_log(ctx, 1, "  %2u    id=", m + 1);
+			dump_hex(ctx, 1, k->id, k->id_len);
+			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
 
 			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
 				selected_cert = k;
@@ -637,16 +643,32 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 				selected_cert = k;
 		}
 	} else {
+		which = "first (with id present)";
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
-			if (k->id && *k->id) {
+
+			ctx_log(ctx, 1, "  %2u    id=", m + 1);
+			dump_hex(ctx, 1, k->id, k->id_len);
+			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
+
+			if (!selected_cert && k->id && *k->id) {
 				selected_cert = k; /* Use the first certificate with nonempty id */
-				break;
 			}
 		}
-		if (!selected_cert)
+		if (!selected_cert) {
+			which = "first";
 			selected_cert = certs; /* Use the first certificate */
+		}
 	}
+
+	if (selected_cert) {
+		ctx_log(ctx, 1, "Returning %s certificate: id=", which);
+		dump_hex(ctx, 1, selected_cert->id, selected_cert->id_len);
+		ctx_log(ctx, 1, " label=%s\n", selected_cert->label ? selected_cert->label : "(null)");
+	} else {
+		ctx_log(ctx, 1, "No matching certificate returned.\n");
+	}
+
 	return selected_cert;
 }
 
@@ -688,14 +710,16 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 {
 	PKCS11_KEY *selected_key = NULL;
 	unsigned int m;
+	const char *which;
 
 	if (key_count == 0)
 		return NULL;
 
 	ctx_log(ctx, 1, "Found %u %s key%s:\n", key_count, key_type,
-		key_count <= 1 ? "" : "s");
+		key_count == 1 ? "" : "s");
 
 	if (obj_id_len != 0 || obj_label) {
+		which = "last matching";
 		for (m = 0; m < key_count; m++) {
 			PKCS11_KEY *k = keys + m;
 
@@ -704,6 +728,7 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 					k->needLogin ? 'L' : ' ');
 			dump_hex(ctx, 1, k->id, k->id_len);
 			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
+
 			if (obj_label && k->label && strcmp(k->label, obj_label) == 0)
 				selected_key = k;
 			if (obj_id_len != 0 && k->id_len == obj_id_len
@@ -711,8 +736,18 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 				selected_key = k;
 		}
 	} else {
+		which = "first";
 		selected_key = keys; /* Use the first key */
 	}
+
+	if (selected_key) {
+		ctx_log(ctx, 1, "Returning %s %s key: id=", which, key_type);
+		dump_hex(ctx, 1, selected_key->id, selected_key->id_len);
+		ctx_log(ctx, 1, " label=%s\n", selected_key->label ? selected_key->label : "(null)");
+	} else {
+		ctx_log(ctx, 1, "No matching %s key returned.\n", key_type);
+	}
+
 	return selected_key;
 }
 
