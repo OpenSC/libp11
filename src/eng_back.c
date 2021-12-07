@@ -298,7 +298,7 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	if (ctx->pkcs11_ctx && ctx->slot_list)
 		return 0;
 
-	ctx_log(ctx, 1, "PKCS#11: Initializing the engine\n");
+	ctx_log(ctx, 1, "PKCS#11: Initializing the engine: %s\n", ctx->module);
 
 	pkcs11_ctx = PKCS11_CTX_new();
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
@@ -388,6 +388,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					ctx->pin_length = tmp_pin_len;
 				}
 			}
+			ctx_log(ctx, 1, "Looking in slots for %s %s login: ",
+				object_typestr, login ? "with" : "without");
 		} else {
 			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
 				obj_id, &obj_id_len, &obj_label);
@@ -401,9 +403,9 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto error;
 			}
+			ctx_log(ctx, 1, "Looking in slot %d for %s %s login: ",
+				slot_nr, object_typestr, login ? "with" : "without");
 		}
-		ctx_log(ctx, 1, "Looking in slot %d for %s: ",
-			slot_nr, object_typestr);
 		if (obj_id_len != 0) {
 			ctx_log(ctx, 1, "id=");
 			dump_hex(ctx, 1, obj_id, obj_id_len);
@@ -457,7 +459,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
-		ctx_log(ctx, 1, "[%lu] %-25.25s  %-16s",
+		ctx_log(ctx, 1, "- [%lu] %-25.25s  %-36s",
 			PKCS11_get_slotid_from_slot(slot),
 			slot->description, flags);
 		if (slot->token) {
@@ -466,9 +468,6 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				slot->token->label : "no label");
 		}
 		ctx_log(ctx, 1, "\n");
-
-		if (found_slot && found_slot->token && !found_slot->token->initialized)
-			ctx_log(ctx, 0, "Found uninitialized token\n");
 
 		/* Ignore slots without tokens or with uninitialized token */
 		if (found_slot && found_slot->token && found_slot->token->initialized) {
@@ -480,13 +479,20 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 
 	if (matched_count == 0) {
 		if (match_tok) {
-			ctx_log(ctx, 0, "Specified object not found\n");
+			if (found_slot) {
+				ctx_log(ctx, 0, "The %s was not found on token %s\n",
+					object_typestr, found_slot->token->label[0] ?
+					found_slot->token->label : "no label");
+			} else {
+				ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
+					object_typestr);
+			}
 			goto error;
 		}
 
 		/* If the legacy slot ID format was used */
 		if (slot_nr != -1) {
-			ctx_log(ctx, 0, "Invalid slot number: %d\n", slot_nr);
+			ctx_log(ctx, 0, "The %s was not found on slot %d\n", object_typestr, slot_nr);
 			goto error;
 		} else {
 			found_slot = PKCS11_find_token(ctx->pkcs11_ctx,
@@ -507,7 +513,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		slot = matched_slots[n];
 		tok = slot->token;
 		if (!tok) {
-			ctx_log(ctx, 0, "Empty token found\n");
+			ctx_log(ctx, 0, "Empty slot found\n");
 			break;
 		}
 
@@ -531,7 +537,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 						" login\n", matched_count);
 					for (m = 0; m < matched_count; m++){
 						slot = matched_slots[m];
-						ctx_log(ctx, 0, "[%u] %s: %s\n", m + 1,
+						ctx_log(ctx, 0, "- [%u] %s: %s\n", m + 1,
 								slot->description? slot->description:
 								"(no description)",
 								(slot->token && slot->token->label)?
@@ -593,7 +599,8 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 		obj = ctx_try_load_object(ctx, object_typestr, match_func,
 			object_uri, 1, ui_method, callback_data);
 		if (!obj) {
-			ctx_log(ctx, 0, "The %s was not found.\n", object_typestr);
+			ctx_log(ctx, 0, "The %s was not found at: %s\n",
+				object_typestr, object_uri);
 		}
 	}
 
