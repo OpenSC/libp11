@@ -625,7 +625,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	if (cert_count == 0)
 		return NULL;
 
-	ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count, cert_count <= 1 ? "s" : "");
+	ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
