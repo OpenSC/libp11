@@ -342,6 +342,18 @@ int pkcs11_store_certificate(PKCS11_TOKEN *token, X509 *x509, char *label,
 	case NID_sha384:
 		ckm_md = CKM_SHA384;
 		break;
+	case NID_sha3_224:
+		ckm_md = CKM_SHA3_224;
+		break;
+	case NID_sha3_256:
+		ckm_md = CKM_SHA3_256;
+		break;
+	case NID_sha3_384:
+		ckm_md = CKM_SHA3_384;
+		break;
+	case NID_sha3_512:
+		ckm_md = CKM_SHA3_512;
+		break;
 	}
 
 	evp_md = EVP_get_digestbynid(evp_md_nid);
