@@ -4,7 +4,7 @@ DISTCLEANFILES = libp11.map
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
-noinst_HEADERS= libp11-int.h pkcs11.h
+noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h
 include_HEADERS= libp11.h p11_err.h
 lib_LTLIBRARIES = libp11.la
 enginesexec_LTLIBRARIES = pkcs11.la
@@ -14,7 +14,7 @@ SHARED_EXT=@SHARED_EXT@
 
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_ckr.c \
 	p11_key.c p11_load.c p11_misc.c p11_rsa.c p11_ec.c p11_pkey.c \
-	p11_slot.c p11_front.c p11_atfork.c p11_pthread.h libp11.exports
+	p11_slot.c p11_front.c p11_atfork.c libp11.exports
 if WIN32
 libp11_la_SOURCES += libp11.rc
 else
