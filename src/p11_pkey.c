@@ -301,8 +301,8 @@ static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
 	if (!oaep->hashAlg || !oaep->mgf)
 		return -1;
 	/* we do not support the OAEP "label" parameter yet... */
-	oaep->source = 0UL; /* empty parameter (label) */
-	oaep->pSourceData = NULL;
+	oaep->source = CKZ_DATA_SPECIFIED;
+	oaep->pSourceData = NULL; /* empty parameter (label) */
 	oaep->ulSourceDataLen = 0;
 	return 0;
 }
