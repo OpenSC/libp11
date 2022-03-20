@@ -452,6 +452,20 @@ P11_DEPRECATED_FUNC extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
 /* Get the RSA key public exponent as BIGNUM */
 P11_DEPRECATED_FUNC extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
 
+/**
+ * Generate a private EC key on the token
+ *
+ * @param token token returned by PKCS11_find_token()
+ * @param curve EC curve name
+ * @param label label for this key
+ * @param id bytes to use as the id value
+ * @param id_len length of the id value
+ * @retval 0 success
+ * @retval -1 error
+ */
+extern int PKCS11_generate_ec_key(PKCS11_TOKEN *token, const char *curve,
+	char *label, unsigned char* id, size_t id_len);
+
 /* Sign with the EC private key */
 P11_DEPRECATED_FUNC extern int PKCS11_ecdsa_sign(
 	const unsigned char *m, unsigned int m_len,
