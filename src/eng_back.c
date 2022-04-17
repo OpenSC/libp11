@@ -631,7 +631,7 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 
 static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b, time_t *ptime)
 {
-	const ASN1_TIME *aa, *ba;
+	const ASN1_TIME *a_time, *b_time;
 	int pday, psec;
 
 	/* the best certificate exists */
@@ -642,11 +642,11 @@ static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b, time_t *ptime)
 		return a;
 	}
 
-	aa = X509_get0_notAfter(a->x509);
-	ba = X509_get0_notAfter(b->x509);
+	a_time = X509_get0_notAfter(a->x509);
+	b_time = X509_get0_notAfter(b->x509);
 
 	/* the best certificate expires last */
-	if (ASN1_TIME_diff(&pday, &psec, aa, ba)) {
+	if (ASN1_TIME_diff(&pday, &psec, a_time, b_time)) {
 		if (pday < 0 || psec < 0) {
 			return a;
 		} else if (pday > 0 || psec > 0) {
