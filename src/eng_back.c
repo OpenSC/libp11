@@ -49,6 +49,7 @@ struct st_engine_ctx {
 	 */
 	char *pin;
 	size_t pin_length;
+	int forced_pin;
 	int verbose;
 	char *module;
 	char *init_args;
@@ -62,6 +63,8 @@ struct st_engine_ctx {
 	PKCS11_SLOT *slot_list;
 	unsigned int slot_count;
 };
+
+static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin);
 
 /******************************************************************************/
 /* Utility functions                                                          */
@@ -131,6 +134,7 @@ static void ctx_destroy_pin(ENGINE_CTX *ctx)
 		OPENSSL_free(ctx->pin);
 		ctx->pin = NULL;
 		ctx->pin_length = 0;
+		ctx->forced_pin = 0;
 	}
 }
 
@@ -209,7 +213,7 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 
 	/* If the token has a secure login (i.e., an external keypad),
 	 * then use a NULL PIN. Otherwise, obtain a new PIN if needed. */
-	if (tok->secureLogin) {
+	if (tok->secureLogin && !ctx->forced_pin) {
 		/* Free the PIN if it has already been
 		 * assigned (i.e, cached by ctx_get_pin) */
 		ctx_destroy_pin(ctx);
@@ -397,12 +401,9 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				goto error;
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
-				ctx_destroy_pin(ctx);
-				ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-				if (ctx->pin) {
-					memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-					memcpy(ctx->pin, tmp_pin, tmp_pin_len);
-					ctx->pin_length = tmp_pin_len;
+				tmp_pin[tmp_pin_len] = 0;
+				if (!ctx_ctrl_set_pin(ctx, tmp_pin)) {
+					goto error;
 				}
 			}
 			ctx_log(ctx, 1, "Looking in slots for %s %s login: ",
@@ -932,6 +933,7 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 		return 0;
 	}
 	ctx->pin_length = strlen(ctx->pin);
+	ctx->forced_pin = 1;
 	return 1;
 }
 
