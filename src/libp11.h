@@ -263,26 +263,6 @@ extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
  */
 extern int PKCS11_logout(PKCS11_SLOT * slot);
 
-/**
- * Get an OpenSSL EVP_PKEY with given PKCS11_KEY as a template
- *
- * @param token token descriptor (in general slot->token)
- * @param key_template PKCS11_KEY filled in by user to match the key attributes
- * @retval !=NULL reference to the EVP_PKEY object
- * @retval NULL error
- */
-extern EVP_PKEY *PKCS11_get_key_from_template(PKCS11_TOKEN * token, PKCS11_KEY * key_template);
-
-/**
- * Get an OpenSSL X509 with given PKCS11_CERT as a template
- *
- * @param token token descriptor (in general slot->token)
- * @param cert_template PKCS11_CERT filled in by user to match the certificate attributes
- * @retval !=NULL reference to the EVP_PKEY object
- * @retval NULL error
- */
-extern X509 *PKCS11_get_x509_from_template(PKCS11_TOKEN * token, PKCS11_CERT * cert_template);
-
 /* Get a list of private keys associated with this token */
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
 	PKCS11_KEY **, unsigned int *);
