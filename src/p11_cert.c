@@ -225,7 +225,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	switch (evp_md_nid) {
 	default:
 		evp_md_nid = NID_sha1;
-		// fall through
+		/* fall through */
 	case NID_sha1:
 		ckm_md = CKM_SHA_1;
 		break;
