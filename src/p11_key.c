@@ -22,7 +22,7 @@
 #include <openssl/ui.h>
 #include <openssl/bn.h>
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(strncasecmp)
 #define strncasecmp strnicmp
 #endif
 

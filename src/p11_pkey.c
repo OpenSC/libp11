@@ -336,7 +336,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
 		return -1;
-	rsa = EVP_PKEY_get0_RSA(pkey);
+	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
 
@@ -437,7 +437,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
 		return -1;
-	rsa = EVP_PKEY_get0_RSA(pkey);
+	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
 

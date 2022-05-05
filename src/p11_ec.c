@@ -221,7 +221,7 @@ static int pkcs11_get_point_x509(EC_KEY *ec, X509 *x509)
 #endif
 	if (!pubkey)
 		goto error;
-	pubkey_ec = EVP_PKEY_get0_EC_KEY(pubkey);
+	pubkey_ec = (EC_KEY *)EVP_PKEY_get0_EC_KEY(pubkey);
 	if (!pubkey_ec)
 		goto error;
 	point = EC_KEY_get0_public_key(pubkey_ec);

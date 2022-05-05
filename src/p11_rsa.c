@@ -35,7 +35,7 @@ static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 	RSA *rsa;
 	if (!evp_key)
 		return NULL;
-	rsa = EVP_PKEY_get0_RSA(evp_key);
+	rsa = (RSA *)EVP_PKEY_get0_RSA(evp_key);
 	/* Danger: this assumes evp_key returned above has at least reference
 	 * count of 2. Which is true in current code as long as key->object_class
 	 * is used for the object_class. */

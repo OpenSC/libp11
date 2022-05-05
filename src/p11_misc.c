@@ -43,7 +43,8 @@ int pkcs11_atomic_add(int *value, int amount, pthread_mutex_t *lock)
 {
 #if defined( _WIN32)
 	(void) lock;
-	return InterlockedExchangeAdd(value, amount) + amount;
+	/* both int and long are 32-bit on all WIN32 platforms */
+	return InterlockedExchangeAdd((LONG *)value, amount) + amount;
 #elif defined(__GNUC__) && defined(__ATOMIC_ACQ_REL)
 	(void) lock;
 	return __atomic_add_fetch(value, amount, __ATOMIC_ACQ_REL);

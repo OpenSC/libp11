@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 	/* use public key for encryption */
 	len = RSA_public_encrypt(RANDOM_SIZE, random, encrypted,
 #if OPENSSL_VERSION_NUMBER >= 0x10100003L && !defined(LIBRESSL_VERSION_NUMBER)
-			EVP_PKEY_get0_RSA(pubkey),
+			(RSA *)EVP_PKEY_get0_RSA(pubkey),
 #else
 			pubkey->pkey.rsa,
 #endif

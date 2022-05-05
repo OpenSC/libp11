@@ -268,9 +268,9 @@ int main(int argc, char *argv[])
 	/* now verify the result */
 	rc = RSA_verify(NID_sha1, random, RANDOM_SIZE,
 #if OPENSSL_VERSION_NUMBER >= 0x10100003L && !defined(LIBRESSL_VERSION_NUMBER)
-			signature, siglen, EVP_PKEY_get0_RSA(pubkey));
+			signature, siglen, (RSA *)EVP_PKEY_get0_RSA(pubkey));
 #else
-			signature, siglen, pubkey->pkey.rsa);
+			signature, siglen, (RSA *)pubkey->pkey.rsa);
 #endif
 	if (rc != 1) {
 		fprintf(stderr, "fatal: RSA_verify failed\n");
