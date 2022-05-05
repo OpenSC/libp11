@@ -101,7 +101,7 @@ Then download and unpack libp11, in its directory use:
 ### MinGW cross-compile on a Unix host
 
 Example configuration for a 64-bit OpenSSL installed in /opt/openssl-mingw64:
-  PKG_CONFIG_PATH=/opt/openssl-mingw64/lib/pkgconfig ./configure --host=x86_64-w64-mingw32 --prefix=/opt/libp11-mingw64
+  PKG_CONFIG_PATH=/opt/openssl-mingw64/lib64/pkgconfig ./configure --host=x86_64-w64-mingw32 --prefix=/opt/libp11-mingw64
 
 Example configuration for a 32-bit OpenSSL installed in /opt/openssl-mingw:
   PKG_CONFIG_PATH=/opt/openssl-mingw/lib/pkgconfig ./configure --host=i686-w64-mingw32 --prefix=/opt/libp11-mingw
