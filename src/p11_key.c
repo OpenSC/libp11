@@ -71,7 +71,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	CK_OBJECT_CLASS object_class = -1;
 	CK_KEY_TYPE key_type = -1;
 	CK_CERTIFICATE_TYPE cert_type = -1;
-	CK_ULONG size;
+	size_t size;
 	unsigned char *data;
 
 	if (pkcs11_getattr_val(ctx, session, object, CKA_CLASS,
