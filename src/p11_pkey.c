@@ -197,6 +197,7 @@ static CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md)
 		return CKM_SHA512;
 	case NID_sha384:
 		return CKM_SHA384;
+#if !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		return CKM_SHA3_224;
 	case NID_sha3_256:
@@ -205,6 +206,7 @@ static CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md)
 		return CKM_SHA3_384;
 	case NID_sha3_512:
 		return CKM_SHA3_512;
+#endif
 	default:
 		return 0;
 	}
@@ -223,6 +225,7 @@ static CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
 		return CKG_MGF1_SHA512;
 	case NID_sha384:
 		return CKG_MGF1_SHA384;
+#if !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		return CKG_MGF1_SHA3_224;
 	case NID_sha3_256:
@@ -231,6 +234,7 @@ static CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
 		return CKG_MGF1_SHA3_384;
 	case NID_sha3_512:
 		return CKG_MGF1_SHA3_512;
+#endif
 	default:
 		return 0;
 	}
@@ -635,7 +639,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		BIGNUM *r = BN_bin2bn(sig, size/2, NULL);
 		BIGNUM *s = BN_bin2bn(sig + size/2, size/2, NULL);
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		ECDSA_SIG_set0(ossl_sig, r, s);
 #else
 		BN_free(ossl_sig->r);

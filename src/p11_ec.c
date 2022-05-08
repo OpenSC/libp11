@@ -462,7 +462,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	key = pkcs11_get_ex_data_ec(ec);
 	if (check_object_fork(key) < 0) {
 		sign_sig_fn orig_sign_sig;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		const EC_KEY_METHOD *meth = EC_KEY_OpenSSL();
 		EC_KEY_METHOD_get_sign((EC_KEY_METHOD *)meth,
 			NULL, NULL, &orig_sign_sig);
@@ -494,7 +494,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 	sig = ECDSA_SIG_new();
 	if (!sig)
 		return NULL;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	ECDSA_SIG_set0(sig, r, s);
 #else
 	BN_free(sig->r);
