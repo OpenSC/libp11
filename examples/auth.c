@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
 
 	/* now verify the result */
 	rc = RSA_verify(NID_sha1, random, RANDOM_SIZE,
-#if OPENSSL_VERSION_NUMBER >= 0x10100003L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100003L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 			signature, siglen, (RSA *)EVP_PKEY_get0_RSA(pubkey));
 #else
 			signature, siglen, (RSA *)pubkey->pkey.rsa);

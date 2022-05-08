@@ -126,7 +126,7 @@ extern int ERR_load_CKR_strings(void);
 extern char *pkcs11_strdup(char *, size_t);
 
 /* Emulate the OpenSSL 1.1 getters */
-#if OPENSSL_VERSION_NUMBER < 0x10100003L || defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER < 0x10100003L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3000000L )
 #define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
 #define EVP_PKEY_get0_EC_KEY(key) ((key)->pkey.ec)
 #endif

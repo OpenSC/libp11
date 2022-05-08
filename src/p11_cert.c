@@ -216,7 +216,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_issuer_name(x509));
 
 	/* Get digest algorithm from x509 certificate */
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	signature_nid = X509_get_signature_nid(x509);
 #else
 	signature_nid = OBJ_obj2nid(x509->sig_alg->algorithm);
@@ -241,6 +241,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	case NID_sha384:
 		ckm_md = CKM_SHA384;
 		break;
+#if !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		ckm_md = CKM_SHA3_224;
 		break;
@@ -253,6 +254,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	case NID_sha3_512:
 		ckm_md = CKM_SHA3_512;
 		break;
+#endif
 	}
 
 	evp_md = EVP_get_digestbynid(evp_md_nid);

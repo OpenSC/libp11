@@ -235,7 +235,7 @@ success:
 	rsa = RSA_new();
 	if (!rsa)
 		goto failure;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
 #else
 	rsa->n = rsa_n;
@@ -272,7 +272,7 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 	}
 	if (key->object_class == CKO_PRIVATE_KEY) {
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
 #else
 		rsa->flags |= RSA_FLAG_EXT_PKEY;
@@ -300,7 +300,7 @@ int pkcs11_get_key_modulus(PKCS11_OBJECT_private *key, BIGNUM **bn)
 
 	if (!rsa)
 		return 0;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_get0_key(rsa, &rsa_n, NULL, NULL);
 #else
 	rsa_n=rsa->n;
@@ -317,7 +317,7 @@ int pkcs11_get_key_exponent(PKCS11_OBJECT_private *key, BIGNUM **bn)
 
 	if (!rsa)
 		return 0;
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_get0_key(rsa, NULL, &rsa_e, NULL);
 #else
 	rsa_e=rsa->e;
