@@ -469,11 +469,12 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		mechanism.pParameter = &oaep_params;
 		mechanism.ulParameterLen = sizeof oaep_params;
 		break;
-	case CKM_RSA_PKCS:
+	case RSA_PKCS1_PADDING:
 #ifdef DEBUG
-		fprintf(stderr, "%s:%d padding=CKM_RSA_PKCS\n",
+		fprintf(stderr, "%s:%d padding=RSA_PKCS1_PADDING\n",
 			__FILE__, __LINE__);
 #endif
+		mechanism.mechanism = CKM_RSA_PKCS;
 		mechanism.pParameter = NULL;
 		mechanism.ulParameterLen = 0;
 		break;
