@@ -591,12 +591,6 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		goto error;
 	}
 
-	if (sig == NULL) {
-		*siglen = (size_t)ECDSA_size(eckey);
-		rv = CKR_OK;
-		goto error;
-	}
-
 	if (*siglen < (size_t)ECDSA_size(eckey))
 		goto error;
 
