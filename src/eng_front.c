@@ -82,6 +82,8 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 	{0, NULL, NULL, 0}
 };
 
+static int bind_helper2(ENGINE *e);
+
 static ENGINE_CTX *get_ctx(ENGINE *engine)
 {
 	ENGINE_CTX *ctx;
@@ -174,6 +176,7 @@ static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
 	ctx = get_ctx(engine);
 	if (!ctx)
 		return 0;
+	bind_helper2(engine);
 	return ctx_load_pubkey(ctx, s_key_id, ui_method, callback_data);
 }
 
@@ -186,6 +189,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 	ctx = get_ctx(engine);
 	if (!ctx)
 		return 0;
+	bind_helper2(engine);
 	pkey = ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
 #ifdef EVP_F_EVP_PKEY_SET1_ENGINE
 	/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
@@ -219,6 +223,25 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_ctrl_function(e, engine_ctrl) ||
 			!ENGINE_set_cmd_defns(e, engine_cmd_defns) ||
 			!ENGINE_set_name(e, PKCS11_ENGINE_NAME) ||
+
+			!ENGINE_set_load_pubkey_function(e, load_pubkey) ||
+			!ENGINE_set_load_privkey_function(e, load_privkey)) {
+		return 0;
+	} else {
+		ERR_load_ENG_strings();
+		return 1;
+	}
+}
+
+/*
+ * With OpenSSL 3.x, engines might be used because defined in openssl.cnf
+ * which will cause problems
+ * only add engine routines after a call to load keys
+ */
+
+static int bind_helper2(ENGINE *e)
+{
+	if (
 #ifndef OPENSSL_NO_RSA
 			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
 #endif
@@ -235,12 +258,9 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_ECDH(e, PKCS11_get_ecdh_method()) ||
 #endif
 #endif /* OPENSSL_VERSION_NUMBER */
-			!ENGINE_set_pkey_meths(e, PKCS11_pkey_meths) ||
-			!ENGINE_set_load_pubkey_function(e, load_pubkey) ||
-			!ENGINE_set_load_privkey_function(e, load_privkey)) {
+			!ENGINE_set_pkey_meths(e, PKCS11_pkey_meths)) {
 		return 0;
 	} else {
-		ERR_load_ENG_strings();
 		return 1;
 	}
 }
