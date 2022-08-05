@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unix-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macOS-latest
+            openssl: openssl@1.1
+          #- os: macOS-latest
+          #  openssl: openssl@3
+
+    runs-on: ${{matrix.os}}
+
+    env:
+      PKG_CONFIG_PATH: /usr/local/opt/${{matrix.openssl}}/lib/pkgconfig
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install apt dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get install -y libssl-dev opensc softhsm
+
+    - name: Install brew dependencies (macOS)
+      if: matrix.os == 'macOS-latest'
+      run: brew install automake pkg-config ${{matrix.openssl}} opensc softhsm
+
+    - name: Bootstrap
+      run: autoreconf --verbose --install --force
+
+    - name: Configure
+      run: ./configure
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: make check
