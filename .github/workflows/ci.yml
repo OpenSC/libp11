@@ -30,7 +30,7 @@ jobs:
 
     - name: Install brew dependencies (macOS)
       if: matrix.os == 'macOS-latest'
-      run: brew install automake pkg-config ${{matrix.openssl}} opensc softhsm
+      run: brew install automake ${{matrix.openssl}} opensc softhsm
 
     - name: Bootstrap
       run: autoreconf --verbose --install --force
