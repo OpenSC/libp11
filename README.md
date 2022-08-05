@@ -1,6 +1,6 @@
 # Build state
 
-[![Linux Build Status](https://travis-ci.org/OpenSC/libp11.png)](https://travis-ci.org/OpenSC/libp11)
+[![Tests](https://github.com/OpenSC/libp11/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSC/libp11/actions/workflows/ci.yml)
 [![Windows Build status](https://ci.appveyor.com/api/projects/status/kmbu8nex5ogecoiq?svg=true)](https://ci.appveyor.com/project/LudovicRousseau/libp11)
 [![Coverity Scan Status](https://scan.coverity.com/projects/15472/badge.svg)](https://scan.coverity.com/projects/opensc-libp11)
 [![Code Quality: Cpp](https://img.shields.io/lgtm/grade/cpp/g/OpenSC/libp11.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/OpenSC/libp11/context:cpp)
