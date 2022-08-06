@@ -224,8 +224,7 @@ static int bind_helper(ENGINE *e)
 			!ENGINE_set_cmd_defns(e, engine_cmd_defns) ||
 			!ENGINE_set_name(e, PKCS11_ENGINE_NAME) ||
 			!ENGINE_set_load_pubkey_function(e, load_pubkey) ||
-			!ENGINE_set_load_privkey_function(e, load_privkey) ||
-			!ENGINE_set_pkey_meths(e, PKCS11_pkey_meths)) {
+			!ENGINE_set_load_privkey_function(e, load_privkey)) {
 		return 0;
 	} else {
 		ERR_load_ENG_strings();
@@ -258,7 +257,7 @@ static int bind_helper_methods(ENGINE *e)
 			!ENGINE_set_ECDH(e, PKCS11_get_ecdh_method()) ||
 #endif
 #endif /* OPENSSL_VERSION_NUMBER */
-			0) {
+			!ENGINE_set_pkey_meths(e, PKCS11_pkey_meths)) {
 		return 0;
 	} else {
 		return 1;
