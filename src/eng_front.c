@@ -209,6 +209,7 @@ static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
 	ctx = get_ctx(engine);
 	if (!ctx)
 		return 0;
+	bind_helper_methods(engine);
 	return ctx_engine_ctrl(ctx, cmd, i, p, f);
 }
 
