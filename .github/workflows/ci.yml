@@ -13,8 +13,8 @@ jobs:
           - os: ubuntu-latest
           - os: macOS-latest
             openssl: openssl@1.1
-          #- os: macOS-latest
-          #  openssl: openssl@3
+          - os: macOS-latest
+            openssl: openssl@3
 
     runs-on: ${{matrix.os}}
 
@@ -30,7 +30,14 @@ jobs:
 
     - name: Install brew dependencies (macOS)
       if: matrix.os == 'macOS-latest'
-      run: brew install automake ${{matrix.openssl}} opensc softhsm
+      run: |
+        brew install automake ${{matrix.openssl}} opensc softhsm
+        echo "/usr/local/opt/openssl/bin" >> $GITHUB_PATH
+
+    - name: System information
+      run: |
+        openssl version -a
+        echo "PATH=$PATH"
 
     - name: Bootstrap
       run: autoreconf --verbose --install --force
@@ -42,4 +49,9 @@ jobs:
       run: make
 
     - name: Test
+      timeout-minutes: 5
       run: make check
+
+    - name: Results of failed tests
+      if: failure()
+      run: cat tests/test-suite.log || true
