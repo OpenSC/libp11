@@ -10,11 +10,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-          - os: macOS-latest
-            openssl: openssl@1.1
+          - os: ubuntu-22.04
+          - os: ubuntu-20.04
+          - os: ubuntu-18.04
           - os: macOS-latest
             openssl: openssl@3
+          - os: macOS-latest
+            openssl: openssl@1.1
 
     runs-on: ${{matrix.os}}
 
@@ -25,11 +27,11 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Install apt dependencies (Linux)
-      if: matrix.os == 'ubuntu-latest'
+      if: runner.os == 'Linux'
       run: sudo apt-get install -y libssl-dev opensc softhsm
 
     - name: Install brew dependencies (macOS)
-      if: matrix.os == 'macOS-latest'
+      if: runner.os == 'macOS'
       run: |
         brew install automake ${{matrix.openssl}} opensc softhsm
         echo "/usr/local/opt/openssl/bin" >> $GITHUB_PATH
