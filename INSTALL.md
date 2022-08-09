@@ -8,9 +8,17 @@ On Debian/Ubuntu use:
 
   sudo apt install pkgconf libssl-dev
 
-Build and install libp11:
+Configure and build libp11:
 
-  ./configure && make && sudo make install
+  ./configure && make
+
+Optionally, execute built-in tests:
+
+  make check
+
+Install libp11:
+
+  sudo make install
 
 ## Windows Build
 
