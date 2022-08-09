@@ -1,0 +1,22 @@
+name: Coverity Scan
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  coverity:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo apt-get install -y libssl-dev opensc softhsm
+    - name: Bootstrap
+      run: autoreconf --verbose --install --force
+    - name: Configure
+      run: ./configure
+    - uses: vapier/coverity-scan-action@v1
+      with:
+        email: 'viktor.tarasov@gmail.com'
+        token: ${{secrets.COVERITY_SCAN_TOKEN}}
+        command: make
