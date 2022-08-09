@@ -43,14 +43,9 @@ void ERR_CKR_error(int function, int reason, char *file, int line);
 int ERR_get_CKR_code(void);
 
 /*
- * The purpose of this library is to provide a simple PKCS11
- * interface to OpenSSL application that wish to use a previously
- * initialized card (as opposed to initializing it, etc).
- *
- * I am therefore making some simplifying assumptions:
- *
- *  -	no support for any operations that alter the card,
- *  	i.e. readonly-login
+ * The purpose of this library is to provide a simple PKCS#11
+ * interface to OpenSSL application.  It was never a goal
+ * of this project to expose the entire PKCS#11 functionality.
  */
 
 /** PKCS11 key object (public or private) */
