@@ -162,9 +162,11 @@ void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, void
 
 void pkcs11_zap_attrs(PKCS11_TEMPLATE *tmpl)
 {
+	unsigned int i;
+
 	if (!tmpl->allocated)
 		return;
-	for (unsigned i = 0; i < 32; i++) {
+	for (i = 0; i < 32; i++) {
 		if (tmpl->allocated & (1<<i))
 			OPENSSL_free(tmpl->attrs[i].pValue);
 	}
