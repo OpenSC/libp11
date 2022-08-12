@@ -7,15 +7,19 @@ on:
 jobs:
   coverity:
     runs-on: ubuntu-latest
+    env:
+      token: ${{secrets.COVERITY_SCAN_TOKEN}}
     steps:
     - uses: actions/checkout@v2
-    - name: Install dependencies
-      run: sudo apt-get install -y libssl-dev opensc softhsm
-    - name: Bootstrap
-      run: autoreconf --verbose --install --force
-    - name: Configure
-      run: ./configure
+      if: env.token
+    - name: Get ready for scanning
+      if: env.token
+      run: |
+        sudo apt-get install -y libssl-dev opensc softhsm
+        autoreconf --verbose --install --force
+        ./configure
     - uses: vapier/coverity-scan-action@v1
+      if: env.token
       with:
         email: 'viktor.tarasov@gmail.com'
         token: ${{secrets.COVERITY_SCAN_TOKEN}}
