@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  version: libp11-0.4.13_git
+
 jobs:
   unix-build:
     strategy:
@@ -57,3 +60,40 @@ jobs:
     - name: Results of failed tests
       if: failure()
       run: cat tests/test-suite.log || true
+
+  windows-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            choco_param: --x86
+            build_for: WIN32
+            openssl_dir: C:\Program Files (x86)\OpenSSL-Win32
+          - arch: x64
+            build_for: WIN64
+            openssl_dir: C:\Program Files\OpenSSL-Win64
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure Visual Studio
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{matrix.arch}}
+
+    - name: Install Chocolatey dependencies
+      run: choco install ${{matrix.choco_param}} -y openssl
+
+    - name: Build
+      run: nmake -f Makefile.mak
+        BUILD_FOR=${{matrix.build_for}}
+        OPENSSL_DIR="${{matrix.openssl_dir}}"
+
+    - name: Upload the DLLs
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{env.version}}-openssl-1.1.1-${{matrix.arch}}
+        path: ${{github.workspace}}/src/*.dll
