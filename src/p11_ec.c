@@ -50,6 +50,7 @@ typedef int (*compute_key_fn)(void *, size_t,
 #endif
 static compute_key_fn ossl_ecdh_compute_key;
 static void (*ossl_ec_finish)(EC_KEY *);
+static int (*ossl_ec_copy)(EC_KEY *, const EC_KEY *);
 
 static int ec_ex_index = 0;
 
@@ -344,6 +345,22 @@ static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
 #endif
 }
 
+static PKCS11_OBJECT_private *object_copy(PKCS11_OBJECT_private *src)
+{
+	PKCS11_OBJECT_private *dest = NULL;
+
+	dest = OPENSSL_malloc(sizeof *dest);
+	if (dest == NULL) {
+		return NULL;
+	}
+	/* shallow copy */
+	memcpy(dest, src, sizeof *dest);
+	/* update ref-counts */
+	dest->slot = pkcs11_slot_ref(src->slot);
+
+	return dest;
+}
+
 /*
  * Get EC key material and stash pointer in ex_data
  * Note we get called twice, once for private key, and once for public
@@ -355,6 +372,7 @@ static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
  */
 static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 {
+	PKCS11_OBJECT_private *newkey = NULL;
 	EVP_PKEY *pk;
 	EC_KEY *ec;
 
@@ -378,7 +396,9 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
-	pkcs11_set_ex_data_ec(ec, key);
+	/* This creates a new EC_KEY object which requires its own key object */
+	newkey = object_copy(key);
+	pkcs11_set_ex_data_ec(ec, newkey);
 	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
 	EC_KEY_free(ec); /* Drops our reference to it */
 	return pk;
@@ -681,6 +701,32 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 	return 1;
 }
 
+/* Without this, the EC_KEY objects share the same PKCS11_OBJECT_private
+ * object in ex_data and when one of them is freed, the following frees
+ * result in crashes.
+ * We need to deep-copy the object and fix all references to slots.
+ */
+static int pkcs11_ec_copy(EC_KEY *dest, const EC_KEY *src)
+{
+	PKCS11_OBJECT_private *srckey = NULL;
+	PKCS11_OBJECT_private *destkey = NULL;
+
+	srckey = pkcs11_get_ex_data_ec(src);
+	/* This now points to the same location ! */
+
+	destkey = object_copy(srckey);
+	if (destkey == NULL) {
+		return 0;
+	}
+
+	pkcs11_set_ex_data_ec(dest, destkey);
+
+	if (ossl_ec_copy)
+		ossl_ec_copy(dest, src);
+
+	return 1;
+}
+
 #else
 
 /**
@@ -740,7 +786,6 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
 	static EC_KEY_METHOD *ops = NULL;
 	int (*orig_init)(EC_KEY *);
-	int (*orig_copy)(EC_KEY *, const EC_KEY *);
 	int (*orig_set_group)(EC_KEY *, const EC_GROUP *);
 	int (*orig_set_private)(EC_KEY *, const BIGNUM *);
 	int (*orig_set_public)(EC_KEY *, const EC_POINT *);
@@ -750,9 +795,9 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 	alloc_ec_ex_index();
 	if (!ops) {
 		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
-		EC_KEY_METHOD_get_init(ops, &orig_init, &ossl_ec_finish, &orig_copy,
+		EC_KEY_METHOD_get_init(ops, &orig_init, &ossl_ec_finish, &ossl_ec_copy,
 			&orig_set_group, &orig_set_private, &orig_set_public);
-		EC_KEY_METHOD_set_init(ops, orig_init, pkcs11_ec_finish, orig_copy,
+		EC_KEY_METHOD_set_init(ops, orig_init, pkcs11_ec_finish, pkcs11_ec_copy,
 			orig_set_group, orig_set_private, orig_set_public);
 		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
 		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
