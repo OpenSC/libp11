@@ -48,7 +48,7 @@ jobs:
       run: autoreconf --verbose --install --force
 
     - name: Configure
-      run: ./configure
+      run: ./configure --enable-strict
 
     - name: Build
       run: make
