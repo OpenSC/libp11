@@ -93,6 +93,8 @@ struct pkcs11_object_private {
 	EVP_PKEY *evp_key;
 	X509 *x509;
 	unsigned int forkid;
+	int refcnt;
+	pthread_mutex_t lock;
 };
 #define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
 #define PRIVCERT(_cert)		((PKCS11_OBJECT_private *) (_cert)->_private)
@@ -252,6 +254,9 @@ extern PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *s
 /* Get the corresponding object (same ID, given different object type) */
 extern PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class);
+
+/* Reference the private object */
+extern PKCS11_OBJECT_private *pkcs11_object_ref(PKCS11_OBJECT_private *obj);
 
 /* Free an object */
 extern void pkcs11_object_free(PKCS11_OBJECT_private *obj);

@@ -115,6 +115,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		return NULL;
 
 	memset(obj, 0, sizeof(*obj));
+	obj->refcnt = 1;
+	pthread_mutex_init(&obj->lock, 0);
 	obj->object_class = object_class;
 	obj->object = object;
 	obj->slot = pkcs11_slot_ref(slot);
@@ -178,6 +180,9 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
+	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
+		return;
+
 	if (obj->evp_key) {
 		/* When the EVP object is reference count goes to zero,
 		 * it will call this function again. */
@@ -189,6 +194,7 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 	pkcs11_slot_unref(obj->slot);
 	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
+	pthread_mutex_destroy(&obj->lock);
 	OPENSSL_free(obj);
 }
 
@@ -609,6 +615,12 @@ static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		return -1;
 
 	return 0;
+}
+
+PKCS11_OBJECT_private *pkcs11_object_ref(PKCS11_OBJECT_private *obj)
+{
+	pkcs11_atomic_add(&obj->refcnt, 1, &obj->lock);
+	return obj;
 }
 
 static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
