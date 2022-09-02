@@ -590,22 +590,22 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	CK_MECHANISM mechanism;
 	int rv;
 
-	CK_BBOOL true = TRUE;
-	CK_BBOOL false = FALSE;
+	CK_BBOOL _true = TRUE;
+	CK_BBOOL _false = FALSE;
 	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
 	CK_ULONG newkey_len = key_len;
 	CK_OBJECT_HANDLE *tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
 	CK_ATTRIBUTE newkey_template[] = {
-		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
+		{CKA_TOKEN, &_false, sizeof(_false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
 		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
-		{CKA_SENSITIVE, &false, sizeof(false) },
-		{CKA_EXTRACTABLE, &true, sizeof(true) },
-		{CKA_ENCRYPT, &true, sizeof(true)},
-		{CKA_DECRYPT, &true, sizeof(true)}
+		{CKA_SENSITIVE, &_false, sizeof(_false) },
+		{CKA_EXTRACTABLE, &_true, sizeof(_true) },
+		{CKA_ENCRYPT, &_true, sizeof(_true)},
+		{CKA_DECRYPT, &_true, sizeof(_true)}
 	};
 
 	memset(&mechanism, 0, sizeof(mechanism));
