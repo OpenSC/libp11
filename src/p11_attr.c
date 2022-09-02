@@ -123,9 +123,9 @@ unsigned int pkcs11_addattr(PKCS11_TEMPLATE *tmpl, int type, void *data, size_t 
 
 void pkcs11_addattr_bool(PKCS11_TEMPLATE *tmpl, int type, int value)
 {
-	static CK_BBOOL true = CK_TRUE;
-	static CK_BBOOL false = CK_FALSE;
-	pkcs11_addattr(tmpl, type, value ? &true : &false, sizeof(CK_BBOOL));
+	static CK_BBOOL _true = CK_TRUE;
+	static CK_BBOOL _false = CK_FALSE;
+	pkcs11_addattr(tmpl, type, value ? &_true : &_false, sizeof(CK_BBOOL));
 }
 
 void pkcs11_addattr_s(PKCS11_TEMPLATE *tmpl, int type, const char *s)
