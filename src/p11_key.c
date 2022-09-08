@@ -252,7 +252,7 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 /**
  * Generate a key pair directly on token
  */
-int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int bits,
+int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 		char *label, unsigned char* id, size_t id_len) {
 
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -266,10 +266,8 @@ int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int b
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	int rv;
 
-	(void)algorithm; /* squash the unused parameter warning */
-
 	if (pkcs11_get_session(slot, 1, &session))
-		return -1;
+		return -10;
 
 	/* pubkey attributes */
 	pkcs11_addattr(&pubtmpl, CKA_ID, id, id_len);
@@ -307,6 +305,94 @@ int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int b
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 
+	return 0;
+}
+
+int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
+		char *label, unsigned char *id, size_t id_len)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session;
+	PKCS11_TEMPLATE pubtmpl = {0}, privtmpl = {0};
+	CK_MECHANISM mechanism = {
+		CKM_EC_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	int rv;
+
+	unsigned char *ecdsa_params = NULL;
+	int ecdsa_params_len = 0;
+	unsigned char *tmp = NULL;
+	ASN1_OBJECT *curve_obj = NULL;
+	int curve_nid = NID_undef;
+
+	if (pkcs11_get_session(slot, 1, &session)) {
+		return -20;
+	}
+
+	curve_nid = EC_curve_nist2nid(curve);
+	if (curve_nid == NID_undef)
+		curve_nid = OBJ_sn2nid(curve);
+	if (curve_nid == NID_undef)
+		curve_nid = OBJ_ln2nid(curve);
+	if (curve_nid == NID_undef)
+		return -21;
+
+	curve_obj = OBJ_nid2obj(curve_nid);
+	if (!curve_obj)
+		return -22;
+	ecdsa_params_len = i2d_ASN1_OBJECT(curve_obj, NULL);
+	ecdsa_params = (unsigned char *)OPENSSL_malloc(ecdsa_params_len);
+	if (!ecdsa_params)
+		return -23;
+	tmp = ecdsa_params;
+	i2d_ASN1_OBJECT(curve_obj, &tmp);
+
+	/* pubkey attributes */
+	pkcs11_addattr(&pubtmpl, CKA_ID, id, id_len);
+	if (label)
+		pkcs11_addattr_s(&pubtmpl, CKA_LABEL, label);
+	pkcs11_addattr_bool(&pubtmpl, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_DERIVE, TRUE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_WRAP, FALSE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY_RECOVER, FALSE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_ENCRYPT, FALSE);
+	pkcs11_addattr(&pubtmpl, CKA_ECDSA_PARAMS, ecdsa_params, ecdsa_params_len);
+
+	/* privkey attributes */
+	pkcs11_addattr(&privtmpl, CKA_ID, id, id_len);
+	if (label)
+		pkcs11_addattr_s(&privtmpl, CKA_LABEL, label);
+	pkcs11_addattr_bool(&privtmpl, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_PRIVATE, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_SENSITIVE, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_DERIVE, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_UNWRAP, FALSE);
+	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_DECRYPT, FALSE);
+
+	/* call the pkcs11 module to create the key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+			session,
+			&mechanism,
+			pubtmpl.attrs,
+			pubtmpl.nattr,
+			privtmpl.attrs,
+			privtmpl.nattr,
+			&pub_key_obj,
+			&priv_key_obj
+	));
+
+	pkcs11_put_session(slot, session);
+
+	/* zap all memory allocated when building the template */
+	pkcs11_zap_attrs(&privtmpl);
+	pkcs11_zap_attrs(&pubtmpl);
+	OPENSSL_free(ecdsa_params);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
 }
 

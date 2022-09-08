@@ -52,6 +52,7 @@
 #define CMD_SET_CALLBACK_DATA	(ENGINE_CMD_BASE + 8)
 #define CMD_FORCE_LOGIN	(ENGINE_CMD_BASE+9)
 #define CMD_RE_ENUMERATE	(ENGINE_CMD_BASE+10)
+#define CMD_KEYGEN		(ENGINE_CMD_BASE+11)
 
 typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 

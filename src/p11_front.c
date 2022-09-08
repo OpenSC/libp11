@@ -16,6 +16,8 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
  */
 
+#include <string.h>
+
 #include "libp11-int.h"
 
 /* The following exported functions are *not* implemented here:
@@ -367,17 +369,33 @@ int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_d
 	return pkcs11_set_ui_method(ctx, ui_method, ui_user_data);
 }
 
-/* External interface to the deprecated features */
-
-int PKCS11_generate_key(PKCS11_TOKEN *token,
-		int algorithm, unsigned int bits,
-		char *label, unsigned char *id, size_t id_len)
+int PKCS11_generate_key(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 {
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_generate_key(slot, algorithm, bits, label, id, id_len);
+	unsigned char out[128] = {0};
+	size_t key_id_len = 0;
+	if (kg && kg->key_id) {
+		key_id_len = strlen(kg->key_id);
+		if (key_id_len > 127) {
+			return -2;
+		}
+		pkcs11_hex_to_bin(kg->key_id, out, &key_id_len);
+	}
+	switch(kg->type) {
+	case EVP_PKEY_RSA:
+		return pkcs11_rsa_keygen(slot, kg->kgen.rsa->bits,
+				kg->key_label, out, key_id_len);
+	case EVP_PKEY_EC:
+		return pkcs11_ec_keygen(slot, kg->kgen.ec->curve,
+				kg->key_label, out, key_id_len);
+	default:
+		return -3;
+	}
 }
+
+/* External interface to the deprecated features */
 
 int PKCS11_get_key_size(PKCS11_KEY *pkey)
 {

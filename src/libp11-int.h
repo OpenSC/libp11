@@ -125,6 +125,9 @@ extern int ERR_load_CKR_strings(void);
 	pkcs11_strdup((char *) s, sizeof(s))
 extern char *pkcs11_strdup(char *, size_t);
 
+/* Hex to bin */
+extern int pkcs11_hex_to_bin(const char *, unsigned char *, size_t *);
+
 /* Emulate the OpenSSL 1.1 getters */
 #if OPENSSL_VERSION_NUMBER < 0x10100003L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3000000L )
 #define EVP_PKEY_get0_RSA(key) ((key)->pkey.rsa)
@@ -307,12 +310,14 @@ extern int pkcs11_store_certificate(PKCS11_SLOT_private *, X509 * x509,
 extern int pkcs11_seed_random(PKCS11_SLOT_private *, const unsigned char *s, unsigned int s_len);
 extern int pkcs11_generate_random(PKCS11_SLOT_private *, unsigned char *r, unsigned int r_len);
 
-/* Internal implementation of deprecated features */
-
 /* Generate and store a private key on the token */
-extern int pkcs11_generate_key(PKCS11_SLOT_private *tpriv,
-	int algorithm, unsigned int bits,
-	char *label, unsigned char* id, size_t id_len);
+extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
+	unsigned int bits, char *label, unsigned char* id, size_t id_len);
+
+extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
+	const char *curve , char *label, unsigned char* id, size_t id_len);
+
+/* Internal implementation of deprecated features */
 
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);

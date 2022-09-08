@@ -890,6 +890,64 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	return PKCS11_get_private_key(key);
 }
 
+static int ctx_keygen(ENGINE_CTX *ctx, void *p)
+{
+	int rv = 1;
+	int i;
+	PKCS11_KGEN_ATTRS *kg_attrs = p;
+	PKCS11_SLOT* slot = NULL;
+
+	pthread_mutex_lock(&ctx->lock);
+	/* Delayed libp11 initialization */
+	if (ctx_init_libp11_unlocked(ctx)) {
+		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
+		goto done;
+	}
+
+	// Take the first token that has a matching label
+	// TODO: make this more intelligent
+	for (i = 0; i < ctx->slot_count; ++i) {
+		slot = ctx->slot_list + i;
+		if (slot && slot->token && slot->token->initialized &&
+				slot->token->label &&
+					!strncmp(slot->token->label, kg_attrs->token_label, 32)) {
+			break;
+		}
+	}
+
+	if (i == ctx->slot_count) {
+		ctx_log(ctx, 0, "Initialized token with matching label not found...\n");
+		goto done;
+	}
+
+	if (!ctx->force_login) {
+		ERR_clear_error();
+		rv = PKCS11_generate_key(slot->token, kg_attrs);
+		if (rv == 0) {
+			goto done;
+		}
+	}
+
+	// Try with logging in
+	ERR_clear_error();
+	if (slot->token->loginRequired) {
+		if (!ctx_login(ctx, slot, slot->token,
+				NULL, NULL)) {
+			ctx_log(ctx, 0, "Login to token failed, returning 0...\n");
+			rv = 1;
+			goto done;
+		}
+		rv = PKCS11_generate_key(slot->token, kg_attrs);
+		if (rv < 0) {
+			ctx_log(ctx, 0, "Failed to generate a key pair on the token."
+					" Error code: %d\n", rv);
+		}
+	}
+
+done:
+	pthread_mutex_unlock(&ctx->lock);
+	return rv ? 0 : 1;
+}
 /******************************************************************************/
 /* Engine ctrl request handling                                               */
 /******************************************************************************/
@@ -1008,6 +1066,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_force_login(ctx);
 	case CMD_RE_ENUMERATE:
 		return ctx_enumerate_slots(ctx, ctx->pkcs11_ctx);
+	case CMD_KEYGEN:
+		return ctx_keygen(ctx, p);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
