@@ -253,7 +253,7 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
  * Generate a key pair directly on token
  */
 int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
-		char *label, unsigned char* id, size_t id_len) {
+		const char *label, unsigned char* id, size_t id_len) {
 
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
@@ -309,7 +309,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 }
 
 int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
-		char *label, unsigned char *id, size_t id_len)
+		const char *label, unsigned char *id, size_t id_len)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;

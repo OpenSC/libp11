@@ -312,10 +312,10 @@ extern int pkcs11_generate_random(PKCS11_SLOT_private *, unsigned char *r, unsig
 
 /* Generate and store a private key on the token */
 extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
-	unsigned int bits, char *label, unsigned char* id, size_t id_len);
+	unsigned int bits, const char *label, unsigned char* id, size_t id_len);
 
 extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
-	const char *curve , char *label, unsigned char* id, size_t id_len);
+	const char *curve , const char *label, unsigned char* id, size_t id_len);
 
 /* Internal implementation of deprecated features */
 

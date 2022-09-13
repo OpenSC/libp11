@@ -120,9 +120,9 @@ typedef struct PKCS11_kgen_attrs_st {
 		PKCS11_EC_KGEN *ec;
 		PKCS11_RSA_KGEN *rsa;
 	} kgen;
-	char *token_label;
-	char *key_label;
-	char *key_id;
+	const char *token_label;
+	const char *key_label;
+	const char *key_id;
 } PKCS11_KGEN_ATTRS;
 
 /**
