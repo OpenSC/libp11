@@ -15,7 +15,6 @@ jobs:
         include:
           - os: 'ubuntu-22.04'
           - os: 'ubuntu-20.04'
-          - os: 'ubuntu-18.04'
           - os: 'macOS-latest'
             openssl: 'openssl@3'
           - os: 'macOS-latest'
