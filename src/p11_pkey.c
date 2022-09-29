@@ -696,11 +696,15 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 {
 	static int pkey_nids[] = {
 		EVP_PKEY_RSA,
+#ifndef OPENSSL_NO_EC
 		EVP_PKEY_EC,
+#endif /* OPENSSL_NO_EC */
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
+#ifndef OPENSSL_NO_EC
 	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
+#endif /* OPENSSL_NO_EC */
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */
