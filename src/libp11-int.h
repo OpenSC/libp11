@@ -24,6 +24,8 @@
 #include "config.h"
 #endif
 
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include "libp11.h"
 
 #define CRYPTOKI_EXPORTS
