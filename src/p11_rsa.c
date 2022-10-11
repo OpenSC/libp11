@@ -24,7 +24,6 @@
 
 #include "libp11-int.h"
 #include <string.h>
-#include <openssl/evp.h>
 #include <openssl/rsa.h>
 
 static int rsa_ex_index = 0;
