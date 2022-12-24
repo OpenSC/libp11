@@ -54,8 +54,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include <execinfo.h>
-
 #include <openssl/evp.h>
 #include <openssl/conf.h>
 #include <openssl/engine.h>
