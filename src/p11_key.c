@@ -19,8 +19,12 @@
 
 #include "libp11-int.h"
 #include <string.h>
-#include <openssl/ui.h>
+#include <openssl/ui.h>	/* Deprecated in Openssl3, left here until engine is supported */
 #include <openssl/bn.h>
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/core_names.h>
+#endif
 
 #if defined(_WIN32) && !defined(strncasecmp)
 #define strncasecmp strnicmp
@@ -192,7 +196,9 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 	OPENSSL_free(obj);
 }
 
-/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively
+ * Deprecated in Openssl3, left here until engine is supported
+ */
 int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 		UI_METHOD *ui_method, void *ui_user_data)
 {
@@ -202,6 +208,20 @@ int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 	ctx->ui_user_data = ui_user_data;
 	return 0;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Set password callback to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+int pkcs11_set_password_callback(PKCS11_CTX_private *ctx,
+		OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+{
+	if (!ctx)
+		return -1;
+	ctx->pw_cb = pw_cb;
+	ctx->pw_cbarg = pw_cbarg;
+	return 0;
+}
+
+#endif
 
 /*
  * Find private key matching a certificate
@@ -292,6 +312,142 @@ int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int b
 	pkcs11_addattr_bool(&privtmpl, CKA_DECRYPT, TRUE);
 	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(&privtmpl, CKA_UNWRAP, TRUE);
+
+	/* call the pkcs11 module to create the key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+		session, &mechanism,
+		pubtmpl.attrs, pubtmpl.nattr,
+		privtmpl.attrs, privtmpl.nattr,
+		&pub_key_obj, &priv_key_obj));
+	pkcs11_put_session(slot, session);
+
+	/* zap all memory allocated when building the template */
+	pkcs11_zap_attrs(&privtmpl);
+	pkcs11_zap_attrs(&pubtmpl);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
+
+	return 0;
+}
+
+/******************************************************************************/
+
+/* from: pkcs11-tool */
+struct ec_curve_info_t {
+	const char *name;
+	const char *oid;
+	const char *ec_params;
+	size_t ec_params_size;
+	size_t size;
+	CK_KEY_TYPE mechanism;
+	CK_ULONG key_type;
+	CK_BBOOL no_derive;
+};
+
+typedef struct ec_curve_info_t EC_CURVE_INFO;
+
+static EC_CURVE_INFO ec_curve_infos[] = {
+	{"secp192r1",    "1.2.840.10045.3.1.1", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x01", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"prime192v1",   "1.2.840.10045.3.1.1", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x01", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"prime192v2",   "1.2.840.10045.3.1.2", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x02", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"prime192v3",   "1.2.840.10045.3.1.3", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x03", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"nistp192",     "1.2.840.10045.3.1.1", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x01", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"ansiX9p192r1", "1.2.840.10045.3.1.1", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x01", 10, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"secp224r1", "1.3.132.0.33", "\x06\x05\x2B\x81\x04\x00\x21", 7, 224, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"nistp224",  "1.3.132.0.33", "\x06\x05\x2B\x81\x04\x00\x21", 7, 224, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"prime256v1",   "1.2.840.10045.3.1.7", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x07", 10, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"secp256r1",    "1.2.840.10045.3.1.7", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x07", 10, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"ansiX9p256r1", "1.2.840.10045.3.1.7", "\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x07", 10, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"frp256v1",	 "1.2.250.1.223.101.256.1", "\x06\x0A\x2A\x81\x7A\x01\x81\x5F\x65\x82\x00\x01", 12, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"secp384r1",		"1.3.132.0.34", "\x06\x05\x2B\x81\x04\x00\x22", 7, 384, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"prime384v1",		"1.3.132.0.34", "\x06\x05\x2B\x81\x04\x00\x22", 7, 384, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"ansiX9p384r1",	"1.3.132.0.34", "\x06\x05\x2B\x81\x04\x00\x22", 7, 384, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"prime521v1", "1.3.132.0.35", "\x06\x05\x2B\x81\x04\x00\x23", 7, 521, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"secp521r1", "1.3.132.0.35", "\x06\x05\x2B\x81\x04\x00\x23", 7, 521, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"nistp521",  "1.3.132.0.35", "\x06\x05\x2B\x81\x04\x00\x23", 7, 521, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"brainpoolP192r1", "1.3.36.3.3.2.8.1.1.3", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x03", 11, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"brainpoolP224r1", "1.3.36.3.3.2.8.1.1.5", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x05", 11, 224, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"brainpoolP256r1", "1.3.36.3.3.2.8.1.1.7", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x07", 11, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"brainpoolP320r1", "1.3.36.3.3.2.8.1.1.9", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x09", 11, 320, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"brainpoolP384r1", "1.3.36.3.3.2.8.1.1.11", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0B", 11, 384, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"brainpoolP512r1", "1.3.36.3.3.2.8.1.1.13", "\x06\x09\x2B\x24\x03\x03\x02\x08\x01\x01\x0D", 11, 512, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"secp192k1",		"1.3.132.0.31", "\x06\x05\x2B\x81\x04\x00\x1F", 7, 192, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"secp256k1",		"1.3.132.0.10", "\x06\x05\x2B\x81\x04\x00\x0A", 7, 256, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+	{"secp521k1",		"1.3.132.0.35", "\x06\x05\x2B\x81\x04\x00\x23", 7, 521, CKM_EC_KEY_PAIR_GEN, CKK_EC, TRUE},
+
+	{"edwards25519","1.3.6.1.4.1159.15.1", "\x13\x0c\x65\x64\x77\x61\x72\x64\x73\x32\x35\x35\x31\x39", 14, 255, CKM_EC_EDWARDS_KEY_PAIR_GEN, CKK_EC_EDWARDS, FALSE},
+	{"curve25519", "1.3.6.1.4.3029.1.5.1", "\x13\x0b\x63\x75\x72\x76\x65\x32\x35\x35\x31\x39", 12, 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN, CKK_EC_MONTGOMERY, TRUE},
+
+	{NULL, NULL, NULL, 0, 0, 0, 0},
+};
+
+static EC_CURVE_INFO* find_ec_curve_info(const char* const name)
+{
+	int ctr;
+
+	for (ctr=0; ec_curve_infos[ctr].name; ctr++) {
+		if (!strcmp(ec_curve_infos[ctr].name, name))
+			break;
+	}
+	if (!ec_curve_infos[ctr].name)
+		return NULL;
+
+	return &ec_curve_infos[ctr];
+}
+
+/**
+ * Generate an EC key pair directly on token
+ * 
+ * Based on: https://github.com/OpenSC/OpenSC/blob/master/src/tools/pkcs11-tool.c
+ */
+int pkcs11_generate_ec_key(PKCS11_SLOT_private *slot, char* curve_name,
+		char *label, unsigned char* id, size_t id_len) {
+
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session;
+	EC_CURVE_INFO* ec_curve;
+	CK_MECHANISM mechanism = {CKM_EC_KEY_PAIR_GEN, NULL_PTR, 0};
+	PKCS11_TEMPLATE pubtmpl = {0}, privtmpl = {0};
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	int rv;
+	
+	ec_curve = find_ec_curve_info(curve_name);
+	if (!ec_curve)
+		return -1;
+
+	mechanism.mechanism = ec_curve->mechanism;
+
+	if (pkcs11_get_session(slot, 1, &session))
+		return -1;
+
+	/* pubkey attributes */
+	pkcs11_addattr(&pubtmpl, CKA_ID, id, id_len);
+	if (label && *label != 0x00)
+		pkcs11_addattr_s(&pubtmpl, CKA_LABEL, label);
+	pkcs11_addattr_bool(&pubtmpl, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
+	pkcs11_addattr_var(&pubtmpl, CKA_KEY_TYPE, ec_curve->key_type);
+	pkcs11_addattr(&pubtmpl, CKA_EC_PARAMS, (void*)ec_curve->ec_params, ec_curve->ec_params_size);
+	if (!ec_curve->no_derive)
+		pkcs11_addattr_bool(&pubtmpl, CKA_DERIVE, TRUE);
+
+	/* privkey attributes */
+	pkcs11_addattr(&privtmpl, CKA_ID, id, id_len);
+	if (label && *label != 0x00)
+		pkcs11_addattr_s(&privtmpl, CKA_LABEL, label);
+	pkcs11_addattr_bool(&privtmpl, CKA_TOKEN, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_PRIVATE, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_SENSITIVE, TRUE);
+	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
+	pkcs11_addattr_var(&privtmpl, CKA_KEY_TYPE, ec_curve->key_type);
+	if (!ec_curve->no_derive)
+		pkcs11_addattr_bool(&privtmpl, CKA_DERIVE, TRUE);
 
 	/* call the pkcs11 module to create the key pair */
 	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
@@ -472,9 +628,21 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	char pin[MAX_PIN_LENGTH+1];
+
 	char* prompt;
 	UI *ui;
 	int rv;
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	size_t pin_length;
+
+	OSSL_PARAM params[2];
+
+	prompt = "PKCS#11 key PIN";
+
+    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_OBJECT_PARAM_DESC, (char *)prompt, 0);
+    params[1] = OSSL_PARAM_construct_end();
+#endif
 
 	/* Handle CKF_PROTECTED_AUTHENTICATION_PATH */
 	if (slot->secure_login) {
@@ -483,30 +651,43 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 		return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 	}
 
-	/* Call UI to ask for a PIN */
-	ui = UI_new_method(ctx->ui_method);
-	if (!ui)
-		return P11_R_UI_FAILED;
-	if (ctx->ui_user_data)
-		UI_add_user_data(ui, ctx->ui_user_data);
-	memset(pin, 0, MAX_PIN_LENGTH+1);
-	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
-	if (!prompt) {
-		return P11_R_UI_FAILED;
-	}
-	if (UI_dup_input_string(ui, prompt,
-			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH) <= 0) {
-		UI_free(ui);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	if (ctx->ui_method) /* if ui_method defined, assume engine is in use */
+	{
+#endif
+		/* Call UI to ask for a PIN */
+		ui = UI_new_method(ctx->ui_method);
+		if (!ui)
+			return P11_R_UI_FAILED;
+		if (ctx->ui_user_data)
+			UI_add_user_data(ui, ctx->ui_user_data);
+		memset(pin, 0, MAX_PIN_LENGTH+1);
+		prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
+		if (!prompt) {
+			return P11_R_UI_FAILED;
+		}
+		if (UI_dup_input_string(ui, prompt,
+				UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH) <= 0) {
+			UI_free(ui);
+			OPENSSL_free(prompt);
+			return P11_R_UI_FAILED;
+		}
 		OPENSSL_free(prompt);
-		return P11_R_UI_FAILED;
-	}
-	OPENSSL_free(prompt);
 
-	if (UI_process(ui)) {
+		if (UI_process(ui)) {
+			UI_free(ui);
+			return P11_R_UI_FAILED;
+		}
 		UI_free(ui);
-		return P11_R_UI_FAILED;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	}
-	UI_free(ui);
+	else
+	{
+		if (!ctx->pw_cb(pin, MAX_PIN_LENGTH, &pin_length, params, ctx->pw_cbarg)) {
+			return P11_R_UI_FAILED;
+		}
+	}
+#endif
 
 	/* Login with the PIN */
 	rv = CRYPTOKI_call(ctx,
