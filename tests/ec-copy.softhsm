@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# Copyright (C) 2022 Red Hat, Inc.
+#
+# Authors: Jakub Jelen <jjelen@redhat.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/ec-no-pubkey.sh
+
+sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+
+export OPENSSL_ENGINES="../src/.libs/"
+PRIVATE_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
+
+./dup-key ${PRIVATE_KEY} ${MODULE} "${outdir}/engines.cnf"
+if test $? != 0;then
+	echo "Could not duplicate private key"
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0

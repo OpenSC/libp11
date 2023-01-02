@@ -32,10 +32,14 @@
 #include "config.h"
 #endif
 
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include "libp11.h"
 #include "eng_err.h"
+
 #include <stdio.h>
 #include <string.h>
+
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>

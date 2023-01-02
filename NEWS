@@ -1,6 +1,25 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.12; unreleased
+New in 0.4.13; unreleased
+
+New in 0.4.12; 2022-07-15; Michał Trojnara
+* Fixed using an explicitly provided PIN regardless of the secure login
+  flag (Alon Bar-Lev)
+* Fixed RSA_PKCS1_PADDING handling (Michał Trojnara)
+* Fixed a crash on LLP64, including 64-bit Windows (Małgorzata Olszówka)
+* Fixed searching objects when both ID and label are specified (minfrin)
+* Fixed the OAEP "source" parameter (S-P Chan)
+* Fixed object searching by label (Michał Trojnara)
+* Fixed thread safety in slot enumeration (Michał Trojnara)
+* Fixed storing certificates on tokens (Mateusz Kwiatkowski)
+* Fixed several memory leaks (Michał Trojnara, Jakub Jelen, Timo Teräs)
+* Fixed OpenSSL 3.0 compatibility (Jakub Jelen)
+* Fixed LibreSSL compatibility (orbea, patchMonkey156)
+* Major concurrency improvements and refactoring (Timo Teräs)
+* Added re-numeration of slots as an engine control command (Markus Koetter)
+* Added the PKCS11_update_slots() API function (Timo Teräs)
+* Added support for the SHA3 hash function (alegon01)
+* Added a self-test for engine RSA operations (Uri Blumenthal)
 
 New in 0.4.11; 2020-10-11; Michał Trojnara
 * Fixed "EVP_PKEY_derive:buffer too small" EC errors (Luka Logar)
