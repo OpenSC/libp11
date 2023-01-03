@@ -23,6 +23,7 @@ extern "C" {
 int ERR_load_P11_strings(void);
 void ERR_unload_P11_strings(void);
 void ERR_P11_error(int function, int reason, char *file, int line);
+void ERR_P11_init_error(int function, int reason, char *file, int line);
 # define P11err(f,r) ERR_P11_error((f),(r),__FILE__,__LINE__)
 # define P11initerr(f,r) ERR_P11_init_error((f),(r),__FILE__,__LINE__)
 
