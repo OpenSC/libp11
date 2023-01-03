@@ -1,6 +1,6 @@
 dnl -*- mode: m4; -*-
 
-AC_PREREQ([2.71])
+AC_PREREQ([2.60])
 
 # When bumping versions see also the LT version numbers below.
 define([PACKAGE_VERSION_MAJOR], [0])
