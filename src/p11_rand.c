@@ -42,6 +42,7 @@ int pkcs11_rand_generate(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, uns
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_RANDOM, rv);
+    return -1;
 }
 
 int pkcs11_rand_seed(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, int prediction_resistance, const unsigned char* ent, size_t ent_len, const unsigned char* addin, size_t addin_len)
@@ -59,4 +60,5 @@ int pkcs11_rand_seed(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, int pre
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_RANDOM, rv);
+    return -1;
 }

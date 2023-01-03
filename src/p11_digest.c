@@ -42,6 +42,7 @@ int pkcs11_digest_init(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_ME
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DIGEST_INIT, rv);
+    return -1;
 }
 
 #define BUFFER_SIZE 256
@@ -72,6 +73,7 @@ int pkcs11_digest_abort(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session)
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DIGEST_ABORT, rv);
+    return -1;
 }
 #undef BUFFER_SIZE
 
@@ -86,6 +88,7 @@ int pkcs11_digest_update(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, con
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DIGEST_UPDATE, rv);
+    return -1;
 }
 
 int pkcs11_digest_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t* outl)
@@ -99,6 +102,7 @@ int pkcs11_digest_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsi
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DIGEST_FINAL, rv);
+    return -1;
 }
 
 int pkcs11_digest(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, const unsigned char* in, size_t inl, unsigned char* out, size_t* outl)
@@ -112,4 +116,5 @@ int pkcs11_digest(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, const unsi
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DIGEST, rv);
+    return -1;
 }

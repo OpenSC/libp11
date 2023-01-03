@@ -39,7 +39,6 @@ int pkcs11_enumerate_slot_mechanisms(PKCS11_CTX_private* ctx,
     PKCS11_MECHANISM *mechinfo = NULL;
     CK_ULONG mechcount;
     int rv;
-    int i;
 
     /* Cache the slot's mechanism list. */
     rv = CRYPTOKI_call(ctx, C_GetMechanismList(slotid, NULL, &mechcount));
@@ -59,7 +58,7 @@ int pkcs11_enumerate_slot_mechanisms(PKCS11_CTX_private* ctx,
     if (!mechinfo)
         goto err;
 
-    for (i = 0; i < mechcount; i++)
+    for (CK_ULONG i = 0; i < mechcount; i++)
     {
         mechinfo[i].type = mechlist[i];
         rv = CRYPTOKI_call(ctx, C_GetMechanismInfo(slotid, mechlist[i], &mechinfo[i].info));
@@ -75,7 +74,6 @@ int pkcs11_enumerate_slot_mechanisms(PKCS11_CTX_private* ctx,
     return 0;
 
 err:
-
     if (mechinfo)
         OPENSSL_free(mechinfo);
 
@@ -83,6 +81,7 @@ err:
         OPENSSL_free(mechlist);
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_ENUMERATE_MECHANISMS, rv);
+    return -1;
 }
 
 int pkcs11_enumerate_mechanisms(PKCS11_CTX_private* ctx,

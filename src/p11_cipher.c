@@ -64,6 +64,7 @@ int pkcs11_create_cipher_key_object(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE s
 
 err:
     CRYPTOKI_checkerr(CKR_F_PKCS11_CREATE_CIPHER_KEY_OBJECT, rv);
+    return -1;
 }
 
 int pkcs11_destroy_cipher_key_object(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE_PTR* key_object)
@@ -84,11 +85,16 @@ int pkcs11_destroy_cipher_key_object(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE 
 
 err:
     CRYPTOKI_checkerr(CKR_F_PKCS11_DESTROY_CIPHER_KEY_OBJECT, rv);
+    return -1;
 }
 
 int pkcs11_decrypt_init(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_MECHANISM_PTR type, CK_OBJECT_HANDLE_PTR key_object, const unsigned char* iv, size_t ivlen)
 {
     int rv;
+
+    // TODO: handle iv & ivlen
+    (void)iv;
+    (void)ivlen;
 
     rv = CRYPTOKI_call(ctx, C_DecryptInit(session, type, *key_object));
     if (rv == CKR_OK)
@@ -97,6 +103,7 @@ int pkcs11_decrypt_init(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_M
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DECRYPT_INIT, rv);
+    return -1;
 }
 
 int pkcs11_decrypt_update(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t* outl, unsigned char* in, size_t inl)
@@ -110,6 +117,7 @@ int pkcs11_decrypt_update(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, un
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DECRYPT_UPDATE, rv);
+    return -1;
 }
 
 int pkcs11_decrypt_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t* outl)
@@ -123,11 +131,16 @@ int pkcs11_decrypt_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, uns
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_DECRYPT_FINAL, rv);
+    return -1;
 }
 
 int pkcs11_encrypt_init(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_MECHANISM_PTR type, CK_OBJECT_HANDLE_PTR key_object, const unsigned char* iv, size_t ivlen)
 {
     int rv;
+
+    // TODO: handle iv & ivlen
+    (void)iv;
+    (void)ivlen;
 
     rv = CRYPTOKI_call(ctx, C_EncryptInit(session, type, *key_object));
     if (rv == CKR_OK)
@@ -136,6 +149,7 @@ int pkcs11_encrypt_init(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, CK_M
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_ENCRYPT_INIT, rv);
+    return -1;
 }
 
 int pkcs11_encrypt_update(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t* outl, const unsigned char* in, size_t inl)
@@ -149,6 +163,7 @@ int pkcs11_encrypt_update(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, un
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_ENCRYPT_UPDATE, rv);
+    return -1;
 }
 
 int pkcs11_encrypt_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t* outl)
@@ -162,4 +177,5 @@ int pkcs11_encrypt_final(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, uns
     }
 
     CRYPTOKI_checkerr(CKR_F_PKCS11_ENCRYPT_FINAL, rv);
+    return -1;
 }

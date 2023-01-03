@@ -5,7 +5,8 @@ TOPDIR = ..
 LIBP11_OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
 	p11_err.obj p11_ckr.obj p11_key.obj p11_load.obj p11_misc.obj \
 	p11_rsa.obj p11_ec.obj p11_pkey.obj p11_slot.obj p11_front.obj \
-	p11_atfork.obj
+	p11_atfork.obj p11_mech.obj p11_digest.obj p11_rand.obj \
+	p11_cipher.obj
 LIBP11_LIB = libp11.lib
 LIBP11_TARGET = libp11.dll
 
