@@ -205,7 +205,7 @@ extern "C" {
 
 
 /* ==============================================================
- * Define structed vector of entry points.  A CK_FUNCTION_LIST
+ * Define structured vector of entry points.  A CK_FUNCTION_LIST
  * contains a CK_VERSION indicating a library's Cryptoki version
  * and then a whole slew of function pointers to the routines in
  * the library.  This type was declared, but not defined, in

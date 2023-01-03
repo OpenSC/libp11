@@ -31,14 +31,14 @@ fi
 if [ -z "$NO_LEGACY_CHECK" -a ! -f $OPENSSL_MODULES/legacy.so ]; then
     echo "Opencryptoki uses OpenSSL and needs the legacy provider. Some other tools may work similarly."
     echo "In case you face issues because of the missing legacy provider, please make sure that the"
-    echo "legacy provider's shared library also availabe in $OPENSSL_MODULES"
+    echo "legacy provider's shared library also available in $OPENSSL_MODULES"
     echo
     echo "To dismiss this warning, export NO_LEGACY_CHECK=1"
     echo
 fi
 
-echo "Please create an RSA and an EC keypair on your smartcard/HSM"
-echo "Then update the keypair URIs in this script"
+echo "Please create an RSA and an EC key pair on your smartcard/HSM"
+echo "Then update the key pair URIs in this script"
 echo
 
 PKCS11URI_RSA="pkcs11:token=utl;id=%01"
@@ -93,9 +93,9 @@ openssl aes-256-cbc -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in dat
 cmp data.txt.cipher.pbkdf2.decrypt data.txt.cipher.pbkdf2.no_pkcs11.decrypt
 print_result $?
 
-## Key generation not supported yet. Generate keypair on the token with another tool first, than you can use in libp11.
+## Key generation not supported yet. Generate key pair on the token with another tool first, than you can use in libp11.
 #echo "=================================="
-#echo "RSA generate keypair"
+#echo "RSA generate key pair"
 #openssl genrsa -provider pkcs11prov -out "pkcs11://"$PKCS11URI_RSA_NEWPAIR 2048
 #print_result $?
 
