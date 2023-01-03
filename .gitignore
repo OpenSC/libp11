@@ -51,6 +51,14 @@ stamp-h*
 *.exp
 *.obj
 *.map
+*.csr
+*.so
+*.signature
+*.pem
+*.cer
+*.key
+*.encrypt
+*.decrypt
 
 m4/ltoptions.m4
 m4/ltsugar.m4
@@ -61,6 +69,7 @@ examples/auth
 examples/decrypt
 examples/getrandom
 examples/listkeys
+examples/mech
 
 test-driver
 tests/openssl_version
@@ -75,3 +84,6 @@ tests/*.trs
 tests/output.*
 
 doc/doxygen.conf
+/.project
+
+.vscode/*

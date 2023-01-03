@@ -54,8 +54,11 @@ The p11-kit proxy module provides access to any configured PKCS #11 module
 in the system. See [the p11-kit web pages](http://p11-glue.freedesktop.org/p11-kit.html)
 for more information.
 
+## OpenSSL providers
 
-# PKCS #11 module configuration
+OpenSSL3 replaces engines with [providers](https://www.openssl.org/docs/manmaster/man7/provider.html).
+
+# PKCS #11 module configuration - OpenSSL engine
 
 ## Copying the engine shared object to the proper location
 
@@ -110,7 +113,6 @@ OpenSSL> engine -t dynamic -pre SO_PATH:/usr/lib/engines/engine_pkcs11.so
          -pre ID:pkcs11 -pre LIST_ADD:1 -pre LOAD 
          -pre MODULE_PATH:opensc-pkcs11.so
 ```
-
 
 ## Testing the engine operation
 
@@ -178,6 +180,84 @@ ENGINE_ctrl_cmd(engine, "MODULE_PATH",
 
 In systems with p11-kit, if this engine control is not called engine_pkcs11
 defaults to loading the p11-kit proxy module.
+
+# PKCS #11 module configuration - OpenSSL3 provider
+
+## Using the provider from the command line
+
+You need to configure OpenSSL to know about the provider.
+
+```
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = providers_sect
+
+[providers_sect]
+pkcs11 = pkcs11_sect
+#default = default_sect
+#legacy = legacy_sect
+
+[pkcs11_sect]
+# Check prov_front.c for supported parameters
+#
+# Some parameters could be overridden with environment variable value. See prov_front.c
+# Like: PKCS11MODULE, PKCS11VERBOSE, PKCS11FORCELOGIN, ...
+#
+# alternative name (if we were compiling the provider as pkcs11.so, we won't need this)
+identity = pkcs11prov
+# name of the libp11 pkcs11 provider
+module = pkcs11prov.so
+# like MODULE_PATH in case of the libp11 pkcs11 engine
+pkcs11module = libopencryptoki.so
+# libp11 log level (0 - off, >0 - on)
+verbose = 0
+# force login to the PKCS#11 module
+force_login = 1
+
+[default_sect]
+activate = 1
+
+[legacy_sect]
+activate = 1
+```
+
+Some openssl command line examples to use the libp11 pkcs11 provider are listed below. Please check [prov-openssl.sh](tests/prov-openssl.sh) for further samples.
+
+```
+# check if provider loaded correctly
+openssl list -provider pkcs11prov -providers
+
+# make a hash
+openssl dgst -provider pkcs11prov -sha256 data.txt
+
+# create csr
+openssl req -provider pkcs11prov -provider default -new -subj "/C=HU/O=ACME/CN=test_cert" -sha256 -key "pkcs11://pkcs11:token=utl;id=%01" -out ./pkcs11_test.csr
+
+# sign
+openssl pkeyutl -provider pkcs11prov -sign -inkey "pkcs11://pkcs11:token=utl;id=%01" -in ./data.txt >./data.txt.rsa.signature
+
+# verify
+openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://pkcs11:token=utl;id=%01" -in ./data.txt -sigfile ./data.txt.rsa.signature
+```
+
+In case the uri after the "-key" does not begin with "<scheme>://", than OpenSSL would look
+for a file, hence one has to begin the key uri with "pkcs11://". As RFC7512 defines the
+pkcs11 uri scheme without the "//", it looked more straightforward to just simply add the
+real pkcs11 uri after the openssl related prefix. See the format above in the examples.
+
+## PKCS11 URI
+
+Supported URI params (same as for engine):
+* model
+* manufacturer
+* token
+* serial
+* object
+* id
+* pin-value
+* pin-source
+* type or object-type
 
 
 # Developer information

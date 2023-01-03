@@ -94,7 +94,51 @@ void ERR_unload_P11_strings(void)
 
 void ERR_P11_error(int function, int reason, char *file, int line)
 {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    (void)function;
+#endif
+    
     if (P11_lib_error_code == 0)
         P11_lib_error_code = ERR_get_next_error_library();
     ERR_PUT_error(P11_lib_error_code, function, reason, file, line);
 }
+
+/* During dynamic module initialization one shall not use error codes
+ * of the library, since OpenSSL unloads the module before printing
+ * the error message. Hence the strings won't be available.
+ */
+void ERR_P11_init_error(int function, int reason, char *file, int line)
+{
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+    /* Fallback to original version as I have no such OpenSSL version 
+     * to implement properly.
+     */
+    ERR_P11_error(function, reason, file, line);
+#else
+    (void)function;
+    char buffer[4096];
+    ERR_STRING_DATA *msg = P11_str_reasons;
+
+    while((msg->error&ERR_REASON_MASK) != (unsigned int)reason && msg->string != NULL)
+    {
+        ++msg;
+    }
+
+# ifdef OPENSSL_NO_FILENAMES
+    file = "";
+# endif
+
+    if (msg->string != NULL)
+    {
+        snprintf(buffer, 4095, "%s:%s:%s:%s:%d", P11_lib_name->string, OPENSSL_FUNC, msg->string, file, line);
+    }
+    else
+    {
+        snprintf(buffer, 4095, "%s:%s:reason(%d):%s:%d", P11_lib_name->string, OPENSSL_FUNC, reason, file, line);
+    }
+
+    ERR_raise(ERR_LIB_PROV, ERR_R_INIT_FAIL);
+    ERR_add_error_data(1, buffer);
+#endif
+}
+

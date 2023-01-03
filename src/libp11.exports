@@ -48,3 +48,5 @@ PKCS11_pkey_meths
 ERR_load_PKCS11_strings
 PKCS11_set_ui_method
 ERR_get_CKR_code
+PKCS11_enumerate_slot_mechanisms
+PKCS11_enumerate_mechanisms

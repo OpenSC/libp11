@@ -24,7 +24,6 @@
 static PKCS11_SLOT_private *pkcs11_slot_new(PKCS11_CTX_private *, CK_SLOT_ID);
 static int pkcs11_init_slot(PKCS11_CTX_private *, PKCS11_SLOT *, PKCS11_SLOT_private *);
 static void pkcs11_release_slot(PKCS11_SLOT *);
-static void pkcs11_destroy_token(PKCS11_TOKEN *);
 
 /*
  * Get slotid from private
@@ -172,6 +171,49 @@ void pkcs11_put_session(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session)
 	pthread_cond_signal(&slot->cond);
 
 	pthread_mutex_unlock(&slot->lock);
+}
+
+/*
+ * Copies the session state
+ */
+int pkcs11_copy_session_state(PKCS11_SLOT_private * slot, CK_SESSION_HANDLE dest, CK_SESSION_HANDLE source)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	int rv = CKR_OK;
+
+	size_t state_len = 4096;
+	CK_BYTE_PTR state_buffer = malloc(state_len);
+
+	if (!state_buffer)
+	{
+		rv = CKR_HOST_MEMORY;
+		goto fin;
+	}
+
+    rv = CRYPTOKI_call(ctx, C_GetOperationState(source, state_buffer, &state_len));
+	if (rv == CKR_OPERATION_NOT_INITIALIZED)
+	{
+		/* nothing to copy */
+		rv = CKR_OK;
+		goto fin;
+	}
+
+	/* TODO: session stat unsaveable in certain cases: rv = 0x180 (OpenCryptoki: https://www.ibm.com/docs/en/linux-on-systems?topic=specifications-soft-token) */
+
+    if (rv != CKR_OK)
+    {
+        goto fin;
+    }
+
+	rv = CRYPTOKI_call(ctx, C_SetOperationState(dest, state_buffer, state_len, 0, 0));
+
+fin:
+	if (state_buffer)
+	{
+		free(state_buffer);
+	}
+
+	return rv;
 }
 
 /*
@@ -533,9 +575,12 @@ int pkcs11_refresh_token(PKCS11_SLOT *slot)
 	return 0;
 }
 
-static void pkcs11_destroy_token(PKCS11_TOKEN *token)
+void pkcs11_destroy_token(PKCS11_TOKEN *token)
 {
-	pkcs11_wipe_cache(PRIVSLOT(token->slot));
+	if (token->slot)
+	{
+		pkcs11_wipe_cache(PRIVSLOT(token->slot));
+	}
 	OPENSSL_free(token->label);
 	OPENSSL_free(token->manufacturer);
 	OPENSSL_free(token->model);

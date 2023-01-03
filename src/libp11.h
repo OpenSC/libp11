@@ -25,6 +25,7 @@
 #define _LIB11_H
 
 #include "p11_err.h"
+#include "pkcs11.h"
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>
@@ -39,7 +40,9 @@ extern "C" {
 int ERR_load_CKR_strings(void);
 void ERR_unload_CKR_strings(void);
 void ERR_CKR_error(int function, int reason, char *file, int line);
+void ERR_CKR_init_error(int function, int reason, char *file, int line);
 # define CKRerr(f,r) ERR_CKR_error((f),(r),__FILE__,__LINE__)
+# define CKRiniterr(f,r) ERR_CKR_init_error((f),(r),__FILE__,__LINE__)
 int ERR_get_CKR_code(void);
 
 /*
@@ -47,6 +50,18 @@ int ERR_get_CKR_code(void);
  * interface to OpenSSL application.  It was never a goal
  * of this project to expose the entire PKCS#11 functionality.
  */
+
+/** an unsigned value, at least 32 bits long */
+typedef unsigned long int CK_ULONG;
+
+/** a value that identifies a mechanism type */
+typedef CK_ULONG CK_MECHANISM_TYPE;
+
+/** a pointer to a CK_MECHANISM_TYPE */
+typedef CK_MECHANISM_TYPE *CK_MECHANISM_TYPE_PTR;
+
+/** a Cryptoki-assigned value that identifies a slot */
+typedef CK_ULONG CK_SLOT_ID;
 
 /** PKCS11 key object (public or private) */
 typedef struct PKCS11_key_st {
@@ -89,6 +104,12 @@ typedef struct PKCS11_token_st {
 	unsigned char soPinToBeChanged;
 	struct PKCS11_slot_st *slot;
 } PKCS11_TOKEN;
+
+/** PKCS11 mechanism object, union of CK_MECHANISM_TYPE and CK_MECHANISM_INFO */
+typedef struct PKCS11_mechanism_st {
+	CK_MECHANISM_TYPE type;
+  	CK_MECHANISM_INFO info;
+} PKCS11_MECHANISM;
 
 /** PKCS11 slot: card reader */
 typedef struct PKCS11_slot_st {
@@ -302,9 +323,19 @@ extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *
 /* Remove the certificate from this token */
 extern int PKCS11_remove_certificate(PKCS11_CERT *);
 
-/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively
+ * Deprecated in Openssl3, left here until engine is supported
+ */
 extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Set password callback to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+extern int PKCS11_set_password_callback(PKCS11_CTX *pctx,
+	OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg);
+
+#endif
 
 /**
  * Initialize a token
@@ -478,6 +509,39 @@ P11_DEPRECATED_FUNC extern int PKCS11_verify(int type,
 	const unsigned char *m, unsigned int m_len,
 	unsigned char *signature, unsigned int siglen, PKCS11_KEY * key);
 
+/**
+ * Enumerate supported mechanisms of the list of slots. Call allocates memory, caller must free once not needed anymore.
+ *
+ * @param pctx libp11 PKCS11 context. Call allocates memory, caller must free once not needed anymore.
+ * @param slots pointer to list of slots
+ * @param nslots number of slots in the slots list
+ * @param mechsp points to the list of mechanism list (results are placed here)
+ * @param mechcountsp points to the list of number of mechanisms (results are placed here)
+ * @retval 0 success
+ * @retval -1 error
+ */
+int PKCS11_enumerate_mechanisms(PKCS11_CTX* pctx,
+                                PKCS11_SLOT* slots,
+                                CK_ULONG nslots,
+                                PKCS11_MECHANISM*** mechsp,
+                                unsigned long** mechcountsp);
+
+/**
+ * Enumerate supported mechanisms of the slot. Call allocates memory, caller must free once not needed anymore.
+ *
+ * @param pctx libp11 PKCS11 context
+ * @param slotid slot identifier
+ * @param mechp points to the list of mechanisms (results are placed here)
+ * @param mechcountsp points to number of mechanisms (result is placed here)
+ * @retval 0 success
+ * @retval -1 error
+ */
+int PKCS11_enumerate_slot_mechanisms(PKCS11_CTX* pctx,
+                                     CK_SLOT_ID slotid,
+                                     PKCS11_MECHANISM** mechp,
+                                     unsigned long* mechcountp);
+
+
 /* Encrypts data using the private key */
 P11_DEPRECATED_FUNC extern int PKCS11_private_encrypt(
 	int flen, const unsigned char *from,
@@ -530,6 +594,21 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
 # define CKR_F_PKCS11_GENERATE_KEY                        130
 # define CKR_F_PKCS11_RELOAD_CERTIFICATE                  131
 # define CKR_F_PKCS11_GET_SESSION                         132
+# define CKR_F_PKCS11_ENUMERATE_MECHANISMS                133
+# define CKR_F_PKCS11_DIGEST                              134
+# define CKR_F_PKCS11_DIGEST_INIT                         135
+# define CKR_F_PKCS11_DIGEST_ABORT                        136
+# define CKR_F_PKCS11_DIGEST_UPDATE                       137
+# define CKR_F_PKCS11_DIGEST_FINAL                        138
+# define CKR_F_PKCS11_CREATE_CIPHER_KEY_OBJECT            139
+# define CKR_F_PKCS11_DESTROY_CIPHER_KEY_OBJECT           140
+# define CKR_F_PKCS11_DECRYPT_INIT                        141
+# define CKR_F_PKCS11_DECRYPT_UPDATE                      142
+# define CKR_F_PKCS11_DECRYPT_FINAL                       143
+# define CKR_F_PKCS11_ENCRYPT_INIT                        144
+# define CKR_F_PKCS11_ENCRYPT_UPDATE                      145
+# define CKR_F_PKCS11_ENCRYPT_FINAL                       146
+# define CKR_F_PKCS11_CTX_RELOAD                          147
 
 /* Backward compatibility of error function codes */
 #define PKCS11_F_PKCS11_CHANGE_PIN CKR_F_PKCS11_CHANGE_PIN

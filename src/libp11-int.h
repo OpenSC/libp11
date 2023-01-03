@@ -48,8 +48,15 @@ struct pkcs11_ctx_private {
 	CK_FUNCTION_LIST_PTR method;
 	void *handle;
 	char *init_args;
+
+	/* Deprecated in Openssl3, left here until engine is supported */
 	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
 	void *ui_user_data;
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	OSSL_PASSPHRASE_CALLBACK *pw_cb;
+	void *pw_cbarg;
+#endif
 	unsigned int forkid;
 	pthread_mutex_t fork_lock;
 };
@@ -236,6 +243,9 @@ extern int pkcs11_login(PKCS11_SLOT_private *, int so, const char *pin);
 /* De-authenticate from the card */
 extern int pkcs11_logout(PKCS11_SLOT_private *);
 
+/* Safely destroys PKCS11_TOKEN object. */
+extern void pkcs11_destroy_token(PKCS11_TOKEN *);
+
 /* Authenticate a private the key operation if needed */
 int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 
@@ -277,9 +287,18 @@ extern int pkcs11_enumerate_certs(PKCS11_SLOT_private *,
 /* Remove an object from the token */
 extern int pkcs11_remove_object(PKCS11_OBJECT_private *object);
 
-/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+/* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively
+ * Deprecated in Openssl3, left here until engine is supported
+ */
 extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Set password callback to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+extern int pkcs11_set_password_callback(PKCS11_CTX_private *pctx,
+	OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg);
+
+#endif
 
 /* Initialize a token */
 extern int pkcs11_init_token(PKCS11_SLOT_private *, const char *pin,
@@ -316,6 +335,10 @@ extern int pkcs11_generate_key(PKCS11_SLOT_private *tpriv,
 	int algorithm, unsigned int bits,
 	char *label, unsigned char* id, size_t id_len);
 
+/* Generate and store an EC key pair on the token */
+extern int pkcs11_generate_ec_key(PKCS11_SLOT_private *slot, char* curve_name,
+		char *label, unsigned char* id, size_t id_len);
+
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);
 
@@ -350,6 +373,124 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
 /* Retrieve PKCS11_KEY from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
+
+/* List available mechanisms for a given slot */
+extern int pkcs11_enumerate_slot_mechanisms(PKCS11_CTX_private* ctx,
+                                     CK_SLOT_ID slotid,
+                                     PKCS11_MECHANISM** mechp,
+                                     unsigned long* mechcountp);
+
+/* List available mechanisms for a list of slots */
+extern int pkcs11_enumerate_mechanisms(PKCS11_CTX_private* ctx,
+                                PKCS11_SLOT* slots,
+                                CK_ULONG nslots,
+                                PKCS11_MECHANISM*** mechsp,
+                                unsigned long** mechcountsp);
+
+/* Initialize digesting on the token */
+extern int pkcs11_digest_init(PKCS11_CTX_private* ctx, 
+							  CK_SESSION_HANDLE session,
+ 							  CK_MECHANISM_TYPE type);
+
+/* Abort a current digesting operation */
+extern int pkcs11_digest_abort(PKCS11_CTX_private* ctx, 
+							   CK_SESSION_HANDLE session);
+
+/* Push the next data block into the digest operation */
+extern int pkcs11_digest_update(PKCS11_CTX_private* ctx, 
+								CK_SESSION_HANDLE session, 
+								const unsigned char* in, size_t inl);
+
+/* Finalize the current digest operation and get the result */
+extern int pkcs11_digest_final(PKCS11_CTX_private* ctx, 
+							   CK_SESSION_HANDLE session, 
+							   unsigned char* out, size_t* outl);
+
+/* Do digesting in single step */
+extern int pkcs11_digest(PKCS11_CTX_private* ctx, 
+ 						 CK_SESSION_HANDLE session, 
+						 const unsigned char* in, size_t inl, 
+						 unsigned char* out, size_t* outl);
+
+/* Generate a random value */
+extern int pkcs11_rand_generate(PKCS11_CTX_private* ctx, 
+                                CK_SESSION_HANDLE session, 
+								unsigned char* out, size_t outlen, 
+								unsigned int strength, 
+								int prediction_resistance, 
+								const unsigned char* addin, size_t addin_len);
+
+/* Seed the random number generator */
+extern int pkcs11_rand_seed(PKCS11_CTX_private* ctx, 
+							CK_SESSION_HANDLE session, 
+							int prediction_resistance, 
+							const unsigned char* ent, size_t ent_len, 
+							const unsigned char* addin, size_t addin_len);
+
+/* Inserts a key into the cipher as a new object */
+extern int pkcs11_create_cipher_key_object(PKCS11_CTX_private* ctx, 
+										   CK_SESSION_HANDLE session, 
+										   CK_OBJECT_HANDLE_PTR* key_object, 
+										   CK_KEY_TYPE keyType, 
+										   const unsigned char* key, size_t keylen);
+
+/* Removes a previously created cipher object */
+extern int pkcs11_destroy_cipher_key_object(PKCS11_CTX_private* ctx, 
+											CK_SESSION_HANDLE session, 
+											CK_OBJECT_HANDLE_PTR* key_object);
+
+/* Initializes a decrypting operation on the token */
+extern int pkcs11_decrypt_init(PKCS11_CTX_private* ctx, 
+							   CK_SESSION_HANDLE session, 
+							   CK_MECHANISM_PTR type, 
+							   CK_OBJECT_HANDLE_PTR key_object, 
+							   const unsigned char* iv, size_t ivlen);
+
+/* Decrypt block of data */
+extern int pkcs11_decrypt_update(PKCS11_CTX_private* ctx, 
+								 CK_SESSION_HANDLE session, 
+								 unsigned char* out, size_t* outl, 
+								 unsigned char* in, size_t inl);
+
+/* Finalize decryption operation */
+extern int pkcs11_decrypt_final(PKCS11_CTX_private* ctx, 
+								CK_SESSION_HANDLE session, 
+								unsigned char* out, size_t* outl);
+
+/* Decrypt data block in one step */
+extern int pkcs11_decrypt(PKCS11_CTX_private* ctx, 
+						  CK_SESSION_HANDLE session, 
+						  unsigned char* out, size_t* outl, 
+						  unsigned char* in, size_t inl);
+
+/* Initializes an encrypting operation on the token */
+extern int pkcs11_encrypt_init(PKCS11_CTX_private* ctx, 
+							   CK_SESSION_HANDLE session, 
+							   CK_MECHANISM_PTR type, 
+							   CK_OBJECT_HANDLE_PTR key_object, 
+							   const unsigned char* iv, size_t ivlen);
+
+/* Encrypt block of data */
+extern int pkcs11_encrypt_update(PKCS11_CTX_private* ctx, 
+								 CK_SESSION_HANDLE session, 
+								 unsigned char* out, size_t* outl, 
+								 const unsigned char* in, size_t inl);
+
+/* Finalize decryption operation */
+extern int pkcs11_encrypt_final(PKCS11_CTX_private* ctx, 
+								CK_SESSION_HANDLE session, 
+								unsigned char* out, size_t* outl);
+
+/* Encrypt data block in one step */
+extern int pkcs11_encrypt(PKCS11_CTX_private* ctx, 
+						  CK_SESSION_HANDLE session, 
+						  unsigned char* out, size_t* outl, 
+						  const unsigned char* in, size_t inl);
+
+/* Clones the session state from one session into another. Not all tokens support. */
+extern int pkcs11_copy_session_state(PKCS11_SLOT_private* slot, 
+									 CK_SESSION_HANDLE dest, 
+									 CK_SESSION_HANDLE source);
 
 #endif
 

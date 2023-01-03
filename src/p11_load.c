@@ -74,7 +74,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 
 	cpriv->handle = C_LoadModule(name, &cpriv->method);
 	if (!cpriv->handle) {
-		P11err(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
+		P11initerr(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
 		return -1;
 	}
 
@@ -87,7 +87,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		C_UnloadModule(cpriv->handle);
 		cpriv->handle = NULL;
-		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
@@ -98,7 +98,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 		cpriv->method->C_Finalize(NULL);
 		C_UnloadModule(cpriv->handle);
 		cpriv->handle = NULL;
-		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
@@ -128,7 +128,7 @@ int pkcs11_CTX_reload(PKCS11_CTX_private *ctx)
 	}
 	rv = ctx->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		CKRerr(P11_F_PKCS11_CTX_RELOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_RELOAD, rv);
 		return -1;
 	}
 
