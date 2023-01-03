@@ -142,6 +142,7 @@ err:
 
 static int _get_all_core_parameters(PROVIDER_CTX* ctx, const OSSL_DISPATCH* in)
 {
+    (void)in;
     const OSSL_CORE_HANDLE* handle = ctx->handle;
     int rv;
 
@@ -367,7 +368,6 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE* handle,
                        void** provctx)
 {
     PROVIDER_CTX* ctx = NULL;
-    int rc;
 
     assert(handle != NULL);
     assert(in != NULL);
@@ -494,8 +494,6 @@ static const OSSL_ALGORITHM* provider_query_operation(void* provctx,
                                                       int operation_id,
                                                       int* no_store)
 {
-    struct provctx* ctx = provctx;
-
     assert(provctx != NULL);
     assert(no_store != NULL);
 
@@ -686,7 +684,6 @@ int filter_mechanisms(const PROVIDER_CTX* ctx, const CK_FLAGS flag, PKCS11_MECHA
 int get_mechanism(const PROVIDER_CTX* ctx, const CK_MECHANISM_TYPE type, PKCS11_MECHANISM** mechp)
 {
     PKCS11_MECHANISM* mech;
-    size_t count = 0;
     size_t i = 0;
 
     while (i < ctx->mechanism_count && ctx->mechanism_list[i].type != type)

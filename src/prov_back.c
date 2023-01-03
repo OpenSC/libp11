@@ -62,40 +62,6 @@ static void dump_hex(PROVIDER_CTX *ctx, int level,
 		ctx_log(ctx, level, "%02x", val[n]);
 }
 
-static void dump_expiry(PROVIDER_CTX* ctx, int level, const PKCS11_CERT* cert)
-{
-    BIO* bio;
-    const ASN1_TIME* exp;
-
-    char* data = NULL;
-    int len = 0;
-
-    if (level > ctx->verbose)
-    {
-        return;
-    }
-
-    if (!cert || !cert->x509 || !(exp = X509_get0_notAfter(cert->x509)))
-    {
-        ctx_log(ctx, level, "none");
-    }
-
-    if ((bio = BIO_new(BIO_s_mem())) == NULL)
-    {
-        return;
-    }
-
-    ASN1_TIME_print(bio, exp);
-
-    len = BIO_get_mem_data(bio, &data);
-
-    ctx_log(ctx, level, "%.*s", len, data);
-
-    BIO_free(bio);
-
-    return;
-}
-
 /******************************************************************************/
 /* PIN handling                                                               */
 /******************************************************************************/
@@ -227,6 +193,8 @@ static int ctx_enumerate_slots_unlocked(PROVIDER_CTX* ctx, PKCS11_CTX* pkcs11_ct
     return 1;
 }
 
+/* not used currently, but kept here for further reference*/
+/*
 static int ctx_enumerate_slots(PROVIDER_CTX* ctx, PKCS11_CTX* pkcs11_ctx)
 {
     int rv;
@@ -236,6 +204,7 @@ static int ctx_enumerate_slots(PROVIDER_CTX* ctx, PKCS11_CTX* pkcs11_ctx)
     pthread_mutex_unlock(&ctx->lock);
     return rv;
 }
+*/
 
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
 static int ctx_init_libp11_unlocked(PROVIDER_CTX* ctx)
@@ -556,145 +525,6 @@ static void* ctx_load_object(PROVIDER_CTX* ctx,
 
     pthread_mutex_unlock(&ctx->lock);
     return obj;
-}
-
-/******************************************************************************/
-/* Certificate handling                                                       */
-/******************************************************************************/
-
-static PKCS11_CERT* cert_cmp(PKCS11_CERT* a, PKCS11_CERT* b, time_t* ptime)
-{
-    const ASN1_TIME *a_time, *b_time;
-    int pday, psec;
-
-    /* the best certificate exists */
-    if (!a || !a->x509)
-    {
-        return b;
-    }
-    if (!b || !b->x509)
-    {
-        return a;
-    }
-
-    a_time = X509_get0_notAfter(a->x509);
-    b_time = X509_get0_notAfter(b->x509);
-
-    /* the best certificate expires last */
-    if (ASN1_TIME_diff(&pday, &psec, a_time, b_time))
-    {
-        if (pday < 0 || psec < 0)
-        {
-            return a;
-        }
-        else if (pday > 0 || psec > 0)
-        {
-            return b;
-        }
-    }
-
-    /* deterministic tie break */
-    if (X509_cmp(a->x509, b->x509) < 1)
-    {
-        return b;
-    }
-    else
-    {
-        return a;
-    }
-}
-
-static void* match_cert(PROVIDER_CTX* ctx, PKCS11_TOKEN* tok,
-                        const unsigned char* obj_id, size_t obj_id_len, const char* obj_label)
-{
-    PKCS11_CERT *certs, *selected_cert = NULL;
-    unsigned int m, cert_count;
-    const char* which;
-
-    if (PKCS11_enumerate_certs(tok, &certs, &cert_count))
-    {
-        ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-        return NULL;
-    }
-    if (cert_count == 0)
-        return NULL;
-
-    ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
-    if (obj_id_len != 0 || obj_label)
-    {
-        which = "longest expiry matching";
-        for (m = 0; m < cert_count; m++)
-        {
-            PKCS11_CERT* k = certs + m;
-
-            ctx_log(ctx, 1, "  %2u    id=", m + 1);
-            dump_hex(ctx, 1, k->id, k->id_len);
-            ctx_log(ctx, 1, " label=%s expiry=", k->label ? k->label : "(null)");
-            dump_expiry(ctx, 1, k);
-            ctx_log(ctx, 1, "\n");
-
-            if (obj_label && obj_id_len != 0)
-            {
-                if (k->label && strcmp(k->label, obj_label) == 0 && k->id_len == obj_id_len && memcmp(k->id, obj_id, obj_id_len) == 0)
-                {
-                    selected_cert = cert_cmp(selected_cert, k, NULL);
-                }
-            }
-            else if (obj_label && !obj_id_len)
-            {
-                if (k->label && strcmp(k->label, obj_label) == 0)
-                {
-                    selected_cert = cert_cmp(selected_cert, k, NULL);
-                }
-            }
-            else if (obj_id_len && !obj_label)
-            {
-                if (k->id_len == obj_id_len && memcmp(k->id, obj_id, obj_id_len) == 0)
-                {
-                    selected_cert = cert_cmp(selected_cert, k, NULL);
-                }
-            }
-        }
-    }
-    else
-    {
-        which = "first (with id present)";
-        for (m = 0; m < cert_count; m++)
-        {
-            PKCS11_CERT* k = certs + m;
-
-            ctx_log(ctx, 1, "  %2u    id=", m + 1);
-            dump_hex(ctx, 1, k->id, k->id_len);
-            ctx_log(ctx, 1, " label=%s expiry=", k->label ? k->label : "(null)");
-            dump_expiry(ctx, 1, k);
-            ctx_log(ctx, 1, "\n");
-
-            if (!selected_cert && k->id && *k->id)
-            {
-                selected_cert = k; /* Use the first certificate with nonempty id */
-            }
-        }
-        if (!selected_cert)
-        {
-            which = "first";
-            selected_cert = certs; /* Use the first certificate */
-        }
-    }
-
-    if (selected_cert)
-    {
-        ctx_log(ctx, 1, "Returning %s certificate: id=", which);
-        dump_hex(ctx, 1, selected_cert->id, selected_cert->id_len);
-        ctx_log(ctx, 1, " label=%s expiry=", selected_cert->label ? selected_cert->label : "(null)");
-        dump_expiry(ctx, 1, selected_cert);
-        ctx_log(ctx, 1, "\n");
-    }
-    else
-    {
-        ctx_log(ctx, 1, "No matching certificate returned.\n");
-    }
-
-    return selected_cert;
 }
 
 /******************************************************************************/

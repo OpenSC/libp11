@@ -86,7 +86,7 @@ typedef struct p11_algorithm_map_t P11_ALGORITHM_MAP;
 
 static const P11_ALGORITHM_MAP p11_algorithm_map[] = {
 {CKM_SHA_1, {"SHA1:SHA-1:SSL3-SHA1", "provider=pkcs11,pkcs11.digest", p11_digest_SHA_1_tbl, NULL}},
-{CKM_SHA224, {"SHA2-224:SHA-224:SHA224", "provider=pkcs11,pkcs11.digest", p11_digest_SHA256_tbl, NULL}},
+{CKM_SHA224, {"SHA2-224:SHA-224:SHA224", "provider=pkcs11,pkcs11.digest", p11_digest_SHA224_tbl, NULL}},
 {CKM_SHA256, {"SHA2-256:SHA-256:SHA256", "provider=pkcs11,pkcs11.digest", p11_digest_SHA256_tbl, NULL}},
 {CKM_SHA384, {"SHA2-384:SHA-384:SHA384", "provider=pkcs11,pkcs11.digest", p11_digest_SHA384_tbl, NULL}},
 {CKM_SHA512, {"SHA2-512:SHA-512:SHA512", "provider=pkcs11,pkcs11.digest", p11_digest_SHA512_tbl, NULL}},
@@ -266,6 +266,7 @@ err:
 
 static int p11_digest_init(void* dctx, const OSSL_PARAM params[])
 {
+    (void)params;
     P11_DIGEST_CTX* ctx = dctx;
     int rc = 1;
 
@@ -372,7 +373,7 @@ static const OSSL_PARAM* p11_digest_gettable_params(void* provctx)
 #define DEFINE_NEWCTX(alg)                                \
     static void* p11_digest_##alg##_newctx(void* provctx) \
     {                                                     \
-        PROVIDER_CTX* ctx = provctx;                      \
+        /* PROVIDER_CTX* ctx = provctx;               */  \
         /* ctx_log(ctx, 3, "%s\n", __FUNCTION__);     */  \
         return p11_digest_newctx(provctx, CKM_##alg);     \
     }
@@ -380,7 +381,7 @@ static const OSSL_PARAM* p11_digest_gettable_params(void* provctx)
 #define DEFINE_DIGEST(alg)                                                                                                                   \
     static int p11_digest_##alg##_digest(void* provctx, const unsigned char* in, size_t inl, unsigned char* out, size_t* outl, size_t outsz) \
     {                                                                                                                                        \
-        PROVIDER_CTX* ctx = provctx;                                                                                                         \
+        /* PROVIDER_CTX* ctx = provctx;           */                                                                                         \
         /* ctx_log(ctx, 3, "%s\n", __FUNCTION__); */                                                                                         \
         return p11_digest_digest(provctx, in, inl, out, outl, outsz, CKM_##alg);                                                             \
     }

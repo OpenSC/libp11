@@ -87,6 +87,10 @@ void ERR_unload_PROV_strings(void)
 
 void ERR_PROV_error(int function, int reason, char* file, int line)
 {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    (void)function;
+#endif
+
     if (PROV_lib_error_code == 0)
         PROV_lib_error_code = ERR_get_next_error_library();
     ERR_PUT_error(PROV_lib_error_code, function, reason, file, line);

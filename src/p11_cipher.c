@@ -30,6 +30,7 @@ int pkcs11_create_cipher_key_object(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE s
 {
     (void)ctx;
     CK_OBJECT_HANDLE_PTR obj;
+    int rv = 0;
 
     obj = malloc(sizeof(*obj));
     if (!obj)
@@ -37,7 +38,6 @@ int pkcs11_create_cipher_key_object(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE s
         goto err;
     }
 
-    int rv;
     CK_OBJECT_CLASS class = CKO_SECRET_KEY;
     CK_UTF8CHAR label[] = "libp11";
     CK_BBOOL true = CK_TRUE;

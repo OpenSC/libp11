@@ -220,6 +220,10 @@ void ERR_unload_CKR_strings(void)
 
 void ERR_CKR_error(int function, int reason, char *file, int line)
 {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    (void)function;
+#endif
+
 	if (CKR_lib_error_code == 0)
 		CKR_lib_error_code = ERR_get_next_error_library();
 	ERR_PUT_error(CKR_lib_error_code, function, reason, file, line);
@@ -237,10 +241,11 @@ void ERR_CKR_init_error(int function, int reason, char *file, int line)
      */
     ERR_CKR_error(function, reason, file, line);
 #else
+    (void)function;
     char buffer[4096];
     ERR_STRING_DATA *msg = CKR_str_reasons;
 
-    while((msg->error&ERR_REASON_MASK) != reason && msg->string != NULL)
+    while((msg->error&ERR_REASON_MASK) != (unsigned int)reason && msg->string != NULL)
     {
         ++msg;
     }

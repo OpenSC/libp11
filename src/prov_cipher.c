@@ -12,7 +12,7 @@ extern int filter_mechanisms(PROVIDER_CTX* ctx, CK_FLAGS flag, PKCS11_MECHANISM*
 
 static void* p11_cipher_newctx(void* provctx, CK_MECHANISM_TYPE type, CK_KEY_TYPE keyType, size_t block_size, size_t keylen, size_t ivlen, unsigned int mode);
 static OSSL_FUNC_cipher_freectx_fn p11_cipher_freectx;
-static OSSL_FUNC_cipher_dupctx_fn p11_cipher_dupctx;
+/* static OSSL_FUNC_cipher_dupctx_fn p11_cipher_dupctx; */
 
 static OSSL_FUNC_cipher_decrypt_init_fn p11_cipher_decrypt_init;
 static OSSL_FUNC_cipher_encrypt_init_fn p11_cipher_encrypt_init;
@@ -29,10 +29,9 @@ static OSSL_FUNC_cipher_set_ctx_params_fn p11_cipher_set_ctx_params;
 
 /******************************************************************************/
 
-#define CIPHER_FUN(alg, op_mode, keylen)                                                        \
-    static OSSL_FUNC_cipher_newctx_fn p11_cipher_##alg##_##op_mode##_##keylen##_newctx;         \
-    static OSSL_FUNC_cipher_get_params_fn p11_cipher_##alg##_##op_mode##_##keylen##_get_params; \
-    static OSSL_FUNC_cipher_get_ctx_params_fn p11_cipher_##alg##_##op_mode##_##keylen##_get_ctx_params;
+#define CIPHER_FUN(alg, op_mode, keylen)                                                \
+    static OSSL_FUNC_cipher_newctx_fn p11_cipher_##alg##_##keylen##_##op_mode##_newctx; \
+    static OSSL_FUNC_cipher_get_params_fn p11_cipher_##alg##_##keylen##_##op_mode##_get_params;
 
 #define CIPHER_TBL(alg, op_mode, keylen)                                                                 \
     const OSSL_DISPATCH p11_cipher_##alg##_##keylen##_##op_mode##_tbl[] = {                              \
@@ -77,9 +76,12 @@ struct p11_algorithm_map_t
 
 typedef struct p11_algorithm_map_t P11_ALGORITHM_MAP;
 
-#define ALG_MAP(p11alg, alg, op_mode, keylen)                                                                                                                     \
-    {                                                                                                                                                             \
-        CKM_##p11alg##_##op_mode, keylen, { #alg "-" #keylen "-" #op_mode, "provider=pkcs11,pkcs11.cipher", p11_cipher_##alg##_##keylen##_##op_mode##_tbl, NULL } \
+#define ALG_MAP(p11alg, alg, op_mode, keylen)                                                                                   \
+    {                                                                                                                           \
+        CKM_##p11alg##_##op_mode, keylen,                                                                                       \
+        {                                                                                                                       \
+#alg "-" #keylen "-" #op_mode, "provider=pkcs11,pkcs11.cipher", p11_cipher_##alg##_##keylen##_##op_mode##_tbl, NULL \
+        }                                                                                                                       \
     }
 
 DECLARE_ALG(AES, AES, ECB, 128, 128, 0, EVP_CIPH_ECB_MODE)
@@ -103,8 +105,8 @@ DECLARE_ALG(AES, AES, CFB64, 256, 128, 128, EVP_CIPH_CFB_MODE)
 DECLARE_ALG(AES, AES, CFB128, 128, 128, 128, EVP_CIPH_CFB_MODE)
 DECLARE_ALG(AES, AES, CFB128, 192, 128, 128, EVP_CIPH_CFB_MODE)
 DECLARE_ALG(AES, AES, CFB128, 256, 128, 128, EVP_CIPH_CFB_MODE)
-DECLARE_ALG(DES, DES, ECB, 64, 64, 0, EVP_CIPH_ECB_MODE)
-DECLARE_ALG(DES, DES, CBC, 64, 64, 64, EVP_CIPH_CBC_MODE)
+/* DECLARE_ALG(DES, DES, ECB, 64, 64, 0, EVP_CIPH_ECB_MODE) */  /* DES deprecated */
+/* DECLARE_ALG(DES, DES, CBC, 64, 64, 64, EVP_CIPH_CBC_MODE) */ /* DES deprecated */
 DECLARE_ALG(DES, DES3, ECB, 192, 192, 0, EVP_CIPH_ECB_MODE)
 DECLARE_ALG(DES, DES3, CBC, 192, 192, 64, EVP_CIPH_CBC_MODE)
 DECLARE_ALG(CAMELLIA, CAMELLIA, ECB, 128, 128, 0, EVP_CIPH_ECB_MODE)
@@ -150,8 +152,8 @@ ALG_MAP(AES, AES, CFB64, 256),
 ALG_MAP(AES, AES, CFB128, 128),
 ALG_MAP(AES, AES, CFB128, 192),
 ALG_MAP(AES, AES, CFB128, 256),
-ALG_MAP(DES, DES, ECB, 64),
-ALG_MAP(DES, DES, CBC, 64),
+/*ALG_MAP(DES, DES, ECB, 64),*/ /* DES deprecated */
+/*ALG_MAP(DES, DES, CBC, 64),*/ /* DES deprecated */
 ALG_MAP(DES, DES3, ECB, 192),
 ALG_MAP(DES, DES3, CBC, 192),
 ALG_MAP(CAMELLIA, CAMELLIA, ECB, 128),
@@ -358,6 +360,8 @@ static void p11_cipher_freectx(void* cctx)
     __free_p11_cipherctx(ctx);
 }
 
+/* currently not used -- how to dup() if get_settion() fails? */
+/*
 static void* p11_cipher_dupctx(void* cctx)
 {
     P11_CIPHER_CTX* ctx = cctx;
@@ -392,11 +396,13 @@ err:
 
     return NULL;
 }
+*/
 
 /******************************************************************************/
 
 static int p11_cipher_encrypt_init(void* cctx, const unsigned char* key, size_t keylen, const unsigned char* iv, size_t ivlen, const OSSL_PARAM params[])
 {
+    (void)params;
     int rv;
     P11_CIPHER_CTX* ctx = cctx;
 
@@ -439,6 +445,7 @@ err:
 
 static int p11_cipher_decrypt_init(void* cctx, const unsigned char* key, size_t keylen, const unsigned char* iv, size_t ivlen, const OSSL_PARAM params[])
 {
+    (void)params;
     int rv;
     P11_CIPHER_CTX* ctx = cctx;
 
@@ -484,8 +491,6 @@ static int p11_cipher_update(void* cctx, unsigned char* out, size_t* outl, size_
 {
     P11_CIPHER_CTX* ctx = cctx;
     int rv;
-    size_t old_outl = *outl;
-    size_t consume = 0;
     size_t written = 0;
 
     *outl = outsize;
@@ -556,10 +561,7 @@ err:
 static int p11_cipher_final(void* cctx, unsigned char* out, size_t* outl, size_t outsize)
 {
     P11_CIPHER_CTX* ctx = cctx;
-    char* buffer = NULL;
-    size_t buf_bytes;
     size_t written = 0;
-    size_t padlen;
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
@@ -606,9 +608,9 @@ static int p11_cipher_final(void* cctx, unsigned char* out, size_t* outl, size_t
             return 0;
         }
 
-        if (buf_bytes > *outl)
+        if (outsize > *outl)
         {
-            ctx_log(ctx->provctx, 2, "%s cannot write final bytes, %ld in access\n", __FUNCTION__, buf_bytes - *outl);
+            ctx_log(ctx->provctx, 2, "%s cannot write final bytes, %ld in access\n", __FUNCTION__, outsize - *outl);
             return 0;
         }
 
@@ -656,6 +658,7 @@ static const OSSL_PARAM* p11_cipher_gettable_params(void* provctx)
 
 static int p11_cipher_get_params(OSSL_PARAM params[], CK_MECHANISM_TYPE type, size_t keylen, size_t block_size, size_t ivlen, unsigned int mode)
 {
+    (void)type;
     OSSL_PARAM* p;
 
     if (params == NULL)
@@ -673,6 +676,7 @@ static int p11_cipher_get_params(OSSL_PARAM params[], CK_MECHANISM_TYPE type, si
 
 static const OSSL_PARAM* p11_cipher_gettable_ctx_params(void* cctx, void* provctx)
 {
+    (void)cctx;
     PROVIDER_CTX* ctx = provctx;
 
     ctx_log(ctx, 3, "%s\n", __FUNCTION__);
@@ -702,6 +706,7 @@ static int p11_cipher_get_ctx_params(void* cctx, OSSL_PARAM params[])
 
 static const OSSL_PARAM* p11_cipher_settable_ctx_params(void* cctx, void* provctx)
 {
+    (void)provctx;
     P11_CIPHER_CTX* ctx = cctx;
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);

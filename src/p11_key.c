@@ -384,7 +384,7 @@ static EC_CURVE_INFO ec_curve_infos[] = {
 	{"edwards25519","1.3.6.1.4.1159.15.1", "\x13\x0c\x65\x64\x77\x61\x72\x64\x73\x32\x35\x35\x31\x39", 14, 255, CKM_EC_EDWARDS_KEY_PAIR_GEN, CKK_EC_EDWARDS, FALSE},
 	{"curve25519", "1.3.6.1.4.3029.1.5.1", "\x13\x0b\x63\x75\x72\x76\x65\x32\x35\x35\x31\x39", 12, 255, CKM_EC_MONTGOMERY_KEY_PAIR_GEN, CKK_EC_MONTGOMERY, TRUE},
 
-	{NULL, NULL, NULL, 0, 0, 0, 0},
+	{NULL, NULL, NULL, 0, 0, 0, 0, 0},
 };
 
 static EC_CURVE_INFO* find_ec_curve_info(const char* const name)

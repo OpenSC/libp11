@@ -4,16 +4,16 @@ DISTCLEANFILES = libp11.map
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
-if OSSL3
-EXTRA_DIST += pkcs11prov.rc.in
-endif
-
 noinst_HEADERS= libp11-int.h pkcs11.h pkcs11f.h pkcs11t.h p11_pthread.h
 include_HEADERS= libp11.h p11_err.h
 lib_LTLIBRARIES = libp11.la
 enginesexec_LTLIBRARIES = pkcs11.la
-providersexec_LTLIBRARIES = pkcs11prov.la
 pkgconfig_DATA = libp11.pc
+
+if OSSL3
+EXTRA_DIST += pkcs11prov.rc.in
+providersexec_LTLIBRARIES = pkcs11prov.la
+endif
 
 SHARED_EXT=@SHARED_EXT@
 

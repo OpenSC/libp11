@@ -308,13 +308,11 @@ int main(int argc, char* argv[])
 {
     PKCS11_CTX* ctx;
     PKCS11_SLOT *slots, *slot;
-    PKCS11_CERT* certs;
 
     PKCS11_MECHANISM* mechanisms;
     unsigned long mechcountp;
 
-    char password[20];
-    int rc, logged_in;
+    int rc;
     unsigned int nslots;
 
     if (argc < 2)
@@ -379,7 +377,7 @@ int main(int argc, char* argv[])
         printedflags++;                        \
     }
 
-    for (int i = 0; i < mechcountp; i++)
+    for (unsigned int i = 0; i < mechcountp; i++)
     {
         int printedflags = 0;
 

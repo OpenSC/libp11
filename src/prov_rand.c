@@ -189,6 +189,12 @@ static int p11_rand_instantiate(void* rctx, unsigned int strength,
     P11_RAND_CTX* ctx = rctx;
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
+    /* TODO: handle following parameters */
+    (void)strength;
+    (void)pstr;
+    (void)pstr_len;
+    (void)params;
+
     if (ctx->parent_get_seed && ctx->parent_clear_seed)
     {
         /* Use parent for seeding */
@@ -340,6 +346,8 @@ static const OSSL_PARAM* p11_rand_gettable_params(void* provctx)
 
 static const OSSL_PARAM* p11_rand_gettable_ctx_params(void* rctx, void* provctx)
 {
+    (void)rctx;
+
     static const OSSL_PARAM known_gettable_ctx_params[] = {
     OSSL_PARAM_size_t(OSSL_RAND_PARAM_MAX_REQUEST, NULL),          /* Specifies the maximum number of bytes that can be generated in a single call to OSSL_FUNC_rand_generate. */
     OSSL_PARAM_size_t(OSSL_DRBG_PARAM_RESEED_REQUESTS, NULL),      /* Reads or set the number of generate requests before reseeding the associated RAND ctx. */

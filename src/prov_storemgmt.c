@@ -116,9 +116,7 @@ const OSSL_ALGORITHM* p11_get_ops_storemgmt(void* provctx, int* no_store)
 
 static void* p11_store_open(void* provctx, const char* uri)
 {
-    PROVIDER_CTX* ctx = provctx;
     P11_STORE_CTX* storectx;
-    CK_RV rc;
 
     if (!(storectx = __new_p11_storectx()))
     {

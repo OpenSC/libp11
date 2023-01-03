@@ -113,6 +113,8 @@ err:
 
 static void* keymgmt_gen_init(void* provctx, int selection, const OSSL_PARAM params[])
 {
+    (void)params;
+    (void)selection;
     P11_KEYMGMT_CTX* ctx = NULL;
 
     ctx = __new_p11_keymgmtctx();
@@ -210,7 +212,7 @@ static int process_uri(P11_KEYMGMT_CTX* ctx)
         goto err;
     }
 
-    if (parse_pkcs11_uri(ctx->provctx, ctx->uri, &temp_token, ctx->id, &ctx->id_len, ctx->provctx->pin, &ctx->provctx->pin_length, &ctx->label))
+    if (parse_pkcs11_uri(ctx->provctx, ctx->uri, &temp_token, (unsigned char*)ctx->id, &ctx->id_len, ctx->provctx->pin, &ctx->provctx->pin_length, &ctx->label))
     {
         /* only id, label and pin are used from the uri, other parsed parts dropped */
 
@@ -241,8 +243,11 @@ static void* keymgmt_gen(void* genctx, OSSL_CALLBACK* cb, void* cbarg)
 {
     P11_KEYMGMT_CTX* ctx = genctx;
     EVP_PKEY* pkey;
-    size_t group_name_len;
     int rv;
+
+    /* TODO: handle following parameters */
+    (void)cb;
+    (void)cbarg;
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
@@ -250,7 +255,7 @@ static void* keymgmt_gen(void* genctx, OSSL_CALLBACK* cb, void* cbarg)
     process_uri(ctx);
 
     /* ID is binary here */
-    rv = pkcs11_generate_ec_key(PRIVSLOT(ctx->slot), ctx->group_name, ctx->label, ctx->id, ctx->id_len);
+    rv = pkcs11_generate_ec_key(PRIVSLOT(ctx->slot), ctx->group_name, ctx->label, (unsigned char*)ctx->id, ctx->id_len);
     if (rv)
     {
         return NULL;
@@ -260,9 +265,6 @@ static void* keymgmt_gen(void* genctx, OSSL_CALLBACK* cb, void* cbarg)
     pkey = ctx_load_privkey(ctx->provctx, ctx->uri, NULL, NULL);
 
     return pkey;
-
-err:
-    return NULL;
 }
 
 static void keymgmt_gen_cleanup(void* genctx)
@@ -276,15 +278,25 @@ static void keymgmt_gen_cleanup(void* genctx)
 
 static void keymgmt_free(void* keydata)
 {
+    /* TODO: implement or remove from available function list */
+    (void)keydata;
 }
 
 static int keymgmt_has(const void* keydata, int selection)
 {
+    /* TODO: implement or remove from available function list */
+    (void)keydata;
+    (void)selection;
+
     return 0;
 }
 
 static int keymgmt_get_params(void* keydata, OSSL_PARAM params[])
 {
+    /* TODO: implement or remove from available function list */
+    (void)keydata;
+    (void)params;
+
     return 0;
 }
 
@@ -310,6 +322,7 @@ OSSL_PARAM_END};
 
 static const OSSL_PARAM* keymgmt_gen_settable_params(void* genctx, void* provctx)
 {
+    (void)provctx;
     P11_KEYMGMT_CTX* ctx = genctx;
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
