@@ -79,6 +79,9 @@ tests/evp-sign
 tests/fork-change-slot
 tests/rsa-oaep
 tests/rsa-pss-sign
+tests/check-privkey
+tests/dup-key
+tests/store-cert
 tests/*.log
 tests/*.trs
 tests/output.*

@@ -330,11 +330,11 @@ err:
 
 static void _close_libp11(PROVIDER_CTX* ctx)
 {
-    if (ctx->pkcs11_ctx)
+    if (ctx->mechanism_list)
     {
-        PKCS11_CTX_unload(ctx->pkcs11_ctx);
-        PKCS11_CTX_free(ctx->pkcs11_ctx);
-        ctx->pkcs11_ctx = NULL;
+        free(ctx->mechanism_list);
+        ctx->mechanism_count = 0;
+        ctx->mechanism_list = NULL;
     }
 
     if (ctx->slot_list)
@@ -344,12 +344,13 @@ static void _close_libp11(PROVIDER_CTX* ctx)
         ctx->slot_list = NULL;
     }
 
-    if (ctx->mechanism_list)
+    if (ctx->pkcs11_ctx)
     {
-        free(ctx->mechanism_list);
-        ctx->mechanism_count = 0;
-        ctx->mechanism_list = NULL;
+        PKCS11_CTX_unload(ctx->pkcs11_ctx);
+        PKCS11_CTX_free(ctx->pkcs11_ctx);
+        ctx->pkcs11_ctx = NULL;
     }
+
 }
 
 /* ---------------------------------------------------------------------------------------- */

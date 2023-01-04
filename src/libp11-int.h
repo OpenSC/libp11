@@ -149,6 +149,7 @@ extern int check_object_fork(PKCS11_OBJECT_private *key);
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
+extern CK_RV C_IsModuleLoaded(void *module);
 extern void pkcs11_destroy_keys(PKCS11_SLOT_private *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_SLOT_private *);
 extern int pkcs11_reload_object(PKCS11_OBJECT_private *);
