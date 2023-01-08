@@ -137,7 +137,7 @@ CK_RV
 C_IsModuleLoaded(void *module)
 {
 #ifdef WIN32
-	auto handle = GetModuleHandleA(mspec);
+	auto handle = GetModuleHandleA(module);
 #else
 	auto handle = dlopen(module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
 #endif
