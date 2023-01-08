@@ -129,4 +129,20 @@ C_UnloadModule(void *module)
 	return CKR_OK;
 }
 
+/*
+ * Check if the pkcs11 module still opened and available.
+ * Returns CK_OK if loaded.
+ */
+CK_RV
+C_IsModuleLoaded(void *module)
+{
+#ifdef WIN32
+	void* handle = GetModuleHandleA(module);
+#else
+	void* handle = dlopen(module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+#endif
+
+	return (handle) ? CKR_OK : CKR_LIBRARY_LOAD_FAILED;
+}
+
 /* vim: set noexpandtab: */

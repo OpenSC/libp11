@@ -49,14 +49,27 @@ print_variable PKCS11URI_RSA
 print_variable PKCS11URI_EC
 echo
 
+# create output folder
+OUTDIR="output."$$
+rm -rf $OUTDIR
+mkdir $OUTDIR
+
+# prepare some data
+echo "something to sign" >$OUTDIR/data.txt
+echo "and it has a second line too" >>$OUTDIR/data.txt
+
+#
+# tests
+#
+
 echo "=================================="
 echo "check if provider loaded correctly"
-openssl list -provider pkcs11prov -providers
+openssl list -provider pkcs11prov -providers >$OUTDIR/providers.txt
 print_result $?
 
 echo "=================================="
 echo "make a hash"
-openssl dgst -provider pkcs11prov -sha256 ./data.txt
+openssl dgst -provider pkcs11prov -sha256 $OUTDIR/data.txt >$OUTDIR/hash.txt
 print_result $?
 
 ## No KDF supported yet
@@ -67,16 +80,16 @@ print_result $?
 
 echo "=================================="
 echo "cipher encrypt"
-openssl aes-256-cbc -provider pkcs11prov -pass pass:1111 -salt -in data.txt -out data.txt.cipher.encrypt
+openssl aes-256-cbc -provider pkcs11prov -pass pass:1111 -salt -in $OUTDIR/data.txt -out $OUTDIR/data.txt.cipher.encrypt
 print_result $?
 
 echo "=================================="
 echo "cipher decrypt"
-openssl aes-256-cbc -provider pkcs11prov -pass pass:1111 -d -salt -in data.txt.cipher.encrypt -out data.txt.cipher.decrypt
+openssl aes-256-cbc -provider pkcs11prov -pass pass:1111 -d -salt -in $OUTDIR/data.txt.cipher.encrypt -out $OUTDIR/data.txt.cipher.decrypt
 
 # OK if we can decrypt without pkcs11 AND the resulting file is the same
-openssl aes-256-cbc -provider default -pass pass:1111 -d -salt -in data.txt.cipher.encrypt -out data.txt.cipher.no_pkcs11.decrypt
-cmp data.txt.cipher.decrypt data.txt.cipher.no_pkcs11.decrypt
+openssl aes-256-cbc -provider default -pass pass:1111 -d -salt -in $OUTDIR/data.txt.cipher.encrypt -out $OUTDIR/data.txt.cipher.no_pkcs11.decrypt
+cmp $OUTDIR/data.txt.cipher.decrypt $OUTDIR/data.txt.cipher.no_pkcs11.decrypt
 print_result $?
 
 echo "=================================="
@@ -86,11 +99,11 @@ echo "cipher with PBKDF2 test"
 #         but Opencryptoki SW implementation does not support session state saving with OpenSSL3, hence digest disabled in these
 #         samples, with using another OpenSSL config 
 #
-OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -nosalt -pbkdf2 -in data.txt -out data.txt.cipher.pbkdf2.encrypt
-OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in data.txt.cipher.pbkdf2.encrypt -out data.txt.cipher.pbkdf2.decrypt
+OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -nosalt -pbkdf2 -in $OUTDIR/data.txt -out $OUTDIR/data.txt.cipher.pbkdf2.encrypt
+OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in $OUTDIR/data.txt.cipher.pbkdf2.encrypt -out $OUTDIR/data.txt.cipher.pbkdf2.decrypt
 # Try to decrypt without provider and check if results the same as with the provider
-openssl aes-256-cbc -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in data.txt.cipher.pbkdf2.encrypt -out data.txt.cipher.pbkdf2.no_pkcs11.decrypt
-cmp data.txt.cipher.pbkdf2.decrypt data.txt.cipher.pbkdf2.no_pkcs11.decrypt
+openssl aes-256-cbc -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in $OUTDIR/data.txt.cipher.pbkdf2.encrypt -out $OUTDIR/data.txt.cipher.pbkdf2.no_pkcs11.decrypt
+cmp $OUTDIR/data.txt.cipher.pbkdf2.decrypt $OUTDIR/data.txt.cipher.pbkdf2.no_pkcs11.decrypt
 print_result $?
 
 ## Key generation not supported yet. Generate key pair on the token with another tool first, than you can use in libp11.
@@ -102,52 +115,52 @@ print_result $?
 echo "=================================="
 echo "RSA create csr"
 ## Not working with opencryptoki openssl 3 backed software token (digest context is not copyable in this case)
-#openssl req -provider pkcs11prov -new -subj "/C=HU/O=ACME/CN=test_cert" -sha256 -key "pkcs11://"$PKCS11URI_RSA -out ./pkcs11_test.csr
+#openssl req -provider pkcs11prov -new -subj "/C=HU/O=ACME/CN=test_cert" -sha256 -key "pkcs11://"$PKCS11URI_RSA -out $OUTDIR/pkcs11_test.csr
 #
 ## This one turns of digest in libp11 and allows openssl to use the default provider for that purpose
-OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl req -provider pkcs11prov -provider default -new -subj "/C=HU/O=ACME/CN=test_cert" -sha256 -key "pkcs11://"$PKCS11URI_RSA -out ./pkcs11_test.csr
+OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl req -provider pkcs11prov -provider default -new -subj "/C=HU/O=ACME/CN=test_cert" -sha256 -key "pkcs11://"$PKCS11URI_RSA -out $OUTDIR/pkcs11_test.csr
 print_result $?
 
 echo "=================================="
 echo "RSA sign"
-openssl pkeyutl -provider pkcs11prov -sign -inkey "pkcs11://"$PKCS11URI_RSA -in ./data.txt >./data.txt.rsa.signature
+openssl pkeyutl -provider pkcs11prov -sign -inkey "pkcs11://"$PKCS11URI_RSA -in $OUTDIR/data.txt >$OUTDIR/data.txt.rsa.signature
 print_result $?
 
 echo "=================================="
 echo "RSA verify"
-openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://"$PKCS11URI_RSA -in ./data.txt -sigfile ./data.txt.rsa.signature
+openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://"$PKCS11URI_RSA -in $OUTDIR/data.txt -sigfile $OUTDIR/data.txt.rsa.signature
 print_result $?
 
 echo "=================================="
 echo "RSA encrypt"
-openssl pkeyutl -provider pkcs11prov -encrypt -inkey "pkcs11://"$PKCS11URI_RSA -in ./data.txt >./data.txt.rsa.encrypt
+openssl pkeyutl -provider pkcs11prov -encrypt -inkey "pkcs11://"$PKCS11URI_RSA -in $OUTDIR/data.txt >$OUTDIR/data.txt.rsa.encrypt
 print_result $?
 
 echo "=================================="
 echo "RSA decrypt"
-openssl pkeyutl -provider pkcs11prov -decrypt -inkey "pkcs11://"$PKCS11URI_RSA -in ./data.txt.rsa.encrypt >./data.txt.rsa.decrypt
+openssl pkeyutl -provider pkcs11prov -decrypt -inkey "pkcs11://"$PKCS11URI_RSA -in $OUTDIR/data.txt.rsa.encrypt >$OUTDIR/data.txt.rsa.decrypt
 print_result $?
 
 echo "=================================="
 echo "EC create csr"
 ## Not working with opencryptoki openssl 3 backed software token (digest context is not copyable in this case)
-#openssl req -provider pkcs11prov -new -subj "/C=HU/O=ACME/CN=test_cert_eckey" -sha256 -key "pkcs11://"$PKCS11URI_EC -out ./pkcs11_test_eckey.csr
+#openssl req -provider pkcs11prov -new -subj "/C=HU/O=ACME/CN=test_cert_eckey" -sha256 -key "pkcs11://"$PKCS11URI_EC -out $OUTDIR/pkcs11_test_eckey.csr
 #
 ## This one turns of digest in libp11 and allows openssl to use the default provider for that purpose
-OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl req -provider pkcs11prov -provider default -new -subj "/C=HU/O=ACME/CN=test_cert_eckey" -sha256 -key "pkcs11://"$PKCS11URI_EC -out ./pkcs11_test_eckey.csr
+OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl req -provider pkcs11prov -provider default -new -subj "/C=HU/O=ACME/CN=test_cert_eckey" -sha256 -key "pkcs11://"$PKCS11URI_EC -out $OUTDIR/pkcs11_test_eckey.csr
 print_result $?
 
 echo "=================================="
 echo "EC sign"
-openssl pkeyutl -provider pkcs11prov -sign -inkey "pkcs11://"$PKCS11URI_EC -in ./data.txt >./data.txt.ec.signature
+openssl pkeyutl -provider pkcs11prov -sign -inkey "pkcs11://"$PKCS11URI_EC -in $OUTDIR/data.txt >$OUTDIR/data.txt.ec.signature
 print_result $?
 
 echo "=================================="
 echo "EC verify"
-openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://"$PKCS11URI_EC -in ./data.txt -sigfile ./data.txt.ec.signature
+openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://"$PKCS11URI_EC -in $OUTDIR/data.txt -sigfile $OUTDIR/data.txt.ec.signature
 print_result $?
 
 echo "=================================="
 echo "Random number"
-openssl rand -provider pkcs11prov -hex 20
+openssl rand -provider pkcs11prov -hex 20 >$OUTDIR/rand.txt
 print_result $?

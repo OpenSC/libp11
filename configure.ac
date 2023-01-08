@@ -29,13 +29,16 @@ AC_PROG_CC
 PKG_PROG_PKG_CONFIG
 AC_C_BIGENDIAN
 
+OSSL_PKG_VERSION=`$PKG_CONFIG --modversion --silence-errors libcrypto || \
+	$PKG_CONFIG --modversion openssl`
+
 # we need to set our soversion based on openssl's soversion to avoid
 # issues with applications linking to new openssl, old libp11, and vice versa
-case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
-	$PKG_CONFIG --modversion openssl`" in
-	3.0.*) # Predicted engines directory prefix for OpenSSL 3.x
+case "$OSSL_PKG_VERSION" in
+	3.*) # Predicted engines directory prefix for OpenSSL 3.x
 		OSSL_VERSION="3.x"
 	    LIBP11_LT_OLDEST="3"
+		LIBP11_OSSL_PROVIDER="yes"
 	    debian_ssl_prefix="openssl-3.0.0";;
 	1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
 		OSSL_VERSION="1.1.x"
@@ -51,7 +54,24 @@ case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
 	    debian_ssl_prefix="ssl";;
 esac
 
-AM_CONDITIONAL([OSSL3], [test x$OSSL_VERSION = x3.x])
+# provider needs openssl >= 3.0.5
+case "$OSSL_PKG_VERSION" in
+	3.0.*) 
+		OSSL_SUB_VER=`echo $OSSL_PKG_VERSION | cut -d \. -f 3`
+		if test $OSSL_SUB_VER -gt 4 ;
+		then
+			LIBP11_OSSL_PROVIDER="yes"
+		else
+			AC_MSG_NOTICE([provider needs openssl >= 3.0.5])
+			LIBP11_OSSL_PROVIDER="no"
+		fi
+		;;
+	3.*) 
+		AC_MSG_NOTICE([3.*])
+		LIBP11_OSSL_PROVIDER="yes";;
+esac
+
+AM_CONDITIONAL([LIBP11_OSSL_PROVIDER], [test x$LIBP11_OSSL_PROVIDER = xyes])
 
 # LT Version numbers, remember to change them just *before* a release.
 #   (Code changed:                      REVISION++)

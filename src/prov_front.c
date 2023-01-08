@@ -40,6 +40,7 @@
 #include "prov_asym_cipher.h"
 #include "prov_cipher.h"
 #include "prov_digest.h"
+#include "prov_err.h"
 #include "prov_kdf.h"
 #include "prov_kem.h"
 #include "prov_keyexch.h"
@@ -330,11 +331,11 @@ err:
 
 static void _close_libp11(PROVIDER_CTX* ctx)
 {
-    if (ctx->pkcs11_ctx)
+    if (ctx->mechanism_list)
     {
-        PKCS11_CTX_unload(ctx->pkcs11_ctx);
-        PKCS11_CTX_free(ctx->pkcs11_ctx);
-        ctx->pkcs11_ctx = NULL;
+        free(ctx->mechanism_list);
+        ctx->mechanism_count = 0;
+        ctx->mechanism_list = NULL;
     }
 
     if (ctx->slot_list)
@@ -344,11 +345,11 @@ static void _close_libp11(PROVIDER_CTX* ctx)
         ctx->slot_list = NULL;
     }
 
-    if (ctx->mechanism_list)
+    if (ctx->pkcs11_ctx)
     {
-        free(ctx->mechanism_list);
-        ctx->mechanism_count = 0;
-        ctx->mechanism_list = NULL;
+        PKCS11_CTX_unload(ctx->pkcs11_ctx);
+        PKCS11_CTX_free(ctx->pkcs11_ctx);
+        ctx->pkcs11_ctx = NULL;
     }
 }
 
@@ -383,6 +384,9 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE* handle,
 
     /* Save core handle. */
     ctx->handle = handle;
+
+    /* load error strings for OpenSSL error reporting */
+    ERR_load_PROV_strings();
 
     /* Get all core functions and check existence of required ones. */
     CALL(_get_all_core_functions(ctx, in));

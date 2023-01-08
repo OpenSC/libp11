@@ -27,6 +27,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "prov_err.h"
 #include "prov_parse.h"
 #include "provider.h"
 #include "libp11-int.h"
@@ -379,7 +380,8 @@ int parse_pkcs11_uri(PROVIDER_CTX* ctx,
     tok = OPENSSL_zalloc(sizeof(PKCS11_TOKEN));
     if (!tok)
     {
-        ctx_log(ctx, 0, "Could not allocate memory for token info\n");
+        PROVerr(PROV_F_URI, PROV_R_MEMORY);
+        // ctx_log(ctx, 0, "Could not allocate memory for token info\n");
         return 0;
     }
 
@@ -444,7 +446,8 @@ int parse_pkcs11_uri(PROVIDER_CTX* ctx,
             }
             else
             {
-                ctx_log(ctx, 0, "Unknown object type\n");
+                PROVerr(PROV_F_URI, PROV_R_URI_TYPE_UNKNOWN);
+                // ctx_log(ctx, 0, "Unknown object type\n");
                 rv = 0;
             }
         }
