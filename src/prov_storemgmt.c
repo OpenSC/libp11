@@ -125,7 +125,7 @@ static void* p11_store_open(void* provctx, const char* uri)
         return NULL;
     }
 
-    storectx->provctx = provctx;
+    storectx->provctx = ctx;
 
     if (provctx == NULL || uri == NULL || strncmp("pkcs11://", uri, 9))
         goto err;

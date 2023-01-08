@@ -350,7 +350,6 @@ static void _close_libp11(PROVIDER_CTX* ctx)
         PKCS11_CTX_free(ctx->pkcs11_ctx);
         ctx->pkcs11_ctx = NULL;
     }
-
 }
 
 /* ---------------------------------------------------------------------------------------- */
