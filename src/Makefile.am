@@ -10,7 +10,7 @@ lib_LTLIBRARIES = libp11.la
 enginesexec_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
-if OSSL3
+if LIBP11_OSSL_PROVIDER
 EXTRA_DIST += pkcs11prov.rc.in
 providersexec_LTLIBRARIES = pkcs11prov.la
 endif
@@ -81,7 +81,7 @@ check-local: $(LTLIBRARIES)
 
 install-exec-hook:
 	cd '$(DESTDIR)$(enginesexecdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
-if OSSL3
+if LIBP11_OSSL_PROVIDER
 	cd '$(DESTDIR)$(providersexecdir)' && $(LN_S) -f pkcs11prov$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 endif
 

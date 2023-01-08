@@ -34,6 +34,7 @@
 #include <openssl/params.h>
 #include <openssl/store.h>
 
+#include "prov_err.h"
 #include "prov_storemgmt.h"
 
 // -------------------------------------------------------------------------------------------------
@@ -117,6 +118,7 @@ const OSSL_ALGORITHM* p11_get_ops_storemgmt(void* provctx, int* no_store)
 static void* p11_store_open(void* provctx, const char* uri)
 {
     P11_STORE_CTX* storectx;
+    PROVIDER_CTX* ctx = provctx;
 
     if (!(storectx = __new_p11_storectx()))
     {
@@ -164,7 +166,8 @@ static EVP_PKEY* p11_store_load_evp(void* storectx, OSSL_CALLBACK* object_cb, vo
 
     if (!(key = loader(ctx->provctx, ctx->uri, pw_cb, pw_cbarg)))
     {
-        ctx_log(ctx->provctx, 0, "EVP loader returned null\n");
+        P11_PROVerr(PROV_F_STOREMGMT, PROV_R_EVP_LOADER_ERR);
+        // ctx_log(ctx->provctx, 0, "EVP loader returned null\n");
         goto err;
     }
 
@@ -184,7 +187,8 @@ static EVP_PKEY* p11_store_load_evp(void* storectx, OSSL_CALLBACK* object_cb, vo
             break;
 
         default:
-            ctx_log(ctx->provctx, 0, "keytype unhandled (%d)\n", pkey_type);
+            P11_PROVerr(PROV_F_STOREMGMT, PROV_R_UNHANDLED_KEY_TYPE);
+            // ctx_log(ctx->provctx, 0, "keytype unhandled (%d)\n", pkey_type);
             goto err;
     }
 
@@ -198,7 +202,9 @@ static EVP_PKEY* p11_store_load_evp(void* storectx, OSSL_CALLBACK* object_cb, vo
 
     if (!object_cb(params, object_cbarg))
     {
-        ctx_log(ctx->provctx, 0, "object_cb returned error\n");
+        // TODO: openssl 3.0.2 itt elszall --> lasd github tesztek
+        P11_PROVerr(PROV_F_STOREMGMT, PROV_R_LOAD_OBJECT_CB);
+        // ctx_log(ctx->provctx, 0, "object_cb returned error\n");
         goto err;
     }
 
@@ -243,7 +249,8 @@ static int p11_store_load(void* storectx,
 
             if (!(ctx->privkey = p11_store_load_evp(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg, ctx_load_privkey)))
             {
-                ctx_log(ctx->provctx, 0, "ctx_load_privkey returned null\n");
+                P11_PROVerr(PROV_F_STOREMGMT, PROV_R_CANNOT_LOAD_PRIVKEY);
+                // ctx_log(ctx->provctx, 0, "ctx_load_privkey returned null\n");
                 goto err;
             }
 
@@ -263,7 +270,8 @@ static int p11_store_load(void* storectx,
 
             if (!(ctx->pubkey = p11_store_load_evp(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg, ctx_load_pubkey)))
             {
-                ctx_log(ctx->provctx, 0, "ctx_load_pubkey returned null\n");
+                P11_PROVerr(PROV_F_STOREMGMT, PROV_R_CANNOT_LOAD_PUBKEY);
+                // ctx_log(ctx->provctx, 0, "ctx_load_pubkey returned null\n");
                 goto err;
             }
 
@@ -273,7 +281,8 @@ static int p11_store_load(void* storectx,
         break;
 
         default:
-            ctx_log(ctx->provctx, 0, "unhandled type: %d\n", ctx->type);
+            P11_PROVerr(PROV_F_STOREMGMT, PROV_R_CANNOT_LOAD_UNHANDLED_DATA_TYPE);
+            // ctx_log(ctx->provctx, 0, "unhandled type: %d\n", ctx->type);
             goto err;
     }
 

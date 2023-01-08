@@ -30,14 +30,23 @@
 outdir="output.$$"
 
 OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
+SKIP_TEST="no"
 case "${OPENSSL_VERSION}" in
 3.*)
+	OSSL_SUB_VER=`echo $OPENSSL_VERSION | cut -d \. -f 3`
+	if test $OSSL_SUB_VER -lt 5 ; then
+		SKIP_TEST="yes"
+	fi
 	;;
 *)
-    echo "Provider RSA tests skipped with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
+	SKIP_TEST="yes"
 	;;
 esac
+
+if [ x$SKIP_TEST = xyes ]; then
+	echo "Provider RSA tests skipped with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
 
 # Load common test functions
 . ${srcdir}/rsa-common.sh
@@ -131,7 +140,7 @@ echo "=================================="
 echo "RSA verify"
 openssl pkeyutl -provider pkcs11prov -verify -inkey "pkcs11://"$PKCS11URI_RSA -in $DATA_FILE -sigfile $DATA_FILE".rsa.signature"
 if test $? != 0;then
-	echo "RSA verfication test with provider library failed"
+	echo "RSA verification test with provider library failed"
 	exit 1;
 fi
 

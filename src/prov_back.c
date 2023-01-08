@@ -53,13 +53,13 @@ static int ctx_ctrl_set_pin(PROVIDER_CTX* ctx, const char* pin);
 /* Utility functions                                                          */
 /******************************************************************************/
 
-static void dump_hex(PROVIDER_CTX *ctx, int level,
-		const unsigned char *val, const size_t len)
+static void dump_hex(PROVIDER_CTX* ctx, int level,
+                     const unsigned char* val, const size_t len)
 {
-	size_t n;
+    size_t n;
 
-	for (n = 0; n < len; n++)
-		ctx_log(ctx, level, "%02x", val[n]);
+    for (n = 0; n < len; n++)
+        ctx_log(ctx, level, "%02x", val[n]);
 }
 
 /******************************************************************************/
@@ -97,7 +97,8 @@ static int ctx_get_pin(PROVIDER_CTX* ctx, const char* token_label, OSSL_PASSPHRA
     /* request password; this is application specific*/
     if (!pw_cb(ctx->pin, MAX_PIN_LENGTH, &ctx->pin_length, params, pw_cbarg))
     {
-        ctx_log(ctx, 0, "pin input failed");
+        PROVerr(PROV_F_GET_PIN, PROV_R_INPUT_FAILED);
+        // ctx_log(ctx, 0, "pin input failed");
         goto err;
     }
 
@@ -170,7 +171,8 @@ static int ctx_login(PROVIDER_CTX* ctx, PKCS11_SLOT* slot, PKCS11_TOKEN* tok,
     {
         /* Login failed, so free the PIN if present */
         ctx_destroy_pin(ctx);
-        ctx_log(ctx, 0, "Login failed\n");
+        PROVerr(PROV_CTX_LOGIN, PROV_R_LOGIN_FAILED);
+        // ctx_log(ctx, 0, "Login failed\n");
         return 0;
     }
     return 1;
@@ -318,7 +320,8 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
                                           sizeof(PKCS11_SLOT*));
     if (!matched_slots)
     {
-        ctx_log(ctx, 0, "Could not allocate memory for matched slots\n");
+        PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_MEMORY);
+        // ctx_log(ctx, 0, "Could not allocate memory for matched slots\n");
         goto error;
     }
 
@@ -380,11 +383,13 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
         {
             if (found_slot)
             {
+                PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
                 ctx_log(ctx, 0, "The %s was not found on token %s\n",
                         object_typestr, found_slot->token->label[0] ? found_slot->token->label : "no label");
             }
             else
             {
+                PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
                 ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
                         object_typestr);
             }
@@ -394,6 +399,7 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
         /* If the legacy slot ID format was used */
         if (slot_nr != -1)
         {
+            PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
             ctx_log(ctx, 0, "The %s was not found on slot %d\n", object_typestr, slot_nr);
             goto error;
         }
@@ -409,6 +415,7 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
             }
             else
             {
+                PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
                 ctx_log(ctx, 0, "No tokens found\n");
                 goto error;
             }
@@ -457,6 +464,7 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
                                 slot->description ? slot->description : "(no description)",
                                 (slot->token && slot->token->label) ? slot->token->label : "no label");
                     }
+                    PROVerr(PROV_CTX_LOGIN, PROV_R_SLOT_AMBIGUOUS);
                     goto error;
                 }
             }

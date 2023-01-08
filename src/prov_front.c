@@ -385,6 +385,9 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE* handle,
     /* Save core handle. */
     ctx->handle = handle;
 
+    /* load error strings for OpenSSL error reporting */
+    ERR_load_PROV_strings();
+
     /* Get all core functions and check existence of required ones. */
     CALL(_get_all_core_functions(ctx, in));
 
