@@ -137,9 +137,9 @@ CK_RV
 C_IsModuleLoaded(void *module)
 {
 #ifdef WIN32
-	auto handle = GetModuleHandleA(module);
+	void* handle = GetModuleHandleA(module);
 #else
-	auto handle = dlopen(module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+	void* handle = dlopen(module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
 #endif
 
 	return (handle) ? CKR_OK : CKR_LIBRARY_LOAD_FAILED;

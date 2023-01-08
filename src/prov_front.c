@@ -40,6 +40,7 @@
 #include "prov_asym_cipher.h"
 #include "prov_cipher.h"
 #include "prov_digest.h"
+#include "prov_err.h"
 #include "prov_kdf.h"
 #include "prov_kem.h"
 #include "prov_keyexch.h"
