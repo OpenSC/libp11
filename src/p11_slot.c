@@ -123,6 +123,7 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	int rv = CKR_OK;
+	CK_SESSION_INFO session_info; 
 
 	if (rw < 0)
 		return -1;
@@ -136,7 +137,17 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 		if (slot->session_head != slot->session_tail) {
 			*sessionp = slot->session_pool[slot->session_head];
 			slot->session_head = (slot->session_head + 1) % slot->session_poolsize;
-			break;
+
+			/* Check if session is valid */
+			rv = CRYPTOKI_call(ctx,
+				C_GetSessionInfo(*sessionp, &session_info));
+			if (rv == CKR_OK) {
+				break;
+			} else {
+				/* Forget this session */
+				slot->num_sessions--;
+				continue;
+			}
 		}
 
 		/* Check if new can be instantiated */
