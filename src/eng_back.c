@@ -667,15 +667,32 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_CERT *certs, *selected_cert = NULL;
+	PKCS11_CERT cert_template = {0};
 	unsigned int m, cert_count;
 	const char *which;
 
-	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
+	errno = 0;
+	cert_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
+	if (errno != 0) {
+		ctx_log(ctx, 0, "%s", strerror(errno));
+		goto cleanup;
+	}
+	if (obj_id_len) {
+		cert_template.id = OPENSSL_malloc(obj_id_len);
+		if (!cert_template.id) {
+			ctx_log(ctx, 0, "Could not allocate memory for ID\n");
+			goto cleanup;
+		}
+		memcpy(cert_template.id, obj_id, obj_id_len);
+		cert_template.id_len = obj_id_len;
+	}
+
+	if (PKCS11_enumerate_certs_ext(tok, &cert_template, &certs, &cert_count)) {
 		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-		return NULL;
+		goto cleanup;
 	}
 	if (cert_count == 0)
-		return NULL;
+		goto cleanup;
 
 	ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
@@ -737,6 +754,9 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		ctx_log(ctx, 1, "No matching certificate returned.\n");
 	}
 
+cleanup:
+	OPENSSL_free(cert_template.label);
+	OPENSSL_free(cert_template.id);
 	return selected_cert;
 }
 
@@ -830,32 +850,57 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	return selected_key;
 }
 
+static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const unsigned int isPrivate, const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+{
+	PKCS11_KEY *keys;
+	PKCS11_KEY key_template = {0};
+	unsigned int key_count;
+	void *ret = NULL;
+
+	key_template.isPrivate = isPrivate;
+	errno = 0;
+	key_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
+	if (errno != 0) {
+		ctx_log(ctx, 0, "%s", strerror(errno));
+		goto cleanup;
+	}
+	if (obj_id_len) {
+		key_template.id = OPENSSL_malloc(obj_id_len);
+		if (!key_template.id) {
+			ctx_log(ctx, 0, "Could not allocate memory for ID\n");
+			goto cleanup;
+		}
+		memcpy(key_template.id, obj_id, obj_id_len);
+		key_template.id_len = obj_id_len;
+	}
+
+	/* Make sure there is at least one private key on the token */
+	if (key_template.isPrivate != 0 && PKCS11_enumerate_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
+		goto cleanup;
+	}
+	else if (key_template.isPrivate == 0 && PKCS11_enumerate_public_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
+		goto cleanup;
+	}
+	ret = match_key(ctx, key_template.isPrivate ? "private" : "public", keys, key_count, obj_id, obj_id_len, obj_label);
+cleanup:
+	OPENSSL_free(key_template.label);
+	OPENSSL_free(key_template.id);
+	return ret;
+}
+
 static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
 {
-	PKCS11_KEY *keys;
-	unsigned int key_count;
-
-	/* Make sure there is at least one public key on the token */
-	if (PKCS11_enumerate_public_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
-		return 0;
-	}
-	return match_key(ctx, "public", keys, key_count, obj_id, obj_id_len, obj_label);
+	return match_key_int(ctx, tok, 0, obj_id, obj_id_len, obj_label);
 }
 
 static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
 {
-	PKCS11_KEY *keys;
-	unsigned int key_count;
-
-	/* Make sure there is at least one private key on the token */
-	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
-		return 0;
-	}
-	return match_key(ctx, "private", keys, key_count, obj_id, obj_id_len, obj_label);
+	return match_key_int(ctx, tok, 1, obj_id, obj_id_len, obj_label);
 }
 
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,

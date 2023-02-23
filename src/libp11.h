@@ -262,12 +262,20 @@ extern int PKCS11_logout(PKCS11_SLOT * slot);
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
 	PKCS11_KEY **, unsigned int *);
 
+/* Get a list of private keys associated with this token and matching the key template */
+extern int PKCS11_enumerate_keys_ext(PKCS11_TOKEN *,
+	const PKCS11_KEY *, PKCS11_KEY **, unsigned int *);
+
 /* Remove the key from this token */
 extern int PKCS11_remove_key(PKCS11_KEY *);
 
 /* Get a list of public keys associated with this token */
 extern int PKCS11_enumerate_public_keys(PKCS11_TOKEN *,
 	PKCS11_KEY **, unsigned int *);
+
+/* Get a list of public keys associated with this token and matching the key template */
+extern int PKCS11_enumerate_public_keys_ext(PKCS11_TOKEN *,
+	const PKCS11_KEY *, PKCS11_KEY **, unsigned int *);
 
 /* Get the key type (as EVP_PKEY_XXX) */
 extern int PKCS11_get_key_type(PKCS11_KEY *);
@@ -298,6 +306,10 @@ extern PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *);
 
 /* Get a list of all certificates associated with this token */
 extern int PKCS11_enumerate_certs(PKCS11_TOKEN *, PKCS11_CERT **, unsigned int *);
+
+/* Get a list of all certificates associated with this token and matching cert template */
+extern int PKCS11_enumerate_certs_ext(PKCS11_TOKEN *,
+	const PKCS11_CERT *, PKCS11_CERT **, unsigned int *);
 
 /* Remove the certificate from this token */
 extern int PKCS11_remove_certificate(PKCS11_CERT *);

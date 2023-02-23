@@ -26,23 +26,34 @@
 #include "libp11-int.h"
 #include <string.h>
 
-static int pkcs11_find_certs(PKCS11_SLOT_private *, CK_SESSION_HANDLE);
+static int pkcs11_find_certs(PKCS11_SLOT_private *, PKCS11_TEMPLATE *, CK_SESSION_HANDLE);
 static int pkcs11_next_cert(PKCS11_CTX_private *, PKCS11_SLOT_private *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_SLOT_private *token, CK_SESSION_HANDLE session,
 	CK_OBJECT_HANDLE o, PKCS11_CERT **);
 
 /*
- * Enumerate all certs on the card
+ * Enumerate all certs matching with cert_template on the card
  */
-int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, PKCS11_CERT **certp, unsigned int *countp)
+int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, const PKCS11_CERT *cert_template, PKCS11_CERT **certp, unsigned int *countp)
 {
 	CK_SESSION_HANDLE session;
 	int rv;
+	PKCS11_TEMPLATE tmpl = {0};
+	CK_OBJECT_CLASS object_class = CKO_CERTIFICATE;
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
+
+	if (cert_template) {
+		if (cert_template->id_len)
+			pkcs11_addattr(&tmpl, CKA_ID, cert_template->id, cert_template->id_len);
+
+		if (cert_template->label)
+			pkcs11_addattr_s(&tmpl, CKA_LABEL, cert_template->label);
+	}
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = pkcs11_find_certs(slot, session);
+	rv = pkcs11_find_certs(slot, &tmpl, session);
 	pkcs11_put_session(slot, session);
 	if (rv < 0) {
 		pkcs11_destroy_certs(slot);
@@ -62,10 +73,12 @@ int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, PKCS11_CERT **certp, unsig
 PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key)
 {
 	PKCS11_OBJECT_private *cpriv;
-	PKCS11_CERT *cert;
+	PKCS11_CERT *cert, cert_template = {0};
 	unsigned int n, count;
 
-	if (pkcs11_enumerate_certs(key->slot, &cert, &count))
+	cert_template.id = key->id;
+	cert_template.id_len = key->id_len;
+	if (pkcs11_enumerate_certs(key->slot, &cert_template, &cert, &count))
 		return NULL;
 	for (n = 0; n < count; n++, cert++) {
 		cpriv = PRIVCERT(cert);
@@ -77,20 +90,15 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key)
 }
 
 /*
- * Find all certs of a given type (public or private)
+ * Find all certs of a given type (public or private) and matching template
  */
-static int pkcs11_find_certs(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session)
+static int pkcs11_find_certs(PKCS11_SLOT_private *slot, PKCS11_TEMPLATE *tmpl, CK_SESSION_HANDLE session)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_OBJECT_CLASS cert_search_class;
-	CK_ATTRIBUTE cert_search_attrs[] = {
-		{CKA_CLASS, &cert_search_class, sizeof(cert_search_class)},
-	};
 	int rv, res = -1;
 
 	/* Tell the PKCS11 lib to enumerate all matching objects */
-	cert_search_class = CKO_CERTIFICATE;
-	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, cert_search_attrs, 1));
+	rv = CRYPTOKI_call(ctx, C_FindObjectsInit(session, tmpl->attrs, tmpl->nattr));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_CERTS, rv);
 
 	do {

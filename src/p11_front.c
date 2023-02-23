@@ -182,13 +182,26 @@ int PKCS11_logout(PKCS11_SLOT *pslot)
 	return pkcs11_logout(slot);
 }
 
-int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
+int PKCS11_enumerate_keys_ext(PKCS11_TOKEN *token, const PKCS11_KEY *key_template,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_KEY tmpl_local = {0};
+
+	if (!key_template) {
+		tmpl_local.isPrivate = 1;
+		key_template = &tmpl_local;
+	}
+
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_enumerate_keys(slot, CKO_PRIVATE_KEY, keys, nkeys);
+	return pkcs11_enumerate_keys(slot, CKO_PRIVATE_KEY, key_template, keys, nkeys);
+}
+
+int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
+		PKCS11_KEY **keys, unsigned int *nkeys)
+{
+	return PKCS11_enumerate_keys_ext(token, NULL, keys, nkeys);
 }
 
 int PKCS11_remove_key(PKCS11_KEY *pkey)
@@ -199,13 +212,26 @@ int PKCS11_remove_key(PKCS11_KEY *pkey)
 	return pkcs11_remove_object(key);
 }
 
-int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
+int PKCS11_enumerate_public_keys_ext(PKCS11_TOKEN *token, const PKCS11_KEY *key_template,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_KEY tmpl_local = {0};
+
+	if (!key_template) {
+		tmpl_local.isPrivate = 0;
+		key_template = &tmpl_local;
+	}
+
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_enumerate_keys(slot, CKO_PUBLIC_KEY, keys, nkeys);
+	return pkcs11_enumerate_keys(slot, CKO_PUBLIC_KEY, key_template, keys, nkeys);
+}
+
+int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
+		PKCS11_KEY **keys, unsigned int *nkeys)
+{
+	return PKCS11_enumerate_public_keys_ext(token, NULL, keys, nkeys);
 }
 
 int PKCS11_get_key_type(PKCS11_KEY *pkey)
@@ -248,13 +274,19 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *pcert)
 	return pkcs11_find_key(cert);
 }
 
-int PKCS11_enumerate_certs(PKCS11_TOKEN *token,
+int PKCS11_enumerate_certs_ext(PKCS11_TOKEN *token, const PKCS11_CERT *cert_template,
 		PKCS11_CERT **certs, unsigned int *ncerts)
 {
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_enumerate_certs(slot, certs, ncerts);
+	return pkcs11_enumerate_certs(slot, cert_template, certs, ncerts);
+}
+
+int PKCS11_enumerate_certs(PKCS11_TOKEN *token,
+		PKCS11_CERT **certs, unsigned int *ncerts)
+{
+	return PKCS11_enumerate_certs_ext(token, NULL, certs, ncerts);
 }
 
 int PKCS11_remove_certificate(PKCS11_CERT *pcert)
