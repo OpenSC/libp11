@@ -136,7 +136,7 @@ void pkcs11_addattr_s(PKCS11_TEMPLATE *tmpl, int type, const char *s)
 void pkcs11_addattr_bn(PKCS11_TEMPLATE *tmpl, int type, const BIGNUM *bn)
 {
 	int n = BN_num_bytes(bn);
-	uint8_t *buf = OPENSSL_malloc(n);
+	unsigned char *buf = OPENSSL_malloc(n);
 	unsigned int i;
 
 	if (buf && BN_bn2bin(bn, buf) == n) {
