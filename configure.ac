@@ -207,6 +207,8 @@ PKG_CHECK_MODULES(
 	[AC_MSG_ERROR([libcrypto >= 0.9.8 is required])]
 )
 
+AC_CHECK_FUNCS([ X509_get0_notAfter X509_get0_notBefore ])
+
 if test -n "${pkcs11_module}"; then
 	AC_DEFINE_UNQUOTED(
 		[DEFAULT_PKCS11_MODULE],
