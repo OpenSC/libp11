@@ -241,7 +241,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	case NID_sha384:
 		ckm_md = CKM_SHA384;
 		break;
-#if !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		ckm_md = CKM_SHA3_224;
 		break;
