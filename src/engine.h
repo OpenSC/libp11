@@ -94,6 +94,15 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	const char *slot_id, int *slot,
 	unsigned char *id, size_t * id_len, char **label);
 
+/* switch to legacy call if get0 variant is not available */
+#ifndef HAVE_X509_GET0_NOTBEFORE
+#	define X509_get0_notBefore X509_get_notBefore
+#endif
+
+#ifndef HAVE_X509_GET0_NOTAFTER
+#	define X509_get0_notAfter X509_get_notAfter
+#endif
+
 #endif
 
 /* vim: set noexpandtab: */
