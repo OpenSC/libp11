@@ -17,6 +17,20 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
+# OpenSSL settings
+if test -n "${PKG_CONFIG_PATH}"; then
+    OPENSSL_PATH="${PKG_CONFIG_PATH}/../.."
+    if command -v "${OPENSSL_PATH}/bin/openssl" &> /dev/null; then
+        OPENSSL="${OPENSSL_PATH}/bin/openssl"
+        export LD_LIBRARY_PATH="${OPENSSL_PATH}/lib:${OPENSSL_PATH}/lib64"
+    else
+        OPENSSL=openssl
+    fi
+else
+    OPENSSL=openssl
+fi
+echo "Compiled with: `${OPENSSL} version`"
+
 OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
 case "${OPENSSL_VERSION}" in
 0.*)

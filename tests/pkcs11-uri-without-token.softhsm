@@ -53,7 +53,7 @@ PUBLIC_KEY="pkcs11:object=server-key;type=public;pin-value=1234"
 echo "secret" >"${outdir}/in.txt"
 
 # Generate signature without specifying the token in the PKCS#11 URI
-openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
 	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? != 0;then
 	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY}"
@@ -61,7 +61,7 @@ if test $? != 0;then
 fi
 
 # Verify the signature without specifying the token in the PKCS#11 URI
-openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY}" \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY}" \
 	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? != 0;then
 	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"

@@ -45,6 +45,7 @@ TESTS = $(dist_check_SCRIPTS)
 TESTS_ENVIRONMENT =	\
 	LC_ALL="C" \
 	EXEEXT=$(EXEEXT) \
+	PKG_CONFIG_PATH="$(PKG_CONFIG_PATH)" \
 	top_builddir="$(top_builddir)" \
 	srcdir="$(srcdir)"
 

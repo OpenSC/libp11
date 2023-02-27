@@ -71,7 +71,7 @@ CERTIFICATE="pkcs11:object=label-3;type=cert;pin-value=1234"
 echo "secret" > "${outdir}/in.txt"
 
 # Verify that it doesn't try to login if more than one token matched the search
-openssl pkeyutl -engine pkcs11 -keyform engine \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
 	-inkey "${PRIVATE_KEY_WITHOUT_TOKEN}" \
 	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? = 0;then
@@ -80,7 +80,7 @@ if test $? = 0;then
 fi
 
 # Generate signature specifying the token in the PKCS#11 URI
-openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
 	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? != 0;then
 	echo "Failed to sign file using PKCS#11 URI ${PRIVATE_KEY}"
@@ -91,7 +91,7 @@ fi
 i=0
 while [ $i -le ${NUM_DEVICES} ]; do
 	pubkey="pkcs11:object=label-$i;type=public;pin-value=1234"
-	openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${pubkey}" \
+	${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${pubkey}" \
 		-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 	if test $? != 0;then
 		echo "Failed to verify the signature using the PKCS#11 URI ${pubkey}"
@@ -101,7 +101,7 @@ while [ $i -le ${NUM_DEVICES} ]; do
 done
 
 # Verify the signature using a certificate without specifying the token
-openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${CERTIFICATE}" \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${CERTIFICATE}" \
 	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? != 0;then
 	echo "Failed to verify the signature using the PKCS#11 URI ${CERTIFICATE}"
@@ -109,7 +109,7 @@ if test $? != 0;then
 fi
 
 # Verify the signature using the first public key found
-openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_ANY}" \
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_ANY}" \
 	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if test $? != 0;then
 	echo "Failed to verify the signature using the PKCS#11 URI ${PUBLIC_KEY_ANY}."

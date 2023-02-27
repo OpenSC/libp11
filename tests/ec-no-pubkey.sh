@@ -17,6 +17,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# OpenSSL settings
+if test -n "${PKG_CONFIG_PATH}"; then
+    OPENSSL_PATH="${PKG_CONFIG_PATH}/../.."
+    if command -v "${OPENSSL_PATH}/bin/openssl" &> /dev/null; then
+        OPENSSL="${OPENSSL_PATH}/bin/openssl"
+        export LD_LIBRARY_PATH="${OPENSSL_PATH}/lib:${OPENSSL_PATH}/lib64"
+    else
+        OPENSSL=openssl
+    fi
+else
+    OPENSSL=openssl
+fi
+echo "Compiled with: `${OPENSSL} version`"
+
 OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
 case "${OPENSSL_VERSION}" in
 0.*)
@@ -114,7 +128,7 @@ if test $? != 0;then
 	exit 1;
 fi
 
-openssl x509 -in ${srcdir}/ec-cert.der -inform DER -out ${outdir}/ec-cert.pem -outform PEM
+${OPENSSL} x509 -in ${srcdir}/ec-cert.der -inform DER -out ${outdir}/ec-cert.pem -outform PEM
 
 echo "***************"
 echo "Listing objects"
