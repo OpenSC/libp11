@@ -23,6 +23,7 @@ dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
 	rsa-testlistkeys.softhsm \
+	rsa-testlistkeys_ext.softhsm \
 	rsa-evp-sign.softhsm \
 	ec-evp-sign.softhsm \
 	ec-testfork.softhsm \
