@@ -1,0 +1,72 @@
+#!/bin/sh
+
+# Copyright (C) 2023 Koninklijke Philips N.V.
+#
+# This is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at
+# your option) any later version.
+#
+# GnuTLS is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GnuTLS; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/rsa-common.sh
+
+# Do the common test initialization
+common_init
+
+import_objects 01020314 "server-key1" "libp11-test"
+import_objects 01020324 "server-key2" "libp11-test"
+import_objects 01020334 "server-key3" "libp11-test"
+import_objects 01020344 "server-key4" "libp11-test"
+
+
+# Run the test
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" | grep -q 'nkeys:5'
+if test $? != 0;then
+	echo "Failed when no search parameters were given. 5 Keys should have been found."
+	exit 1;
+fi
+
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020314 | grep -q 'nkeys:1'
+if test $? != 0;then
+	echo "Failed when searching with id. Only 1 key should have been found."
+	exit 1;
+fi
+
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 1020314 | grep -q 'nkeys:1'
+if test $? != 0;then
+	echo "Failed when searching with id. Only 1 key should have been found."
+	exit 1;
+fi
+
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -l server-key3 | grep -q 'nkeys:1'
+if test $? != 0;then
+	echo "Failed when searching with label. Only 1 key should have been found."
+	exit 1;
+fi
+
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020334 -l server-key3 | grep -q 'nkeys:1'
+if test $? != 0;then
+	echo "Failed when searching with id and label. Only 1 key should have been found."
+	exit 1;
+fi
+
+../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020334 -l server-key1
+if test $? = 0;then
+	echo "Did not fail when no keys should have been found."
+	exit 1;
+fi
+
+rm -rf "$outdir"
+
+exit 0
