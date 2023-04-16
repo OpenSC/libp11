@@ -123,7 +123,7 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	int rv = CKR_OK;
-	CK_SESSION_INFO session_info; 
+	CK_SESSION_INFO session_info;
 
 	if (rw < 0)
 		return -1;
@@ -282,14 +282,22 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
+	unsigned char ck_label[32] = { };
 	int rv;
+
+	/* Must be padded with blank characters */
+	memset(ck_label, ' ', sizeof(ck_label))
 
 	if (!label)
 		label = "PKCS#11 Token";
+
+	/* Must not be null terminated */
+	memcpy(ck_label, label, strnlen(label, sizeof(ck_label)));
+
 	rv = CRYPTOKI_call(ctx,
 		C_InitToken(slot->id,
 			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
-			(CK_UTF8CHAR *) label));
+			(CK_UTF8CHAR *) ck_label));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
