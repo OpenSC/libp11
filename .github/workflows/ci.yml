@@ -74,7 +74,9 @@ jobs:
           - arch: 'x64'
             openssl_version: '1.1.1'
             build_for: 'WIN64'
-            openssl_dir: 'C:\Program Files\OpenSSL-Win64'
+            # Use OpenSSL from PostgreSQL, because Chocolatey is broken
+            #openssl_dir: 'C:\Program Files\OpenSSL-Win64'
+            openssl_dir: 'C:\Program Files\PostgreSQL\14'
           - arch: 'x86'
             openssl_version: '3.0'
             build_for: 'WIN32'
@@ -113,7 +115,7 @@ jobs:
         vcpkg install --triplet=${{matrix.arch}}-windows openssl
         echo "${{matrix.openssl_dir}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Show OpenSSL version
+    - name: System information
       run: openssl version -a
 
     - name: Build
