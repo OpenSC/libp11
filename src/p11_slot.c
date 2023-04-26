@@ -282,11 +282,11 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	unsigned char ck_label[32] = { };
+	unsigned char ck_label[32];
 	int rv;
 
 	/* Must be padded with blank characters */
-	memset(ck_label, ' ', sizeof(ck_label))
+	memset(ck_label, ' ', sizeof ck_label);
 
 	if (!label)
 		label = "PKCS#11 Token";
