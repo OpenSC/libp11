@@ -180,6 +180,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
+	if(!obj)
+		return;
 	if (obj->evp_key) {
 		/* When the EVP object is reference count goes to zero,
 		 * it will call this function again. */
