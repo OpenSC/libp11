@@ -119,6 +119,14 @@ int pkcs11_open_session(PKCS11_SLOT_private *slot, int rw)
 	return 0;
 }
 
+
+static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
+{
+	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
+	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
+	pkcs11_destroy_certs(slot);
+}
+
 int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *sessionp)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -146,6 +154,13 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 			} else {
 				/* Forget this session */
 				slot->num_sessions--;
+				if (slot->num_sessions == 0) {
+					/* Object handles are valid across
+					   sessions, so the cache should only be
+					   cleared when there are no valid
+					   sessions.*/
+					pkcs11_wipe_cache(slot);
+				}
 				continue;
 			}
 		}
@@ -245,13 +260,6 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 	}
 
 	return 0;
-}
-
-static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
-{
-	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
-	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
-	pkcs11_destroy_certs(slot);
 }
 
 /*
