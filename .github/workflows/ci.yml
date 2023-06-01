@@ -15,7 +15,6 @@ jobs:
         include:
           - os: 'ubuntu-22.04'
           - os: 'ubuntu-20.04'
-          - os: 'ubuntu-18.04'
           - os: 'macOS-latest'
             openssl: 'openssl@3'
           - os: 'macOS-latest'
@@ -36,8 +35,9 @@ jobs:
     - name: Install brew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install automake ${{matrix.openssl}} opensc softhsm
-        echo "/usr/local/opt/openssl/bin" >> $GITHUB_PATH
+        brew install automake ${{matrix.openssl}} softhsm
+        brew install --cask opensc
+        echo "/usr/local/opt/${{matrix.openssl}}/bin" >> $GITHUB_PATH
 
     - name: System information
       run: |
@@ -74,7 +74,9 @@ jobs:
           - arch: 'x64'
             openssl_version: '1.1.1'
             build_for: 'WIN64'
-            openssl_dir: 'C:\Program Files\OpenSSL-Win64'
+            # Use OpenSSL from PostgreSQL, because Chocolatey is broken
+            #openssl_dir: 'C:\Program Files\OpenSSL-Win64'
+            openssl_dir: 'C:\Program Files\PostgreSQL\14'
           - arch: 'x86'
             openssl_version: '3.0'
             build_for: 'WIN32'
@@ -113,7 +115,7 @@ jobs:
         vcpkg install --triplet=${{matrix.arch}}-windows openssl
         echo "${{matrix.openssl_dir}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Show OpenSSL version
+    - name: System information
       run: openssl version -a
 
     - name: Build

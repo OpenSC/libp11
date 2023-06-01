@@ -197,7 +197,7 @@ static CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md)
 		return CKM_SHA512;
 	case NID_sha384:
 		return CKM_SHA384;
-#if !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		return CKM_SHA3_224;
 	case NID_sha3_256:
@@ -225,7 +225,7 @@ static CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
 		return CKG_MGF1_SHA512;
 	case NID_sha384:
 		return CKG_MGF1_SHA384;
-#if !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
 	case NID_sha3_224:
 		return CKG_MGF1_SHA3_224;
 	case NID_sha3_256:
@@ -696,11 +696,15 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 {
 	static int pkey_nids[] = {
 		EVP_PKEY_RSA,
+#ifndef OPENSSL_NO_EC
 		EVP_PKEY_EC,
+#endif /* OPENSSL_NO_EC */
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
+#ifndef OPENSSL_NO_EC
 	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
+#endif /* OPENSSL_NO_EC */
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */

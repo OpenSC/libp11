@@ -32,10 +32,14 @@
 #include "config.h"
 #endif
 
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include "libp11.h"
 #include "eng_err.h"
+
 #include <stdio.h>
 #include <string.h>
+
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
@@ -89,6 +93,15 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 int parse_slot_id_string(ENGINE_CTX *ctx,
 	const char *slot_id, int *slot,
 	unsigned char *id, size_t * id_len, char **label);
+
+/* switch to legacy call if get0 variant is not available */
+#ifndef HAVE_X509_GET0_NOTBEFORE
+#	define X509_get0_notBefore X509_get_notBefore
+#endif
+
+#ifndef HAVE_X509_GET0_NOTAFTER
+#	define X509_get0_notAfter X509_get_notAfter
+#endif
 
 #endif
 

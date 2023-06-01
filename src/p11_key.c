@@ -151,7 +151,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
 {
-	PKCS11_OBJECT_private *obj;
+	PKCS11_OBJECT_private *obj = NULL;
+	CK_OBJECT_HANDLE object_handle;
 	int release = 0;
 
 	if (session == CK_INVALID_HANDLE) {
@@ -160,8 +161,9 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 		release = 1;
 	}
 
-	obj = pkcs11_object_from_handle(slot, session,
-		pkcs11_handle_from_template(slot, session, tmpl));
+	object_handle = pkcs11_handle_from_template(slot, session, tmpl);
+	if(object_handle)
+		obj = pkcs11_object_from_handle(slot, session, object_handle);
 
 	if (release)
 		pkcs11_put_session(slot, session);
@@ -180,10 +182,11 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
-	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
+	if(!obj)
 		return;
-
-	if (obj->evp_key) {
+  if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
+		return;
+  if (obj->evp_key) {
 		/* When the EVP object is reference count goes to zero,
 		 * it will call this function again. */
 		EVP_PKEY *pkey = obj->evp_key;

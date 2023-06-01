@@ -119,10 +119,19 @@ int pkcs11_open_session(PKCS11_SLOT_private *slot, int rw)
 	return 0;
 }
 
+
+static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
+{
+	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
+	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
+	pkcs11_destroy_certs(slot);
+}
+
 int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *sessionp)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	int rv = CKR_OK;
+	CK_SESSION_INFO session_info;
 
 	if (rw < 0)
 		return -1;
@@ -136,7 +145,24 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 		if (slot->session_head != slot->session_tail) {
 			*sessionp = slot->session_pool[slot->session_head];
 			slot->session_head = (slot->session_head + 1) % slot->session_poolsize;
-			break;
+
+			/* Check if session is valid */
+			rv = CRYPTOKI_call(ctx,
+				C_GetSessionInfo(*sessionp, &session_info));
+			if (rv == CKR_OK) {
+				break;
+			} else {
+				/* Forget this session */
+				slot->num_sessions--;
+				if (slot->num_sessions == 0) {
+					/* Object handles are valid across
+					   sessions, so the cache should only be
+					   cleared when there are no valid
+					   sessions.*/
+					pkcs11_wipe_cache(slot);
+				}
+				continue;
+			}
 		}
 
 		/* Check if new can be instantiated */
@@ -236,13 +262,6 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 	return 0;
 }
 
-static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
-{
-	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
-	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
-	pkcs11_destroy_certs(slot);
-}
-
 /*
  * Log out
  */
@@ -271,14 +290,22 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
+	unsigned char ck_label[32];
 	int rv;
+
+	/* Must be padded with blank characters */
+	memset(ck_label, ' ', sizeof ck_label);
 
 	if (!label)
 		label = "PKCS#11 Token";
+
+	/* Must not be null terminated */
+	memcpy(ck_label, label, strnlen(label, sizeof(ck_label)));
+
 	rv = CRYPTOKI_call(ctx,
 		C_InitToken(slot->id,
 			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
-			(CK_UTF8CHAR *) label));
+			(CK_UTF8CHAR *) ck_label));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
