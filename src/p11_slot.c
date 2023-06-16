@@ -76,9 +76,14 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 	for (n = 0; n < nslots; n++) {
 		PKCS11_SLOT_private *slot = NULL;
 		for (i = 0; i < *countp; i++) {
-			if (PRIVSLOT(slotp[i])->id != slotid[n])
+			PKCS11_SLOT_private *slot_old_private =
+				PRIVSLOT(&((*slotp)[i]));
+			if (slot_old_private->id != slotid[n])
 				continue;
-			slot = pkcs11_slot_ref(PRIVSLOT(slotp[i]));
+			/* Increase ref count so it doesn't get freed when ref
+			 * count is decremented in pkcs11_release_all_slots
+			 * at the end of this function. */
+			slot = pkcs11_slot_ref(slot_old_private);
 			break;
 		}
 		if (!slot)
@@ -447,10 +452,10 @@ PKCS11_SLOT_private *pkcs11_slot_ref(PKCS11_SLOT_private *slot)
 	return slot;
 }
 
-void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
+int pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 {
 	if (pkcs11_atomic_add(&slot->refcnt, -1, &slot->lock) != 0)
-		return;
+		return 0;
 
 	pkcs11_wipe_cache(slot);
 	if (slot->prev_pin) {
@@ -461,6 +466,8 @@ void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 	OPENSSL_free(slot->session_pool);
 	pthread_mutex_destroy(&slot->lock);
 	pthread_cond_destroy(&slot->cond);
+
+	return 1;
 }
 
 static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, PKCS11_SLOT_private *spriv)
@@ -500,11 +507,13 @@ static void pkcs11_release_slot(PKCS11_SLOT *slot)
 		pkcs11_destroy_token(slot->token);
 		OPENSSL_free(slot->token);
 	}
-	if (spriv)
-		pkcs11_slot_unref(spriv);
+	if (spriv) {
+		if (pkcs11_slot_unref(spriv) != 0) {
+			OPENSSL_free(slot->_private);
+		}
+	}
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);
-	OPENSSL_free(slot->_private);
 
 	memset(slot, 0, sizeof(*slot));
 }
