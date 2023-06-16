@@ -220,8 +220,9 @@ extern unsigned long pkcs11_get_slotid_from_slot(PKCS11_SLOT_private *);
 /* Increment slot reference count */
 extern PKCS11_SLOT_private *pkcs11_slot_ref(PKCS11_SLOT_private *slot);
 
-/* Decrement slot reference count, free if it becomes zero */
-extern void pkcs11_slot_unref(PKCS11_SLOT_private *slot);
+/* Decrement slot reference count, free if it becomes zero.
+ * Returns 1 if it was freed. */
+extern int pkcs11_slot_unref(PKCS11_SLOT_private *slot);
 
 /* Free the list of slots allocated by PKCS11_enumerate_slots() */
 extern void pkcs11_release_all_slots(PKCS11_SLOT *slots, unsigned int nslots);
