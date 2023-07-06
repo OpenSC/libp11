@@ -60,4 +60,79 @@ int pkcs11_atomic_add(int *value, int amount, pthread_mutex_t *lock)
 #endif
 }
 
+/* Stolen from OpenSC/src/libopensc/sc.c */
+int pkcs11_hex_to_bin(const char *in, unsigned char *out, size_t *outlen)
+{
+	const char *sc_hex_to_bin_separators = " :";
+	if (in == NULL || out == NULL || outlen == NULL) {
+		return -1;
+	}
+
+	int byte_needs_nibble = 0;
+	int r = 0;
+	size_t left = *outlen;
+	unsigned char byte = 0;
+	while (*in != '\0' && 0 != left) {
+		char c = *in++;
+		unsigned char nibble;
+		if ('0' <= c && c <= '9')
+			nibble = c - '0';
+		else if ('a' <= c && c <= 'f')
+			nibble = c - 'a' + 10;
+		else if ('A' <= c && c <= 'F')
+			nibble = c - 'A' + 10;
+		else {
+			if (strchr(sc_hex_to_bin_separators, (int) c)) {
+				if (byte_needs_nibble) {
+					r = -2;
+					goto err;
+				}
+				continue;
+			}
+			r = -3;
+			goto err;
+		}
+
+		if (byte_needs_nibble) {
+			byte |= nibble;
+			*out++ = (unsigned char) byte;
+			left--;
+			byte_needs_nibble = 0;
+		} else {
+			byte  = nibble << 4;
+			byte_needs_nibble = 1;
+		}
+	}
+
+	if (left == *outlen && 1 == byte_needs_nibble && 0 != left) {
+		/* no output written so far, but we have a valid nibble in the upper
+		 * bits. Allow this special case. */
+		*out = (unsigned char) byte>>4;
+		left--;
+		byte_needs_nibble = 0;
+	}
+
+	/* for ease of implementation we only accept completely hexed bytes. */
+	if (byte_needs_nibble) {
+		r = -4;
+		goto err;
+	}
+
+	/* skip all trailing separators to see if we missed something */
+	while (*in != '\0') {
+		if (NULL == strchr(sc_hex_to_bin_separators, (int) *in))
+			break;
+		in++;
+	}
+	if (*in != '\0') {
+		r = -5;
+		goto err;
+	}
+
+err:
+	*outlen -= left;
+	return r;
+}
+
+
 /* vim: set noexpandtab: */

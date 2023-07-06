@@ -79,6 +79,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"RE_ENUMERATE",
 		"re enumerate slots",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_KEYGEN,
+		"KEYGEN",
+		"Generate asymmetric key pair",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 
