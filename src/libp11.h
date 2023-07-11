@@ -423,30 +423,8 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
  */
 extern void ERR_load_PKCS11_strings(void);
 
-#if defined(_LIBP11_INT_H)
-	/* Deprecated functions will no longer be exported in libp11 0.5.0 */
-	/* They are, however, used internally in OpenSSL method definitions */
-#define P11_DEPRECATED(msg)
-#elif defined(_MSC_VER)
-#define P11_DEPRECATED(msg) __declspec(deprecated(msg))
-#elif defined(__GNUC__)
-#if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) >= 40500
-	/* GCC >= 4.5.0 supports printing a message */
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated(msg)))
-#else
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated))
-#endif
-#elif defined(__clang__)
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated(msg)))
-#else
-#define P11_DEPRECATED(msg)
-#endif
-
-#define P11_DEPRECATED_FUNC \
-	P11_DEPRECATED("This function will be removed in libp11 0.5.0")
-
 /*
- * These functions will be removed from libp11, because they partially
+ * The following functions are discouraged, because they partially
  * duplicate the functionality OpenSSL provides for EVP_PKEY objects
  */
 
@@ -462,36 +440,36 @@ extern void ERR_load_PKCS11_strings(void);
  * @retval 0 success
  * @retval -1 error
  */
-P11_DEPRECATED_FUNC extern int PKCS11_generate_key(PKCS11_TOKEN * token,
+extern int PKCS11_generate_key(PKCS11_TOKEN * token,
 	int algorithm, unsigned int bits,
 	char *label, unsigned char* id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
-P11_DEPRECATED_FUNC extern int PKCS11_get_key_size(PKCS11_KEY *);
+extern int PKCS11_get_key_size(PKCS11_KEY *);
 
 /* Get the RSA key modules as BIGNUM */
-P11_DEPRECATED_FUNC extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
+extern int PKCS11_get_key_modulus(PKCS11_KEY *, BIGNUM **);
 
 /* Get the RSA key public exponent as BIGNUM */
-P11_DEPRECATED_FUNC extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
+extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
 
 /* Sign with the EC private key */
-P11_DEPRECATED_FUNC extern int PKCS11_ecdsa_sign(
+extern int PKCS11_ecdsa_sign(
 	const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
 
 /* Sign with the RSA private key */
-P11_DEPRECATED_FUNC extern int PKCS11_sign(int type,
+extern int PKCS11_sign(int type,
 	const unsigned char *m, unsigned int m_len,
 	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
 
 /* This function has never been implemented */
-P11_DEPRECATED_FUNC extern int PKCS11_verify(int type,
+extern int PKCS11_verify(int type,
 	const unsigned char *m, unsigned int m_len,
 	unsigned char *signature, unsigned int siglen, PKCS11_KEY * key);
 
 /* Encrypts data using the private key */
-P11_DEPRECATED_FUNC extern int PKCS11_private_encrypt(
+extern int PKCS11_private_encrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * rsa, int padding);
 
@@ -505,7 +483,7 @@ P11_DEPRECATED_FUNC extern int PKCS11_private_encrypt(
  * @param  padding  padding algorithm to be used
  * @return the length of the decrypted data or 0 if an error occurred
  */
-P11_DEPRECATED_FUNC extern int PKCS11_private_decrypt(
+extern int PKCS11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY * key, int padding);
 
