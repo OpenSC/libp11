@@ -18,11 +18,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <string.h>
+
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <libp11.h>
 #include <openssl/conf.h>
 #include <openssl/engine.h>
 #include <openssl/pem.h>
-#include <string.h>
 
 static void
 usage(char* argv[])

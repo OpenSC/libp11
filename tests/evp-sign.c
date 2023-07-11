@@ -33,6 +33,10 @@
 #include <getopt.h>
 #include <err.h>
 #include <arpa/inet.h>
+
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>

@@ -21,6 +21,9 @@
 #include <unistd.h>
 #include <string.h>
 
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 #include <openssl/evp.h>
