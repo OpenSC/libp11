@@ -59,8 +59,11 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	memset(mechanism, 0, sizeof(CK_MECHANISM));
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
-		 mechanism->mechanism = CKM_RSA_PKCS;
-		 break;
+		mechanism->mechanism = CKM_RSA_PKCS;
+		break;
+	case RSA_PKCS1_OAEP_PADDING:
+		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
+		break;
 	case RSA_NO_PADDING:
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
@@ -74,6 +77,23 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism, const int padding)
 	return 0;
 }
 
+static void
+pkcs11_oaep_param(CK_MECHANISM *mechanism, CK_RSA_PKCS_OAEP_PARAMS *oaep_params)
+{
+	/* Openssl API for RSA_private_decrypt() allows to use
+	 * RSA_PKCS1_OAEP_PADDING nly with SHA_1 hash and and MGF1_SHA1 mask
+	 * gen function.  It is not possible to use RFC8017 "Label" or
+	 * PKCS#11 "source data" respectively.
+	 * https://www.openssl.org/docs/man3.0/man3/RSA_private_decrypt.html */
+
+	mechanism->pParameter = oaep_params;
+	mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_OAEP_PARAMS);
+	oaep_params->mgf = CKG_MGF1_SHA1;
+	oaep_params->hashAlg = CKM_SHA_1;
+	oaep_params->source = 0;
+	oaep_params->pSourceData = NULL;
+	oaep_params->ulSourceDataLen = 0;
+}
 /* RSA private key encryption (also invoked by OpenSSL for signing) */
 /* OpenSSL assumes that the output buffer is always big enough */
 int pkcs11_private_encrypt(int flen,
@@ -86,11 +106,15 @@ int pkcs11_private_encrypt(int flen,
 	CK_ULONG size;
 	CK_SESSION_HANDLE session;
 	int rv;
+	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
 	size = pkcs11_get_key_size(key);
 
 	if (pkcs11_mechanism(&mechanism, padding) < 0)
 		return -1;
+
+	if (mechanism.mechanism == CKM_RSA_PKCS_OAEP)
+		pkcs11_oaep_param(&mechanism, &oaep_params);
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
@@ -133,9 +157,13 @@ int pkcs11_private_decrypt(int flen, const unsigned char *from, unsigned char *t
 	CK_MECHANISM mechanism;
 	CK_ULONG size = flen;
 	CK_RV rv;
+	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
 	if (pkcs11_mechanism(&mechanism, padding) < 0)
 		return -1;
+
+	if (mechanism.mechanism == CKM_RSA_PKCS_OAEP)
+		pkcs11_oaep_param(&mechanism, &oaep_params);
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
