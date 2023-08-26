@@ -77,7 +77,7 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key)
 }
 
 /*
- * Find all certs of a given type (public or private)
+ * Find all certs of a given type
  */
 static int pkcs11_find_certs(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session)
 {
@@ -159,6 +159,8 @@ static int pkcs11_init_cert(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session
 	cert->id_len = cpriv->id_len;
 	cert->label = cpriv->label;
 	cert->x509 = cpriv->x509;
+	cert->data = cpriv->data;
+	cert->size = cpriv->size;
 	cert->_private = cpriv;
 
 	if (ret)

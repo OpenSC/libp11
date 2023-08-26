@@ -102,6 +102,8 @@ struct pkcs11_object_private {
 	EVP_PKEY *evp_key;
 	X509 *x509;
 	unsigned int forkid;
+	size_t size;
+	unsigned char *data;
 };
 #define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
 #define PRIVCERT(_cert)		((PKCS11_OBJECT_private *) (_cert)->_private)

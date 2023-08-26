@@ -52,6 +52,7 @@ static ERR_STRING_DATA PROV_str_reasons[] = {
 {ERR_REASON(PROV_R_INPUT_FAILED), "pin input failed"},
 {ERR_REASON(PROV_R_LOGIN_FAILED), "token login failed"},
 {ERR_REASON(PROV_R_SLOT_AMBIGUOUS), "multiple slots found"},
+{ERR_REASON(PROV_R_CANNOT_LOAD_CERT), "cannot load certificate"},
 {0, NULL}};
 
 #endif
