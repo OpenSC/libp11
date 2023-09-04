@@ -74,7 +74,7 @@ echo "secret" > "${outdir}/in.txt"
 openssl pkeyutl -engine pkcs11 -keyform engine \
 	-inkey "${PRIVATE_KEY_WITHOUT_TOKEN}" \
 	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
-if test $? = 0;then
+if test $? != 1;then
 	echo "Did not fail when the PKCS#11 URI matched multiple tokens"
 	exit 1;
 fi

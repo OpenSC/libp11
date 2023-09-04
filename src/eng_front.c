@@ -161,7 +161,13 @@ static int engine_finish(ENGINE *engine)
 	 * engine_finish() is also executed from ENGINE_finish() without
 	 * acquired CRYPTO_LOCK_ENGINE, and there is no way with to check
 	 * whether a lock is already acquired with OpenSSL < 1.1.0 API. */
-#if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
+
+	/* When using openssl 1.1.1n or 3.0.9, calling ctx_finish()
+	 * was found to cause a segmentation fault
+	 * (tests/search-all-matching-tokens.softhsm).  It is much
+	 * better not to call ctx_finish() and cause a memory leak
+	 * than a segfault. */
+#if 0
 	rv &= ctx_finish(ctx);
 #endif
 
