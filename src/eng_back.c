@@ -499,14 +499,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 
 	if (matched_count == 0) {
 		if (match_tok) {
-			if (found_slot) {
-				ctx_log(ctx, 0, "The %s was not found on token %s\n",
-					object_typestr, found_slot->token->label[0] ?
-					found_slot->token->label : "no label");
-			} else {
-				ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
-					object_typestr);
-			}
+			ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
+				object_typestr);
 			goto error;
 		}
 
