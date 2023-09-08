@@ -105,6 +105,7 @@ static void dump_expiry(ENGINE_CTX *ctx, int level,
 
 	if (!cert || !cert->x509 || !(exp = X509_get0_notAfter(cert->x509))) {
 		ctx_log(ctx, level, "none");
+		return;
 	}
 
 	if ((bio = BIO_new(BIO_s_mem())) == NULL) {
