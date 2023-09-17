@@ -277,6 +277,7 @@ static int read_from_file(ENGINE_CTX *ctx,
 		ctx_log(ctx, 0, "Could not open file %s\n", path);
 		return 0;
 	}
+    *field_len += 1; //BIO_gets reads maximum length size-1. if the PIN length is MAX_PIN_LENGTH(32), then the last symbol will be cut
 	if (BIO_gets(fp, field, *field_len) > 0) {
 		*field_len = strlen(field);
 	} else {
