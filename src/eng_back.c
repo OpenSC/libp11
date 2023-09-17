@@ -542,7 +542,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		/* In several tokens certificates are marked as private */
 		if (login) {
 			/* Only try to login if login is required */
-			if (tok->loginRequired) {
+			if (tok->loginRequired || ctx->force_login) {
 				/* Only try to login if a single slot matched to avoiding trying
 				 * the PIN against all matching slots */
 				if (matched_count == 1) {
