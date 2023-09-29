@@ -200,14 +200,15 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
 	int rv, r = -1;
+	PKCS11_TEMPLATE tmpl = {0};
+	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
+	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
+
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
 	unsigned int md_len;
-	PKCS11_TEMPLATE tmpl = {0};
-	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
-	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
 	CK_MECHANISM_TYPE ckm_md;
 
 	/* First, make sure we have a session */
