@@ -204,6 +204,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
 	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
 
+	int cryptokiVersion;
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
@@ -227,7 +228,9 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	/* CKA_NAME_HASH_ALGORITHM was added in Cryptoki 2.30; older
 	 * versions of PKCS#11 modules should not touch this attribute or
 	 * any other attributes related to it */
-	if (pkcs11_get_cryptoki_version(ctx) >= pkcs11_convert_version(2, 30)) {
+	if ((cryptokiVersion = pkcs11_get_cryptoki_version(ctx)) < 0)
+		return -1;
+	if (cryptokiVersion >= pkcs11_convert_version(2, 30)) {
 		/* Get digest algorithm from x509 certificate */
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		signature_nid = X509_get_signature_nid(x509);
