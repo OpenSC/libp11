@@ -30,13 +30,10 @@ int pkcs11_get_cryptoki_version(PKCS11_CTX_private* ctx)
 
 	memset(&ck_info, 0, sizeof(ck_info));
 	rv = CRYPTOKI_call(ctx, C_GetInfo(&ck_info));
-	if (rv == CKR_OK) {
-		CK_VERSION version = ck_info.cryptokiVersion;
-		return pkcs11_convert_version(version.major, version.minor);
-	} else {
-		/* TODO(mihai): handle error */
-		return -1;
-	}
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GET_CRYPTOKI_VERSION, rv);
+
+	CK_VERSION version = ck_info.cryptokiVersion;
+	return pkcs11_convert_version(version.major, version.minor);
 }
 
 /* vim: set noexpandtab: */
