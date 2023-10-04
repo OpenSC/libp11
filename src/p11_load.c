@@ -104,6 +104,8 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
+	ctx->cryptoki_version.major = ck_info.cryptokiVersion.major;
+	ctx->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
 
 	return 0;
 }
