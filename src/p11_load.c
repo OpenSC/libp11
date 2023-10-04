@@ -101,11 +101,10 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
-
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
-	ctx->cryptoki_version.major = ck_info.cryptokiVersion.major;
-	ctx->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
+	cpriv->cryptoki_version.major = ck_info.cryptokiVersion.major;
+	cpriv->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
 
 	return 0;
 }

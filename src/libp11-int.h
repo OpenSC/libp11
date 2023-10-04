@@ -48,6 +48,7 @@ struct pkcs11_ctx_private {
 	CK_FUNCTION_LIST_PTR method;
 	void *handle;
 	char *init_args;
+	struct _CK_VERSION cryptoki_version;
 	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
 	void *ui_user_data;
 	unsigned int forkid;
