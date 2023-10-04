@@ -103,6 +103,9 @@ typedef struct PKCS11_slot_st {
 typedef struct PKCS11_ctx_st {
 	char *manufacturer;
 	char *description;
+	struct {
+		unsigned char major, minor;
+	} cryptoki_version;
 	void *_private;
 } PKCS11_CTX;
 
