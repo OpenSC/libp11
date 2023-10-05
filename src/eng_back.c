@@ -37,7 +37,6 @@
 
 /* The maximum length of an internally-allocated PIN */
 #define MAX_PIN_LENGTH   32
-#define MAX_VALUE_LEN	200
 
 struct st_engine_ctx {
 	/* Engine configuration */
@@ -378,8 +377,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	unsigned int n, m;
-	unsigned char obj_id[MAX_VALUE_LEN / 2];
-	size_t obj_id_len = sizeof(obj_id);
+	unsigned char *obj_id = NULL;
+	size_t obj_id_len = 0;
 	char *obj_label = NULL;
 	char tmp_pin[MAX_PIN_LENGTH+1];
 	size_t tmp_pin_len = MAX_PIN_LENGTH;
@@ -389,6 +388,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	void *object = NULL;
 
 	if (object_uri && *object_uri) {
+		obj_id_len = strlen(object_uri) + 1;
+		obj_id = OPENSSL_malloc(obj_id_len);
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
 				obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
@@ -585,6 +586,8 @@ error:
 		OPENSSL_free(obj_label);
 	if (matched_slots)
 		free(matched_slots);
+	if (obj_id)
+		OPENSSL_free(obj_id);
 	return object;
 }
 
