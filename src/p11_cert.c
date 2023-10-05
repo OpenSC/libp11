@@ -30,6 +30,7 @@ static int pkcs11_find_certs(PKCS11_SLOT_private *, PKCS11_TEMPLATE *, CK_SESSIO
 static int pkcs11_next_cert(PKCS11_CTX_private *, PKCS11_SLOT_private *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_SLOT_private *token, CK_SESSION_HANDLE session,
 	CK_OBJECT_HANDLE o, PKCS11_CERT **);
+static int is_version_ge(CK_VERSION version, CK_VERSION target);
 
 /*
  * Enumerate all certs matching with cert_template on the card
@@ -200,14 +201,15 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
 	int rv, r = -1;
+	PKCS11_TEMPLATE tmpl = {0};
+	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
+	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
+
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
 	unsigned int md_len;
-	PKCS11_TEMPLATE tmpl = {0};
-	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
-	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
 	CK_MECHANISM_TYPE ckm_md;
 
 	/* First, make sure we have a session */
@@ -223,54 +225,59 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	pkcs11_addattr_obj(&tmpl, CKA_ISSUER,
 		(pkcs11_i2d_fn)i2d_X509_NAME, X509_get_issuer_name(x509));
 
-	/* Get digest algorithm from x509 certificate */
+	/* CKA_NAME_HASH_ALGORITHM was added in Cryptoki 2.30; older
+	 * versions of PKCS#11 modules should not touch this attribute or
+	 * any other attributes related to it */
+	if (is_version_ge(ctx->cryptoki_version, (CK_VERSION){2, 30})) {
+		/* Get digest algorithm from x509 certificate */
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
-	signature_nid = X509_get_signature_nid(x509);
+		signature_nid = X509_get_signature_nid(x509);
 #else
-	signature_nid = OBJ_obj2nid(x509->sig_alg->algorithm);
+		signature_nid = OBJ_obj2nid(x509->sig_alg->algorithm);
 #endif
-	OBJ_find_sigid_algs(signature_nid, &evp_md_nid, NULL);
-	switch (evp_md_nid) {
-	default:
-		evp_md_nid = NID_sha1;
-		/* fall through */
-	case NID_sha1:
-		ckm_md = CKM_SHA_1;
-		break;
-	case NID_sha224:
-		ckm_md = CKM_SHA224;
-		break;
-	case NID_sha256:
-		ckm_md = CKM_SHA256;
-		break;
-	case NID_sha512:
-		ckm_md = CKM_SHA512;
-		break;
-	case NID_sha384:
-		ckm_md = CKM_SHA384;
-		break;
+		OBJ_find_sigid_algs(signature_nid, &evp_md_nid, NULL);
+		switch (evp_md_nid) {
+		default:
+			evp_md_nid = NID_sha1;
+			/* fall through */
+		case NID_sha1:
+			ckm_md = CKM_SHA_1;
+			break;
+		case NID_sha224:
+			ckm_md = CKM_SHA224;
+			break;
+		case NID_sha256:
+			ckm_md = CKM_SHA256;
+			break;
+		case NID_sha512:
+			ckm_md = CKM_SHA512;
+			break;
+		case NID_sha384:
+			ckm_md = CKM_SHA384;
+			break;
 #if OPENSSL_VERSION_NUMBER >= 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
-	case NID_sha3_224:
-		ckm_md = CKM_SHA3_224;
-		break;
-	case NID_sha3_256:
-		ckm_md = CKM_SHA3_256;
-		break;
-	case NID_sha3_384:
-		ckm_md = CKM_SHA3_384;
-		break;
-	case NID_sha3_512:
-		ckm_md = CKM_SHA3_512;
-		break;
+		case NID_sha3_224:
+			ckm_md = CKM_SHA3_224;
+			break;
+		case NID_sha3_256:
+			ckm_md = CKM_SHA3_256;
+			break;
+		case NID_sha3_384:
+			ckm_md = CKM_SHA3_384;
+			break;
+		case NID_sha3_512:
+			ckm_md = CKM_SHA3_512;
+			break;
 #endif
+		}
+
+		evp_md = EVP_get_digestbynid(evp_md_nid);
+
+		/* Set hash algorithm; default is SHA-1 */
+		pkcs11_addattr_var(&tmpl, CKA_NAME_HASH_ALGORITHM, ckm_md);
+		if (X509_pubkey_digest(x509,evp_md,md,&md_len))
+			pkcs11_addattr(&tmpl, CKA_HASH_OF_SUBJECT_PUBLIC_KEY, md, md_len);
 	}
-
-	evp_md = EVP_get_digestbynid(evp_md_nid);
-
-	/* Set hash algorithm; default is SHA-1 */
-	pkcs11_addattr_var(&tmpl, CKA_NAME_HASH_ALGORITHM, ckm_md);
-	if (X509_pubkey_digest(x509,evp_md,md,&md_len))
-		pkcs11_addattr(&tmpl, CKA_HASH_OF_SUBJECT_PUBLIC_KEY, md, md_len);
 
 	pkcs11_addattr_obj(&tmpl, CKA_VALUE, (pkcs11_i2d_fn)i2d_X509, x509);
 	if (label)
@@ -292,6 +299,17 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_CERTIFICATE, rv);
 	return r;
+}
+
+/**
+ * Compare two CK_VERSION(s).
+ *
+ * Return 1 if version is greater or equal with the target version.
+ * Return 0, otherwise.
+ */
+int is_version_ge(CK_VERSION version, CK_VERSION target) {
+	return version.major > target.major ||
+		(version.major == target.major && version.minor >= target.minor);
 }
 
 /* vim: set noexpandtab: */
