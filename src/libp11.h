@@ -520,7 +520,6 @@ extern int PKCS11_private_decrypt(
 # define CKR_F_PKCS11_GENERATE_KEY                        130
 # define CKR_F_PKCS11_RELOAD_CERTIFICATE                  131
 # define CKR_F_PKCS11_GET_SESSION                         132
-# define CKR_F_PKCS11_GET_CRYPTOKI_VERSION                133
 
 /* Backward compatibility of error function codes */
 #define PKCS11_F_PKCS11_CHANGE_PIN CKR_F_PKCS11_CHANGE_PIN

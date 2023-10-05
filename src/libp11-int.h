@@ -358,13 +358,6 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 /* Retrieve PKCS11_KEY from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 
-/* Compute a number using version's major and minor values */
-extern int pkcs11_convert_version(unsigned char major, unsigned char minor);
-
-/* Obtain the cryptokiVersion for the module.
- * Returns -1 if there's an error. */
-extern int pkcs11_get_cryptoki_version(PKCS11_CTX_private* ctx);
-
 #endif
 
 /* vim: set noexpandtab: */
