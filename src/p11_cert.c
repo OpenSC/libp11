@@ -30,6 +30,7 @@ static int pkcs11_find_certs(PKCS11_SLOT_private *, PKCS11_TEMPLATE *, CK_SESSIO
 static int pkcs11_next_cert(PKCS11_CTX_private *, PKCS11_SLOT_private *, CK_SESSION_HANDLE);
 static int pkcs11_init_cert(PKCS11_SLOT_private *token, CK_SESSION_HANDLE session,
 	CK_OBJECT_HANDLE o, PKCS11_CERT **);
+static int is_version_ge(CK_VERSION version, CK_VERSION target);
 
 /*
  * Enumerate all certs matching with cert_template on the card
@@ -204,7 +205,6 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	CK_OBJECT_CLASS class_certificate = CKO_CERTIFICATE;
 	CK_CERTIFICATE_TYPE certificate_x509 = CKC_X_509;
 
-	int cryptokiVersion;
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
 	const EVP_MD* evp_md;
@@ -228,9 +228,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	/* CKA_NAME_HASH_ALGORITHM was added in Cryptoki 2.30; older
 	 * versions of PKCS#11 modules should not touch this attribute or
 	 * any other attributes related to it */
-	if ((cryptokiVersion = pkcs11_get_cryptoki_version(ctx)) < 0)
-		return -1;
-	if (cryptokiVersion >= pkcs11_convert_version(2, 30)) {
+	if (is_version_ge(ctx->cryptoki_version, (CK_VERSION){2, 30})) {
 		/* Get digest algorithm from x509 certificate */
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		signature_nid = X509_get_signature_nid(x509);
@@ -301,6 +299,18 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_CERTIFICATE, rv);
 	return r;
+}
+
+/**
+ * Compare two CK_VERSION(s).
+ *
+ * Return 1 if version is greater or equal with the target version.
+ * Return 0, otherwise.
+ */
+int is_version_ge(CK_VERSION version, CK_VERSION target) {
+	int v1 = version.major * 1000 + version.minor;
+	int v2 = target.major * 1000 + target.minor;
+	return v1 >= v2;
 }
 
 /* vim: set noexpandtab: */
