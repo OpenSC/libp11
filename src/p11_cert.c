@@ -308,9 +308,8 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
  * Return 0, otherwise.
  */
 int is_version_ge(CK_VERSION version, CK_VERSION target) {
-	int v1 = version.major * 1000 + version.minor;
-	int v2 = target.major * 1000 + target.minor;
-	return v1 >= v2;
+	return version.major > target.major ||
+		(version.major == target.major && version.minor >= target.minor);
 }
 
 /* vim: set noexpandtab: */
