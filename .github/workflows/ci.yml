@@ -69,10 +69,8 @@ jobs:
         include:
           - arch: 'x86'
             build_for: 'WIN32'
-            openssl_dir: 'C:\vcpkg\packages\openssl_x86-windows'
           - arch: 'x64'
             build_for: 'WIN64'
-            openssl_dir: 'C:\vcpkg\packages\openssl_x64-windows'
 
     runs-on: windows-latest
 
@@ -93,7 +91,7 @@ jobs:
     - name: Install OpenSSL with VCPKG
       run: |
         vcpkg install --triplet=${{matrix.arch}}-windows openssl
-        echo "${{matrix.openssl_dir}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "C:\vcpkg\packages\openssl_${{matrix.arch}}-windows\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: System information
       run: openssl version -a
@@ -101,10 +99,10 @@ jobs:
     - name: Build
       run: nmake -f Makefile.mak
         BUILD_FOR=${{matrix.build_for}}
-        OPENSSL_DIR="${{matrix.openssl_dir}}"
+        OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.arch}}-windows"
 
     - name: Upload the DLLs
       uses: actions/upload-artifact@v3
       with:
-        name: libp11-${{env.version}}-openssl-${{matrix.arch}}
+        name: libp11-${{env.version}}-${{matrix.arch}}
         path: ${{github.workspace}}/src/*.dll
