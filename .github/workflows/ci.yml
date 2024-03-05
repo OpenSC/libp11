@@ -102,7 +102,7 @@ jobs:
         OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.arch}}-windows"
 
     - name: Upload the DLLs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: libp11-${{env.version}}-${{matrix.arch}}
         path: ${{github.workspace}}/src/*.dll
