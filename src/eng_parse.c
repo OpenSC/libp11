@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2017 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2024 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -271,17 +271,22 @@ static int read_from_file(ENGINE_CTX *ctx,
 	const char *path, char *field, size_t *field_len)
 {
 	BIO *fp;
+	char *txt;
 
 	fp = BIO_new_file(path, "r");
 	if (!fp) {
 		ctx_log(ctx, 0, "Could not open file %s\n", path);
 		return 0;
 	}
-	if (BIO_gets(fp, field, *field_len) > 0) {
-		*field_len = strlen(field);
+
+	txt = OPENSSL_malloc(*field_len + 1); /* + 1 for '\0' */
+	if (BIO_gets(fp, txt, *field_len + 1) > 0) {
+		memcpy(field, txt, *field_len);
+		*field_len = strlen(txt);
 	} else {
 		*field_len = 0;
 	}
+	OPENSSL_free(txt);
 
 	BIO_free(fp);
 	return 1;
