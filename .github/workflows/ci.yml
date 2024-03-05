@@ -78,7 +78,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Cache the vcpkg archives
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
         key: ${{matrix.arch}}
