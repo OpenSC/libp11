@@ -27,7 +27,7 @@ jobs:
       PKG_CONFIG_PATH: /usr/local/opt/${{matrix.openssl}}/lib/pkgconfig
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install apt dependencies (Linux)
       if: runner.os == 'Linux'
@@ -75,7 +75,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Cache the vcpkg archives
       uses: actions/cache@v3
