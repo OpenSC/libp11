@@ -185,8 +185,6 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 	if(!obj)
 		return;
 
-	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
-		return;
 	if (obj->evp_key) {
 		/* When the EVP object is reference count goes to zero,
 		 * it will call this function again. */
@@ -195,6 +193,10 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 		EVP_PKEY_free(pkey);
 		return;
 	}
+
+	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
+		return;
+
 	pkcs11_slot_unref(obj->slot);
 	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
