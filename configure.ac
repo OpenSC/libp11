@@ -31,20 +31,23 @@ AC_C_BIGENDIAN
 
 # we need to set our soversion based on openssl's soversion to avoid
 # issues with applications linking to new openssl, old libp11, and vice versa
-case "`$PKG_CONFIG --modversion --silence-errors libcrypto || \
-	$PKG_CONFIG --modversion openssl`" in
-	3.*) # Predicted engines directory prefix for OpenSSL 3.x
+opensslversion="$( \
+	( $PKG_CONFIG --modversion --silence-errors libcrypto || \
+    $PKG_CONFIG --modversion openssl ) | \
+    sed 's/^\([0-9.]*\).*/\1/' )"
+case "$opensslversion" in
+	3.*) # Engines directory prefix for OpenSSL 3.x
 	    LIBP11_LT_OLDEST="3"
-	    debian_ssl_prefix="openssl-3.0.0";;
-	1.1.*) # Predicted engines directory prefix for OpenSSL 1.1.x
+	    debian_ssl_prefix="engines-3";;
+	1.1.*) # Engines directory prefix for OpenSSL 1.1.x
 	    LIBP11_LT_OLDEST="3"
-	    debian_ssl_prefix="openssl-1.1.0";;
+	    debian_ssl_prefix="engines-1.1";;
 	1.0.*) # Engines directory prefix for OpenSSL 1.0.x
 	    LIBP11_LT_OLDEST="2"
-	    debian_ssl_prefix="openssl-1.0.0";;
+	    debian_ssl_prefix="openssl-$opensslversion/engines";;
 	*) # Engines directory prefix for OpenSSL 0.9.x
 	    LIBP11_LT_OLDEST="2"
-	    debian_ssl_prefix="ssl";;
+	    debian_ssl_prefix="ssl/engines";;
 esac
 
 
@@ -132,9 +135,9 @@ AC_ARG_WITH(
 		if test "${enginesexecdir}" = ""; then
 		    libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
 			$PKG_CONFIG --variable=libdir openssl`"
-		    if test -d "$libcryptodir/$debian_ssl_prefix/engines"; then
+		    if test -d "$libcryptodir/$debian_ssl_prefix"; then
 			# Debian-based OpenSSL package (for example Ubuntu)
-			enginesexecdir="$libcryptodir/$debian_ssl_prefix/engines"
+			enginesexecdir="$libcryptodir/$debian_ssl_prefix"
 		    else # Default OpenSSL engines directory
 			enginesexecdir="$libcryptodir/engines"
 		    fi
