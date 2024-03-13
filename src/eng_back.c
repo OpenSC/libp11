@@ -628,7 +628,7 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 /* Certificate handling                                                       */
 /******************************************************************************/
 
-static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b, time_t *ptime)
+static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b)
 {
 	const ASN1_TIME *a_time, *b_time;
 	int pday, psec;
@@ -708,16 +708,16 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 				if (k->label && strcmp(k->label, obj_label) == 0 &&
 						k->id_len == obj_id_len &&
 						memcmp(k->id, obj_id, obj_id_len) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			} else if (obj_label && !obj_id_len) {
 				if (k->label && strcmp(k->label, obj_label) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			} else if (obj_id_len && !obj_label) {
 				if (k->id_len == obj_id_len &&
 						memcmp(k->id, obj_id, obj_id_len) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			}
 		}
