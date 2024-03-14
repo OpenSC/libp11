@@ -65,7 +65,7 @@ static void error_queue(const char *name);
 
 int main(int argc, char *argv[])
 {
-	PKCS11_CTX *ctx=NULL;
+	PKCS11_CTX *ctx;
 	PKCS11_SLOT *slots=NULL, *slot;
 	PKCS11_KEY *keys;
 	unsigned int nslots, nkeys;
@@ -127,10 +127,8 @@ int main(int argc, char *argv[])
 end:
 	if (slots)
 		PKCS11_release_all_slots(ctx, slots, nslots);
-	if (ctx) {
-		PKCS11_CTX_unload(ctx);
-		PKCS11_CTX_free(ctx);
-	}
+	PKCS11_CTX_unload(ctx);
+	PKCS11_CTX_free(ctx);
 
 	if (rc)
 		printf("Failed (error code %d).\n", rc);
