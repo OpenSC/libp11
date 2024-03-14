@@ -248,10 +248,13 @@ static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_H
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
 
+	if (!key)
+		return -1;
+
 	if (key->x509 && pkcs11_get_point_x509(ec, key->x509) == 0)
 		return 0;
 
-	if (!key || pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
+	if (pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_POINT, &point, &point_len))
 		return -1;
 
