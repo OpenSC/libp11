@@ -35,7 +35,7 @@
 #endif
 
 static int hex_to_bin(ENGINE_CTX *ctx,
-		const char *in, unsigned char *out, size_t *outlen)
+		const char *in, char *out, size_t *outlen)
 {
 	size_t left, count = 0;
 
@@ -75,7 +75,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 			*outlen = 0;
 			return 0;
 		}
-		out[count++] = (unsigned char)byte;
+		out[count++] = byte;
 		left--;
 	}
 
@@ -86,7 +86,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 /* parse string containing slot and id information */
 int parse_slot_id_string(ENGINE_CTX *ctx,
 		const char *slot_id, int *slot,
-		unsigned char *id, size_t *id_len, char **label)
+		char *id, size_t *id_len, char **label)
 {
 	int n, i;
 
@@ -210,23 +210,12 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	return 0;
 }
 
-static int parse_uri_attr(ENGINE_CTX *ctx,
-		const char *attr, int attrlen, unsigned char **field,
+static int parse_uri_attr_len(ENGINE_CTX *ctx,
+		const char *attr, int attrlen, char *field,
 		size_t *field_len)
 {
-	size_t max, outlen = 0;
-	unsigned char *out;
+	size_t max = *field_len, outlen = 0;
 	int ret = 1;
-
-	if (field_len) {
-		out = *field;
-		max = *field_len;
-	} else {
-		out = OPENSSL_malloc(attrlen + 1);
-		if (!out)
-			return 0;
-		max = attrlen + 1;
-	}
 
 	while (ret && attrlen && outlen < max) {
 		if (*attr == '%') {
@@ -239,33 +228,47 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 				tmp[0] = attr[1];
 				tmp[1] = attr[2];
 				tmp[2] = 0;
-				ret = hex_to_bin(ctx, tmp, &out[outlen++], &l);
+				ret = hex_to_bin(ctx, tmp, &field[outlen++], &l);
 				attrlen -= 3;
 				attr += 3;
 			}
 
 		} else {
-			out[outlen++] = *(attr++);
+			field[outlen++] = *(attr++);
 			attrlen--;
 		}
 	}
 	if (attrlen && outlen == max)
 		ret = 0;
 
+	if (ret)
+		*field_len = outlen;
+
+	return ret;
+}
+
+static int parse_uri_attr(ENGINE_CTX *ctx,
+		const char *attr, int attrlen, char **field)
+{
+	int ret = 1;
+	size_t outlen = attrlen + 1;
+	char *out = OPENSSL_malloc(outlen);
+
+	if (!out)
+		return 0;
+
+	ret = parse_uri_attr_len(ctx, attr, attrlen, out, &outlen);
+
 	if (ret) {
-		if (field_len) {
-			*field_len = outlen;
-		} else {
-			out[outlen] = 0;
-			*field = out;
-		}
+		out[outlen] = 0;
+		*field = out;
 	} else {
-		if (!field_len)
-			OPENSSL_free(out);
+		OPENSSL_free(out);
 	}
 
 	return ret;
 }
+
 
 static int read_from_file(ENGINE_CTX *ctx,
 	const char *path, char *field, size_t *field_len)
@@ -293,24 +296,24 @@ static int read_from_file(ENGINE_CTX *ctx,
 }
 
 static int parse_pin_source(ENGINE_CTX *ctx,
-		const char *attr, int attrlen, unsigned char *field,
+		const char *attr, int attrlen, char *field,
 		size_t *field_len)
 {
-	unsigned char *val;
+	char *val;
 	int ret = 1;
 
-	if (!parse_uri_attr(ctx, attr, attrlen, &val, NULL)) {
+	if (!parse_uri_attr(ctx, attr, attrlen, &val)) {
 		return 0;
 	}
 
 	if (!strncasecmp((const char *)val, "file:", 5)) {
-		ret = read_from_file(ctx, (const char *)(val + 5), (char *)field, field_len);
+		ret = read_from_file(ctx, (const char *)(val + 5), field, field_len);
 	} else if (*val == '|') {
 		ret = 0;
 		ctx_log(ctx, 0, "Unsupported pin-source syntax\n");
 	/* 'pin-source=/foo/bar' is commonly used */
 	} else {
-		ret = read_from_file(ctx, (const char *)val, (char *)field, field_len);
+		ret = read_from_file(ctx, (const char *)val, field, field_len);
 	}
 	OPENSSL_free(val);
 
@@ -319,7 +322,7 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 
 int parse_pkcs11_uri(ENGINE_CTX *ctx,
 		const char *uri, PKCS11_TOKEN **p_tok,
-		unsigned char *id, size_t *id_len, char *pin, size_t *pin_len,
+		char *id, size_t *id_len, char *pin, size_t *pin_len,
 		char **label)
 {
 	PKCS11_TOKEN *tok;
@@ -344,30 +347,30 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 
 		if (!strncmp(p, "model=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->model, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, &tok->model);
 		} else if (!strncmp(p, "manufacturer=", 13)) {
 			p += 13;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->manufacturer, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, &tok->manufacturer);
 		} else if (!strncmp(p, "token=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->label, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, &tok->label);
 		} else if (!strncmp(p, "serial=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&tok->serialnr, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, &tok->serialnr);
 		} else if (!strncmp(p, "object=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&newlabel, NULL);
+			rv = parse_uri_attr(ctx, p, end - p, &newlabel);
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
-			rv = parse_uri_attr(ctx, p, end - p, (void *)&id, id_len);
+			rv = parse_uri_attr_len(ctx, p, end - p, id, id_len);
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
-			rv = pin_set ? 0 : parse_uri_attr(ctx, p, end - p, (void *)&pin, pin_len);
+			rv = pin_set ? 0 : parse_uri_attr_len(ctx, p, end - p, pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "pin-source=", 11)) {
 			p += 11;
-			rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, (unsigned char *)pin, pin_len);
+			rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;

@@ -370,7 +370,7 @@ int ctx_finish(ENGINE_CTX *ctx)
 static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
+				const char *, size_t, const char *),
 		const char *object_uri, const int login,
 		UI_METHOD *ui_method, void *callback_data)
 {
@@ -378,7 +378,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	unsigned int n, m;
-	unsigned char *obj_id = NULL;
+	char *obj_id = NULL;
 	size_t obj_id_len = 0;
 	char *obj_label = NULL;
 	char tmp_pin[MAX_PIN_LENGTH+1];
@@ -428,7 +428,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		}
 		if (obj_id_len != 0) {
 			ctx_log(ctx, 1, "id=");
-			dump_hex(ctx, 1, obj_id, obj_id_len);
+			dump_hex(ctx, 1, (unsigned char *)obj_id, obj_id_len);
 		}
 		if (obj_id_len != 0 && obj_label)
 			ctx_log(ctx, 1, " ");
@@ -589,7 +589,7 @@ error:
 static void *ctx_load_object(ENGINE_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
+				const char *, size_t, const char *),
 		const char *object_uri, UI_METHOD *ui_method, void *callback_data)
 {
 	void *obj = NULL;
@@ -662,7 +662,7 @@ static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b)
 }
 
 static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_CERT *certs, *selected_cert = NULL;
 	PKCS11_CERT cert_template = {0};
@@ -792,7 +792,7 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 
 static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 		PKCS11_KEY *keys, unsigned int key_count,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_KEY *selected_key = NULL;
 	unsigned int m;
@@ -849,7 +849,7 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 }
 
 static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned int isPrivate, const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const unsigned int isPrivate, const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_KEY *keys;
 	PKCS11_KEY key_template = {0};
@@ -890,13 +890,13 @@ cleanup:
 }
 
 static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	return match_key_int(ctx, tok, 0, obj_id, obj_id_len, obj_label);
 }
 
 static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	return match_key_int(ctx, tok, 1, obj_id, obj_id_len, obj_label);
 }
