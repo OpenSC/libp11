@@ -102,13 +102,13 @@ int getbin(const char c)
 int hex2bin(unsigned char *dst, const char *str, size_t *op_len)
 {
 	const char HEXDIGITS[] = "01234567890ABCDEFabcdef";
+	size_t len, byte_len;
 
 	if (!str || !dst) {
 		*op_len = 0;
 		return -1;
 	}
 
-	ssize_t len = 0, byte_len = 0;
 	len = strspn(str, HEXDIGITS);
 	/* 0x010 needs 2 bytes , 0x0110 needs 2 bytes, 0x010203 needs 3 bytes, 0x10203 needs 3 bytes, and so on */
 	byte_len = (len + 1) / 2;
@@ -124,7 +124,7 @@ int hex2bin(unsigned char *dst, const char *str, size_t *op_len)
 		/* start parsing from end of hexstring to beginning of hex string */
 		/* len is including '\0' so use pre-decrement */
 		int lsb = getbin(str[--len]); // this never goes out of bounds, we will have at least one byte to process!
-		int msb = --len >= 0 ? getbin(str[len]) : 0; // avoid underflow on str (when len is not even we assume 0)
+		int msb = len-- > 0 ? getbin(str[len]) : 0; // avoid underflow on str (when len is not even we assume 0)
 
 		/* combine msb and lsb to make uint8_t; */
 		dst[byte_len] = msb << 4 | lsb;
