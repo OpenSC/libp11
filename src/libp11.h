@@ -79,6 +79,8 @@ typedef struct PKCS11_cert_st {
 	unsigned char *id;
 	size_t id_len;
 	X509 *x509;
+	size_t size;
+	unsigned char *data;
 	void *_private;
 } PKCS11_CERT;
 

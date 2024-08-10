@@ -103,6 +103,8 @@ struct pkcs11_object_private {
 	unsigned int forkid;
 	int refcnt;
 	pthread_mutex_t lock;
+	size_t size;
+	unsigned char *data;
 };
 #define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
 #define PRIVCERT(_cert)		((PKCS11_OBJECT_private *) (_cert)->_private)

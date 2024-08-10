@@ -64,6 +64,7 @@ struct p11_storectx_t
 
     EVP_PKEY* privkey;
     EVP_PKEY* pubkey;
+    X509* cert;
 };
 
 typedef struct p11_storectx_t P11_STORE_CTX;

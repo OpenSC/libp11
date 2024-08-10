@@ -639,6 +639,84 @@ static void* match_private_key(PROVIDER_CTX* ctx, PKCS11_TOKEN* tok,
     return match_key(ctx, "private", keys, key_count, obj_id, obj_id_len, obj_label);
 }
 
+static void* match_cert(PROVIDER_CTX* ctx, PKCS11_TOKEN* tok,
+                        const unsigned char* obj_id, size_t obj_id_len, const char* obj_label)
+{
+    PKCS11_CERT* certs;
+    PKCS11_CERT* selected_cert = NULL;
+    unsigned int cert_count;
+    unsigned int m;
+    const char* which;
+
+    /* Make sure there is at least one certificate on the token */
+    if (PKCS11_enumerate_certs(tok, &certs, &cert_count))
+    {
+        ctx_log(ctx, 0, "Unable to enumerate certificates\n");
+        return 0;
+    }
+
+    if (cert_count == 0)
+    {
+        ctx_log(ctx, 0, "No certificates found\n");
+        return 0;
+    }
+
+    ctx_log(ctx, 1, "Found %u cert%s:\n", cert_count, cert_count == 1 ? "" : "s");
+
+    if (obj_id_len != 0 || obj_label)
+    {
+        which = "last matching";
+        for (m = 0; m < cert_count; m++)
+        {
+            PKCS11_CERT* c = certs + m;
+
+            ctx_log(ctx, 1, "  %2u id=", m + 1);
+            dump_hex(ctx, 1, c->id, c->id_len);
+            ctx_log(ctx, 1, " label=%s\n", c->label ? c->label : "(null)");
+
+            if (obj_label && obj_id_len != 0)
+            {
+                if (c->label && strcmp(c->label, obj_label) == 0 && c->id_len == obj_id_len && memcmp(c->id, obj_id, obj_id_len) == 0)
+                {
+                    selected_cert = c;
+                }
+            }
+            else if (obj_label && !obj_id_len)
+            {
+                if (c->label && strcmp(c->label, obj_label) == 0)
+                {
+                    selected_cert = c;
+                }
+            }
+            else if (obj_id_len && !obj_label)
+            {
+                if (c->id_len == obj_id_len && memcmp(c->id, obj_id, obj_id_len) == 0)
+                {
+                    selected_cert = c;
+                }
+            }
+        }
+    }
+    else
+    {
+        which = "first";
+        selected_cert = certs; /* Use the first cert */
+    }
+
+    if (selected_cert)
+    {
+        ctx_log(ctx, 1, "Returning %s cert: id=", which);
+        dump_hex(ctx, 1, selected_cert->id, selected_cert->id_len);
+        ctx_log(ctx, 1, " label=%s\n", selected_cert->label ? selected_cert->label : "(null)");
+    }
+    else
+    {
+        ctx_log(ctx, 1, "No matching certificate returned.\n");
+    }
+
+    return selected_cert;
+}
+
 EVP_PKEY* ctx_load_pubkey(PROVIDER_CTX* ctx, const char* s_key_id,
                           OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg)
 {
@@ -671,6 +749,25 @@ EVP_PKEY* ctx_load_privkey(PROVIDER_CTX* ctx, const char* s_key_id,
         return NULL;
     }
     return PKCS11_get_private_key(key);
+}
+
+PKCS11_CERT* ctx_load_cert(PROVIDER_CTX* ctx, const char* s_key_id,
+                        OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg)
+{
+    PKCS11_CERT* cert;
+
+    cert = ctx_load_object(ctx, "certificate", match_cert, s_key_id,
+                          pw_cb, pw_cbarg);
+    if (!cert)
+    {
+        ctx_log(ctx, 0, "PKCS11_load_cert returned NULL\n");
+        if (!ERR_peek_last_error())
+            PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
+        return NULL;
+    }
+    return cert;
+#warning cert?
+    //return PKCS11_find_certificate(key);
 }
 
 /******************************************************************************/

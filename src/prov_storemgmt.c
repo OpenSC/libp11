@@ -42,8 +42,10 @@
 static const char* keytype_rsa = "RSA";
 static const char* keytype_rsa_pss = "RSA-PSS";
 static const char* keytype_ec = "EC";
+static const char* keytype_cert = "CERT";
 
 typedef EVP_PKEY*(EVP_LOADER)(PROVIDER_CTX*, const char*, OSSL_PASSPHRASE_CALLBACK*, void*);
+typedef PKCS11_CERT*(X509_LOADER)(PROVIDER_CTX*, const char*, OSSL_PASSPHRASE_CALLBACK*, void*);
 
 // -------------------------------------------------------------------------------------------------
 
@@ -60,6 +62,7 @@ extern void pkcs11_object_free(PKCS11_OBJECT_private* obj); /* Free an object */
 
 extern EVP_PKEY* ctx_load_privkey(PROVIDER_CTX* ctx, const char* s_key_id, OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg);
 extern EVP_PKEY* ctx_load_pubkey(PROVIDER_CTX* ctx, const char* s_key_id, OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg);
+extern PKCS11_CERT* ctx_load_cert(PROVIDER_CTX* ctx, const char* s_key_id, OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg);
 
 // -------------------------------------------------------------------------------------------------
 
@@ -219,6 +222,57 @@ err:
     return NULL;
 }
 
+static X509* p11_store_load_x509(void* storectx, OSSL_CALLBACK* object_cb, void* object_cbarg,
+                                    OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg,
+                                    X509_LOADER* loader)
+{
+    P11_STORE_CTX* ctx = storectx;
+    PKCS11_CERT* cert;
+    PKCS11_CERT* return_cert;
+	size_t size;
+	unsigned char *data;
+
+    OSSL_PARAM params[4];
+    int object_type = OSSL_OBJECT_CERT;
+
+    if (!(cert = loader(ctx->provctx, ctx->uri, pw_cb, pw_cbarg)))
+    {
+        P11_PROVerr(PROV_F_STOREMGMT, PROV_R_EVP_LOADER_ERR);
+        // ctx_log(ctx->provctx, 0, "EVP loader returned null\n");
+        goto err;
+    }
+
+    return_cert = cert;
+    size = cert->size;
+    data = cert->data;
+
+    params[0] = OSSL_PARAM_construct_int(OSSL_OBJECT_PARAM_TYPE, &object_type);
+    /* try_cert() checks OSSL_OBJECT_PARAM_DATA_TYPE, we set it not to equal PEM_STRING_X509_TRUSTED */
+    params[1] = OSSL_PARAM_construct_utf8_string(OSSL_OBJECT_PARAM_DATA_TYPE, (char*)keytype_cert, 0);
+    /* try_cert() expects OSSL_OBJECT_PARAM_DATA in octet string format, it should be the cert in binary format */
+    params[2] = OSSL_PARAM_construct_octet_string(OSSL_OBJECT_PARAM_DATA, data, size);
+    params[3] = OSSL_PARAM_construct_end();
+
+    if (!object_cb(params, object_cbarg))
+    {
+        // TODO: openssl 3.0.2 itt elszall --> lasd github tesztek
+        P11_PROVerr(PROV_F_STOREMGMT, PROV_R_LOAD_OBJECT_CB);
+        // ctx_log(ctx->provctx, 0, "object_cb returned error\n");
+        goto err;
+    }
+
+    return return_cert->x509;
+
+err:
+    if (cert)
+    {
+        X509_free(cert->x509);
+        OPENSSL_free(cert->data);
+    }
+
+    return NULL;
+}
+
 static int p11_store_load(void* storectx,
                           OSSL_CALLBACK* object_cb, void* object_cbarg,
                           OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg)
@@ -277,6 +331,26 @@ static int p11_store_load(void* storectx,
 
             info->_.pubkey = ctx->pubkey;
             EVP_PKEY_up_ref(ctx->pubkey);
+        }
+        break;
+
+        case OSSL_STORE_INFO_CERT:
+        {
+            if (ctx->cert)
+            {
+                X509_free(ctx->cert);
+                ctx->cert = NULL;
+            }
+
+            if (!(ctx->cert = p11_store_load_x509(ctx, object_cb, object_cbarg, pw_cb, pw_cbarg, ctx_load_cert)))
+            {
+                P11_PROVerr(PROV_F_STOREMGMT, PROV_R_CANNOT_LOAD_CERT);
+                // ctx_log(ctx->provctx, 0, "ctx_load_cert returned null\n");
+                goto err;
+            }
+
+            info->_.x509 = ctx->cert;
+            X509_up_ref(ctx->cert);
         }
         break;
 

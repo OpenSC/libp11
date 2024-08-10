@@ -143,6 +143,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		if (!pkcs11_getattr_alloc(ctx, session, object, CKA_VALUE,
 				&data, &size)) {
 			const unsigned char *p = data;
+			obj->data = OPENSSL_memdup(data, size);
+			obj->size = size;
 			obj->x509 = d2i_X509(NULL, &p, (long)size);
 			OPENSSL_free(data);
 		}

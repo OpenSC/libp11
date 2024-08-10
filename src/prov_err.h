@@ -62,6 +62,7 @@ extern "C"
 #define PROV_R_INPUT_FAILED 113
 #define PROV_R_LOGIN_FAILED 114
 #define PROV_R_SLOT_AMBIGUOUS 115
+#define PROV_R_CANNOT_LOAD_CERT 116
 
 #ifdef __cplusplus
 }
