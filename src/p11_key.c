@@ -33,7 +33,7 @@
 /* The maximum length of PIN */
 #define MAX_PIN_LENGTH   32
 
-static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int);
+static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int, PKCS11_TEMPLATE *);
 static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
 static int pkcs11_init_key(PKCS11_SLOT_private *, CK_SESSION_HANDLE session,
@@ -119,6 +119,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		return NULL;
 
 	memset(obj, 0, sizeof(*obj));
+	obj->refcnt = 1;
+	pthread_mutex_init(&obj->lock, 0);
 	obj->object_class = object_class;
 	obj->object = object;
 	obj->slot = pkcs11_slot_ref(slot);
@@ -153,7 +155,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
 {
-	PKCS11_OBJECT_private *obj;
+	PKCS11_OBJECT_private *obj = NULL;
+	CK_OBJECT_HANDLE object_handle;
 	int release = 0;
 
 	if (session == CK_INVALID_HANDLE) {
@@ -162,8 +165,9 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 		release = 1;
 	}
 
-	obj = pkcs11_object_from_handle(slot, session,
-		pkcs11_handle_from_template(slot, session, tmpl));
+	object_handle = pkcs11_handle_from_template(slot, session, tmpl);
+	if(object_handle)
+		obj = pkcs11_object_from_handle(slot, session, object_handle);
 
 	if (release)
 		pkcs11_put_session(slot, session);
@@ -182,6 +186,11 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
+	if(!obj)
+		return;
+
+	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
+		return;
 	if (obj->evp_key) {
 		/* When the EVP object is reference count goes to zero,
 		 * it will call this function again. */
@@ -193,6 +202,7 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 	pkcs11_slot_unref(obj->slot);
 	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
+	pthread_mutex_destroy(&obj->lock);
 	OPENSSL_free(obj);
 }
 
@@ -228,10 +238,14 @@ int pkcs11_set_password_callback(PKCS11_CTX_private *ctx,
  */
 PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert)
 {
-	PKCS11_KEY *keys;
+	PKCS11_KEY *keys, key_template = {0};
 	unsigned int n, count;
+	key_template.isPrivate = 1;
 
-	if (pkcs11_enumerate_keys(cert->slot, CKO_PRIVATE_KEY, &keys, &count))
+	key_template.id = cert->id;
+	key_template.id_len = cert->id_len;
+
+	if (pkcs11_enumerate_keys(cert->slot, CKO_PRIVATE_KEY, &key_template, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
 		PKCS11_OBJECT_private *kpriv = PRIVKEY(&keys[n]);
@@ -698,20 +712,31 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 }
 
 /*
- * Return keys of a given type (public or private)
+ * Return keys of a given type (public or private) matching the key_template
  * Use the cached values if available
  */
-int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type,
+int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PKCS11_KEY *key_template,
 		PKCS11_KEY **keyp, unsigned int *countp)
 {
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
+	PKCS11_TEMPLATE tmpl = {0};
 	CK_SESSION_HANDLE session;
+	CK_OBJECT_CLASS object_class = type;
 	int rv;
+
+	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
+	if (key_template) {
+		if (key_template->id_len)
+			pkcs11_addattr(&tmpl, CKA_ID, key_template->id, key_template->id_len);
+
+		if (key_template->label)
+			pkcs11_addattr_s(&tmpl, CKA_LABEL, key_template->label);
+	}
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = pkcs11_find_keys(slot, session, type);
+	rv = pkcs11_find_keys(slot, session, type, &tmpl);
 	pkcs11_put_session(slot, session);
 	if (rv < 0) {
 		pkcs11_destroy_keys(slot, type);
@@ -746,21 +771,16 @@ int pkcs11_remove_object(PKCS11_OBJECT_private *obj)
 }
 
 /*
- * Find all keys of a given type (public or private)
+ * Find all keys of a given type (public or private) matching template
  */
-static int pkcs11_find_keys(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session, unsigned int type)
+static int pkcs11_find_keys(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session, unsigned int type, PKCS11_TEMPLATE *tmpl)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_OBJECT_CLASS key_search_class;
-	CK_ATTRIBUTE key_search_attrs[1] = {
-		{CKA_CLASS, &key_search_class, sizeof(key_search_class)},
-	};
 	int rv, res = -1;
 
 	/* Tell the PKCS11 lib to enumerate all matching objects */
-	key_search_class = type;
 	rv = CRYPTOKI_call(ctx,
-		C_FindObjectsInit(session, key_search_attrs, 1));
+		C_FindObjectsInit(session, tmpl->attrs, tmpl->nattr));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_FIND_KEYS, rv);
 
 	do {
@@ -790,6 +810,12 @@ static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 		return -1;
 
 	return 0;
+}
+
+PKCS11_OBJECT_private *pkcs11_object_ref(PKCS11_OBJECT_private *obj)
+{
+	pkcs11_atomic_add(&obj->refcnt, 1, &obj->lock);
+	return obj;
 }
 
 static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,

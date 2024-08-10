@@ -248,10 +248,13 @@ static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_H
 	ASN1_OCTET_STRING *os;
 	int rv = -1;
 
+	if (!key)
+		return -1;
+
 	if (key->x509 && pkcs11_get_point_x509(ec, key->x509) == 0)
 		return 0;
 
-	if (!key || pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
+	if (pkcs11_getattr_alloc(key->slot->ctx, session, key->object,
 			CKA_EC_POINT, &point, &point_len))
 		return -1;
 
@@ -345,22 +348,6 @@ static void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
 #endif
 }
 
-static PKCS11_OBJECT_private *object_copy(PKCS11_OBJECT_private *src)
-{
-	PKCS11_OBJECT_private *dest = NULL;
-
-	dest = OPENSSL_malloc(sizeof *dest);
-	if (dest == NULL) {
-		return NULL;
-	}
-	/* shallow copy */
-	memcpy(dest, src, sizeof *dest);
-	/* update ref-counts */
-	dest->slot = pkcs11_slot_ref(src->slot);
-
-	return dest;
-}
-
 /*
  * Get EC key material and stash pointer in ex_data
  * Note we get called twice, once for private key, and once for public
@@ -372,7 +359,6 @@ static PKCS11_OBJECT_private *object_copy(PKCS11_OBJECT_private *src)
  */
 static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 {
-	PKCS11_OBJECT_private *newkey = NULL;
 	EVP_PKEY *pk;
 	EC_KEY *ec;
 
@@ -392,15 +378,16 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
 		ECDH_set_method(ec, PKCS11_get_ecdh_method());
 #endif
+		/* This creates a new EC_KEY object which requires its own key object reference */
+		key = pkcs11_object_ref(key);
+		pkcs11_set_ex_data_ec(ec, key);
 	}
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
-	/* This creates a new EC_KEY object which requires its own key object */
-	newkey = object_copy(key);
-	pkcs11_set_ex_data_ec(ec, newkey);
 	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
 	EC_KEY_free(ec); /* Drops our reference to it */
+
 	return pk;
 }
 
@@ -590,22 +577,22 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 	CK_MECHANISM mechanism;
 	int rv;
 
-	CK_BBOOL true = TRUE;
-	CK_BBOOL false = FALSE;
+	CK_BBOOL _true = TRUE;
+	CK_BBOOL _false = FALSE;
 	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
 	CK_OBJECT_CLASS newkey_class= CKO_SECRET_KEY;
 	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
 	CK_ULONG newkey_len = key_len;
 	CK_OBJECT_HANDLE *tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
 	CK_ATTRIBUTE newkey_template[] = {
-		{CKA_TOKEN, &false, sizeof(false)}, /* session only object */
+		{CKA_TOKEN, &_false, sizeof(_false)}, /* session only object */
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
 		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
-		{CKA_SENSITIVE, &false, sizeof(false) },
-		{CKA_EXTRACTABLE, &true, sizeof(true) },
-		{CKA_ENCRYPT, &true, sizeof(true)},
-		{CKA_DECRYPT, &true, sizeof(true)}
+		{CKA_SENSITIVE, &_false, sizeof(_false) },
+		{CKA_EXTRACTABLE, &_true, sizeof(_true) },
+		{CKA_ENCRYPT, &_true, sizeof(_true)},
+		{CKA_DECRYPT, &_true, sizeof(_true)}
 	};
 
 	memset(&mechanism, 0, sizeof(mechanism));
@@ -704,7 +691,7 @@ static int pkcs11_ec_ckey(unsigned char **out, size_t *outlen,
 /* Without this, the EC_KEY objects share the same PKCS11_OBJECT_private
  * object in ex_data and when one of them is freed, the following frees
  * result in crashes.
- * We need to deep-copy the object and fix all references to slots.
+ * We need to increase the reference to the private object.
  */
 static int pkcs11_ec_copy(EC_KEY *dest, const EC_KEY *src)
 {
@@ -712,12 +699,7 @@ static int pkcs11_ec_copy(EC_KEY *dest, const EC_KEY *src)
 	PKCS11_OBJECT_private *destkey = NULL;
 
 	srckey = pkcs11_get_ex_data_ec(src);
-	/* This now points to the same location ! */
-
-	destkey = object_copy(srckey);
-	if (destkey == NULL) {
-		return 0;
-	}
+	destkey = pkcs11_object_ref(srckey);
 
 	pkcs11_set_ex_data_ec(dest, destkey);
 

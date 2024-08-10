@@ -13,8 +13,10 @@ PKCS11_is_logged_in
 PKCS11_login
 PKCS11_logout
 PKCS11_enumerate_keys
+PKCS11_enumerate_keys_ext
 PKCS11_remove_key
 PKCS11_enumerate_public_keys
+PKCS11_enumerate_public_keys_ext
 PKCS11_get_key_type
 PKCS11_get_key_size
 PKCS11_get_key_modulus
@@ -25,6 +27,7 @@ PKCS11_get_slotid_from_slot
 PKCS11_find_certificate
 PKCS11_find_key
 PKCS11_enumerate_certs
+PKCS11_enumerate_certs_ext
 PKCS11_remove_certificate
 PKCS11_init_token
 PKCS11_init_pin

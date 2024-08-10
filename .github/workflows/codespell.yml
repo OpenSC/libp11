@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: codespell-project/actions-codespell@master
         with:
           ignore_words_file: codespell_ignore_words.txt

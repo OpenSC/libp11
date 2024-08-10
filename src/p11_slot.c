@@ -75,9 +75,14 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 	for (n = 0; n < nslots; n++) {
 		PKCS11_SLOT_private *slot = NULL;
 		for (i = 0; i < *countp; i++) {
-			if (PRIVSLOT(slotp[i])->id != slotid[n])
+			PKCS11_SLOT_private *slot_old_private =
+				PRIVSLOT(&((*slotp)[i]));
+			if (slot_old_private->id != slotid[n])
 				continue;
-			slot = pkcs11_slot_ref(PRIVSLOT(slotp[i]));
+			/* Increase ref count so it doesn't get freed when ref
+			 * count is decremented in pkcs11_release_all_slots
+			 * at the end of this function. */
+			slot = pkcs11_slot_ref(slot_old_private);
 			break;
 		}
 		if (!slot)
@@ -118,10 +123,19 @@ int pkcs11_open_session(PKCS11_SLOT_private *slot, int rw)
 	return 0;
 }
 
+
+static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
+{
+	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
+	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
+	pkcs11_destroy_certs(slot);
+}
+
 int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *sessionp)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	int rv = CKR_OK;
+	CK_SESSION_INFO session_info;
 
 	if (rw < 0)
 		return -1;
@@ -135,7 +149,24 @@ int pkcs11_get_session(PKCS11_SLOT_private * slot, int rw, CK_SESSION_HANDLE *se
 		if (slot->session_head != slot->session_tail) {
 			*sessionp = slot->session_pool[slot->session_head];
 			slot->session_head = (slot->session_head + 1) % slot->session_poolsize;
-			break;
+
+			/* Check if session is valid */
+			rv = CRYPTOKI_call(ctx,
+				C_GetSessionInfo(*sessionp, &session_info));
+			if (rv == CKR_OK) {
+				break;
+			} else {
+				/* Forget this session */
+				slot->num_sessions--;
+				if (slot->num_sessions == 0) {
+					/* Object handles are valid across
+					   sessions, so the cache should only be
+					   cleared when there are no valid
+					   sessions.*/
+					pkcs11_wipe_cache(slot);
+				}
+				continue;
+			}
 		}
 
 		/* Check if new can be instantiated */
@@ -278,13 +309,6 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 	return 0;
 }
 
-static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
-{
-	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
-	pkcs11_destroy_keys(slot, CKO_PUBLIC_KEY);
-	pkcs11_destroy_certs(slot);
-}
-
 /*
  * Log out
  */
@@ -313,14 +337,22 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
+	unsigned char ck_label[32];
 	int rv;
+
+	/* Must be padded with blank characters */
+	memset(ck_label, ' ', sizeof ck_label);
 
 	if (!label)
 		label = "PKCS#11 Token";
+
+	/* Must not be null terminated */
+	memcpy(ck_label, label, strnlen(label, sizeof(ck_label)));
+
 	rv = CRYPTOKI_call(ctx,
 		C_InitToken(slot->id,
 			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
-			(CK_UTF8CHAR *) label));
+			(CK_UTF8CHAR *) ck_label));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
 	/* FIXME: how to update the token?
@@ -462,10 +494,10 @@ PKCS11_SLOT_private *pkcs11_slot_ref(PKCS11_SLOT_private *slot)
 	return slot;
 }
 
-void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
+int pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 {
 	if (pkcs11_atomic_add(&slot->refcnt, -1, &slot->lock) != 0)
-		return;
+		return 0;
 
 	pkcs11_wipe_cache(slot);
 	if (slot->prev_pin) {
@@ -476,6 +508,8 @@ void pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 	OPENSSL_free(slot->session_pool);
 	pthread_mutex_destroy(&slot->lock);
 	pthread_cond_destroy(&slot->cond);
+
+	return 1;
 }
 
 static int pkcs11_init_slot(PKCS11_CTX_private *ctx, PKCS11_SLOT *slot, PKCS11_SLOT_private *spriv)
@@ -515,11 +549,13 @@ static void pkcs11_release_slot(PKCS11_SLOT *slot)
 		pkcs11_destroy_token(slot->token);
 		OPENSSL_free(slot->token);
 	}
-	if (spriv)
-		pkcs11_slot_unref(spriv);
+	if (spriv) {
+		if (pkcs11_slot_unref(spriv) != 0) {
+			OPENSSL_free(slot->_private);
+		}
+	}
 	OPENSSL_free(slot->description);
 	OPENSSL_free(slot->manufacturer);
-	OPENSSL_free(slot->_private);
 
 	memset(slot, 0, sizeof(*slot));
 }

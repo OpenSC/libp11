@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 env:
   version: 0.4.13_git
@@ -26,7 +27,7 @@ jobs:
       PKG_CONFIG_PATH: /usr/local/opt/${{matrix.openssl}}/lib/pkgconfig
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install apt dependencies (Linux)
       if: runner.os == 'Linux'
@@ -35,8 +36,9 @@ jobs:
     - name: Install brew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install automake ${{matrix.openssl}} opensc softhsm
-        echo "/usr/local/opt/openssl/bin" >> $GITHUB_PATH
+        brew install automake ${{matrix.openssl}} softhsm
+        brew install --cask opensc
+        echo "/usr/local/opt/${{matrix.openssl}}/bin" >> $GITHUB_PATH
 
     - name: System information
       run: |
@@ -66,62 +68,41 @@ jobs:
       matrix:
         include:
           - arch: 'x86'
-            openssl_version: '1.1.1'
-            choco_param: '--x86'
             build_for: 'WIN32'
-            openssl_dir: 'C:\Program Files (x86)\OpenSSL-Win32'
           - arch: 'x64'
-            openssl_version: '1.1.1'
             build_for: 'WIN64'
-            openssl_dir: 'C:\Program Files\OpenSSL-Win64'
-          - arch: 'x86'
-            openssl_version: '3.0'
-            build_for: 'WIN32'
-            openssl_dir: 'C:\vcpkg\packages\openssl_x86-windows'
-          - arch: 'x64'
-            openssl_version: '3.0'
-            build_for: 'WIN64'
-            openssl_dir: 'C:\vcpkg\packages\openssl_x64-windows'
 
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Cache the vcpkg archives
-      if: matrix.openssl_version == '3.0'
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
-        key: ${{matrix.arch}}-${{matrix.openssl_version}}
+        key: ${{matrix.arch}}
 
     - name: Configure Visual Studio
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: ${{matrix.arch}}
 
-    - name: Install OpenSSL 1.1.1 with Chocolatey
-      if: matrix.openssl_version == '1.1.1'
-      run: |
-        choco install ${{matrix.choco_param}} -y openssl
-        echo "${{matrix.openssl_dir}}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-    - name: Install OpenSSL 3.0 with VCPKG
-      if: matrix.openssl_version == '3.0'
+    - name: Install OpenSSL with VCPKG
       run: |
         vcpkg install --triplet=${{matrix.arch}}-windows openssl
-        echo "${{matrix.openssl_dir}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "C:\vcpkg\packages\openssl_${{matrix.arch}}-windows\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Show OpenSSL version
+    - name: System information
       run: openssl version -a
 
     - name: Build
       run: nmake -f Makefile.mak
         BUILD_FOR=${{matrix.build_for}}
-        OPENSSL_DIR="${{matrix.openssl_dir}}"
+        OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.arch}}-windows"
 
     - name: Upload the DLLs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: libp11-${{env.version}}-openssl-${{matrix.openssl_version}}-${{matrix.arch}}
+        name: libp11-${{env.version}}-${{matrix.arch}}
         path: ${{github.workspace}}/src/*.dll

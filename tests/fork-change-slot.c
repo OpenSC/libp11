@@ -54,7 +54,8 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include <execinfo.h>
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
 
 #include <openssl/evp.h>
 #include <openssl/conf.h>

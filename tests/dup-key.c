@@ -23,6 +23,9 @@
 #include <unistd.h>
 #include <string.h>
 
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 #include <openssl/evp.h>
@@ -150,6 +153,18 @@ int main(int argc, char *argv[])
 		EC_KEY_free(ec_dup);
 		break;
 	}
+
+	EVP_PKEY_free(pkey);
+	/* Do it one more time */
+	pkey = ENGINE_load_private_key(engine, privkey, 0, 0);
+
+	if (pkey == NULL) {
+		printf("Could not load key\n");
+		display_openssl_errors(__LINE__);
+		ret = 1;
+		goto end;
+	}
+
 	ENGINE_finish(engine);
 
 	ret = 0;

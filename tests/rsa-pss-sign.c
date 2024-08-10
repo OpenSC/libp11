@@ -29,6 +29,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <openssl/rsa.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>

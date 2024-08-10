@@ -2,8 +2,6 @@
 
 [![Tests](https://github.com/OpenSC/libp11/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSC/libp11/actions/workflows/ci.yml)
 [![Coverity Scan Status](https://scan.coverity.com/projects/15472/badge.svg)](https://scan.coverity.com/projects/opensc-libp11)
-[![Code Quality: Cpp](https://img.shields.io/lgtm/grade/cpp/g/OpenSC/libp11.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/OpenSC/libp11/context:cpp)
-[![Total Alerts](https://img.shields.io/lgtm/alerts/g/OpenSC/libp11.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/OpenSC/libp11/alerts)
 
 
 # Overview

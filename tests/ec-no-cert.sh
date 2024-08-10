@@ -33,7 +33,7 @@ echo "Output directory: ${outdir}"
 
 mkdir -p $outdir
 
-for i in /usr/lib64/pkcs11 /usr/lib64/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib/softhsm /usr/lib ;do
+for i in /usr/local/lib/softhsm /opt/local/lib/softhsm /usr/lib64/pkcs11 /usr/lib64/softhsm /usr/lib/x86_64-linux-gnu/softhsm /usr/lib/softhsm /usr/lib; do
 	if test -f "$i/libsofthsm2.so"; then
 		MODULE="$i/libsofthsm2.so"
 		break

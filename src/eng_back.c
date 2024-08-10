@@ -37,7 +37,6 @@
 
 /* The maximum length of an internally-allocated PIN */
 #define MAX_PIN_LENGTH   32
-#define MAX_VALUE_LEN	200
 
 struct st_engine_ctx {
 	/* Engine configuration */
@@ -105,6 +104,7 @@ static void dump_expiry(ENGINE_CTX *ctx, int level,
 
 	if (!cert || !cert->x509 || !(exp = X509_get0_notAfter(cert->x509))) {
 		ctx_log(ctx, level, "none");
+		return;
 	}
 
 	if ((bio = BIO_new(BIO_s_mem())) == NULL) {
@@ -370,7 +370,7 @@ int ctx_finish(ENGINE_CTX *ctx)
 static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
+				const char *, size_t, const char *),
 		const char *object_uri, const int login,
 		UI_METHOD *ui_method, void *callback_data)
 {
@@ -378,8 +378,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *tok, *match_tok = NULL;
 	unsigned int n, m;
-	unsigned char obj_id[MAX_VALUE_LEN / 2];
-	size_t obj_id_len = sizeof(obj_id);
+	char *obj_id = NULL;
+	size_t obj_id_len = 0;
 	char *obj_label = NULL;
 	char tmp_pin[MAX_PIN_LENGTH+1];
 	size_t tmp_pin_len = MAX_PIN_LENGTH;
@@ -389,6 +389,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	void *object = NULL;
 
 	if (object_uri && *object_uri) {
+		obj_id_len = strlen(object_uri) + 1;
+		obj_id = OPENSSL_malloc(obj_id_len);
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
 				obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
@@ -426,7 +428,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		}
 		if (obj_id_len != 0) {
 			ctx_log(ctx, 1, "id=");
-			dump_hex(ctx, 1, obj_id, obj_id_len);
+			dump_hex(ctx, 1, (unsigned char *)obj_id, obj_id_len);
 		}
 		if (obj_id_len != 0 && obj_label)
 			ctx_log(ctx, 1, " ");
@@ -497,14 +499,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 
 	if (matched_count == 0) {
 		if (match_tok) {
-			if (found_slot) {
-				ctx_log(ctx, 0, "The %s was not found on token %s\n",
-					object_typestr, found_slot->token->label[0] ?
-					found_slot->token->label : "no label");
-			} else {
-				ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
-					object_typestr);
-			}
+			ctx_log(ctx, 0, "No matching initialized token was found for %s\n",
+				object_typestr);
 			goto error;
 		}
 
@@ -541,7 +537,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		/* In several tokens certificates are marked as private */
 		if (login) {
 			/* Only try to login if login is required */
-			if (tok->loginRequired) {
+			if (tok->loginRequired || ctx->force_login) {
 				/* Only try to login if a single slot matched to avoiding trying
 				 * the PIN against all matching slots */
 				if (matched_count == 1) {
@@ -585,13 +581,15 @@ error:
 		OPENSSL_free(obj_label);
 	if (matched_slots)
 		free(matched_slots);
+	if (obj_id)
+		OPENSSL_free(obj_id);
 	return object;
 }
 
 static void *ctx_load_object(ENGINE_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
-				const unsigned char *, size_t, const char *),
+				const char *, size_t, const char *),
 		const char *object_uri, UI_METHOD *ui_method, void *callback_data)
 {
 	void *obj = NULL;
@@ -630,7 +628,7 @@ static void *ctx_load_object(ENGINE_CTX *ctx,
 /* Certificate handling                                                       */
 /******************************************************************************/
 
-static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b, time_t *ptime)
+static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b)
 {
 	const ASN1_TIME *a_time, *b_time;
 	int pday, psec;
@@ -664,18 +662,35 @@ static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b, time_t *ptime)
 }
 
 static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_CERT *certs, *selected_cert = NULL;
+	PKCS11_CERT cert_template = {0};
 	unsigned int m, cert_count;
 	const char *which;
 
-	if (PKCS11_enumerate_certs(tok, &certs, &cert_count)) {
+	errno = 0;
+	cert_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
+	if (errno != 0) {
+		ctx_log(ctx, 0, "%s", strerror(errno));
+		goto cleanup;
+	}
+	if (obj_id_len) {
+		cert_template.id = OPENSSL_malloc(obj_id_len);
+		if (!cert_template.id) {
+			ctx_log(ctx, 0, "Could not allocate memory for ID\n");
+			goto cleanup;
+		}
+		memcpy(cert_template.id, obj_id, obj_id_len);
+		cert_template.id_len = obj_id_len;
+	}
+
+	if (PKCS11_enumerate_certs_ext(tok, &cert_template, &certs, &cert_count)) {
 		ctx_log(ctx, 0, "Unable to enumerate certificates\n");
-		return NULL;
+		goto cleanup;
 	}
 	if (cert_count == 0)
-		return NULL;
+		goto cleanup;
 
 	ctx_log(ctx, 1, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
@@ -693,16 +708,16 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 				if (k->label && strcmp(k->label, obj_label) == 0 &&
 						k->id_len == obj_id_len &&
 						memcmp(k->id, obj_id, obj_id_len) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			} else if (obj_label && !obj_id_len) {
 				if (k->label && strcmp(k->label, obj_label) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			} else if (obj_id_len && !obj_label) {
 				if (k->id_len == obj_id_len &&
 						memcmp(k->id, obj_id, obj_id_len) == 0) {
-					selected_cert = cert_cmp(selected_cert, k, NULL);
+					selected_cert = cert_cmp(selected_cert, k);
 				}
 			}
 		}
@@ -737,6 +752,9 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		ctx_log(ctx, 1, "No matching certificate returned.\n");
 	}
 
+cleanup:
+	OPENSSL_free(cert_template.label);
+	OPENSSL_free(cert_template.id);
 	return selected_cert;
 }
 
@@ -774,7 +792,7 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 
 static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 		PKCS11_KEY *keys, unsigned int key_count,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_KEY *selected_key = NULL;
 	unsigned int m;
@@ -830,32 +848,57 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	return selected_key;
 }
 
-static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const unsigned int isPrivate, const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_KEY *keys;
+	PKCS11_KEY key_template = {0};
 	unsigned int key_count;
+	void *ret = NULL;
 
-	/* Make sure there is at least one public key on the token */
-	if (PKCS11_enumerate_public_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
-		return 0;
+	key_template.isPrivate = isPrivate;
+	errno = 0;
+	key_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
+	if (errno != 0) {
+		ctx_log(ctx, 0, "%s", strerror(errno));
+		goto cleanup;
 	}
-	return match_key(ctx, "public", keys, key_count, obj_id, obj_id_len, obj_label);
+	if (obj_id_len) {
+		key_template.id = OPENSSL_malloc(obj_id_len);
+		if (!key_template.id) {
+			ctx_log(ctx, 0, "Could not allocate memory for ID\n");
+			goto cleanup;
+		}
+		memcpy(key_template.id, obj_id, obj_id_len);
+		key_template.id_len = obj_id_len;
+	}
+
+	/* Make sure there is at least one private key on the token */
+	if (key_template.isPrivate != 0 && PKCS11_enumerate_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
+		goto cleanup;
+	}
+	else if (key_template.isPrivate == 0 && PKCS11_enumerate_public_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
+		ctx_log(ctx, 0, "Unable to enumerate public keys\n");
+		goto cleanup;
+	}
+	ret = match_key(ctx, key_template.isPrivate ? "private" : "public", keys, key_count, obj_id, obj_id_len, obj_label);
+cleanup:
+	OPENSSL_free(key_template.label);
+	OPENSSL_free(key_template.id);
+	return ret;
+}
+
+static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
+{
+	return match_key_int(ctx, tok, 0, obj_id, obj_id_len, obj_label);
 }
 
 static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
-		const unsigned char *obj_id, size_t obj_id_len, const char *obj_label)
+		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
-	PKCS11_KEY *keys;
-	unsigned int key_count;
-
-	/* Make sure there is at least one private key on the token */
-	if (PKCS11_enumerate_keys(tok, &keys, &key_count)) {
-		ctx_log(ctx, 0, "Unable to enumerate private keys\n");
-		return 0;
-	}
-	return match_key(ctx, "private", keys, key_count, obj_id, obj_id_len, obj_label);
+	return match_key_int(ctx, tok, 1, obj_id, obj_id_len, obj_label);
 }
 
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,

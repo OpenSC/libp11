@@ -45,6 +45,10 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+
+/* this code extensively uses deprecated features, so warnings are useless */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <libp11.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
