@@ -210,18 +210,20 @@ AC_PROG_SED
 AC_PROG_MAKE_SET
 
 dnl Add libtool support.
-ifdef(
-	[LT_INIT],
-	[
-		LT_INIT([win32-dll])
-		LT_LANG([Windows Resource])
-	],
-	[
-		AC_LIBTOOL_WIN32_DLL
-		AC_LIBTOOL_RC
-		AC_PROG_LIBTOOL
-	]
-)
+if test "${WIN32}" != "yes"; then
+	ifdef(
+		[LT_INIT],
+		[
+			LT_INIT([win32-dll])
+			LT_LANG([Windows Resource])
+		],
+		[
+			AC_LIBTOOL_WIN32_DLL
+			AC_LIBTOOL_RC
+			AC_PROG_LIBTOOL
+		]
+	)
+fi
 
 dnl Checks for header files.
 AC_HEADER_STDC
