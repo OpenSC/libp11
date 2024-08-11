@@ -210,7 +210,7 @@ AC_PROG_SED
 AC_PROG_MAKE_SET
 
 dnl Add libtool support.
-if test "${WIN32}" != "yes"; then
+if test "${WIN32}" = "yes"; then
 	ifdef(
 		[LT_INIT],
 		[
