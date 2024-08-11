@@ -46,6 +46,7 @@ stamp-h*
 *.pc
 *~
 *.gz
+*.tgz
 *.bz2
 *.out
 *.exp
@@ -91,3 +92,5 @@ doc/doxygen.conf
 /.project
 
 .vscode/*
+
+cov-int/*

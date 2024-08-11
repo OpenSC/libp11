@@ -1,7 +1,7 @@
 # Build state
 
-[![Tests](https://github.com/OpenSC/libp11/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSC/libp11/actions/workflows/ci.yml)
-[![Coverity Scan Status](https://scan.coverity.com/projects/15472/badge.svg)](https://scan.coverity.com/projects/opensc-libp11)
+[![Tests](https://github.com/patzol768/libp11/actions/workflows/ci.yml/badge.svg)](https://github.com/patzol768/libp11/actions/workflows/ci.yml)
+[![Coverity Scan Status](https://scan.coverity.com/projects/30601/badge.svg)](https://scan.coverity.com/projects/patzol768-libp11)
 
 
 # Overview
