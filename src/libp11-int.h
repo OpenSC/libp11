@@ -426,14 +426,14 @@ extern int pkcs11_rand_generate(PKCS11_CTX_private* ctx,
 								unsigned char* out, size_t outlen, 
 								unsigned int strength, 
 								int prediction_resistance, 
-								const unsigned char* addin, size_t addin_len);
+								const unsigned char* additional_input, size_t additional_input_len);
 
 /* Seed the random number generator */
 extern int pkcs11_rand_seed(PKCS11_CTX_private* ctx, 
 							CK_SESSION_HANDLE session, 
 							int prediction_resistance, 
 							const unsigned char* ent, size_t ent_len, 
-							const unsigned char* addin, size_t addin_len);
+							const unsigned char* additional_input, size_t additional_input_len);
 
 /* Inserts a key into the cipher as a new object */
 extern int pkcs11_create_cipher_key_object(PKCS11_CTX_private* ctx, 

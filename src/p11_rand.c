@@ -26,14 +26,14 @@
 
 #include "libp11-int.h"
 
-int pkcs11_rand_generate(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t outlen, unsigned int strength, int prediction_resistance, const unsigned char* addin, size_t addin_len)
+int pkcs11_rand_generate(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, unsigned char* out, size_t outlen, unsigned int strength, int prediction_resistance, const unsigned char* additional_input, size_t additional_input_len)
 {
     int rv;
 
     (void)strength;
     (void)prediction_resistance;
-    (void)addin;
-    (void)addin_len;
+    (void)additional_input;
+    (void)additional_input_len;
 
     rv = CRYPTOKI_call(ctx, C_GenerateRandom(session, out, outlen));
     if (rv == CKR_OK)
@@ -45,13 +45,13 @@ int pkcs11_rand_generate(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, uns
     return -1;
 }
 
-int pkcs11_rand_seed(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, int prediction_resistance, const unsigned char* ent, size_t ent_len, const unsigned char* addin, size_t addin_len)
+int pkcs11_rand_seed(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE session, int prediction_resistance, const unsigned char* ent, size_t ent_len, const unsigned char* additional_input, size_t additional_input_len)
 {
     int rv;
 
     (void)prediction_resistance;
-    (void)addin;
-    (void)addin_len;
+    (void)additional_input;
+    (void)additional_input_len;
 
     rv = CRYPTOKI_call(ctx, C_SeedRandom(session, (unsigned char*)ent, ent_len));
     if (rv == CKR_OK)

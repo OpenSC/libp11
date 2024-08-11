@@ -223,7 +223,7 @@ static int p11_rand_uninstantiate(void* rctx)
 
 int p11_rand_generate(void* rctx, unsigned char* out, size_t outlen,
                       unsigned int strength, int prediction_resistance,
-                      const unsigned char* addin, size_t addin_len)
+                      const unsigned char* additional_input, size_t additional_input_len)
 {
     P11_RAND_CTX* ctx = rctx;
     int reseed_required = 0;
@@ -260,7 +260,7 @@ int p11_rand_generate(void* rctx, unsigned char* out, size_t outlen,
         }
 
         /* seed may be empty */
-        if (p11_rand_reseed(ctx, prediction_resistance, buffer, bytes, addin, addin_len))
+        if (p11_rand_reseed(ctx, prediction_resistance, buffer, bytes, additional_input, additional_input_len))
         {
             /* reseed error */
             return 0;
@@ -272,19 +272,19 @@ int p11_rand_generate(void* rctx, unsigned char* out, size_t outlen,
         ctx->generate_counter++;
     }
 
-    return pkcs11_rand_generate(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, out, outlen, strength, prediction_resistance, addin, addin_len) ? 0 : 1;
+    return pkcs11_rand_generate(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, out, outlen, strength, prediction_resistance, additional_input, additional_input_len) ? 0 : 1;
 }
 
 int p11_rand_reseed(void* rctx, int prediction_resistance,
                     const unsigned char* ent, size_t ent_len,
-                    const unsigned char* addin, size_t addin_len)
+                    const unsigned char* additional_input, size_t additional_input_len)
 {
     P11_RAND_CTX* ctx = rctx;
     int res;
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
-    res = pkcs11_rand_seed(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, prediction_resistance, ent, ent_len, addin, addin_len) ? 0 : 1;
+    res = pkcs11_rand_seed(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, prediction_resistance, ent, ent_len, additional_input, additional_input_len) ? 0 : 1;
 
     if (ctx->reseed_interval > 0)
     {
