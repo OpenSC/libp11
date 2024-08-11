@@ -255,7 +255,7 @@ static X509* p11_store_load_x509(void* storectx, OSSL_CALLBACK* object_cb, void*
 
     if (!object_cb(params, object_cbarg))
     {
-        // TODO: openssl 3.0.2 itt elszall --> lasd github tesztek
+        // TODO: openssl 3.0.2 fails here --> see tests on github
         P11_PROVerr(PROV_F_STOREMGMT, PROV_R_LOAD_OBJECT_CB);
         // ctx_log(ctx->provctx, 0, "object_cb returned error\n");
         goto err;

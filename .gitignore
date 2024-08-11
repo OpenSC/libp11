@@ -69,6 +69,7 @@ examples/auth
 examples/decrypt
 examples/getrandom
 examples/listkeys
+examples/listkeys_ext
 examples/mech
 
 test-driver

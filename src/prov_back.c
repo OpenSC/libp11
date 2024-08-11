@@ -762,12 +762,10 @@ PKCS11_CERT* ctx_load_cert(PROVIDER_CTX* ctx, const char* s_key_id,
     {
         ctx_log(ctx, 0, "PKCS11_load_cert returned NULL\n");
         if (!ERR_peek_last_error())
-            PROVerr(PROV_F_CTX_LOAD_OBJECT, PROV_R_OBJECT_NOT_FOUND);
+            PROVerr(PROV_F_CTX_LOAD_CERT, PROV_R_OBJECT_NOT_FOUND);
         return NULL;
     }
     return cert;
-#warning cert?
-    //return PKCS11_find_certificate(key);
 }
 
 /******************************************************************************/

@@ -17,9 +17,11 @@ extern EVP_PKEY* ctx_load_privkey(PROVIDER_CTX* ctx, const char* s_key_id, OSSL_
 
 /******************************************************************************/
 
-static OSSL_FUNC_keymgmt_gen_init_fn keymgmt_gen_init;
+static OSSL_FUNC_keymgmt_gen_init_fn keymgmt_gen_init_ec;
+static OSSL_FUNC_keymgmt_gen_init_fn keymgmt_gen_init_rsa;
 static OSSL_FUNC_keymgmt_gen_set_params_fn keymgmt_gen_set_params;
 static OSSL_FUNC_keymgmt_gen_settable_params_fn keymgmt_gen_settable_params;
+static OSSL_FUNC_keymgmt_new_fn keymgmt_new;
 static OSSL_FUNC_keymgmt_gen_fn keymgmt_gen;
 static OSSL_FUNC_keymgmt_gen_cleanup_fn keymgmt_gen_cleanup;
 static OSSL_FUNC_keymgmt_load_fn keymgmt_load;
@@ -30,11 +32,26 @@ static OSSL_FUNC_keymgmt_has_fn keymgmt_has;
 
 /******************************************************************************/
 
-static const OSSL_DISPATCH p11_keymgmt_tbl[] = {
+static const OSSL_DISPATCH p11_keymgmt_tbl_rsa[] = {
 {OSSL_FUNC_KEYMGMT_FREE, (void (*)(void))keymgmt_free},
-{OSSL_FUNC_KEYMGMT_GEN_INIT, (void (*)(void))keymgmt_gen_init},
+{OSSL_FUNC_KEYMGMT_GEN_INIT, (void (*)(void))keymgmt_gen_init_rsa},
 {OSSL_FUNC_KEYMGMT_GEN_SET_PARAMS, (void (*)(void))keymgmt_gen_set_params},
 {OSSL_FUNC_KEYMGMT_GEN_SETTABLE_PARAMS, (void (*)(void))keymgmt_gen_settable_params},
+{OSSL_FUNC_KEYMGMT_NEW, (void (*)(void))keymgmt_new},
+{OSSL_FUNC_KEYMGMT_GEN, (void (*)(void))keymgmt_gen},
+{OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (void (*)(void))keymgmt_gen_cleanup},
+{OSSL_FUNC_KEYMGMT_LOAD, (void (*)(void))keymgmt_load},
+{OSSL_FUNC_KEYMGMT_GET_PARAMS, (void (*)(void))keymgmt_get_params},
+{OSSL_FUNC_KEYMGMT_GETTABLE_PARAMS, (void (*)(void))keymgmt_gettable_params},
+{OSSL_FUNC_KEYMGMT_HAS, (void (*)(void))keymgmt_has},
+{0, NULL}};
+
+static const OSSL_DISPATCH p11_keymgmt_tbl_ec[] = {
+{OSSL_FUNC_KEYMGMT_FREE, (void (*)(void))keymgmt_free},
+{OSSL_FUNC_KEYMGMT_GEN_INIT, (void (*)(void))keymgmt_gen_init_ec},
+{OSSL_FUNC_KEYMGMT_GEN_SET_PARAMS, (void (*)(void))keymgmt_gen_set_params},
+{OSSL_FUNC_KEYMGMT_GEN_SETTABLE_PARAMS, (void (*)(void))keymgmt_gen_settable_params},
+{OSSL_FUNC_KEYMGMT_NEW, (void (*)(void))keymgmt_new},
 {OSSL_FUNC_KEYMGMT_GEN, (void (*)(void))keymgmt_gen},
 {OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (void (*)(void))keymgmt_gen_cleanup},
 {OSSL_FUNC_KEYMGMT_LOAD, (void (*)(void))keymgmt_load},
@@ -44,9 +61,9 @@ static const OSSL_DISPATCH p11_keymgmt_tbl[] = {
 {0, NULL}};
 
 static const OSSL_ALGORITHM p11_dispatch_keymgmt[] = {
-{"RSA:rsaEncryption", "provider=pkcs11", p11_keymgmt_tbl, "PKCS#11 RSA implementation"},
+{"RSA:rsaEncryption", "provider=pkcs11", p11_keymgmt_tbl_rsa, "PKCS#11 RSA implementation"},
 /*{"RSA-PSS:RSASSA-PSS", "provider=pkcs11", p11_keymgmt_tbl, "PKCS#11 RSA-PSS implementation"},*/
-{"EC:id-ecPublicKey", "provider=pkcs11", p11_keymgmt_tbl, "PKCS#11 EC implementation"},
+{"EC:id-ecPublicKey", "provider=pkcs11", p11_keymgmt_tbl_ec, "PKCS#11 EC implementation"},
 {NULL, NULL, NULL, NULL}};
 
 const OSSL_ALGORITHM* p11_get_ops_keymgmt(void* provctx, int* no_store)
@@ -111,10 +128,8 @@ err:
 
 /******************************************************************************/
 
-static void* keymgmt_gen_init(void* provctx, int selection, const OSSL_PARAM params[])
+static void* keymgmt_gen_init(void* provctx, int selection, const OSSL_PARAM params[], long algorithm)
 {
-    (void)params;
-    (void)selection;
     P11_KEYMGMT_CTX* ctx = NULL;
 
     ctx = __new_p11_keymgmtctx();
@@ -125,6 +140,15 @@ static void* keymgmt_gen_init(void* provctx, int selection, const OSSL_PARAM par
 
     ctx->provctx = provctx;
     ctx->slot = ctx->provctx->slot;
+    ctx->algorithm = algorithm;
+    ctx->nbits = 2048;
+    // ctx->type = RSA; // RSA, RSA-PSS, EC, ...
+
+    ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
+    ctx_log(ctx->provctx, 2, "selection=%04x\n", selection);
+
+    if ((selection & OSSL_KEYMGMT_SELECT_KEYPAIR) == 0)
+        goto err;
 
     if (!ctx->slot)
     {
@@ -143,7 +167,8 @@ static void* keymgmt_gen_init(void* provctx, int selection, const OSSL_PARAM par
         goto err;
     }
 
-    ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
+    if (!keymgmt_gen_set_params(ctx, params))
+        goto err;
 
     return ctx;
 
@@ -154,6 +179,16 @@ err:
     }
 
     return NULL;
+}
+
+static void* keymgmt_gen_init_rsa(void* provctx, int selection, const OSSL_PARAM params[])
+{
+    return keymgmt_gen_init(provctx, selection, params, CKK_RSA);
+}
+
+static void* keymgmt_gen_init_ec(void* provctx, int selection, const OSSL_PARAM params[])
+{
+    return keymgmt_gen_init(provctx, selection, params, CKK_EC);
 }
 
 #define ALLOC(ptr, len, max)       \
@@ -202,7 +237,7 @@ static int process_uri(P11_KEYMGMT_CTX* ctx)
         }
         *p = 0;
 
-        ctx_log(ctx->provctx, 3, "%s pkcs11 uri not defined, using arbitrary [%s]\n", __FUNCTION__, ctx->uri);
+        ctx_log(ctx->provctx, 0, "%s pkcs11 uri not defined, using arbitrary [%s]\n", __FUNCTION__, ctx->uri);
     }
 
     ALLOC(ctx->id, ctx->id_len, STRING_BUF_LEN + 1)
@@ -239,6 +274,15 @@ err:
     return rv;
 }
 
+static void* keymgmt_new(void* provctx)
+{
+    PROVIDER_CTX* ctx = provctx;
+
+    ctx_log(ctx, 3, "%s\n", __FUNCTION__);
+
+    return NULL;
+}
+
 static void* keymgmt_gen(void* genctx, OSSL_CALLBACK* cb, void* cbarg)
 {
     P11_KEYMGMT_CTX* ctx = genctx;
@@ -255,7 +299,20 @@ static void* keymgmt_gen(void* genctx, OSSL_CALLBACK* cb, void* cbarg)
     process_uri(ctx);
 
     /* ID is binary here */
-    rv = pkcs11_generate_ec_key(PRIVSLOT(ctx->slot), ctx->group_name, ctx->label, (unsigned char*)ctx->id, ctx->id_len);
+    switch (ctx->algorithm)
+    {
+        case CKK_RSA:
+            rv = pkcs11_generate_key(PRIVSLOT(ctx->slot), ctx->algorithm, ctx->nbits, ctx->label, (unsigned char*)ctx->id, ctx->id_len);
+            break;
+
+        case CKK_EC:
+            rv = pkcs11_generate_ec_key(PRIVSLOT(ctx->slot), ctx->group_name, ctx->label, (unsigned char*)ctx->id, ctx->id_len);
+            break;
+
+        default:
+            rv = 1;
+    }
+
     if (rv)
     {
         return NULL;
@@ -280,6 +337,8 @@ static void keymgmt_free(void* keydata)
 {
     /* TODO: implement or remove from available function list */
     (void)keydata;
+
+    // fprintf(stderr, "%s\n", __FUNCTION__);
 }
 
 static int keymgmt_has(const void* keydata, int selection)
@@ -287,6 +346,8 @@ static int keymgmt_has(const void* keydata, int selection)
     /* TODO: implement or remove from available function list */
     (void)keydata;
     (void)selection;
+
+    // fprintf(stderr, "%s\n", __FUNCTION__);
 
     return 0;
 }
@@ -296,6 +357,8 @@ static int keymgmt_get_params(void* keydata, OSSL_PARAM params[])
     /* TODO: implement or remove from available function list */
     (void)keydata;
     (void)params;
+
+    // fprintf(stderr, "%s\n", __FUNCTION__);
 
     return 0;
 }
@@ -312,10 +375,31 @@ static const OSSL_PARAM* keymgmt_gettable_params(void* provctx)
 #define P11_PKEY_PARAM_PIN_CODE "pass"
 #define P11_PKEY_PARAM_URI "uri"
 
-static const OSSL_PARAM keymgmt_gen_settable_params_tbl[] = {
+static const OSSL_PARAM keymgmt_gen_settable_params_tbl_rsa[] = {
+// RSA
+OSSL_PARAM_size_t(OSSL_PKEY_PARAM_RSA_BITS, NULL),
+// OSSL_PARAM_size_t(OSSL_PKEY_PARAM_RSA_PRIMES, NULL),
+// OSSL_PARAM_BN(OSSL_PKEY_PARAM_RSA_E, NULL, 0),
+
+// RSA-PSS
+// OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_RSA_DIGEST, NULL, 0),
+// OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_RSA_DIGEST_PROPS, NULL, 0),
+// OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_RSA_MASKGENFUNC, NULL, 0),
+// OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_RSA_MGF1_DIGEST, NULL, 0),
+// OSSL_PARAM_int(OSSL_PKEY_PARAM_RSA_PSS_SALTLEN, NULL),
+
+// common
+OSSL_PARAM_utf8_string(P11_PKEY_PARAM_PIN_CODE, NULL, 0),
+OSSL_PARAM_utf8_string(P11_PKEY_PARAM_URI, NULL, 0),
+OSSL_PARAM_END};
+
+static const OSSL_PARAM keymgmt_gen_settable_params_tbl_ec[] = {
+// EC
 OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, NULL, 0),
 OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_EC_ENCODING, NULL, 0),
 OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT, NULL, 0),
+
+// common
 OSSL_PARAM_utf8_string(P11_PKEY_PARAM_PIN_CODE, NULL, 0),
 OSSL_PARAM_utf8_string(P11_PKEY_PARAM_URI, NULL, 0),
 OSSL_PARAM_END};
@@ -327,7 +411,21 @@ static const OSSL_PARAM* keymgmt_gen_settable_params(void* genctx, void* provctx
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
-    return keymgmt_gen_settable_params_tbl;
+    switch (ctx->algorithm)
+    {
+        case CKK_RSA:
+            return keymgmt_gen_settable_params_tbl_rsa;
+            break;
+
+        case CKK_EC:
+            return keymgmt_gen_settable_params_tbl_ec;
+            break;
+
+        default:
+            break;
+    }
+
+    return NULL;
 }
 
 static int keymgmt_gen_set_params(void* genctx, const OSSL_PARAM params[])
@@ -337,52 +435,77 @@ static int keymgmt_gen_set_params(void* genctx, const OSSL_PARAM params[])
 
     ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
-    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME);
-    if (p != NULL && !OSSL_PARAM_get_utf8_string(p, &ctx->group_name, STRING_BUF_LEN))
-    {
-        goto err;
-    }
+    if (params == NULL)
+        return 1;
 
-    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_EC_ENCODING);
-    if (p != NULL && !OSSL_PARAM_get_utf8_string(p, &ctx->encoding, STRING_BUF_LEN))
-    {
-        goto err;
-    }
-
-    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT);
-    if (p != NULL && !OSSL_PARAM_get_utf8_string(p, &ctx->point_conversion, STRING_BUF_LEN))
-    {
-        goto err;
-    }
-
-    p = OSSL_PARAM_locate_const(params, P11_PKEY_PARAM_URI);
-    if (p != NULL)
+    if ((p = OSSL_PARAM_locate_const(params, P11_PKEY_PARAM_URI)) != NULL)
     {
         if (!OSSL_PARAM_get_utf8_string(p, &ctx->uri, MAX_URI_LENGTH))
         {
             goto err;
         }
+
+        ctx_log(ctx->provctx, 2, "param: P11_PKEY_PARAM_URI=%s\n", ctx->uri);
     }
 
-    p = OSSL_PARAM_locate_const(params, P11_PKEY_PARAM_PIN_CODE);
-    if (p != NULL)
+    if ((p = OSSL_PARAM_locate_const(params, P11_PKEY_PARAM_PIN_CODE)) != NULL)
     {
         if (!OSSL_PARAM_get_utf8_string(p, &ctx->provctx->pin, MAX_PIN_LENGTH))
         {
             goto err;
         }
+
+        ctx_log(ctx->provctx, 2, "param: P11_PKEY_PARAM_PIN_CODE=%s\n", ctx->provctx->pin);
     }
 
-    ctx_log(ctx->provctx, 3, "%s group:[%s] encoding:[%s] point_conversion:[%s] pin:[%s]\n",
-            __FUNCTION__,
-            ctx->group_name,
-            ctx->encoding,
-            ctx->point_conversion,
-            ctx->provctx->pin);
+    if (ctx->algorithm == CKK_RSA)
+    {
+        if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_RSA_BITS)) != NULL)
+        {
+            if (!OSSL_PARAM_get_size_t(p, &ctx->nbits))
+                goto err;
+
+            ctx_log(ctx->provctx, 2, "param: OSSL_PKEY_PARAM_RSA_BITS=%ld\n", ctx->nbits);
+
+            if (ctx->nbits < RSA_MIN_MODULUS_BITS)
+            {
+                ctx_log(ctx->provctx, 0, "RSA key too small\n");
+                goto err;
+            }
+        }
+    }
+
+    if (ctx->algorithm == CKK_EC)
+    {
+        if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME)) != NULL)
+        {
+            if (!OSSL_PARAM_get_utf8_string(p, &ctx->group_name, STRING_BUF_LEN))
+                goto err;
+        }
+
+        if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_EC_ENCODING)) != NULL)
+        {
+            if (!OSSL_PARAM_get_utf8_string(p, &ctx->encoding, STRING_BUF_LEN))
+                goto err;
+        }
+
+        if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT)) != NULL)
+        {
+            if (!OSSL_PARAM_get_utf8_string(p, &ctx->point_conversion, STRING_BUF_LEN))
+                goto err;
+        }
+
+        ctx_log(ctx->provctx, 2, "%s group:[%s] encoding:[%s] point_conversion:[%s] pin:[%s]\n",
+                __FUNCTION__,
+                ctx->group_name,
+                ctx->encoding,
+                ctx->point_conversion,
+                ctx->provctx->pin);
+    }
 
     if (ctx->slot->token->loginRequired && !ctx->provctx->pin)
     {
-        ctx_log(ctx->provctx, 3, "%s login required, but no pin present\n", __FUNCTION__);
+        ctx_log(ctx->provctx, 0, "%s login required, but no pin present\n", __FUNCTION__);
         goto err;
     }
 

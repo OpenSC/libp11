@@ -61,7 +61,7 @@ pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT) \
 pkcs11prov_la_SOURCES = prov_back.c prov_err.c prov_front.c prov_parse.c \
 	prov_asym_cipher.c prov_cipher.c prov_digest.c prov_kdf.c prov_kem.c \
 	prov_keyexch.c prov_keymgmt.c prov_mac.c prov_rand.c prov_signature.c \
-	prov_storemgmt.c prov.exports
+	prov_storemgmt.c p11_kdf.c prov.exports
 if WIN32
 pkcs11prov_la_SOURCES += pkcs11prov.rc
 else

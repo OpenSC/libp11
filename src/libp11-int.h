@@ -495,6 +495,13 @@ extern int pkcs11_encrypt(PKCS11_CTX_private* ctx,
 						  unsigned char* out, size_t* outl, 
 						  const unsigned char* in, size_t inl);
 
+/* Generate a secret key */
+extern int pkcs11_generate_secret_key(PKCS11_CTX_private* ctx,
+									  CK_SESSION_HANDLE session,
+									  CK_MECHANISM_PTR mechanism,
+									  CK_KEY_TYPE key_type,
+									  size_t keylen, unsigned char* key);
+
 /* Clones the session state from one session into another. Not all tokens support. */
 extern int pkcs11_copy_session_state(PKCS11_SLOT_private* slot, 
 									 CK_SESSION_HANDLE dest, 

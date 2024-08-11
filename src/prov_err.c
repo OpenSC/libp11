@@ -24,7 +24,7 @@ static ERR_STRING_DATA PROV_str_functs[] = {
 // {ERR_FUNC(PROV_F_CTX_CTRL_LOAD_CERT), "ctx_ctrl_load_cert"},
 {ERR_FUNC(PROV_F_CTX_CTRL_SET_PIN), "ctx_ctrl_set_pin"},
 // {ERR_FUNC(PROV_F_CTX_ENGINE_CTRL), "ctx_engine_ctrl"},
-// {ERR_FUNC(PROV_F_CTX_LOAD_CERT), "ctx_load_cert"},
+{ERR_FUNC(PROV_F_CTX_LOAD_CERT), "ctx_load_cert"},
 // {ERR_FUNC(PROV_F_CTX_LOAD_KEY), "ctx_load_key"},
 {ERR_FUNC(PROV_F_CTX_LOAD_PRIVKEY), "ctx_load_privkey"},
 {ERR_FUNC(PROV_F_CTX_LOAD_PUBKEY), "ctx_load_pubkey"},

@@ -5,10 +5,15 @@
 
 #include "prov_ctx.h"
 
+#ifndef RSA_MIN_MODULUS_BITS
+#define RSA_MIN_MODULUS_BITS    512
+#endif
+
 struct p11_keymgmtctx
 {
     PROVIDER_CTX* provctx;
     PKCS11_SLOT* slot;
+    long algorithm;
 
     /* PKCS11 URI */
     char* uri;
@@ -17,6 +22,8 @@ struct p11_keymgmtctx
     char* label;
     char* id;
     size_t id_len;
+
+    size_t nbits;
 
     char* group_name;
     char* encoding;
