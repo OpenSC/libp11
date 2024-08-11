@@ -14,9 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: 'ubuntu-24.04'
-            openssl: 'openssl@3'
           - os: 'ubuntu-22.04'
+            openssl: 'openssl@3'
+          - os: 'ubuntu-20.04'
             openssl: 'openssl@1.1'
           - os: 'macOS-latest'
             openssl: 'openssl@3'
