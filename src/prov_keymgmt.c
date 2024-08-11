@@ -206,6 +206,9 @@ static int process_uri(P11_KEYMGMT_CTX* ctx)
     PKCS11_TOKEN* temp_token = NULL;
     int rv = 0;
 
+    if (!ctx)
+        goto err;
+
     if (!ctx->uri)
     {
         time_t now;
@@ -214,6 +217,10 @@ static int process_uri(P11_KEYMGMT_CTX* ctx)
         char skip;
         static const char* hexdigits = "01234567890ABCDEFabcdef";
         time(&now);
+
+        ctx->uri = OPENSSL_zalloc(64);
+        if (!ctx->uri)
+            goto err;
 
         strcpy(ctx->uri, "pkcs11:token=libp11;id=");
         p = ctx->uri + strlen(ctx->uri);
@@ -247,7 +254,7 @@ static int process_uri(P11_KEYMGMT_CTX* ctx)
         goto err;
     }
 
-    if (parse_pkcs11_uri(ctx->provctx, ctx->uri, &temp_token, (unsigned char*)ctx->id, &ctx->id_len, ctx->provctx->pin, &ctx->provctx->pin_length, &ctx->label))
+    if (parse_pkcs11_uri(ctx->provctx, ctx->uri, &temp_token, (unsigned char**)&ctx->id, &ctx->id_len, &ctx->provctx->pin, &ctx->provctx->pin_length, &ctx->label))
     {
         /* only id, label and pin are used from the uri, other parsed parts dropped */
 
@@ -269,6 +276,7 @@ err:
     if (temp_token)
     {
         pkcs11_destroy_token(temp_token);
+        OPENSSL_free(temp_token);
     }
 
     return rv;

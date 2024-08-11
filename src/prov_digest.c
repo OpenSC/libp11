@@ -128,7 +128,7 @@ static const OSSL_ALGORITHM* find_algorithm(const P11_ALGORITHM_MAP* algorithm_m
 const OSSL_ALGORITHM* p11_get_ops_digest(void* provctx, int* no_store)
 {
     PROVIDER_CTX* ctx = provctx;
-    OSSL_ALGORITHM* algorithms;
+    OSSL_ALGORITHM* algorithms = NULL;
     PKCS11_MECHANISM* mechanisms = NULL;
     unsigned long mechanism_count = 0;
     unsigned long supported_count = 0;
@@ -165,13 +165,12 @@ const OSSL_ALGORITHM* p11_get_ops_digest(void* provctx, int* no_store)
         }
     }
 
-    return algorithms;
-
 err:
     if (mechanisms)
         free(mechanisms);
 
-    return NULL;
+    // when error, the algorithms is NULL anyway
+    return algorithms;
 }
 
 /******************************************************************************/
@@ -324,12 +323,12 @@ static int p11_digest_digest(void* provctx, const unsigned char* in, size_t inl,
 
     *outl = outsz;
 
-    ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
-
-    if (!ctx)
+    if (!ctx || !ctx->provctx)
     {
         return 0;
     }
+
+    ctx_log(ctx->provctx, 3, "%s\n", __FUNCTION__);
 
     rv = pkcs11_digest(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, in, inl, out, outl) ? 0 : 1;
 

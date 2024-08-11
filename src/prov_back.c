@@ -105,7 +105,7 @@ static int ctx_get_pin(PROVIDER_CTX* ctx, const char* token_label, OSSL_PASSPHRA
     return 1;
 
 err:
-    free(ctx->pin);
+    OPENSSL_free(ctx->pin);
     ctx->pin = NULL;
 
     return 0;
@@ -250,22 +250,27 @@ static void* ctx_try_load_object(PROVIDER_CTX* ctx,
     PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
     PKCS11_TOKEN *tok, *match_tok = NULL;
     unsigned int n, m;
-    unsigned char obj_id[MAX_VALUE_LEN / 2];
-    size_t obj_id_len = sizeof(obj_id);
+    unsigned char* obj_id = OPENSSL_zalloc(MAX_VALUE_LEN + 1);
+    size_t obj_id_len = sizeof(MAX_VALUE_LEN);
     char* obj_label = NULL;
-    char tmp_pin[MAX_PIN_LENGTH + 1];
+    char* tmp_pin = OPENSSL_zalloc(MAX_PIN_LENGTH + 1);
     size_t tmp_pin_len = MAX_PIN_LENGTH;
     int slot_nr = -1;
     char flags[64];
     size_t matched_count = 0;
     void* object = NULL;
 
+    if (obj_id == NULL || tmp_pin == NULL)
+    {
+        goto error;
+    }
+
     if (object_uri && *object_uri)
     {
         if (!strncasecmp(object_uri, "pkcs11:", 7))
         {
             n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
-                                 obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
+                                 &obj_id, &obj_id_len, &tmp_pin, &tmp_pin_len, &obj_label);
             if (!n)
             {
                 ctx_log(ctx, 0,
@@ -486,6 +491,10 @@ error:
         OPENSSL_free(match_tok);
     }
 
+    if (tmp_pin)
+        OPENSSL_free(tmp_pin);
+    if (obj_id)
+        OPENSSL_free(obj_id);
     if (obj_label)
         OPENSSL_free(obj_label);
     if (matched_slots)
@@ -752,12 +761,12 @@ EVP_PKEY* ctx_load_privkey(PROVIDER_CTX* ctx, const char* s_key_id,
 }
 
 PKCS11_CERT* ctx_load_cert(PROVIDER_CTX* ctx, const char* s_key_id,
-                        OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg)
+                           OSSL_PASSPHRASE_CALLBACK* pw_cb, void* pw_cbarg)
 {
     PKCS11_CERT* cert;
 
     cert = ctx_load_object(ctx, "certificate", match_cert, s_key_id,
-                          pw_cb, pw_cbarg);
+                           pw_cb, pw_cbarg);
     if (!cert)
     {
         ctx_log(ctx, 0, "PKCS11_load_cert returned NULL\n");

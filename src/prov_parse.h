@@ -34,7 +34,7 @@
 
 int parse_pkcs11_uri(PROVIDER_CTX* ctx,
                      const char* uri, PKCS11_TOKEN** p_tok,
-                     unsigned char* id, size_t* id_len, char* pin, size_t* pin_len,
+                     unsigned char** id, size_t* id_len, char** pin, size_t* pin_len,
                      char** label);
 
 int parse_slot_id_string(PROVIDER_CTX* ctx,

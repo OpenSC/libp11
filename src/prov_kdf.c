@@ -182,7 +182,8 @@ const OSSL_ALGORITHM* p11_get_ops_kdf(void* provctx, int* no_store)
     }
 
     // new size is never bigger, hence assuming the pointer not changes
-    if (!realloc(algorithms, (supported_count + 1) * sizeof(*algorithms)))
+    algorithms = realloc(algorithms, (supported_count + 1) * sizeof(*algorithms));
+    if (!algorithms)
     {
         goto err;
     }
@@ -276,7 +277,7 @@ static void p11_kdf_reset(void* kctx)
     if (p != NULL && p->data != NULL && p->data_size != 0)                        \
     {                                                                             \
         OPENSSL_clear_free(octet_data, octet_size);                               \
-        ctx->pass = NULL;                                                         \
+        octet_data = NULL;                                                         \
         if (!OSSL_PARAM_get_octet_string(p, (void**)&octet_data, 0, &octet_size)) \
         {                                                                         \
             return 0;                                                             \
@@ -293,8 +294,11 @@ static int p11_kdf_derive(void* kctx, unsigned char* key, size_t keylen, const O
 
     ctx->keylen = keylen;
 
-    GET_OCTET(OSSL_KDF_PARAM_PASSWORD, ctx->pass, ctx->passlen)
-    GET_OCTET(OSSL_KDF_PARAM_SALT, ctx->salt, ctx->saltlen)
+    // octet
+    GET_OCTET(OSSL_KDF_PARAM_PASSWORD, ctx->pass, ctx->passlen);
+
+    // octet
+    GET_OCTET(OSSL_KDF_PARAM_SALT, ctx->salt, ctx->saltlen);
 
     // int
     p = OSSL_PARAM_locate_const(params, OSSL_KDF_PARAM_PKCS5);
@@ -345,7 +349,7 @@ static int p11_kdf_derive(void* kctx, unsigned char* key, size_t keylen, const O
     .ulPasswordLen = ctx->passlen};
 
     ctx->mech->pParameter = &meth_param;
-    ctx->mech->ulParameterLen = sizeof(&meth_param);
+    ctx->mech->ulParameterLen = sizeof(meth_param);
 
     rc = pkcs11_generate_secret_key(PRIVCTX(ctx->provctx->pkcs11_ctx), ctx->session, ctx->mech, CKK_GENERIC_SECRET, ctx->keylen, key);
 
@@ -427,6 +431,8 @@ static int p11_kdf_get_ctx_params(void* kctx, OSSL_PARAM params[], CK_MECHANISM_
 
     // openssl: If the algorithm produces a variable amount of output, SIZE_MAX should be returned.
     ctx->param_size = (mechp->info.ulMinKeySize == mechp->info.ulMaxKeySize) ? mechp->info.ulMaxKeySize : SIZE_MAX;
+
+    free(mechp);
 
     GET_PARAM(OSSL_KDF_PARAM_SIZE, size_t, ctx->param_size)
 

@@ -264,7 +264,8 @@ const OSSL_ALGORITHM* p11_get_ops_cipher(void* provctx, int* no_store)
     }
 
     /* new size is never bigger, hence assuming the pointer not changes */
-    if (!realloc(algorithms, (supported_count + 1) * sizeof(*algorithms)))
+    algorithms = realloc(algorithms, (supported_count + 1) * sizeof(*algorithms));
+    if (!algorithms)
     {
         goto err;
     }

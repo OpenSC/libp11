@@ -369,7 +369,7 @@ static int parse_pin_source(PROVIDER_CTX* ctx,
 
 int parse_pkcs11_uri(PROVIDER_CTX* ctx,
                      const char* uri, PKCS11_TOKEN** p_tok,
-                     unsigned char* id, size_t* id_len, char* pin, size_t* pin_len,
+                     unsigned char** id, size_t* id_len, char** pin, size_t* pin_len,
                      char** label)
 {
     PKCS11_TOKEN* tok;
@@ -472,7 +472,7 @@ int parse_pkcs11_uri(PROVIDER_CTX* ctx,
         if (tok)
         {
             pkcs11_destroy_token(tok);
-            tok = NULL;
+            OPENSSL_free(tok);
         }
         OPENSSL_free(newlabel);
     }

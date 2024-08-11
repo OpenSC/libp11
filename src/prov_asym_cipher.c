@@ -11,5 +11,6 @@ const OSSL_ALGORITHM* p11_get_ops_asym_cipher(void* provctx, int* no_store)
 
     ctx_log(ctx, 3, "%s\n", __FUNCTION__);
 
-    return !ctx->b_asym_cipher_disabled ? NULL : NULL;
+    // return !ctx->b_asym_cipher_disabled ? NULL : NULL;
+    return NULL;
 }
