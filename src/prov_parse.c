@@ -421,19 +421,19 @@ int parse_pkcs11_uri(PROVIDER_CTX* ctx,
         else if (!strncmp(p, "id=", 3))
         {
             p += 3;
-            rv = parse_uri_attr(ctx, p, end - p, (void*)&id, id_len);
+            rv = parse_uri_attr(ctx, p, end - p, id, id_len);
             id_set = 1;
         }
         else if (!strncmp(p, "pin-value=", 10))
         {
             p += 10;
-            rv = pin_set ? 0 : parse_uri_attr(ctx, p, end - p, (void*)&pin, pin_len);
+            rv = pin_set ? 0 : parse_uri_attr(ctx, p, end - p, (unsigned char**)pin, pin_len);
             pin_set = 1;
         }
         else if (!strncmp(p, "pin-source=", 11))
         {
             p += 11;
-            rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, (unsigned char*)pin, pin_len);
+            rv = pin_set ? 0 : parse_pin_source(ctx, p, end - p, *pin, pin_len);
             pin_set = 1;
         }
         else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12))
