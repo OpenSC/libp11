@@ -40,7 +40,7 @@ int pkcs11_generate_secret_key(PKCS11_CTX_private* ctx, CK_SESSION_HANDLE sessio
     CK_ATTRIBUTE attributes[] = {
     {CKA_CLASS, &class, sizeof(class)},
     {CKA_KEY_TYPE, &key_type, sizeof(key_type)},
-    {CKA_DERIVE, &true, sizeof(false)},
+    {CKA_DERIVE, &true, sizeof(true)},
     {CKA_SENSITIVE, &false, sizeof(false)},
     {CKA_EXTRACTABLE, &true, sizeof(true)},
     // {CKA_TOKEN, &true, sizeof(true)},

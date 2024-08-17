@@ -1,3 +1,34 @@
+/*
+ * Code build on definitions from OpenSSL 3 documentation.
+ *
+ * Copyright (c) 2022 Zoltan Patocs
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*
+ * !!! Seems working, but derives wrong keys. Hence the KDF is disabled
+ * !!! in the PBKDF2 tests. -- FIX NEEDED!
+ */
+
 #include <stdlib.h>
 
 #include "pkcs11.h"
@@ -112,6 +143,43 @@ ALG_MAP(GENERIC_SECRET_KEY_GEN, PBKDF2)};
 
 // -------------------------------------------------------------------------------------------------
 
+struct str_alg_map_t
+{
+    char *name;
+    CK_ULONG code;
+};
+
+typedef struct str_alg_map_t P11_ALG_MAP;
+
+static P11_ALG_MAP alg_map[] = {
+{"SHA256", CKP_PKCS5_PBKD2_HMAC_SHA256},
+{"SHA1", CKP_PKCS5_PBKD2_HMAC_SHA1},
+{"GOSTR3411", CKP_PKCS5_PBKD2_HMAC_GOSTR3411},
+{"SHA224", CKP_PKCS5_PBKD2_HMAC_SHA224},
+{"SHA384", CKP_PKCS5_PBKD2_HMAC_SHA384},
+{"SHA512", CKP_PKCS5_PBKD2_HMAC_SHA512},
+{"SHA512_224", CKP_PKCS5_PBKD2_HMAC_SHA512_224},
+{"SHA512_256", CKP_PKCS5_PBKD2_HMAC_SHA512_256},
+{NULL, 0L}};
+
+CK_ULONG find_algorithm(const char* name)
+{
+    P11_ALG_MAP* map = alg_map;
+
+    while(map->name)
+    {
+        if (!strcmp(map->name, name))
+        {
+            return map->code;
+        }
+    }
+
+    return 0L;
+}
+
+// -------------------------------------------------------------------------------------------------
+
+
 static PKCS11_KDF_CTX* __new_p11_kdfctx()
 {
     return calloc(1, sizeof(PKCS11_KDF_CTX));
@@ -154,7 +222,7 @@ const OSSL_ALGORITHM* p11_get_ops_kdf(void* provctx, int* no_store)
 
     (void)no_store;
 
-    ctx_log(ctx, 3, "%s\n", __FUNCTION__);
+    ctx_log(ctx, 3, "%s%s\n", __FUNCTION__, ctx->b_kdf_disabled ? " disabled" : "");
 
     if (ctx->b_kdf_disabled)
     {
@@ -342,11 +410,16 @@ static int p11_kdf_derive(void* kctx, unsigned char* key, size_t keylen, const O
     .pSaltSourceData = ctx->salt,
     .ulSaltSourceDataLen = ctx->saltlen,
     .iterations = ctx->iter,
-    .prf = CKP_PKCS5_PBKD2_HMAC_SHA256,
+    .prf = find_algorithm(ctx->mdname), // SHA256 --> CKP_PKCS5_PBKD2_HMAC_SHA256
     .pPrfData = ctx->secret,
     .ulPrfDataLen = ctx->secretlen,
     .pPassword = ctx->pass,
     .ulPasswordLen = ctx->passlen};
+
+    if (!meth_param.prf)
+    {
+        return 0;
+    }
 
     ctx->mech->pParameter = &meth_param;
     ctx->mech->ulParameterLen = sizeof(meth_param);

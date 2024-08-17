@@ -235,7 +235,7 @@ const OSSL_ALGORITHM* p11_get_ops_cipher(void* provctx, int* no_store)
 
     (void)no_store;
 
-    ctx_log(ctx, 3, "%s\n", __FUNCTION__);
+    ctx_log(ctx, 3, "%s%s\n", __FUNCTION__, ctx->b_cipher_disabled ? " disabled" : "");
 
     if (ctx->b_cipher_disabled)
     {
