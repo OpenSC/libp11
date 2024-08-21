@@ -46,11 +46,20 @@ stamp-h*
 *.pc
 *~
 *.gz
+*.tgz
 *.bz2
 *.out
 *.exp
 *.obj
 *.map
+*.csr
+*.so
+*.signature
+*.pem
+*.cer
+*.key
+*.encrypt
+*.decrypt
 
 m4/ltoptions.m4
 m4/ltsugar.m4
@@ -61,6 +70,8 @@ examples/auth
 examples/decrypt
 examples/getrandom
 examples/listkeys
+examples/listkeys_ext
+examples/mech
 
 test-driver
 tests/openssl_version
@@ -70,8 +81,16 @@ tests/evp-sign
 tests/fork-change-slot
 tests/rsa-oaep
 tests/rsa-pss-sign
+tests/check-privkey
+tests/dup-key
+tests/store-cert
 tests/*.log
 tests/*.trs
 tests/output.*
 
 doc/doxygen.conf
+/.project
+
+.vscode/*
+
+cov-int/*

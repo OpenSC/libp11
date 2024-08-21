@@ -74,7 +74,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 
 	cpriv->handle = C_LoadModule(name, &cpriv->method);
 	if (!cpriv->handle) {
-		P11err(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
+		P11initerr(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
 		return -1;
 	}
 
@@ -87,7 +87,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 		C_UnloadModule(cpriv->handle);
 		cpriv->handle = NULL;
-		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
@@ -98,11 +98,12 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 		cpriv->method->C_Finalize(NULL);
 		C_UnloadModule(cpriv->handle);
 		cpriv->handle = NULL;
-		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 	ctx->manufacturer = PKCS11_DUP(ck_info.manufacturerID);
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
+	ctx->module_name = PKCS11_DUP(name);
 	cpriv->cryptoki_version.major = ck_info.cryptokiVersion.major;
 	cpriv->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
 
@@ -129,7 +130,7 @@ int pkcs11_CTX_reload(PKCS11_CTX_private *ctx)
 	}
 	rv = ctx->method->C_Initialize(args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		CKRerr(P11_F_PKCS11_CTX_RELOAD, rv);
+		CKRiniterr(CKR_F_PKCS11_CTX_RELOAD, rv);
 		return -1;
 	}
 
@@ -143,12 +144,19 @@ void pkcs11_CTX_unload(PKCS11_CTX *ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	/* Tell the PKCS11 library to shut down */
-	if (cpriv->forkid == get_forkid())
-		cpriv->method->C_Finalize(NULL);
+	/* Avoid cases when an unsafe exit first cleans up
+	 * the module library and only after that calls the
+	 * provider cleanup.
+	 */
+	if (C_IsModuleLoaded(ctx->module_name) == CKR_OK)
+	{
+		/* Tell the PKCS11 library to shut down */
+		if (cpriv->forkid == get_forkid())
+			cpriv->method->C_Finalize(NULL);
 
-	/* Unload the module */
-	C_UnloadModule(cpriv->handle);
+		/* Unload the module */
+		C_UnloadModule(cpriv->handle);
+	}
 	cpriv->handle = NULL;
 }
 

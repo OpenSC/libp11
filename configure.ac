@@ -29,6 +29,9 @@ AC_PROG_CC
 PKG_PROG_PKG_CONFIG
 AC_C_BIGENDIAN
 
+OSSL_PKG_VERSION=`$PKG_CONFIG --modversion --silence-errors libcrypto || \
+	$PKG_CONFIG --modversion openssl`
+
 # we need to set our soversion based on openssl's soversion to avoid
 # issues with applications linking to new openssl, old libp11, and vice versa
 opensslversion="$( \
@@ -38,18 +41,39 @@ opensslversion="$( \
 case "$opensslversion" in
 	3.*) # Engines directory prefix for OpenSSL 3.x
 	    LIBP11_LT_OLDEST="3"
+		LIBP11_OSSL_PROVIDER="yes"
 	    debian_ssl_prefix="engines-3";;
 	1.1.*) # Engines directory prefix for OpenSSL 1.1.x
 	    LIBP11_LT_OLDEST="3"
 	    debian_ssl_prefix="engines-1.1";;
 	1.0.*) # Engines directory prefix for OpenSSL 1.0.x
+		OSSL_VERSION="1.0.x"
 	    LIBP11_LT_OLDEST="2"
 	    debian_ssl_prefix="openssl-$opensslversion/engines";;
 	*) # Engines directory prefix for OpenSSL 0.9.x
+		OSSL_VERSION="0.9.x"
 	    LIBP11_LT_OLDEST="2"
 	    debian_ssl_prefix="ssl/engines";;
 esac
 
+# provider needs openssl >= 3.0.5
+case "$OSSL_PKG_VERSION" in
+	3.0.*) 
+		OSSL_SUB_VER=`echo $OSSL_PKG_VERSION | cut -d \. -f 3`
+		if test $OSSL_SUB_VER -gt 4 ;
+		then
+			LIBP11_OSSL_PROVIDER="yes"
+		else
+			AC_MSG_NOTICE([provider needs openssl >= 3.0.5])
+			LIBP11_OSSL_PROVIDER="no"
+		fi
+		;;
+	3.*) 
+		AC_MSG_NOTICE([3.*])
+		LIBP11_OSSL_PROVIDER="yes";;
+esac
+
+AM_CONDITIONAL([LIBP11_OSSL_PROVIDER], [test x$LIBP11_OSSL_PROVIDER = xyes])
 
 # LT Version numbers, remember to change them just *before* a release.
 #   (Code changed:                      REVISION++)
@@ -150,6 +174,28 @@ AC_ARG_WITH(
 )
 
 AC_ARG_WITH(
+	[providersdir],
+	[AS_HELP_STRING([--with-providersdir], [OpenSSL3 providers directory])],
+	[providersexecdir="${withval}"],
+	[
+		providersexecdir="`$PKG_CONFIG --variable=providersdir --silence-errors libcrypto`"
+		if test "${providersexecdir}" = ""; then
+		    libcryptodir="`$PKG_CONFIG --variable=libdir --silence-errors libcrypto || \
+			$PKG_CONFIG --variable=libdir openssl`"
+		    if test -d "$libcryptodir/$debian_ssl_prefix/ossl-modules"; then
+			# Debian-based OpenSSL package (for example Ubuntu)
+			providersexecdir="$libcryptodir/$debian_ssl_prefix/ossl-modules"
+		    else # Default OpenSSL providers directory
+			providersexecdir="$libcryptodir/ossl-modules"
+		    fi
+		    if test "${prefix}" != "NONE" -o "${exec_prefix}" != "NONE"; then
+			# Override the autodetected value with the default
+			providersexecdir="\$(libdir)"
+		    fi
+		fi
+	]
+)
+AC_ARG_WITH(
 	[pkcs11-module],
 	[AS_HELP_STRING([--with-pkcs11-module], [default PKCS11 module])],
 	[pkcs11_module="${withval}"],
@@ -224,6 +270,7 @@ pkgconfigdir="\$(libdir)/pkgconfig"
 AC_SUBST([pkgconfigdir])
 AC_SUBST([apidocdir])
 AC_SUBST([enginesexecdir])
+AC_SUBST([providersexecdir])
 AC_SUBST([LIBP11_VERSION_MAJOR])
 AC_SUBST([LIBP11_VERSION_MINOR])
 AC_SUBST([LIBP11_VERSION_FIX])
@@ -265,6 +312,7 @@ AC_CONFIG_FILES([
 	src/libp11.pc
 	src/libp11.rc
 	src/pkcs11.rc
+	src/pkcs11prov.rc
 	doc/Makefile
 	doc/doxygen.conf
 	examples/Makefile
@@ -292,6 +340,7 @@ libp11 has been configured with the following options:
 Version:                 ${PACKAGE_VERSION}
 libp11 directory:        $(eval eval eval echo "${libdir}")
 Engine directory:        ${enginesexecdir}
+Provider directory:      ${providersexecdir}
 Default PKCS11 module:   ${pkcs11_module}
 API doc support:         ${enable_api_doc}
 

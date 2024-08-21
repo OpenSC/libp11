@@ -167,6 +167,8 @@ static int pkcs11_init_cert(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session
 	cert->id_len = cpriv->id_len;
 	cert->label = cpriv->label;
 	cert->x509 = cpriv->x509;
+	cert->data = cpriv->data;
+	cert->size = cpriv->size;
 	cert->_private = cpriv;
 
 	if (ret)
