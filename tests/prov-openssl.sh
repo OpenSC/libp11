@@ -128,14 +128,17 @@ print_result $?
 
 echo "=================================="
 echo "cipher with PBKDF2 test"
-# Note 1: KDF not yet supported, hence "-provider default" required to provide the PBKDF2 algorithm
+# Note 1: PBKDF2 KDF is implemented, but not yet tested (as it looks, opencryptoki sw token does not support CKM_PKCS5_PBKD2),
+#         meaning that these samples only test the cipher
 # Note 2: OpenSSL implementation of PBKDF2 requires digest session state saving (it duplicates session after some date sent into),
 #         but Opencryptoki SW implementation does not support session state saving with OpenSSL3, hence digest disabled in these
 #         samples, with using another OpenSSL config 
 #
 OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -nosalt -pbkdf2 -in $OUTDIR/data.txt -out $OUTDIR/data.txt.cipher.pbkdf2.encrypt
 OPENSSL_CONF=$OPENSSL_CONF_NO_DIGEST openssl aes-256-cbc -provider pkcs11prov -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in $OUTDIR/data.txt.cipher.pbkdf2.encrypt -out $OUTDIR/data.txt.cipher.pbkdf2.decrypt
-# Try to decrypt without provider and check if results the same as with the provider
+# Check if the file matches the original after the decryption
+cmp $OUTDIR/data.txt.cipher.pbkdf2.decrypt $OUTDIR/data.txt
+# Try to decrypt without provider
 openssl aes-256-cbc -provider default -pass pass:1111 -d -nosalt -pbkdf2 -in $OUTDIR/data.txt.cipher.pbkdf2.encrypt -out $OUTDIR/data.txt.cipher.pbkdf2.no_pkcs11.decrypt
 cmp $OUTDIR/data.txt.cipher.pbkdf2.decrypt $OUTDIR/data.txt.cipher.pbkdf2.no_pkcs11.decrypt
 print_result $?

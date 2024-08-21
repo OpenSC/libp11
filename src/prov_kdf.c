@@ -128,12 +128,10 @@ typedef struct p11_algorithm_map_t P11_ALGORITHM_MAP;
         CKM_##p11alg, { PROV_NAMES_##alg, "provider=pkcs11,pkcs11.kdf", p11_kdf_##alg##_tbl, NULL } \
     }
 
-// DECLARE_ALG(PKCS5_PBKD2, PBKDF2)
-DECLARE_ALG(GENERIC_SECRET_KEY_GEN, PBKDF2)
+DECLARE_ALG(PKCS5_PBKD2, PBKDF2)
 
 static const P11_ALGORITHM_MAP p11_algorithm_map[] = {
-// ALG_MAP(PKCS5_PBKD2, PBKDF2)};
-ALG_MAP(GENERIC_SECRET_KEY_GEN, PBKDF2)};
+ALG_MAP(PKCS5_PBKD2, PBKDF2)};  // CKM_PKCS5_PBKD2 --> this is the correct mechanism, according to http://docs.oasis-open.org/pkcs11/pkcs11-curr/v2.40/cs01/pkcs11-curr-v2.40-cs01.html#_Toc399399019
 
 #define FREE(x)  \
     if (x)       \
