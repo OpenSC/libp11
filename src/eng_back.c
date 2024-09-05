@@ -547,7 +547,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 						goto error;
 					}
 				} else {
-					ctx_log(ctx, 0, "Multiple matching slots (%lu); will not try to"
+					ctx_log(ctx, 0, "Multiple matching slots (%zu); will not try to"
 						" login\n", matched_count);
 					for (m = 0; m < matched_count; m++){
 						slot = matched_slots[m];
