@@ -358,6 +358,18 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 /* Retrieve PKCS11_KEY from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 
+/* Free the global RSA_METHOD */
+extern void pkcs11_rsa_method_free(void);
+
+/* Free the global EC_KEY_METHOD */
+extern void pkcs11_ec_key_method_free(void);
+
+/* Free the global ECDSA_METHOD */
+extern void pkcs11_ecda_method_free(void);
+
+/* Free the global ECDH_METHOD */
+extern void pkcs11_ecdh_method_free(void);
+
 #endif
 
 /* vim: set noexpandtab: */

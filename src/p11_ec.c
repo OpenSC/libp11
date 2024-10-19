@@ -38,6 +38,22 @@
 #include <openssl/ecdh.h>
 #endif
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+#ifndef OPENSSL_NO_EC
+static EC_KEY_METHOD *pkcs11_ec_key_method = NULL;
+void pkcs11_ec_key_method_free(void);
+#endif /* OPENSSL_NO_EC */
+#else /* OPENSSL_VERSION_NUMBER */
+#ifndef OPENSSL_NO_ECDSA
+static ECDSA_METHOD *pkcs11_ecdsa_method = NULL;
+void pkcs11_ecdsa_method_free(void);
+#endif /* OPENSSL_NO_ECDSA */
+#ifndef OPENSSL_NO_ECDH
+static ECDH_METHOD *pkcs11_ecdh_method = NULL;
+void pkcs11_ecdh_method_free(void);
+#endif /* OPENSSL_NO_ECDH */
+#endif /* OPENSSL_VERSION_NUMBER */
+
 #ifndef OPENSSL_NO_EC
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100004L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -171,8 +187,6 @@ static void alloc_ec_ex_index()
 	}
 }
 
-#if 0
-/* TODO: Free the indexes on unload */
 static void free_ec_ex_index()
 {
 	if (ec_ex_index > 0) {
@@ -183,7 +197,6 @@ static void free_ec_ex_index()
 		ec_ex_index = 0;
 	}
 }
-#endif
 
 /********** EVP_PKEY retrieval */
 
@@ -766,7 +779,6 @@ static int pkcs11_ec_ckey(void *out, size_t outlen,
 
 EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 {
-	static EC_KEY_METHOD *ops = NULL;
 	int (*orig_init)(EC_KEY *);
 	int (*orig_set_group)(EC_KEY *, const EC_GROUP *);
 	int (*orig_set_private)(EC_KEY *, const BIGNUM *);
@@ -774,22 +786,31 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 	int (*orig_sign)(int, const unsigned char *, int, unsigned char *,
 		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
-	alloc_ec_ex_index();
-	if (!ops) {
-		ops = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
-		EC_KEY_METHOD_get_init(ops, &orig_init, &ossl_ec_finish, &ossl_ec_copy,
+	if (!pkcs11_ec_key_method) {
+		alloc_ec_ex_index();
+		pkcs11_ec_key_method = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
+		EC_KEY_METHOD_get_init(pkcs11_ec_key_method, &orig_init, &ossl_ec_finish, &ossl_ec_copy,
 			&orig_set_group, &orig_set_private, &orig_set_public);
-		EC_KEY_METHOD_set_init(ops, orig_init, pkcs11_ec_finish, pkcs11_ec_copy,
+		EC_KEY_METHOD_set_init(pkcs11_ec_key_method, orig_init, pkcs11_ec_finish, pkcs11_ec_copy,
 			orig_set_group, orig_set_private, orig_set_public);
-		EC_KEY_METHOD_get_sign(ops, &orig_sign, NULL, NULL);
-		EC_KEY_METHOD_set_sign(ops, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
-		EC_KEY_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
-		EC_KEY_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
+		EC_KEY_METHOD_get_sign(pkcs11_ec_key_method, &orig_sign, NULL, NULL);
+		EC_KEY_METHOD_set_sign(pkcs11_ec_key_method, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
+		EC_KEY_METHOD_get_compute_key(pkcs11_ec_key_method, &ossl_ecdh_compute_key);
+		EC_KEY_METHOD_set_compute_key(pkcs11_ec_key_method, pkcs11_ec_ckey);
 	}
-	return ops;
+	return pkcs11_ec_key_method;
 }
 
-/* define old way to keep old engines working without ECDSA */
+void pkcs11_ec_key_method_free(void)
+{
+	if (pkcs11_ec_key_method) {
+		free_ec_ex_index();
+		EC_KEY_METHOD_free(pkcs11_ec_key_method);
+	    pkcs11_ec_key_method = NULL;
+	}
+}
+
+/* define old way to keep old applications/engines working without ECDSA */
 void *PKCS11_get_ecdsa_method(void)
 {
 	return NULL;
@@ -810,27 +831,41 @@ void *PKCS11_get_ec_key_method(void)
 
 ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 {
-	static ECDSA_METHOD *ops = NULL;
-
-	if (!ops) {
+	if (!pkcs11_ecdsa_method) {
 		alloc_ec_ex_index();
-		ops = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
-		ECDSA_METHOD_set_sign(ops, pkcs11_ecdsa_sign_sig);
+		pkcs11_ecdsa_method = ECDSA_METHOD_new((ECDSA_METHOD *)ECDSA_OpenSSL());
+		ECDSA_METHOD_set_sign(pkcs11_ecdsa_method, pkcs11_ecdsa_sign_sig);
 	}
-	return ops;
+	return pkcs11_ecdsa_method;
+}
+
+void pkcs11_ecdsa_method_free(void)
+{
+	if (pkcs11_ecdsa_method) {
+		free_ec_ex_index();
+		EC_KEY_METHOD_free(pkcs11_ecdsa_method);
+	    pkcs11_ecdsa_method = NULL;
+	}
 }
 
 ECDH_METHOD *PKCS11_get_ecdh_method(void)
 {
-	static ECDH_METHOD *ops = NULL;
-
-	if (!ops) {
+	if (!pkcs11_ecdh_method) {
 		alloc_ec_ex_index();
-		ops = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
-		ECDH_METHOD_get_compute_key(ops, &ossl_ecdh_compute_key);
-		ECDH_METHOD_set_compute_key(ops, pkcs11_ec_ckey);
+		pkcs11_ecdh_method = ECDH_METHOD_new((ECDH_METHOD *)ECDH_OpenSSL());
+		ECDH_METHOD_get_compute_key(pkcs11_ecdh_method, &ossl_ecdh_compute_key);
+		ECDH_METHOD_set_compute_key(pkcs11_ecdh_method, pkcs11_ec_ckey);
 	}
-	return ops;
+	return pkcs11_ecdh_method;
+}
+
+void pkcs11_ecdh_method_free(void)
+{
+	if (pkcs11_ecdh_method) {
+		free_ec_ex_index();
+		EC_KEY_METHOD_free(pkcs11_ecdh_method);
+	    pkcs11_ecdh_method = NULL;
+	}
 }
 
 #endif /* OPENSSL_VERSION_NUMBER */

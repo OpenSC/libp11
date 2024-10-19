@@ -1,6 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.13; unreleased
+* Fixed memory leak of RSA/EC methods when releasing PKCS11_CTX.
 
 New in 0.4.12; 2022-07-15; Michał Trojnara
 * Fixed using an explicitly provided PIN regardless of the secure login

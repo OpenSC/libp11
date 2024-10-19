@@ -27,6 +27,7 @@
 #include <openssl/rsa.h>
 
 static int rsa_ex_index = 0;
+static RSA_METHOD *pkcs11_rsa_method = NULL;
 
 static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 {
@@ -516,26 +517,27 @@ static int RSA_meth_set_finish(RSA_METHOD *meth, int (*finish)(RSA *rsa))
  */
 RSA_METHOD *PKCS11_get_rsa_method(void)
 {
-	static RSA_METHOD *ops = NULL;
-
-	if (!ops) {
+	if (!pkcs11_rsa_method) {
 		alloc_rsa_ex_index();
-		ops = RSA_meth_dup(RSA_get_default_method());
-		if (!ops)
+		pkcs11_rsa_method = RSA_meth_dup(RSA_get_default_method());
+		if (!pkcs11_rsa_method)
 			return NULL;
-		RSA_meth_set1_name(ops, "libp11 RSA method");
-		RSA_meth_set_flags(ops, 0);
-		RSA_meth_set_priv_enc(ops, pkcs11_rsa_priv_enc_method);
-		RSA_meth_set_priv_dec(ops, pkcs11_rsa_priv_dec_method);
-		RSA_meth_set_finish(ops, pkcs11_rsa_free_method);
+		RSA_meth_set1_name(pkcs11_rsa_method, "libp11 RSA method");
+		RSA_meth_set_flags(pkcs11_rsa_method, 0);
+		RSA_meth_set_priv_enc(pkcs11_rsa_method, pkcs11_rsa_priv_enc_method);
+		RSA_meth_set_priv_dec(pkcs11_rsa_method, pkcs11_rsa_priv_dec_method);
+		RSA_meth_set_finish(pkcs11_rsa_method, pkcs11_rsa_free_method);
 	}
-	return ops;
+	return pkcs11_rsa_method;
 }
 
-/* This function is *not* currently exported */
-void PKCS11_rsa_method_free(void)
+void pkcs11_rsa_method_free(void)
 {
-	free_rsa_ex_index();
+	if (!pkcs11_rsa_method) {
+		free_rsa_ex_index();
+		RSA_meth_free(pkcs11_rsa_method);
+		pkcs11_rsa_method = NULL;
+	}
 }
 
 PKCS11_OBJECT_ops pkcs11_rsa_ops = {

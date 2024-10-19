@@ -19,6 +19,11 @@
 #include "libp11-int.h"
 #include <string.h>
 
+/* Global number of active PKCS11_CTX objects */
+static int pkcs11_ctx_refs = 0;
+
+static void pkcs11_global_free(void);
+
 /*
  * Create a new context
  */
@@ -41,6 +46,8 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	ctx->_private = cpriv;
 	cpriv->forkid = get_forkid();
 	pthread_mutex_init(&cpriv->fork_lock, 0);
+
+	pkcs11_ctx_refs++;
 
 	return ctx;
 fail:
@@ -159,11 +166,6 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	/* TODO: Move the global methods and ex_data indexes into
-	 * the ctx structure, so they can be safely deallocated here:
-	PKCS11_rsa_method_free(ctx);
-	PKCS11_ecdsa_method_free(ctx);
-	*/
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
 	}
@@ -175,6 +177,28 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 	OPENSSL_free(ctx->description);
 	OPENSSL_free(ctx->_private);
 	OPENSSL_free(ctx);
+
+	if (--pkcs11_ctx_refs == 0)
+		pkcs11_global_free();
+}
+
+static void pkcs11_global_free(void)
+{
+#ifndef OPENSSL_NO_RSA
+	pkcs11_rsa_method_free();
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+#ifndef OPENSSL_NO_EC
+	pkcs11_ec_key_method_free();
+#endif /* OPENSSL_NO_EC */
+#else /* OPENSSL_VERSION_NUMBER */
+#ifndef OPENSSL_NO_ECDSA
+	pkcs11_ecdsa_method_free();
+#endif /* OPENSSL_NO_ECDSA */
+#ifndef OPENSSL_NO_ECDH
+	pkcs11_ecdh_method_free();
+#endif /* OPENSSL_NO_ECDH */
+#endif /* OPENSSL_VERSION_NUMBER */
 }
 
 /* vim: set noexpandtab: */
