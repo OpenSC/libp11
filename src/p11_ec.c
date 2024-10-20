@@ -41,16 +41,13 @@
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 #ifndef OPENSSL_NO_EC
 static EC_KEY_METHOD *pkcs11_ec_key_method = NULL;
-void pkcs11_ec_key_method_free(void);
 #endif /* OPENSSL_NO_EC */
 #else /* OPENSSL_VERSION_NUMBER */
 #ifndef OPENSSL_NO_ECDSA
 static ECDSA_METHOD *pkcs11_ecdsa_method = NULL;
-void pkcs11_ecdsa_method_free(void);
 #endif /* OPENSSL_NO_ECDSA */
 #ifndef OPENSSL_NO_ECDH
 static ECDH_METHOD *pkcs11_ecdh_method = NULL;
-void pkcs11_ecdh_method_free(void);
 #endif /* OPENSSL_NO_ECDH */
 #endif /* OPENSSL_VERSION_NUMBER */
 
@@ -806,7 +803,7 @@ void pkcs11_ec_key_method_free(void)
 	if (pkcs11_ec_key_method) {
 		free_ec_ex_index();
 		EC_KEY_METHOD_free(pkcs11_ec_key_method);
-	    pkcs11_ec_key_method = NULL;
+		pkcs11_ec_key_method = NULL;
 	}
 }
 
@@ -844,7 +841,7 @@ void pkcs11_ecdsa_method_free(void)
 	if (pkcs11_ecdsa_method) {
 		free_ec_ex_index();
 		EC_KEY_METHOD_free(pkcs11_ecdsa_method);
-	    pkcs11_ecdsa_method = NULL;
+		pkcs11_ecdsa_method = NULL;
 	}
 }
 
@@ -864,7 +861,7 @@ void pkcs11_ecdh_method_free(void)
 	if (pkcs11_ecdh_method) {
 		free_ec_ex_index();
 		EC_KEY_METHOD_free(pkcs11_ecdh_method);
-	    pkcs11_ecdh_method = NULL;
+		pkcs11_ecdh_method = NULL;
 	}
 }
 

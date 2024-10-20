@@ -369,19 +369,19 @@ int (*RSA_meth_get_priv_enc(const RSA_METHOD *meth))
 		(int flen, const unsigned char *from,
 			unsigned char *to, RSA *rsa, int padding)
 {
-    return meth->rsa_priv_enc;
+	return meth->rsa_priv_enc;
 }
 
 int (*RSA_meth_get_priv_dec(const RSA_METHOD *meth))
 		(int flen, const unsigned char *from,
 			unsigned char *to, RSA *rsa, int padding)
 {
-    return meth->rsa_priv_dec;
+	return meth->rsa_priv_dec;
 }
 
 static int (*RSA_meth_get_finish(const RSA_METHOD *meth)) (RSA *rsa)
 {
-    return meth->finish;
+	return meth->finish;
 }
 
 #endif

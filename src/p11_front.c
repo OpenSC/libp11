@@ -343,7 +343,7 @@ int PKCS11_store_private_key(PKCS11_TOKEN *token,
 }
 
 int PKCS11_store_public_key(PKCS11_TOKEN *token,
-    	EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len)
+		EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len)
 {
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
 	if (check_slot_fork(slot) < 0)

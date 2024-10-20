@@ -20,9 +20,9 @@
 #include <string.h>
 
 /* Global number of active PKCS11_CTX objects */
-static int pkcs11_ctx_refs = 0;
+static int pkcs11_global_data_refs = 0;
 
-static void pkcs11_global_free(void);
+static void pkcs11_global_data_free(void);
 
 /*
  * Create a new context
@@ -47,7 +47,7 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	cpriv->forkid = get_forkid();
 	pthread_mutex_init(&cpriv->fork_lock, 0);
 
-	pkcs11_ctx_refs++;
+	pkcs11_global_data_refs++;
 
 	return ctx;
 fail:
@@ -178,11 +178,11 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 	OPENSSL_free(ctx->_private);
 	OPENSSL_free(ctx);
 
-	if (--pkcs11_ctx_refs == 0)
-		pkcs11_global_free();
+	if (--pkcs11_global_data_refs == 0)
+		pkcs11_global_data_free();
 }
 
-static void pkcs11_global_free(void)
+static void pkcs11_global_data_free(void)
 {
 #ifndef OPENSSL_NO_RSA
 	pkcs11_rsa_method_free();
