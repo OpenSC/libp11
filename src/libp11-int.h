@@ -365,7 +365,7 @@ extern void pkcs11_rsa_method_free(void);
 extern void pkcs11_ec_key_method_free(void);
 
 /* Free the global ECDSA_METHOD */
-extern void pkcs11_ecda_method_free(void);
+extern void pkcs11_ecdsa_method_free(void);
 
 /* Free the global ECDH_METHOD */
 extern void pkcs11_ecdh_method_free(void);
