@@ -642,17 +642,28 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 {
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 	PKCS11_OBJECT_private *kpriv;
-	PKCS11_KEY *key, *tmp;
+	PKCS11_KEY *key = NULL, *tmp;
 	int i;
 
-	/* Prevent re-adding existing PKCS#11 object handles */
+	/*
+	 * Prevent re-adding and re-using existing PKCS#11 object handles.
+	 * If handle is found in cache, remove it a re-create a new OpenSSL
+	 * key for that handle. This prevents assuming the handle value still
+	 * relates to the very same object while client may be modified the
+	 * pkcs11 token data not through this pkcs11 engine.
+	 */
 	/* TODO: Rewrite the O(n) algorithm as O(log n),
 	 * or it may be too slow with a large number of keys */
 	for (i = 0; i < keys->num; ++i) {
-		if (PRIVKEY(&keys->keys[i])->object == object) {
-			if (ret)
-				*ret = &keys->keys[i];
-			return 0;
+		if (PRIVKEY(&keys->keys[i]) &&
+		    PRIVKEY(&keys->keys[i])->object == object) {
+			key = &keys->keys[i];
+
+			if (key->_private) {
+				pkcs11_object_free(PRIVKEY(key));
+				key->_private = NULL;
+			}
+			break;
 		}
 	}
 
@@ -660,14 +671,21 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 	if (!kpriv)
 		return -1;
 
-	/* Allocate memory */
-	tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
-	if (!tmp) {
-		pkcs11_object_free(kpriv);
-		return -1;
+	/*
+	 * If a matching key handle was found, reuse its entry, otherwise,
+	 * add a new OpenSSL key entry.
+	 */
+	if (!key) {
+		/* Allocate memory */
+		tmp = OPENSSL_realloc(keys->keys, (keys->num + 1) * sizeof(PKCS11_KEY));
+		if (!tmp) {
+			pkcs11_object_free(kpriv);
+			return -1;
+		}
+		keys->keys = tmp;
+		key = keys->keys + keys->num++;
 	}
-	keys->keys = tmp;
-	key = keys->keys + keys->num++;
+
 	memset(key, 0, sizeof(PKCS11_KEY));
 
 	/* Fill public properties */
