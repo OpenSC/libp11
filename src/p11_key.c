@@ -162,7 +162,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	}
 
 	object_handle = pkcs11_handle_from_template(slot, session, tmpl);
-	if(object_handle)
+	if (object_handle)
 		obj = pkcs11_object_from_handle(slot, session, object_handle);
 
 	if (release)
@@ -182,7 +182,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 {
-	if(!obj)
+	if (!obj)
 		return;
 
 	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
@@ -267,7 +267,7 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
  * Generate a key pair directly on token
  */
 int pkcs11_generate_key(PKCS11_SLOT_private *slot, int algorithm, unsigned int bits,
-		char *label, unsigned char* id, size_t id_len) {
+		char *label, unsigned char *id, size_t id_len) {
 
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
@@ -348,7 +348,7 @@ int pkcs11_store_public_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
  */
 static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		CK_OBJECT_CLASS type, char *label, unsigned char *id, size_t id_len,
-		PKCS11_KEY ** ret_key)
+		PKCS11_KEY **ret_key)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	PKCS11_TEMPLATE tmpl = {0};
@@ -386,14 +386,14 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 #else
 	if (pk->type == EVP_PKEY_RSA) {
 		RSA *rsa = pk->pkey.rsa;
-		rsa_n=rsa->n;
-		rsa_e=rsa->e;
-		rsa_d=rsa->d;
-		rsa_p=rsa->p;
-		rsa_q=rsa->q;
-		rsa_dmp1=rsa->dmp1;
-		rsa_dmq1=rsa->dmq1;
-		rsa_iqmp=rsa->iqmp;
+		rsa_n = rsa->n;
+		rsa_e = rsa->e;
+		rsa_d = rsa->d;
+		rsa_p = rsa->p;
+		rsa_q = rsa->q;
+		rsa_dmp1 = rsa->dmp1;
+		rsa_dmq1 = rsa->dmq1;
+		rsa_iqmp = rsa->iqmp;
 #endif
 		pkcs11_addattr_var(&tmpl, CKA_KEY_TYPE, key_type_rsa);
 		pkcs11_addattr_bn(&tmpl, CKA_MODULUS, rsa_n);
@@ -486,7 +486,7 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	char pin[MAX_PIN_LENGTH+1];
-	char* prompt;
+	char *prompt;
 	UI *ui;
 	int rv;
 

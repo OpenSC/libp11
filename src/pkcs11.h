@@ -819,23 +819,23 @@ struct ck_mechanism_info
 #define CKD_SHA512_KDF			(0x8UL)
 
 typedef struct CK_ECDH1_DERIVE_PARAMS {
-	unsigned long  kdf;
-	unsigned long  ulSharedDataLen;
-	unsigned char *  pSharedData;
-	unsigned long  ulPublicDataLen;
-	unsigned char *  pPublicData;
+	unsigned long kdf;
+	unsigned long ulSharedDataLen;
+	unsigned char *pSharedData;
+	unsigned long ulPublicDataLen;
+	unsigned char *pPublicData;
 } CK_ECDH1_DERIVE_PARAMS;
 
 typedef struct CK_ECMQV_DERIVE_PARAMS {
 	unsigned long kdf;
 	unsigned long ulSharedDataLen;
-	unsigned char * pSharedData;
+	unsigned char *pSharedData;
 	unsigned long ulPublicDataLen;
-	unsigned char * pPublicData;
+	unsigned char *pPublicData;
 	unsigned long ulPrivateDataLen;
 	CK_OBJECT_HANDLE hPrivateData;
 	unsigned long ulPublicDataLen2;
-	unsigned char * pPublicData2;
+	unsigned char *pPublicData2;
 	CK_OBJECT_HANDLE publicKey;
 } CK_ECMQV_DERIVE_PARAMS;
 
@@ -869,10 +869,10 @@ typedef struct CK_RSA_PKCS_PSS_PARAMS {
 #define CKZ_DATA_SPECIFIED	(0x00000001UL)
 
 typedef struct CK_GCM_PARAMS {
-	void * pIv;
+	void *pIv;
 	unsigned long ulIvLen;
 	unsigned long ulIvBits;
-	void * pAAD;
+	void *pAAD;
 	unsigned long ulAADLen;
 	unsigned long ulTagBits;
 } CK_GCM_PARAMS;

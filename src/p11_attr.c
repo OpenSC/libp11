@@ -130,7 +130,7 @@ void pkcs11_addattr_bool(PKCS11_TEMPLATE *tmpl, int type, int value)
 
 void pkcs11_addattr_s(PKCS11_TEMPLATE *tmpl, int type, const char *s)
 {
-	pkcs11_addattr(tmpl, type, (void*) s, s ? strlen(s) : 0);
+	pkcs11_addattr(tmpl, type, (void *)s, s ? strlen(s) : 0);
 }
 
 void pkcs11_addattr_bn(PKCS11_TEMPLATE *tmpl, int type, const BIGNUM *bn)

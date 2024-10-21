@@ -252,7 +252,7 @@ static int bind_helper_methods(ENGINE *e)
 #ifndef OPENSSL_NO_RSA
 			!ENGINE_set_RSA(e, PKCS11_get_rsa_method()) ||
 #endif
-#if OPENSSL_VERSION_NUMBER  >= 0x10100002L
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
 #ifndef OPENSSL_NO_EC
 			/* PKCS11_get_ec_key_method combines ECDSA and ECDH */
 			!ENGINE_set_EC(e, PKCS11_get_ec_key_method()) ||

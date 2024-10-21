@@ -72,10 +72,10 @@ int ctx_finish(ENGINE_CTX *ctx);
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
 
 EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD * ui_method, void *callback_data);
+	UI_METHOD *ui_method, void *callback_data);
 
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD * ui_method, void *callback_data);
+	UI_METHOD *ui_method, void *callback_data);
 
 void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 #ifdef __GNUC__
@@ -92,7 +92,7 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 
 int parse_slot_id_string(ENGINE_CTX *ctx,
 	const char *slot_id, int *slot,
-	char *id, size_t * id_len, char **label);
+	char *id, size_t *id_len, char **label);
 
 /* switch to legacy call if get0 variant is not available */
 #ifndef HAVE_X509_GET0_NOTBEFORE

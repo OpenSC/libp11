@@ -212,7 +212,7 @@ extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw, CK_SESSION_HANDLE *
 extern void pkcs11_put_session(PKCS11_SLOT_private *, CK_SESSION_HANDLE session);
 
 /* Get a list of all slots */
-extern int pkcs11_enumerate_slots(PKCS11_CTX_private * ctx,
+extern int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /* Get the slot_id from a slot as it is stored in private */
@@ -308,7 +308,7 @@ extern int pkcs11_store_public_key(PKCS11_SLOT_private *,
 	EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len);
 
 /* Store certificate on a token */
-extern int pkcs11_store_certificate(PKCS11_SLOT_private *, X509 * x509,
+extern int pkcs11_store_certificate(PKCS11_SLOT_private *, X509 *x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert);
 
@@ -321,7 +321,7 @@ extern int pkcs11_generate_random(PKCS11_SLOT_private *, unsigned char *r, unsig
 /* Generate and store a private key on the token */
 extern int pkcs11_generate_key(PKCS11_SLOT_private *tpriv,
 	int algorithm, unsigned int bits,
-	char *label, unsigned char* id, size_t id_len);
+	char *label, unsigned char *id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);

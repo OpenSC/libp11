@@ -331,7 +331,7 @@ int pkcs11_get_key_modulus(PKCS11_OBJECT_private *key, BIGNUM **bn)
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_get0_key(rsa, &rsa_n, NULL, NULL);
 #else
-	rsa_n=rsa->n;
+	rsa_n = rsa->n;
 #endif
 	*bn = BN_dup(rsa_n);
 	return *bn == NULL ? 0 : 1;
@@ -348,7 +348,7 @@ int pkcs11_get_key_exponent(PKCS11_OBJECT_private *key, BIGNUM **bn)
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_get0_key(rsa, NULL, &rsa_e, NULL);
 #else
-	rsa_e=rsa->e;
+	rsa_e = rsa->e;
 #endif
 	*bn = BN_dup(rsa_e);
 	return *bn == NULL ? 0 : 1;
@@ -535,7 +535,7 @@ void pkcs11_rsa_method_free(void)
 {
 	if (!pkcs11_rsa_method) {
 		free_rsa_ex_index();
-#if OPENSSL_VERSION_NUMBER  >= 0x10100000L
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		RSA_meth_free(pkcs11_rsa_method);
 #else
 		OPENSSL_free((char *)pkcs11_rsa_method->name);

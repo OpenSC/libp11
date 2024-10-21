@@ -119,7 +119,7 @@ extern PKCS11_CTX *PKCS11_CTX_new(void);
  *
  * @return none
  */
-extern void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
+extern void PKCS11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args);
 
 /**
  * Load a PKCS#11 module
@@ -129,21 +129,21 @@ extern void PKCS11_CTX_init_args(PKCS11_CTX * ctx, const char * init_args);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_CTX_load(PKCS11_CTX * ctx, const char * ident);
+extern int PKCS11_CTX_load(PKCS11_CTX *ctx, const char *ident);
 
 /**
  * Unload a PKCS#11 module
  *
  * @param ctx context allocated by PKCS11_CTX_new()
  */
-extern void PKCS11_CTX_unload(PKCS11_CTX * ctx);
+extern void PKCS11_CTX_unload(PKCS11_CTX *ctx);
 
 /**
  * Free a libp11 context
  *
  * @param ctx context allocated by PKCS11_CTX_new()
  */
-extern void PKCS11_CTX_free(PKCS11_CTX * ctx);
+extern void PKCS11_CTX_free(PKCS11_CTX *ctx);
 
 /** Open a session in RO or RW mode
  *
@@ -152,7 +152,7 @@ extern void PKCS11_CTX_free(PKCS11_CTX * ctx);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_open_session(PKCS11_SLOT * slot, int rw);
+extern int PKCS11_open_session(PKCS11_SLOT *slot, int rw);
 
 /**
  * Get a list of all slots
@@ -163,7 +163,7 @@ extern int PKCS11_open_session(PKCS11_SLOT * slot, int rw);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
+extern int PKCS11_enumerate_slots(PKCS11_CTX *ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /**
@@ -180,7 +180,7 @@ extern int PKCS11_enumerate_slots(PKCS11_CTX * ctx,
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_update_slots(PKCS11_CTX * ctx,
+extern int PKCS11_update_slots(PKCS11_CTX *ctx,
 			PKCS11_SLOT **slotsp, unsigned int *nslotsp);
 
 /**
@@ -198,7 +198,7 @@ extern unsigned long PKCS11_get_slotid_from_slot(PKCS11_SLOT *slotp);
  * @param slots list of slots allocated by PKCS11_enumerate_slots()
  * @param nslots size of the list
  */
-extern void PKCS11_release_all_slots(PKCS11_CTX * ctx,
+extern void PKCS11_release_all_slots(PKCS11_CTX *ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
 /**
@@ -210,7 +210,7 @@ extern void PKCS11_release_all_slots(PKCS11_CTX * ctx,
  * @retval !=NULL pointer on a slot structure
  * @retval NULL error
  */
-PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
+PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *ctx,
 			PKCS11_SLOT *slots, unsigned int nslots);
 
 /**
@@ -223,7 +223,7 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX * ctx,
  * @retval !=NULL pointer on a slot structure
  * @retval NULL error
  */
-PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX * ctx,
+PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
 			PKCS11_SLOT *slots, unsigned int nslots,
 		   	PKCS11_SLOT *slot);
 
@@ -236,7 +236,7 @@ PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX * ctx,
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
+extern int PKCS11_is_logged_in(PKCS11_SLOT *slot, int so, int *res);
 
 /**
  * Authenticate to the card
@@ -247,7 +247,7 @@ extern int PKCS11_is_logged_in(PKCS11_SLOT * slot, int so, int * res);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
+extern int PKCS11_login(PKCS11_SLOT *slot, int so, const char *pin);
 
 /**
  * De-authenticate from the card
@@ -256,7 +256,7 @@ extern int PKCS11_login(PKCS11_SLOT * slot, int so, const char *pin);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_logout(PKCS11_SLOT * slot);
+extern int PKCS11_logout(PKCS11_SLOT *slot);
 
 /* Get a list of private keys associated with this token */
 extern int PKCS11_enumerate_keys(PKCS11_TOKEN *,
@@ -327,7 +327,7 @@ extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
+extern int PKCS11_init_token(PKCS11_TOKEN *token, const char *pin,
 	const char *label);
 
 /**
@@ -338,7 +338,7 @@ extern int PKCS11_init_token(PKCS11_TOKEN * token, const char *pin,
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
+extern int PKCS11_init_pin(PKCS11_TOKEN *token, const char *pin);
 
 /**
  * Change the currently used (either USER or SO) PIN on a token.
@@ -349,7 +349,7 @@ extern int PKCS11_init_pin(PKCS11_TOKEN * token, const char *pin);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
+extern int PKCS11_change_pin(PKCS11_SLOT *slot, const char *old_pin,
 	const char *new_pin);
 
 /**
@@ -363,7 +363,7 @@ extern int PKCS11_change_pin(PKCS11_SLOT * slot, const char *old_pin,
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
+extern int PKCS11_store_private_key(PKCS11_TOKEN *token, EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len);
 
 /**
  * Store public key on a token
@@ -376,7 +376,7 @@ extern int PKCS11_store_private_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *l
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *label, unsigned char *id, size_t id_len);
+extern int PKCS11_store_public_key(PKCS11_TOKEN *token, EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len);
 
 /**
  * Store certificate on a token
@@ -390,7 +390,7 @@ extern int PKCS11_store_public_key(PKCS11_TOKEN * token, EVP_PKEY * pk, char *la
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_store_certificate(PKCS11_TOKEN * token, X509 * x509,
+extern int PKCS11_store_certificate(PKCS11_TOKEN *token, X509 *x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert);
 
@@ -440,9 +440,9 @@ extern void ERR_load_PKCS11_strings(void);
  * @retval 0 success
  * @retval -1 error
  */
-extern int PKCS11_generate_key(PKCS11_TOKEN * token,
+extern int PKCS11_generate_key(PKCS11_TOKEN *token,
 	int algorithm, unsigned int bits,
-	char *label, unsigned char* id, size_t id_len);
+	char *label, unsigned char *id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */
 extern int PKCS11_get_key_size(PKCS11_KEY *);
@@ -456,22 +456,22 @@ extern int PKCS11_get_key_exponent(PKCS11_KEY *, BIGNUM **);
 /* Sign with the EC private key */
 extern int PKCS11_ecdsa_sign(
 	const unsigned char *m, unsigned int m_len,
-	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
+	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key);
 
 /* Sign with the RSA private key */
 extern int PKCS11_sign(int type,
 	const unsigned char *m, unsigned int m_len,
-	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY * key);
+	unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *key);
 
 /* This function has never been implemented */
 extern int PKCS11_verify(int type,
 	const unsigned char *m, unsigned int m_len,
-	unsigned char *signature, unsigned int siglen, PKCS11_KEY * key);
+	unsigned char *signature, unsigned int siglen, PKCS11_KEY *key);
 
 /* Encrypts data using the private key */
 extern int PKCS11_private_encrypt(
 	int flen, const unsigned char *from,
-	unsigned char *to, PKCS11_KEY * rsa, int padding);
+	unsigned char *to, PKCS11_KEY *rsa, int padding);
 
 /**
  * Decrypts data using the private key
@@ -485,7 +485,7 @@ extern int PKCS11_private_encrypt(
  */
 extern int PKCS11_private_decrypt(
 	int flen, const unsigned char *from,
-	unsigned char *to, PKCS11_KEY * key, int padding);
+	unsigned char *to, PKCS11_KEY *key, int padding);
 
 /* Function codes */
 # define CKR_F_PKCS11_CHANGE_PIN                          100

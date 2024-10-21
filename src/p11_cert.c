@@ -131,7 +131,7 @@ static int pkcs11_next_cert(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *slot,
 }
 
 static int pkcs11_init_cert(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
-	CK_OBJECT_HANDLE object, PKCS11_CERT ** ret)
+	CK_OBJECT_HANDLE object, PKCS11_CERT **ret)
 {
 	PKCS11_OBJECT_private *cpriv;
 	PKCS11_CERT *cert, *tmp;
@@ -202,7 +202,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	int rv, r = -1;
 	int signature_nid;
 	int evp_md_nid = NID_sha1;
-	const EVP_MD* evp_md;
+	const EVP_MD *evp_md;
 	unsigned char md[EVP_MAX_MD_SIZE];
 	unsigned int md_len;
 	PKCS11_TEMPLATE tmpl = {0};

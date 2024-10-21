@@ -142,10 +142,10 @@ static void ctx_destroy_pin(ENGINE_CTX *ctx)
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int ctx_get_pin(ENGINE_CTX *ctx, const char* token_label, UI_METHOD *ui_method, void *callback_data)
+static int ctx_get_pin(ENGINE_CTX *ctx, const char *token_label, UI_METHOD *ui_method, void *callback_data)
 {
 	UI *ui;
-	char* prompt;
+	char *prompt;
 
 	/* call ui to ask for a pin */
 	ui = UI_new_method(ui_method);
