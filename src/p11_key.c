@@ -187,14 +187,6 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 
 	if (pkcs11_atomic_add(&obj->refcnt, -1, &obj->lock) != 0)
 		return;
-	if (obj->evp_key) {
-		/* When the EVP object is reference count goes to zero,
-		 * it will call this function again. */
-		EVP_PKEY *pkey = obj->evp_key;
-		obj->evp_key = NULL;
-		EVP_PKEY_free(pkey);
-		return;
-	}
 	pkcs11_slot_unref(obj->slot);
 	X509_free(obj->x509);
 	OPENSSL_free(obj->label);
@@ -455,6 +447,10 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 {
 	PKCS11_OBJECT_private *key = key0;
 	EVP_PKEY *ret = NULL;
+	RSA *rsa;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
+	EC_KEY *ec_key;
+#endif
 
 	if (key->object_class != object_class)
 		key = pkcs11_object_from_object(key, CK_INVALID_HANDLE, object_class);
@@ -465,12 +461,51 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 		if (!key->evp_key)
 			goto err;
 	}
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
-	EVP_PKEY_up_ref(key->evp_key);
+	/* We need a full copy of the EVP_PKEY as it will be modified later.
+	 * Using a reference would mean changes to the duplicated EVP_PKEY could
+	 * affect the original one.
+	 */
+	switch (EVP_PKEY_base_id(key->evp_key)) {
+	case EVP_PKEY_RSA:
+		/* Do not try to duplicate foreign RSA keys */
+		rsa = EVP_PKEY_get1_RSA(key->evp_key);
+		if (!rsa)
+			goto err;
+		ret = EVP_PKEY_new();
+		if (!ret) {
+			RSA_free(rsa);
+			goto err;
+		}
+		if (!EVP_PKEY_assign_RSA(ret, rsa)) {
+			RSA_free(rsa);
+			EVP_PKEY_free(ret);
+			goto err;
+		}
+		pkcs11_object_ref(key);
+		break;
+	case EVP_PKEY_EC:
+#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
+		ec_key = EVP_PKEY_get1_EC_KEY(key->evp_key);
+		if (!ec_key)
+			goto err;
+		ret = EVP_PKEY_new();
+		if (!ret) {
+			EC_KEY_free(ec_key);
+			goto err;
+		}
+		if (!EVP_PKEY_assign_EC_KEY(ret, ec_key)) {
+			EC_KEY_free(ec_key);
+			EVP_PKEY_free(ret);
+			goto err;
+		}
+		pkcs11_object_ref(key);
 #else
-	CRYPTO_add(&key->evp_key->references, 1, CRYPTO_LOCK_EVP_PKEY);
+		ret = EVP_PKEY_dup(key->evp_key);
 #endif
-	ret = key->evp_key;
+		break;
+	default:
+		printf("Unsupported key type\n");
+	}
 err:
 	if (key != key0)
 		pkcs11_object_free(key);
@@ -691,8 +726,12 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 
 	while (keys->num > 0) {
 		PKCS11_KEY *key = &keys->keys[--keys->num];
-		if (key->_private)
-			pkcs11_object_free(PRIVKEY(key));
+		PKCS11_OBJECT_private *obj = PRIVKEY(key);
+
+		if (obj) {
+			EVP_PKEY_free(obj->evp_key);
+			pkcs11_object_free(obj);
+		}
 	}
 	if (keys->keys)
 		OPENSSL_free(keys->keys);
