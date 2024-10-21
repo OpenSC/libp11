@@ -22,6 +22,11 @@
 #include <openssl/ui.h>
 #include <openssl/bn.h>
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+// for definitions of OSSL_PKEY_PARAM_PRIV_KEY, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY
+# include <openssl/core_names.h>
+#endif
+
 #if defined(_WIN32) && !defined(strncasecmp)
 #define strncasecmp strnicmp
 #endif
@@ -343,6 +348,106 @@ int pkcs11_store_public_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 	return 0;
 }
 
+
+struct char_with_len {
+	unsigned char *value;
+	size_t len;
+};
+
+struct ecc_key_info {
+	struct char_with_len param_oid;
+	struct char_with_len public;
+	struct char_with_len private;
+};
+
+/**
+ * Based on OpenSC's parse_ec_pkey() function in src/tools/pkcs11-tool.c
+ */
+static int parse_ec_pkey(EVP_PKEY *pkey, int isPrivate, struct ecc_key_info *key_info)
+{
+	// According to PKCS#11 specification "Elliptic curve private key objects" 
+	// & "ECDSA public key objects",
+	// CKA_EC_PARAMS shall be DER-encoding of an ANSI X9.62 Parameters value
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+	const EC_KEY *src = EVP_PKEY_get0_EC_KEY(pkey);
+	const BIGNUM *bignum;
+	if (!src) {
+		fprintf(stderr,"ERROR: parse_ec_pkey()- EVP_PKEY_get0_EC_KEY() failed !\n");
+		return -1;
+	}
+	key_info->param_oid.len = i2d_ECParameters((EC_KEY *)src, &key_info->param_oid.value);
+#else
+	BIGNUM *bignum = NULL;
+	key_info->param_oid.len = i2d_KeyParams(pkey, &key_info->param_oid.value);
+#endif
+	if (key_info->param_oid.len <= 0) {
+		fprintf(stderr,"ERROR: parse_ec_pkey(): could not get Key parameters !\n");
+		return -1;
+	}
+
+	if (isPrivate) {
+		// According to PKCS#11 specification "Elliptic curve private key objects", 
+		// CKA_VALUE for EC is a "Big Integer", i.e. it shall be big endian.
+		// => use BN_bn2bin to convert BIGNUM to bytes in big-endian form.
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		bignum = EC_KEY_get0_private_key(src);
+#else
+		if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY, &bignum) != 1) {
+			printf("ERROR: parse_ec_pkey(): EVP_PKEY_get_bn_param() failed !\n");
+			return -1;
+		}
+#endif
+		key_info->private.len = BN_num_bytes(bignum);
+		key_info->private.value = malloc(key_info->private.len);
+		if (!key_info->private.value) {
+			printf("ERROR: parse_ec_pkey(): could not allocate private value !\n");
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+			BN_free(bignum);
+#endif
+			return -1;
+		}
+		BN_bn2bin(bignum, key_info->private.value);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		BN_free(bignum);
+#endif
+	}
+
+	// Extract public value for both public & private keys
+	// CKA_EC_POINT shall be DER-encoding of ANSI X9.62 ECPoint value Q
+	unsigned char buf[512], *point;
+	size_t point_len, header_len;
+	const int MAX_HEADER_LEN = 3;
+	// NOTE : src/tools/pkcs11-tool.c uses 
+	// EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, buf, sizeof(buf), &point_len); 
+	// to get the EC_POINT.
+	// However, this does not seem to work (the HSM answers HSE_SRV_RSP_INVALID_PARAM
+	// when calling C_CreateObject while using this value).
+	// because of this, we're keeping the openSSL < 3 code, which does work.
+	const EC_KEY *src = EVP_PKEY_get0_EC_KEY(pkey);
+	const EC_GROUP *ecgroup = EC_KEY_get0_group(src);
+	const EC_POINT *ecpoint = EC_KEY_get0_public_key(src);
+	if (!ecgroup || !ecpoint) {
+		printf("ERROR: parse_ec_pkey(): could not get ecgroup or ecpoint !\n");
+		return -1;
+	}
+	point_len = EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_UNCOMPRESSED, buf, sizeof(buf), NULL);
+	key_info->public.value = malloc(MAX_HEADER_LEN+point_len);
+	if (!key_info->public.value) {
+		return -1;
+	}
+	point = key_info->public.value;
+	ASN1_put_object(&point, 0, (int)point_len, V_ASN1_OCTET_STRING, V_ASN1_UNIVERSAL);
+	header_len = point-key_info->public.value;
+	memcpy(point, buf, point_len);
+	key_info->public.len = header_len+point_len;
+#ifdef EC_POINT_NO_ASN1_OCTET_STRING // workaround for non-compliant cards not expecting DER encoding
+	key_info->public.len   -= header_len;
+	key_info->public.value += header_len;
+#endif
+
+	return 0;
+}
+
 /*
  * Store private key
  */
@@ -355,6 +460,7 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 	CK_SESSION_HANDLE session;
 	CK_OBJECT_HANDLE object;
 	CK_KEY_TYPE key_type_rsa = CKK_RSA;
+	CK_KEY_TYPE key_type_ecc = CKK_EC;
 	int rv, r = -1;
 	const BIGNUM *rsa_n, *rsa_e, *rsa_d, *rsa_p, *rsa_q, *rsa_dmp1, *rsa_dmq1, *rsa_iqmp;
 
@@ -408,6 +514,24 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 				pkcs11_addattr_bn(&tmpl, CKA_EXPONENT_2, rsa_dmq1);
 			if (rsa_iqmp)
 				pkcs11_addattr_bn(&tmpl, CKA_COEFFICIENT, rsa_iqmp);
+		}
+	} else if(EVP_PKEY_base_id(pk) == EVP_PKEY_EC) {
+		struct ecc_key_info key_info;
+		memset(&key_info,  0, sizeof(key_info));
+
+		int isPrivate = (type == CKO_PRIVATE_KEY);
+		rv = parse_ec_pkey(pk, isPrivate, &key_info);
+		if (rv != 0) {
+			printf("Error: parse_ec_pkey() failed !\n");
+			pkcs11_zap_attrs(&tmpl);
+			return -1;
+		}
+
+		pkcs11_addattr_var(&tmpl, CKA_KEY_TYPE, key_type_ecc);
+		pkcs11_addattr(&tmpl, CKA_EC_POINT, key_info.public.value, key_info.public.len);
+		pkcs11_addattr(&tmpl, CKA_EC_PARAMS, key_info.param_oid.value, key_info.param_oid.len);
+		if(isPrivate) {
+			pkcs11_addattr(&tmpl, CKA_VALUE, key_info.private.value, key_info.private.len);
 		}
 	} else {
 		pkcs11_zap_attrs(&tmpl);
