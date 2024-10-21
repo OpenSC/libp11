@@ -27,7 +27,7 @@
 #endif
 
 /* The maximum length of PIN */
-#define MAX_PIN_LENGTH   32
+#define MAX_PIN_LENGTH   256
 
 static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int, PKCS11_TEMPLATE *);
 static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,

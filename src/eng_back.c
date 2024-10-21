@@ -36,7 +36,7 @@
 #endif
 
 /* The maximum length of an internally-allocated PIN */
-#define MAX_PIN_LENGTH   32
+#define MAX_PIN_LENGTH   256
 
 struct st_engine_ctx {
 	/* Engine configuration */
