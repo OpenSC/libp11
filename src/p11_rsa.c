@@ -538,8 +538,8 @@ void pkcs11_rsa_method_free(void)
 #if OPENSSL_VERSION_NUMBER  >= 0x10100000L
 		RSA_meth_free(pkcs11_rsa_method);
 #else
-        OPENSSL_free((char *)pkcs11_rsa_method->name);
-        OPENSSL_free(pkcs11_rsa_method);
+		OPENSSL_free((char *)pkcs11_rsa_method->name);
+		OPENSSL_free(pkcs11_rsa_method);
 #endif
 		pkcs11_rsa_method = NULL;
 	}
