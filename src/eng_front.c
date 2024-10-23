@@ -29,6 +29,7 @@
 #define PKCS11_ENGINE_NAME "pkcs11 engine"
 
 static int pkcs11_idx = -1;
+static int shutdown_mode = 0;
 
 /* The definitions for control commands specific to this engine */
 
@@ -162,7 +163,8 @@ static int engine_finish(ENGINE *engine)
 	 * acquired CRYPTO_LOCK_ENGINE, and there is no way with to check
 	 * whether a lock is already acquired with OpenSSL < 1.1.0 API. */
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L && !defined(LIBRESSL_VERSION_NUMBER)
-	rv &= ctx_finish(ctx);
+	if (!shutdown_mode)
+		rv &= ctx_finish(ctx);
 #endif
 
 	return rv;
@@ -272,6 +274,11 @@ static int bind_helper_methods(ENGINE *e)
 	}
 }
 
+static void exit_callback(void)
+{
+	shutdown_mode = 1;
+}
+
 static int bind_fn(ENGINE *e, const char *id)
 {
 	if (id && (strcmp(id, PKCS11_ENGINE_ID) != 0)) {
@@ -282,6 +289,7 @@ static int bind_fn(ENGINE *e, const char *id)
 		fprintf(stderr, "bind failed\n");
 		return 0;
 	}
+	atexit(exit_callback);
 	return 1;
 }
 
