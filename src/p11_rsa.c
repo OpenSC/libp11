@@ -533,7 +533,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 
 void pkcs11_rsa_method_free(void)
 {
-	if (!pkcs11_rsa_method) {
+	if (pkcs11_rsa_method) {
 		free_rsa_ex_index();
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		RSA_meth_free(pkcs11_rsa_method);
