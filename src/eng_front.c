@@ -175,7 +175,9 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		return 0;
 	bind_helper_methods(engine);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	if (OpenSSL_version_num() == 0x30200000L || OpenSSL_version_num() == 0x30200010L) {
+	if (OpenSSL_version_num() == 0x300000c0L || OpenSSL_version_num() == 0x300000d0L
+		|| OpenSSL_version_num() == 0x30100040L || OpenSSL_version_num() == 0x30100050L
+		|| OpenSSL_version_num() == 0x30200000L || OpenSSL_version_num() == 0x30200010L) {
 		printf("Workaround for %s enabled\n",
 			OpenSSL_version(OPENSSL_VERSION));
 		ENGINE_set_default_string(engine, "PKEY_CRYPTO");
