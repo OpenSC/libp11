@@ -40,6 +40,9 @@ static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 	 * count of 2. Which is true in current code as long as key->object_class
 	 * is used for the object_class. */
 	EVP_PKEY_free(evp_key);
+	/* Freeing the object is necessary because the pkcs11_get_key()
+	 * function increments the reference count */
+	pkcs11_object_free(key);
 	return rsa;
 }
 
