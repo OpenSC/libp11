@@ -284,26 +284,16 @@ int ctx_destroy(ENGINE_CTX *ctx)
 	return 1;
 }
 
-static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
+static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx)
 {
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
-	if (PKCS11_update_slots(pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
+	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
 		ctx_log(ctx, 0, "Failed to enumerate slots\n");
 		return 0;
 	}
 	ctx_log(ctx, 1, "Found %u slot%s\n", ctx->slot_count,
 		ctx->slot_count <= 1 ? "" : "s");
 	return 1;
-}
-
-static int ctx_enumerate_slots(ENGINE_CTX *ctx, PKCS11_CTX *pkcs11_ctx)
-{
-	int rv;
-
-	pthread_mutex_lock(&ctx->lock);
-	rv = ctx_enumerate_slots_unlocked(ctx, pkcs11_ctx);
-	pthread_mutex_unlock(&ctx->lock);
-	return rv;
 }
 
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
@@ -326,10 +316,35 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	}
 	ctx->pkcs11_ctx = pkcs11_ctx;
 
-	if (ctx_enumerate_slots_unlocked(ctx, pkcs11_ctx) != 1)
+	if (ctx_enumerate_slots_unlocked(ctx) != 1)
 		return -1;
 
 	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+}
+
+static int ctx_init_libp11(ENGINE_CTX *ctx)
+{
+	int rv;
+	
+	pthread_mutex_lock(&ctx->lock);
+	rv = ctx_init_libp11_unlocked(ctx);
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
+}
+
+static int ctx_enumerate_slots(ENGINE_CTX *ctx)
+{
+	int rv;
+	
+	if (!ctx->pkcs11_ctx)
+		ctx_init_libp11(ctx);
+	if (!ctx->pkcs11_ctx)
+		return -1;
+
+	pthread_mutex_lock(&ctx->lock);
+	rv = ctx_enumerate_slots_unlocked(ctx);
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
 }
 
 /* Function called from ENGINE_init() */
@@ -1050,7 +1065,7 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case CMD_FORCE_LOGIN:
 		return ctx_ctrl_force_login(ctx);
 	case CMD_RE_ENUMERATE:
-		return ctx_enumerate_slots(ctx, ctx->pkcs11_ctx);
+		return ctx_enumerate_slots(ctx);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
