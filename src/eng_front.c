@@ -202,7 +202,9 @@ static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
 	ctx = get_ctx(engine);
 	if (!ctx)
 		return 0;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	bind_helper_methods(engine);
+#endif
 	return ctx_engine_ctrl(ctx, cmd, i, p, f);
 }
 
