@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 # Copyright (C) 2023 Koninklijke Philips N.V.
 #
 # This is free software; you can redistribute it and/or modify it
@@ -19,53 +21,62 @@
 outdir="output.$$"
 
 # Load common test functions
-. ${srcdir}/rsa-common.sh
+. ${srcdir}/common.sh
 
-# Do the common test initialization
-common_init
+# Do the token initialization
+init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
-import_objects 01020314 "server-key1" "libp11-test"
-import_objects 01020324 "server-key2" "libp11-test"
-import_objects 01020334 "server-key3" "libp11-test"
-import_objects 01020344 "server-key4" "libp11-test"
+# Write more objects with different labels to the token
+import_objects "rsa" "libp11-0" "01020314" "server-key-1" "privkey" "pubkey" "cert"
+import_objects "rsa" "libp11-0" "01020324" "server-key-2" "privkey" "pubkey" "cert"
+import_objects "rsa" "libp11-0" "01020334" "server-key-3" "privkey" "pubkey" "cert"
+import_objects "rsa" "libp11-0" "01020344" "server-key-4" "privkey" "pubkey" "cert"
 
+list_objects "libp11-0"
+
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
 
 # Run the test
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" | grep -q 'nkeys:5'
-if test $? != 0;then
+${WRAPPER} ../examples/listkeys_ext -m ${MODULE} -p ${PIN} | grep -q 'nkeys:5'
+if [[ $? -ne 0 ]]; then
 	echo "Failed when no search parameters were given. 5 Keys should have been found."
-	exit 1;
+	exit 1
 fi
 
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020314 | grep -q 'nkeys:1'
-if test $? != 0;then
+../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020314" | grep -q 'nkeys:1'
+if [[ $? -ne 0 ]]; then
 	echo "Failed when searching with id. Only 1 key should have been found."
-	exit 1;
+	exit 1
 fi
 
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 1020314 | grep -q 'nkeys:1'
-if test $? != 0;then
+../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "1020314" | grep -q 'nkeys:1'
+if [[ $? -ne 0 ]]; then
 	echo "Failed when searching with id. Only 1 key should have been found."
-	exit 1;
+	exit 1
 fi
 
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -l server-key3 | grep -q 'nkeys:1'
-if test $? != 0;then
+../examples/listkeys_ext -m ${MODULE} -p ${PIN} -l server-key-3 | grep -q 'nkeys:1'
+if [[ $? -ne 0 ]]; then
 	echo "Failed when searching with label. Only 1 key should have been found."
-	exit 1;
+	exit 1
 fi
 
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020334 -l server-key3 | grep -q 'nkeys:1'
-if test $? != 0;then
+../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-3 | grep -q 'nkeys:1'
+if [[ $? -ne 0 ]]; then
 	echo "Failed when searching with id and label. Only 1 key should have been found."
-	exit 1;
+	exit 1
 fi
 
-../examples/listkeys_ext -m "${MODULE}" -p "${PIN}" -i 01020334 -l server-key1
-if test $? = 0;then
+../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-1
+if [[ $? -eq 0 ]]; then
 	echo "Did not fail when no keys should have been found."
-	exit 1;
+	exit 1
 fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

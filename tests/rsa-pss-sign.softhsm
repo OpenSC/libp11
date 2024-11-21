@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 # Copyright (C) 2015 Nikos Mavrogiannopoulos
 # Copyright (C) 2018 Anderson Toshiyuki Sasaki
 #
@@ -18,23 +20,29 @@
 
 outdir="output.$$"
 
+PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=1234"
+PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=public;pin-value=1234"
+
 # Load common test functions
-. ${srcdir}/rsa-common.sh
+. ${srcdir}/common.sh
 
-# Do the common test initialization
-common_init
+# Do the token initialization
+init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
-sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
 
-export OPENSSL_ENGINES="../src/.libs/"
-PRIVATE_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=private;pin-value=1234"
-PUBLIC_KEY="pkcs11:token=libp11-test;id=%01%02%03%04;object=server-key;type=public;pin-value=1234"
-
-./rsa-pss-sign 1234 "${outdir}/engines.cnf" ${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if test $? != 0;then
+# Run the test
+${WRAPPER} ./rsa-pss-sign ${PIN} "${outdir}/engines.cnf" \
+	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
+if [[ $? -ne 0 ]]; then
 	echo "RSA-PSS signature/verification test failed."
-	exit 1;
+	exit 1
 fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 
