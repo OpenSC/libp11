@@ -1,4 +1,4 @@
-EXTRA_DIST = engines.cnf.in rsa-common.sh rsa-no-pubkey.sh ec-common.sh ec-no-pubkey.sh
+EXTRA_DIST = engines.cnf.in common.sh
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
@@ -25,27 +25,28 @@ dist_check_SCRIPTS = \
 	rsa-testlistkeys.softhsm \
 	rsa-testlistkeys_ext.softhsm \
 	rsa-evp-sign.softhsm \
-	ec-evp-sign.softhsm \
-	ec-testfork.softhsm \
-	fork-change-slot.softhsm \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
-	case-insensitive.softhsm \
 	rsa-check-privkey.softhsm \
+	ec-testfork.softhsm \
+	ec-evp-sign.softhsm \
 	ec-check-privkey.softhsm \
-	pkcs11-uri-without-token.softhsm \
-	search-all-matching-tokens.softhsm \
 	ec-cert-store.softhsm \
-	ec-copy.softhsm
+	ec-copy.softhsm \
+	fork-change-slot.softhsm \
+	case-insensitive.softhsm \
+	pkcs11-uri-without-token.softhsm \
+	search-all-matching-tokens.softhsm
 dist_check_DATA = \
-	rsa-cert.der rsa-prvkey.der rsa-pubkey.der \
-	ec-cert.der ec-prvkey.der ec-pubkey.der
+	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
+	ec-cert.der ec-privkey.der ec-pubkey.der
 
 TESTS = $(dist_check_SCRIPTS)
 
 TESTS_ENVIRONMENT =	\
 	LC_ALL="C" \
 	EXEEXT=$(EXEEXT) \
+	PKG_CONFIG_PATH="$(PKG_CONFIG_PATH)" \
 	top_builddir="$(top_builddir)" \
 	srcdir="$(srcdir)"
 

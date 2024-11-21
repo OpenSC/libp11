@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 # Copyright (C) 2015 Nikos Mavrogiannopoulos
 # Copyright (C) 2019 Anderson Toshiyuki Sasaki
 # Copyright (C) 2019 Red Hat, Inc.
@@ -21,25 +23,36 @@
 
 outdir="output.$$"
 
+CERTIFICATE_URL="pkcs11:token=libp11-0;object=stored-cert;pin-value=1234"
+
 # Load common test functions
-. ${srcdir}/ec-no-pubkey.sh
+. ${srcdir}/common.sh
 
-sed -e "s|@MODULE_PATH@|${MODULE}|g" -e "s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
+# Do the token initialization
+init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
 
-export OPENSSL_ENGINES="../src/.libs/"
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+${OPENSSL} x509 -in ${srcdir}/ec-cert.der -inform DER -outform PEM \
+	-out ${outdir}/ec-cert.pem
 CERTIFICATE="${outdir}/ec-cert.pem"
-CERTIFICATE_URL="pkcs11:token=libp11-test;object=stored-cert;pin-value=1234"
 
-./store-cert ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE} "${outdir}/engines.cnf"
-if test $? != 0;then
+# Run the test
+${WRAPPER} ./store-cert ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE} "${outdir}/engines.cnf"
+if [[ $? -ne 0 ]]; then
 	echo "The certificate storing couldn't be performed"
-	exit 1;
+	exit 1
 fi
 
-pkcs11-tool -p 1234 --module ${MODULE} -l -O | grep -q stored-cert
-if test $? != 0;then
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
+
+list_objects | grep -q stored-cert
+if [[ $? -ne 0 ]]; then
 	echo "The certificate was not properly stored"
-	exit 1;
+	exit 1
 fi
 
 rm -rf "$outdir"

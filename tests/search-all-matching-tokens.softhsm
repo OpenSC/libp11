@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 # Copyright (C) 2015 Nikos Mavrogiannopoulos
 #
 # GnuTLS is free software; you can redistribute it and/or modify it
@@ -29,92 +31,81 @@
 
 outdir="output.$$"
 
-# Load common test functions
-. ${srcdir}/rsa-common.sh
-
-PIN=1234
-PUK=1234
-
-NUM_DEVICES=5
-
-# Initialize the SoftHSM DB
-init_db
-
-# Create some devices
-create_devices $NUM_DEVICES $PIN $PUK "libp11-test" "label"
-
-echo "Detected system: ${OSTYPE}"
-
-
-case "${OSTYPE}" in
-    darwin* )
-	SHARED_EXT=.dylib
-	;;
-    *)
-	SHARED_EXT=.so
-	;;
-esac
-
-sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
-    "s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
-    <"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
-
-export OPENSSL_ENGINES="../src/.libs/"
-export OPENSSL_CONF="${outdir}/engines.cnf"
-
-PRIVATE_KEY="pkcs11:token=libp11-test-3;object=label-3;type=private;pin-value=1234"
+PRIVATE_KEY="pkcs11:token=libp11-3;object=label-3;type=private;pin-value=1234"
 PRIVATE_KEY_WITHOUT_TOKEN="pkcs11:object=label-3;type=private;pin-value=1234"
 PUBLIC_KEY_ANY="pkcs11:type=public"
 CERTIFICATE="pkcs11:object=label-3;type=cert;pin-value=1234"
+NUM_DEVICES=5
 
-# Create input file
+# Load common test functions
+. ${srcdir}/common.sh
+
+export OPENSSL_CONF="${outdir}/engines.cnf"
+echo "OPENSSL_CONF=${OPENSSL_CONF}"
+
+# Do the token initialization, create some devices
+init_token "rsa" ${NUM_DEVICES} "libp11" ${ID} "label" "privkey" "pubkey" "cert"
+
+# Create the input file
 echo "secret" > "${outdir}/in.txt"
 
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+# Run the test
 # Verify that it doesn't try to login if more than one token matched the search
-openssl pkeyutl -engine pkcs11 -keyform engine \
-	-inkey "${PRIVATE_KEY_WITHOUT_TOKEN}" \
-	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
-if test $? = 0;then
+${WRAPPER} ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY_WITHOUT_TOKEN} -sign \
+	-out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if [[ $? -eq 0 ]]; then
 	echo "Did not fail when the PKCS#11 URI matched multiple tokens"
-	exit 1;
+	exit 1
 fi
 
 # Generate signature specifying the token in the PKCS#11 URI
-openssl pkeyutl -engine pkcs11 -keyform engine -inkey "${PRIVATE_KEY}" \
-	-sign -out "${outdir}/signature.bin" -in "${outdir}/in.txt"
-if test $? != 0;then
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} -sign -out "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
 	echo "Failed to sign file using PKCS#11 URI ${PRIVATE_KEY}"
-	exit 1;
+	exit 1
 fi
 
 # Verify the signature using the public key from each token
 i=0
-while [ $i -le ${NUM_DEVICES} ]; do
+while [[ $i -lt ${NUM_DEVICES} ]]; do
 	pubkey="pkcs11:object=label-$i;type=public;pin-value=1234"
-	openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${pubkey}" \
-		-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
-	if test $? != 0;then
+	${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
+		-inkey ${pubkey} -verify -sigfile "${outdir}/signature.bin" \
+		-in "${outdir}/in.txt"
+	if [[ $? -ne 0 ]]; then
 		echo "Failed to verify the signature using the PKCS#11 URI ${pubkey}"
-		exit 1;
+		exit 1
 	fi
 	i=$(($i + 1))
 done
 
 # Verify the signature using a certificate without specifying the token
-openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${CERTIFICATE}" \
-	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
-if test $? != 0;then
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
+	-inkey ${CERTIFICATE} -verify -sigfile "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
 	echo "Failed to verify the signature using the PKCS#11 URI ${CERTIFICATE}"
-	exit 1;
+	exit 1
 fi
 
 # Verify the signature using the first public key found
-openssl pkeyutl -engine pkcs11 -keyform engine -pubin -inkey "${PUBLIC_KEY_ANY}" \
-	-verify -sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
-if test $? != 0;then
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
+	-inkey ${PUBLIC_KEY_ANY} -verify -sigfile "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
 	echo "Failed to verify the signature using the PKCS#11 URI ${PUBLIC_KEY_ANY}."
-	exit 1;
+	exit 1
 fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

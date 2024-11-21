@@ -32,7 +32,7 @@
 
 /* libp11 example code: auth.c
  *
- * This examply simply connects to your smart card
+ * This examply simply connects to your smart card / SoftHSM  token
  * and does a public key authentication.
  */
 

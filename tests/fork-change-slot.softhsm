@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 # Copyright (C) 2013 Nikos Mavrogiannopoulos
 # Copyright (C) 2015 Red Hat, Inc.
 #
@@ -20,52 +22,44 @@
 outdir="output.$$"
 
 # Load common test functions
-. ${srcdir}/rsa-common.sh
-
-sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
-	"s|@ENGINE_PATH@|../src/.libs/pkcs11.so|g" \
-	<"${srcdir}/engines.cnf.in" >"${outdir}/engines.cnf"
-
-# Set the used PIN and PUK
-PIN=1234
-PUK=1234
+. ${srcdir}/common.sh
 
 # Initialize SoftHSM DB
 init_db
 
 # Create 2 different tokens
-init_card $PIN $PUK "token1"
-init_card $PIN $PUK "token2"
+init_card "token1"
+init_card "token2"
 
-# Force the use of the local built engine
-export OPENSSL_ENGINES="../src/.libs/"
+# Generate an RSA key pair on the second token
+generate_rsa_key_pair "pkey" "token2"
 
-# Generate a key pair in the second token
-pkcs11-tool --module ${MODULE} -l --pin $PIN --keypairgen --key-type \
-	rsa:2048 --id 01020304 --label pkey --token-label token2
-if test $? != 0;then
-	exit 1;
-fi
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
 
 # Run the test program which will stop and wait for a signal (SIGUSR1)
-./fork-change-slot \
-	"pkcs11:token=token2;object=pkey;type=private;pin-value=$PIN" \
+# Valgrind cannot be used because the test program waits indefinitely at the sigwait call
+./fork-change-slot "pkcs11:token=token2;object=pkey;type=private;pin-value=$PIN" \
 	"${outdir}/engines.cnf" ${MODULE} &
 pid=$!
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 # Wait the test program to reach the sigwait
 sleep 3
 
 # Remove the first token to change the slotID associated with token2
-${SOFTHSM_TOOL} --delete-token --token token1
+remove_card "token1"
 
 # Send the signal to the waiting process
 kill -USR1 `pgrep -P $pid`
 
 # Test the result
 wait $pid
-if test $? != 0;then
-	exit 1;
+if [[ $? -ne 0 ]]; then
+	exit 1
 fi
 
 # Cleanup
