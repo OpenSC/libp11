@@ -70,12 +70,31 @@ void pkcs11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args)
 }
 
 /*
+ * Tell the PKCS11 to initialize itself
+ */
+static int pkcs11_initialize(PKCS11_CTX_private *cpriv)
+{
+	CK_C_INITIALIZE_ARGS args;
+	int rv;
+
+	memset(&args, 0, sizeof(args));
+	/* Unconditionally say using OS locking primitives is OK */
+	args.flags |= CKF_OS_LOCKING_OK;
+	args.pReserved = cpriv->init_args;
+	rv = cpriv->method->C_Initialize(&args);
+	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
+		return -1;
+	}
+	return 0;
+}
+
+/*
  * Load the shared library, and initialize it.
  */
 int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
-	CK_C_INITIALIZE_ARGS args;
 	CK_INFO ck_info;
 	int rv;
 
@@ -85,16 +104,9 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 		return -1;
 	}
 
-	/* Tell the PKCS11 to initialize itself */
-	memset(&args, 0, sizeof(args));
-	/* Unconditionally say using OS locking primitives is OK */
-	args.flags |= CKF_OS_LOCKING_OK;
-	args.pReserved = cpriv->init_args;
-	rv = cpriv->method->C_Initialize(&args);
-	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+	if (pkcs11_initialize(cpriv)) {
 		C_UnloadModule(cpriv->handle);
 		cpriv->handle = NULL;
-		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
 
@@ -119,28 +131,12 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 /*
  * Reinitialize (e.g., after a fork).
  */
-int pkcs11_CTX_reload(PKCS11_CTX_private *ctx)
+int pkcs11_CTX_reload(PKCS11_CTX_private *cpriv)
 {
-	CK_C_INITIALIZE_ARGS _args;
-	CK_C_INITIALIZE_ARGS *args = NULL;
-	int rv;
-
-	if (!ctx->method) /* Module not loaded */
+	if (!cpriv->method) /* Module not loaded */
 		return 0;
 
-	/* Tell the PKCS11 to initialize itself */
-	if (ctx->init_args) {
-		memset(&_args, 0, sizeof(_args));
-		args = &_args;
-		args->pReserved = ctx->init_args;
-	}
-	rv = ctx->method->C_Initialize(args);
-	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
-		CKRerr(P11_F_PKCS11_CTX_RELOAD, rv);
-		return -1;
-	}
-
-	return 0;
+	return pkcs11_initialize(cpriv);
 }
 
 /*
