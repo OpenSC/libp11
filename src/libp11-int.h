@@ -355,8 +355,14 @@ extern int pkcs11_private_decrypt(
 /* Retrieve PKCS11_KEY from an RSA key */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
+/* Set PKCS11_KEY for an RSA key */
+void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key);
+
 /* Retrieve PKCS11_KEY from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
+
+/* Set PKCS11_KEY for an EC_KEY */
+extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
 
 /* Free the global RSA_METHOD */
 extern void pkcs11_rsa_method_free(void);
