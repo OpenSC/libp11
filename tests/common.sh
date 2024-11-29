@@ -55,12 +55,21 @@ OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
 # Restore settings
 export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
-LIBCRYPTO_VER=$(ldd "${MODULE}" | grep 'libcrypto' | awk '{print $1}')
-if [[ "$OPENSSL_VERSION" =~ ^0.* || "$OPENSSL_VERSION" =~ ^1\.0.* ]] \
-	&& [[ "$LIBCRYPTO_VER" == "libcrypto.so.3" ]]; then
-	echo -n "Skipping test: Module '${MODULE}' built with '${LIBCRYPTO_VER}'"
-	echo "is incompatible with OpenSSL version '${OPENSSL_VERSION}'."
-	exit 77
+# Check for ldd command
+if command -v ldd >/dev/null 2>&1; then
+	LIBCRYPTO_VER=$(ldd "${MODULE}" | grep 'libcrypto' | awk '{print $1}')
+else
+	echo "Warning: ldd command not found. Skipping library version detection."
+	LIBCRYPTO_VER="unknown"
+fi
+
+# Check OpenSSL version and library compatibility
+if [[ "$OPENSSL_VERSION" =~ ^0.* || "$OPENSSL_VERSION" =~ ^1\.0.* ]]; then
+	if [[ "$LIBCRYPTO_VER" == "libcrypto.so.3" ]]; then
+		echo -n "Skipping test: Module '${MODULE}' built with '${LIBCRYPTO_VER}'"
+		echo "is incompatible with OpenSSL version '${OPENSSL_VERSION}'."
+		exit 77
+	fi
 fi
 
 echo "Detected system: ${OSTYPE}"
@@ -214,7 +223,7 @@ import_objects () {
 	# Import objects with different labels
 	for param in "$@"; do
 		if [[ -n "$param" ]]; then
-			echo -n "* Importing the ${key_type^^} ${param} object id=${obj_id}"
+			echo -n "* Importing the ${key_type} ${param} object id=${obj_id}"
 			echo -n " into the token ${token_label} ... "
 			pkcs11-tool --login --pin ${PIN} --module ${MODULE} \
 				--token-label "${token_label}"\
