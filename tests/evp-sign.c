@@ -220,6 +220,11 @@ int main(int argc, char **argv)
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
+	/*
+	 * ENGINE_init() returned a functional reference, so free the structural
+	 * reference from ENGINE_by_id().
+	 */
+	ENGINE_free(e);
 
 	switch (pin_method) {
 	case BY_DEFAULT:
@@ -253,6 +258,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	/* Free the functional reference from ENGINE_init */
+	ENGINE_finish(e);
+
 	digest_algo = EVP_get_digestbyname("sha256");
 
 	ctx = EVP_MD_CTX_create();
@@ -275,6 +283,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	EVP_MD_CTX_destroy(ctx);
+	EVP_PKEY_free(private_key);
 
 	printf("Signature created\n");
 
@@ -301,6 +310,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	EVP_MD_CTX_destroy(ctx);
+	EVP_PKEY_free(public_key);
 
 	printf("Signature verified\n");
 
@@ -310,8 +320,10 @@ int main(int argc, char **argv)
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
-	ENGINE_finish(e);
 	CONF_modules_unload(1);
+	UI_destroy_method(ui_detect_failed_ctrl);
+	UI_destroy_method(ui_console_with_default);
+
 	return 0;
 }
 

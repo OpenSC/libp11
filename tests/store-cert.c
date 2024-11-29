@@ -143,6 +143,8 @@ store_certificate(char* address, X509* cert)
 		printf("Could not store certificate\n");
 		return -1;
 	}
+	PKCS11_release_all_slots(global_pkcs11_ctx, global_pkcs11_slots,
+	        global_pkcs11_slot_num);
 
 	return 0;
 }
@@ -221,6 +223,11 @@ main(int argc, char* argv[])
 		ret = 1;
 		goto end;
 	}
+	/*
+	 * ENGINE_init() returned a functional reference, so free the structural
+	 * reference from ENGINE_by_id().
+	 */
+	ENGINE_free(engine);
 
 	if (!strncmp(certfile, "pkcs11:", 7)) {
 		params.cert_id = certfile;
@@ -267,7 +274,9 @@ main(int argc, char* argv[])
 		printf("Certificate stored\n");
 		ret = 0;
 	}
+	PKCS11_CTX_free(global_pkcs11_ctx);
 
+	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(engine);
 
 	CONF_modules_unload(1);

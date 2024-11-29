@@ -195,6 +195,7 @@ loggedin:
 		goto failed;
 	}
 
+	do_fork();
 	/* ask for a sha256 hash of the random data, signed by the key */
 	siglen = MAX_SIGSIZE;
 	signature = OPENSSL_malloc(MAX_SIGSIZE);
@@ -203,7 +204,6 @@ loggedin:
 
 	digest_algo = EVP_get_digestbyname("sha256");
 
-	do_fork();
 	privkey = PKCS11_get_private_key(authkey);
 	if (privkey == NULL) {
 		fprintf(stderr, "Could not extract the private key\n");
@@ -255,18 +255,16 @@ loggedin:
 		error_queue("EVP_VerifyFinal");
 		goto failed;
 	}
+	EVP_MD_CTX_destroy(md_ctx);
+
 	printf("Signature matched\n");
 
-	if (md_ctx != NULL)
-		EVP_MD_CTX_destroy(md_ctx);
-	if (privkey != NULL)
-		EVP_PKEY_free(privkey);
-	if (pubkey != NULL)
-		EVP_PKEY_free(pubkey);
-	if (random != NULL)
-		OPENSSL_free(random);
-	if (signature != NULL)
-		OPENSSL_free(signature);
+	/* If key is NULL nothing is done */
+	EVP_PKEY_free(privkey);
+	EVP_PKEY_free(pubkey);
+
+	OPENSSL_free(random);
+	OPENSSL_free(signature);
 
 	PKCS11_release_all_slots(ctx, slots, nslots);
 	PKCS11_CTX_unload(ctx);

@@ -125,6 +125,11 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto end;
 	}
+	/*
+	 * ENGINE_init() returned a functional reference, so free the structural
+	 * reference from ENGINE_by_id().
+	 */
+	ENGINE_free(engine);
 
 	if (!strncmp(certfile, "pkcs11:", 7)) {
 		params.cert_id = certfile;
@@ -154,7 +159,6 @@ int main(int argc, char *argv[])
 	}
 
 	pkey = ENGINE_load_private_key(engine, privkey, 0, 0);
-
 	if (pkey == NULL) {
 		printf("Could not load key\n");
 		display_openssl_errors(__LINE__);
@@ -162,9 +166,11 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
+	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(engine);
 
 	ret = X509_check_private_key(cert, pkey);
+	EVP_PKEY_free(pkey);
 	if (!ret) {
 		printf("Could not check private key\n");
 		display_openssl_errors(__LINE__);
@@ -178,7 +184,6 @@ int main(int argc, char *argv[])
 	CONF_modules_unload(1);
 end:
 	X509_free(cert);
-	EVP_PKEY_free(pkey);
 
 	return ret;
 }

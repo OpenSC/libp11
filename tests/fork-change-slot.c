@@ -232,18 +232,20 @@ int main(int argc, char *argv[])
     }
 
     /* Initialize to get the engine functional reference */
-    if (ENGINE_init(engine)) {
-        pkey = ENGINE_load_private_key(engine, argv[1], 0, 0);
-        if (pkey == NULL) {
-            error_queue("ENGINE_load_private_key", pid);
-            goto failed;
-        }
-
-        ENGINE_free(engine);
-        engine = NULL;
-    }
-    else {
+    if (!ENGINE_init(engine)) {
+        printf("Could not initialize engine\n");
         error_queue("ENGINE_init", pid);
+        goto failed;
+    }
+    /*
+     * ENGINE_init() returned a functional reference, so free the structural
+     * reference from ENGINE_by_id().
+     */
+    ENGINE_free(engine);
+
+    pkey = ENGINE_load_private_key(engine, argv[1], 0, 0);
+    if (pkey == NULL) {
+        error_queue("ENGINE_load_private_key", pid);
         goto failed;
     }
 
@@ -307,8 +309,9 @@ failed:
         EVP_MD_CTX_destroy(md_ctx);
     if (pkey != NULL)
         EVP_PKEY_free(pkey);
-    if (engine != NULL)
-        ENGINE_free(engine);
+
+    /* Free the functional reference from ENGINE_init */
+    ENGINE_finish(engine);
 
     return rv;
 }
