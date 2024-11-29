@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2024 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -481,7 +481,10 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 			EVP_PKEY_free(ret);
 			goto err;
 		}
-		pkcs11_object_ref(key);
+		if (key->object_class == CKO_PRIVATE_KEY)
+			pkcs11_object_ref(key);
+		else /* Public key -> detach PKCS11_OBJECT */
+			pkcs11_set_ex_data_rsa(rsa, NULL);
 		break;
 	case EVP_PKEY_EC:
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -498,8 +501,13 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 			EVP_PKEY_free(ret);
 			goto err;
 		}
-		pkcs11_object_ref(key);
+		if (key->object_class == CKO_PRIVATE_KEY)
+			pkcs11_object_ref(key);
+		else /* Public key -> detach PKCS11_OBJECT */
+			pkcs11_set_ex_data_ec(ec_key, NULL);
 #else
+		/* pkcs11_ec_copy() method is only set for private keys,
+		 * so public keys do not have a PKCS11_OBJECT reference */
 		ret = EVP_PKEY_dup(key->evp_key);
 #endif
 		break;

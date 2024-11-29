@@ -280,7 +280,7 @@ PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa)
 	return RSA_get_ex_data(rsa, rsa_ex_index);
 }
 
-static void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key)
+void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key)
 {
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
