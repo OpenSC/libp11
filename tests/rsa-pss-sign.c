@@ -132,6 +132,11 @@ int main(int argc, char **argv)
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
+	/*
+	 * ENGINE_init() returned a functional reference, so free the structural
+	 * reference from ENGINE_by_id().
+	 */
+	ENGINE_free(e);
 
 	if (key_pass && !ENGINE_ctrl_cmd_string(e, "PIN", key_pass, 0)) {
 		display_openssl_errors(__LINE__);
@@ -211,6 +216,7 @@ int main(int argc, char **argv)
 	}
 
 	EVP_PKEY_CTX_free(pkey_ctx);
+	EVP_PKEY_free(private_key);
 
 	printf("Signature created\n");
 
@@ -249,6 +255,7 @@ int main(int argc, char **argv)
 	}
 
 	EVP_PKEY_CTX_free(pkey_ctx);
+	EVP_PKEY_free(public_key);
 
 	if (ret == 1) {
 		printf("Signature verified\n");
@@ -265,6 +272,7 @@ int main(int argc, char **argv)
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
+	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(e);
 	CONF_modules_unload(1);
 	return 0;
