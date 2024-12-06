@@ -9,39 +9,67 @@ env:
   version: 0.4.13_git
 
 jobs:
-  unix:
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: 'ubuntu-22.04'
-          - os: 'ubuntu-20.04'
-          - os: 'macOS-latest'
+          - id: ubuntu-24.04
+            triplet: x64-linux
+            compiler: gcc
+            os: ubuntu-24.04
+            generator: Unix Makefiles
+          - id: ubuntu-22.04
+            triplet: x64-linux
+            compiler: gcc
+            os: ubuntu-22.04
+            generator: Unix Makefiles
+          - id: ubuntu-20.04
+            triplet: x64-linux
+            compiler: gcc
+            os: ubuntu-20.04
+            generator: Unix Makefiles
+          - id: macOS-3
             openssl: 'openssl@3'
-          - os: 'macOS-latest'
+            triplet: x64-osx
+            compiler: clang
+            os: macOS-latest
+            generator: Unix Makefiles
+          - id: macOS-1.1
             openssl: 'openssl@1.1'
+            triplet: x64-osx
+            compiler: clang
+            os: macOS-latest
+            generator: Unix Makefiles
 
     runs-on: ${{matrix.os}}
-
-    env:
-      PKG_CONFIG_PATH: /usr/local/opt/${{matrix.openssl}}/lib/pkgconfig
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Install apt dependencies (Linux)
       if: runner.os == 'Linux'
-      run: sudo apt-get install -y libssl-dev opensc softhsm
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev opensc softhsm2
 
     - name: Install brew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install libtool automake ${{matrix.openssl}} softhsm
-        brew install --cask opensc
-        echo "/usr/local/opt/${{matrix.openssl}}/bin" >> $GITHUB_PATH
+        brew install libtool automake opensc softhsm
+
+    - name: Set environment variables (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        echo "/opt/homebrew/bin" >> $GITHUB_PATH
+        echo "/opt/homebrew/opt/${{matrix.openssl}}/bin" >> $GITHUB_PATH
+        echo "PKG_CONFIG_PATH=/opt/homebrew/opt/${{matrix.openssl}}/lib/pkgconfig" >> $GITHUB_ENV
 
     - name: System information
       run: |
+        which pkcs11-tool
+        which softhsm2-util
+        which openssl
         openssl version -a
         echo "PATH=$PATH"
 
@@ -58,19 +86,30 @@ jobs:
       timeout-minutes: 5
       run: make check
 
-    - name: Results of failed tests
-      if: failure()
-      run: cat tests/test-suite.log || true
+    - name: Results of tests
+      run: cat ${{github.workspace}}/tests/test-suite.log || true
 
   windows:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: 'x86'
+          - id: windows-x86-vs
+            triplet: x86-windows
             build_for: 'WIN32'
-          - arch: 'x64'
+            compiler: vs
+            arch: x86
+            os: windows-latest
+            generator: Ninja
+            vcpkg_root: C:/vcpkg
+          - id: windows-x64-vs
+            triplet: x64-windows
             build_for: 'WIN64'
+            compiler: vs
+            arch: x64
+            os: windows-latest
+            generator: Ninja
+            vcpkg_root: C:/vcpkg
 
     runs-on: windows-latest
 
@@ -81,7 +120,10 @@ jobs:
       uses: actions/cache@v4
       with:
         path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
-        key: ${{matrix.arch}}
+        key: ${{matrix.id}}-${{hashFiles('vcpkg.json')}}
+        restore-keys: |
+          ${{matrix.id}}-${{hashFiles('vcpkg.json')}}
+          ${{matrix.id}}-
 
     - name: Configure Visual Studio
       uses: ilammy/msvc-dev-cmd@v1
@@ -90,8 +132,8 @@ jobs:
 
     - name: Install OpenSSL with VCPKG
       run: |
-        vcpkg install --triplet=${{matrix.arch}}-windows openssl
-        echo "C:\vcpkg\packages\openssl_${{matrix.arch}}-windows\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        vcpkg install --triplet=${{matrix.triplet}} openssl[tools]
+        echo "C:\vcpkg\packages\openssl_${{matrix.triplet}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: System information
       run: openssl version -a
@@ -99,7 +141,7 @@ jobs:
     - name: Build
       run: nmake -f Makefile.mak
         BUILD_FOR=${{matrix.build_for}}
-        OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.arch}}-windows"
+        OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.triplet}}"
 
     - name: Upload the DLLs
       uses: actions/upload-artifact@v4
