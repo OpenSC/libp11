@@ -1,6 +1,6 @@
 dnl -*- mode: m4; -*-
 
-AC_PREREQ(2.60)
+AC_PREREQ([2.69])
 
 # When bumping versions see also the LT version numbers below.
 define([PACKAGE_VERSION_MAJOR], [0])
@@ -164,21 +164,10 @@ AC_PROG_SED
 AC_PROG_MAKE_SET
 
 dnl Add libtool support.
-ifdef(
-	[LT_INIT],
-	[
-		LT_INIT([win32-dll])
-		LT_LANG([Windows Resource])
-	],
-	[
-		AC_LIBTOOL_WIN32_DLL
-		AC_LIBTOOL_RC
-		AC_PROG_LIBTOOL
-	]
-)
+LT_INIT([win32-dll])
+LT_LANG([Windows Resource])
 
 dnl Checks for header files.
-AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([ \
 	errno.h fcntl.h malloc.h stdlib.h \
