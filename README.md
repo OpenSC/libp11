@@ -188,9 +188,6 @@ the same.
 Access to the the PKCS#11 tokens and objects is via a pool of PKCS#11 sessions.
 This allows concurrent usage of crypto operations in thread safe manner.
 
-However, many of the main PKCS11_* API functions are currently not fully thread
-safe. Work to fix this is pending.
-
 ## Submitting pull requests
 
 For adding new features or extending functionality in addition to the code,
