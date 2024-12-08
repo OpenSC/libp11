@@ -175,12 +175,29 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		return 0;
 	bind_helper_methods(engine);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	if (OpenSSL_version_num() == 0x300000c0L || OpenSSL_version_num() == 0x300000d0L
-		|| OpenSSL_version_num() == 0x30100040L || OpenSSL_version_num() == 0x30100050L
-		|| OpenSSL_version_num() == 0x30200000L || OpenSSL_version_num() == 0x30200010L) {
-		printf("Workaround for %s enabled\n",
-			OpenSSL_version(OPENSSL_VERSION));
-		ENGINE_set_default_string(engine, "PKEY_CRYPTO");
+	/*
+	 * A workaround for an OpenSSL bug affecting the handling of foreign
+	 * EVP_PKEY objects: https://github.com/openssl/openssl/pull/23063
+	 * Affected OpenSSL versions:
+	 *  - 3.0.12 (0x300000c0L) - 3.0.13 (0x300000d0L)
+	 *  - 3.1.4 (0x30100040L) - 3.1.5 (0x30100050L)
+	 *  - 3.2.0 (0x30200000L) - 3.2.1 (0x30200010L)
+	 * This workaround may disrupt rare deployments
+	 * that use foreign keys from multiple engines.
+	 */
+	{
+		unsigned long ver = OpenSSL_version_num();
+
+		if ((ver >= 0x300000c0L && ver <= 0x300000d0L) ||
+				(ver >= 0x30100040L && ver <= 0x30100050L) ||
+				(ver >= 0x30200000L && ver <= 0x30200010L)) {
+			if (ENGINE_set_default_string(engine, "PKEY_CRYPTO")) {
+				fprintf(stderr, "Workaround for %s enabled\n",
+					OpenSSL_version(OPENSSL_VERSION));
+			} else {
+				fprintf(stderr, "Failed to set PKEY_CRYPTO default engine\n");
+			}
+		}
 	}
 #endif
 	pkey = ctx_load_privkey(ctx, s_key_id, ui_method, callback_data);
