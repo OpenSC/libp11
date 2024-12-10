@@ -472,7 +472,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			if (slot->token->readOnly)
 				strcat(flags, "ro, ");
 		} else {
-			strcpy(flags, "no token");
+			strcpy(flags, "no token, ");
 		}
 		if ((m = strlen(flags)) != 0) {
 			flags[m - 2] = '\0';
