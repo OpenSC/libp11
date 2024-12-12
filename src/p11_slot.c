@@ -180,6 +180,10 @@ int pkcs11_get_session(PKCS11_SLOT_private *slot, int rw, CK_SESSION_HANDLE *ses
 				slot->num_sessions++;
 				break;
 			}
+			if (rv == CKR_TOKEN_NOT_RECOGNIZED) {
+				pthread_mutex_unlock(&slot->lock);
+				return -1;
+			}
 
 			/* Remember the maximum session count */
 			if (rv == CKR_SESSION_COUNT)
