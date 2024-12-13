@@ -1,8 +1,22 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.13; unreleased
-* Increased maximum PIN length.
-* Fixed memory leak of RSA/EC methods when releasing PKCS11_CTX.
+New in 0.4.13; 2024-12-13; Michał Trojnara
+* Increased maximum PIN length (Michał Trojnara)
+* Fixed several memory leaks (Michał Trojnara, Małgorzata Olszówka)
+* Don't include libp11.rc VERSIONINFO into pkcs11 (Mikhail Titov)
+* Reimplement CI with GitHub Actions (Michał Trojnara, Małgorzata Olszówka)
+* Improved tests (Małgorzata Olszówka)
+* Added static ENGINE (libpkcas11.a) build (Marouene Boubakri)
+* Added a workaround broken foreign key handling in OpenSSL
+  3.0.12-3.0.13, 3.1.4-3.1.5, 3.2.0-3.2.1 (Małgorzata Olszówka)
+* Added a workaround for conflicting atexit() callbacks (Michał Trojnara)
+* Always login with PIN If FORCE_LOGIN is specified in openssl config
+  (Plamen Todorov)
+* Added OAEP support to RSA_private_decrypt (Peter Popovec)
+* Added PKCS11_enumerate_*_ext functions (Harshal Gohel)
+* Fixed non-null-terminated label padding (Jorge Ramirez-Ortiz)
+* Fixed several object management issues (Jakub Jelen)
+* Deferred libp11 initialization until needed (Doug Engert)
 
 New in 0.4.12; 2022-07-15; Michał Trojnara
 * Fixed using an explicitly provided PIN regardless of the secure login
