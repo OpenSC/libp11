@@ -1,4 +1,4 @@
-EXTRA_DIST = engines.cnf.in common.sh
+EXTRA_DIST = engines.cnf.in common.sh openssl-settings.sh
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
