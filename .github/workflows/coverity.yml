@@ -15,7 +15,7 @@ jobs:
     - name: Get ready for scanning
       if: env.token
       run: |
-        sudo apt-get install -y libssl-dev opensc softhsm
+        sudo apt-get install -y libssl-dev opensc softhsm2
         autoreconf --verbose --install --force
         ./configure
     - uses: vapier/coverity-scan-action@v1
