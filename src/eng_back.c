@@ -80,11 +80,20 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 	va_start(args, format);
 	if (ctx->vlog) {
 		/* Log messages through a custom logging function */
-		char *new_format;
+		va_list args_copy;
+		char *new_format = NULL;
+		int len = strlen("libp11: ") + strlen(format) + 1;
 
-		if (asprintf(&new_format, "libp11: %s", format) < 0)
+		new_format = (char *)OPENSSL_malloc((size_t)len);
+		if (new_format == NULL) {
+			va_end(args);
 			return;
-		ctx->vlog(level, (const char *)new_format, args);
+		}
+		va_copy(args_copy, args);
+		BIO_snprintf(new_format, (size_t)len, "libp11: %s", format);
+		ctx->vlog(level, (const char *)new_format, args_copy);
+		va_end(args_copy);
+		OPENSSL_free(new_format);
 	} else if (level <= ctx->verbose) {
 		vfprintf(stderr, format, args);
 	}
