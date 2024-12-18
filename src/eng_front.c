@@ -80,6 +80,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"RE_ENUMERATE",
 		"re enumerate slots",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_VLOG_A,
+		"VLOG_A",
+		"Set the logging callback",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 
@@ -192,10 +196,10 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 				(ver >= 0x30100040L && ver <= 0x30100050L) ||
 				(ver >= 0x30200000L && ver <= 0x30200010L)) {
 			if (ENGINE_set_default_string(engine, "PKEY_CRYPTO")) {
-				fprintf(stderr, "Workaround for %s enabled\n",
+				ctx_log(ctx, 1, "Workaround for %s enabled\n",
 					OpenSSL_version(OPENSSL_VERSION));
 			} else {
-				fprintf(stderr, "Failed to set PKEY_CRYPTO default engine\n");
+				ctx_log(ctx, 1, "Failed to set PKEY_CRYPTO default engine\n");
 			}
 		}
 	}

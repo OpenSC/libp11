@@ -50,6 +50,7 @@ struct st_engine_ctx {
 	size_t pin_length;
 	int forced_pin;
 	int verbose;
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
 	char *module;
 	char *init_args;
 	UI_METHOD *ui_method;
@@ -71,55 +72,66 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin);
 
 void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 {
-	va_list ap;
+	va_list args;
 
-	if (level > ctx->verbose)
+	if (!ctx)
+		return;
+
+	va_start(args, format);
+	if (ctx->vlog) {
+		/* Log messages through a custom logging function */
+		char *new_format;
+
+		if (asprintf(&new_format, "libp11: %s", format) < 0)
 			return;
-	va_start(ap, format);
-	vfprintf(stderr, format, ap);
-	va_end(ap);
+		ctx->vlog(level, (const char *)new_format, args);
+	} else if (level <= ctx->verbose) {
+		vfprintf(stderr, format, args);
+	}
+	va_end(args);
 }
 
-static void dump_hex(ENGINE_CTX *ctx, int level,
-		const unsigned char *val, const size_t len)
+static char *dump_hex(unsigned char *val, const size_t len)
 {
-	size_t n;
+	char *hexbuf = NULL;
+	int i, j = 0, size = 2 * len + 1;
 
-	for (n = 0; n < len; n++)
-		ctx_log(ctx, level, "%02x", val[n]);
+	hexbuf = OPENSSL_malloc((size_t)size);
+	for (i = 0; i < len; i++) {
+#ifdef WIN32
+		j += sprintf_s(hexbuf + j, size - j, "%02X", val[i]);
+#else
+		j += sprintf(hexbuf + j, "%02X", val[i]);
+#endif /* WIN32 */
+	}
+	return hexbuf;
 }
 
-static void dump_expiry(ENGINE_CTX *ctx, int level,
-		const PKCS11_CERT *cert)
+static char *dump_expiry(const PKCS11_CERT *cert)
 {
 	BIO *bio;
 	const ASN1_TIME *exp;
-
-	char *data = NULL;
+	char *buf = NULL, *result;
 	int len = 0;
 
-	if (level > ctx->verbose) {
-		return;
+	if (!cert || !cert->x509 || !(exp = X509_get0_notAfter(cert->x509)))
+		return strdup("No expiry information available");
+
+	if ((bio = BIO_new(BIO_s_mem())) == NULL)
+		return NULL; /* Memory allocation failure */
+
+	/* Print the expiry date into the BIO */
+	if (ASN1_TIME_print(bio, exp) <= 0) {
+		BIO_free(bio);
+		return NULL; /* Failed to format expiry date */
 	}
-
-	if (!cert || !cert->x509 || !(exp = X509_get0_notAfter(cert->x509))) {
-		ctx_log(ctx, level, "none");
-		return;
-	}
-
-	if ((bio = BIO_new(BIO_s_mem())) == NULL) {
-		return;
-	}
-
-	ASN1_TIME_print(bio, exp);
-
-	len = BIO_get_mem_data(bio, &data);
-
-	ctx_log(ctx, level, "%.*s", len, data);
-
+	/* Retrieve the data from the BIO */
+	len = BIO_get_mem_data(bio, &buf);
+	
+	result = OPENSSL_strndup((const char *)buf, (size_t)len);
 	BIO_free(bio);
 
-	return;
+	return result;
 }
 
 /******************************************************************************/
@@ -393,7 +405,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
 	PKCS11_TOKEN *match_tok = NULL;
 	unsigned int n, m;
-	char *obj_id = NULL;
+	char *obj_id = NULL, *hexbuf = NULL;
 	size_t obj_id_len = 0;
 	char *obj_label = NULL;
 	char tmp_pin[MAX_PIN_LENGTH+1];
@@ -427,8 +439,17 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					goto cleanup;
 				}
 			}
-			ctx_log(ctx, 1, "Looking in slots for %s %s login: ",
-				object_typestr, login ? "with" : "without");
+			if (obj_id_len != 0) {
+				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
+			}
+			ctx_log(ctx, 1, "Looking in slots for %s %s login:%s%s%s%s\n",
+				object_typestr,
+				login ? "with" : "without",
+				hexbuf ? " id=" : "",
+				hexbuf ? hexbuf : "",
+				obj_label ? " label=" : "",
+				obj_label ? obj_label : "");
+			OPENSSL_free(hexbuf);
 		} else {
 			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
 				obj_id, &obj_id_len, &obj_label);
@@ -442,18 +463,18 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto cleanup;
 			}
-			ctx_log(ctx, 1, "Looking in slot %d for %s %s login: ",
-				slot_nr, object_typestr, login ? "with" : "without");
+			if (obj_id_len != 0) {
+				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
+			}
+			ctx_log(ctx, 1, "Looking in slot %d for %s %s login:%s%s%s%s\n",
+				slot_nr, object_typestr,
+				login ? "with" : "without",
+				hexbuf ? " id=" : "",
+				hexbuf ? hexbuf : "",
+				obj_label ? " label=" : "",
+				obj_label ? obj_label : "");
+			OPENSSL_free(hexbuf);
 		}
-		if (obj_id_len != 0) {
-			ctx_log(ctx, 1, "id=");
-			dump_hex(ctx, 1, (unsigned char *)obj_id, obj_id_len);
-		}
-		if (obj_id_len != 0 && obj_label)
-			ctx_log(ctx, 1, " ");
-		if (obj_label)
-			ctx_log(ctx, 1, "label=%s", obj_label);
-		ctx_log(ctx, 1, "\n");
 	}
 
 	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
@@ -498,15 +519,10 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
-		ctx_log(ctx, 1, "- [%lu] %-25.25s  %-36s",
+		ctx_log(ctx, 1, "- [%lu] %-25.25s  %-36s  (%s)\n",
 			PKCS11_get_slotid_from_slot(slot),
-			slot->description, flags);
-		if (slot->token) {
-			ctx_log(ctx, 1, "  (%s)",
-				slot->token->label[0] ?
-				slot->token->label : "no label");
-		}
-		ctx_log(ctx, 1, "\n");
+			slot->description, flags,
+			slot->token->label[0] ? slot->token->label : "no label");
 
 		/* Ignore slots without tokens. Thales HSM (and potentially
 		 * other modules) allow objects on uninitialized tokens. */
@@ -766,6 +782,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	PKCS11_CERT cert_template = {0};
 	unsigned int m, cert_count;
 	const char *which;
+	char *hexbuf, *expiry;
 
 	errno = 0;
 	cert_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
@@ -796,11 +813,17 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
 
-			ctx_log(ctx, 1, "  %2u    id=", m + 1);
-			dump_hex(ctx, 1, k->id, k->id_len);
-			ctx_log(ctx, 1, " label=%s expiry=", k->label ? k->label : "(null)");
-			dump_expiry(ctx, 1, k);
-			ctx_log(ctx, 1, "\n");
+			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
+			expiry = dump_expiry(k);
+			ctx_log(ctx, 1, "  %2u    %s%s%s%s%s%s\n", m + 1,
+				hexbuf ? " id=" : "",
+				hexbuf ? hexbuf : "",
+				k->label ? " label=" : "",
+				k->label ? k->label : "",
+				expiry ? " expiry=" : "",
+				expiry ? expiry : "");
+			OPENSSL_free(hexbuf);
+			OPENSSL_free(expiry);
 
 			if (obj_label && obj_id_len != 0) {
 				if (k->label && strcmp(k->label, obj_label) == 0 &&
@@ -824,11 +847,17 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
 
-			ctx_log(ctx, 1, "  %2u    id=", m + 1);
-			dump_hex(ctx, 1, k->id, k->id_len);
-			ctx_log(ctx, 1, " label=%s expiry=", k->label ? k->label : "(null)");
-			dump_expiry(ctx, 1, k);
-			ctx_log(ctx, 1, "\n");
+			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
+			expiry = dump_expiry(k);
+			ctx_log(ctx, 1, "  %2u    %s%s%s%s%s%s\n", m + 1,
+				hexbuf ? " id=" : "",
+				hexbuf ? hexbuf : "",
+				k->label ? " label=" : "",
+				k->label ? k->label : "",
+				expiry ? " expiry=" : "",
+				expiry ? expiry : "");
+			OPENSSL_free(hexbuf);
+			OPENSSL_free(expiry);
 
 			if (!selected_cert && k->id && *k->id) {
 				selected_cert = k; /* Use the first certificate with nonempty id */
@@ -841,11 +870,17 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	}
 
 	if (selected_cert) {
-		ctx_log(ctx, 1, "Returning %s certificate: id=", which);
-		dump_hex(ctx, 1, selected_cert->id, selected_cert->id_len);
-		ctx_log(ctx, 1, " label=%s expiry=", selected_cert->label ? selected_cert->label : "(null)");
-		dump_expiry(ctx, 1, selected_cert);
-		ctx_log(ctx, 1, "\n");
+		hexbuf = dump_hex((unsigned char *)selected_cert->id, selected_cert->id_len);
+		expiry = dump_expiry(selected_cert);
+		ctx_log(ctx, 1, "Returning %s certificate:%s%s%s%s%s%s\n", which,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			selected_cert->label ? " label=" : "",
+			selected_cert->label ? selected_cert->label : "",
+			expiry ? " expiry=" : "",
+			expiry ? expiry : "");
+		OPENSSL_free(hexbuf);
+		OPENSSL_free(expiry);
 	} else {
 		ctx_log(ctx, 1, "No matching certificate returned.\n");
 	}
@@ -895,6 +930,7 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	PKCS11_KEY *selected_key = NULL;
 	unsigned int m;
 	const char *which;
+	char *hexbuf;
 
 	if (key_count == 0)
 		return NULL;
@@ -907,11 +943,15 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 		for (m = 0; m < key_count; m++) {
 			PKCS11_KEY *k = keys + m;
 
-			ctx_log(ctx, 1, "  %2u %c%c id=", m + 1,
-					k->isPrivate ? 'P' : ' ',
-					k->needLogin ? 'L' : ' ');
-			dump_hex(ctx, 1, k->id, k->id_len);
-			ctx_log(ctx, 1, " label=%s\n", k->label ? k->label : "(null)");
+			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
+			ctx_log(ctx, 1, "  %2u %c%c%s%s%s%s\n", m + 1,
+				k->isPrivate ? 'P' : ' ',
+				k->needLogin ? 'L' : ' ',
+				hexbuf ? " id=" : "",
+				hexbuf ? hexbuf : "",
+				k->label ? " label=" : "",
+				k->label ? k->label : "");
+			OPENSSL_free(hexbuf);
 
 			if (obj_label && obj_id_len != 0) {
 				if (k->label && strcmp(k->label, obj_label) == 0 &&
@@ -936,9 +976,13 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	}
 
 	if (selected_key) {
-		ctx_log(ctx, 1, "Returning %s %s key: id=", which, key_type);
-		dump_hex(ctx, 1, selected_key->id, selected_key->id_len);
-		ctx_log(ctx, 1, " label=%s\n", selected_key->label ? selected_key->label : "(null)");
+		hexbuf = dump_hex((unsigned char *)selected_key->id, selected_key->id_len);
+		ctx_log(ctx, 1, "Returning %s %s key:%s%s%s%s\n", which, key_type,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			selected_key->label ? " label=" : "",
+			selected_key->label ? selected_key->label : "");
+		OPENSSL_free(hexbuf);
 	} else {
 		ctx_log(ctx, 1, "No matching %s key returned.\n", key_type);
 	}
@@ -1121,6 +1165,16 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 	return 1;
 }
 
+static int ctx_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
+{
+	struct {
+		void (*vlog)(int, const char *, va_list);
+	} *vlog_callback = cb;
+
+	ctx->vlog = vlog_callback->vlog;
+	return 1;
+}
+
 int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -1149,6 +1203,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_force_login(ctx);
 	case CMD_RE_ENUMERATE:
 		return ctx_enumerate_slots(ctx);
+	case CMD_VLOG_A:
+		return ctx_ctrl_set_vlog(ctx, p);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
