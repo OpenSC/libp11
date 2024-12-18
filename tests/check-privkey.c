@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	if (!ENGINE_ctrl_cmd_string(engine, "VERBOSE", NULL, 0)) {
+	if (!ENGINE_ctrl_cmd_string(engine, "DEBUG_LEVEL", "7", 0)) {
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
