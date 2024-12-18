@@ -49,7 +49,7 @@ struct st_engine_ctx {
 	char *pin;
 	size_t pin_length;
 	int forced_pin;
-	int verbose;
+	int debug_level;                             /* level of debug output */
 	void (*vlog)(int, const char *, va_list); /* for the logging callback */
 	char *module;
 	char *init_args;
@@ -94,7 +94,7 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 		ctx->vlog(level, (const char *)new_format, args_copy);
 		va_end(args_copy);
 		OPENSSL_free(new_format);
-	} else if (level <= ctx->verbose) {
+	} else if (level <= ctx->debug_level) {
 		vfprintf(stderr, format, args);
 	}
 	va_end(args);
@@ -288,6 +288,7 @@ ENGINE_CTX *ctx_new()
 		ctx->module = NULL;
 #endif
 	}
+	ctx->debug_level = LOG_NOTICE;
 
 	return ctx;
 }
@@ -1131,15 +1132,15 @@ static int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
 	return 1;
 }
 
-static int ctx_ctrl_inc_verbose(ENGINE_CTX *ctx)
+static int ctx_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
 {
-	ctx->verbose++;
+	ctx->debug_level = level;
 	return 1;
 }
 
 static int ctx_ctrl_set_quiet(ENGINE_CTX *ctx)
 {
-	ctx->verbose = -1;
+	ctx->debug_level = 0;
 	return 1;
 }
 
@@ -1198,8 +1199,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_set_module(ctx, (const char *)p);
 	case CMD_PIN:
 		return ctx_ctrl_set_pin(ctx, (const char *)p);
-	case CMD_VERBOSE:
-		return ctx_ctrl_inc_verbose(ctx);
+	case CMD_DEBUG_LEVEL:
+		return ctx_ctrl_set_debug_level(ctx, (int)i);
 	case CMD_QUIET:
 		return ctx_ctrl_set_quiet(ctx);
 	case CMD_LOAD_CERT_CTRL:
