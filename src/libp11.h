@@ -106,6 +106,11 @@ typedef struct PKCS11_ctx_st {
 	void *_private;
 } PKCS11_CTX;
 
+/** PKCS11 ASCII logging callback */
+typedef struct {
+	void (*vlog)(int, const char *, va_list);
+} PKCS11_VLOG_A_CB;
+
 /**
  * Create a new libp11 context
  *
@@ -486,6 +491,9 @@ extern int PKCS11_private_encrypt(
 extern int PKCS11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_KEY *key, int padding);
+
+/* Set the logging callback */
+extern void PKCS11_vlog_a(PKCS11_CTX *pctx, PKCS11_VLOG_A_CB *cb);
 
 /* Function codes */
 # define CKR_F_PKCS11_CHANGE_PIN                          100

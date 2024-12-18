@@ -1176,11 +1176,15 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 
 static int ctx_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 {
-	struct {
-		void (*vlog)(int, const char *, va_list);
-	} *vlog_callback = cb;
+	PKCS11_VLOG_A_CB *vlog_callback = cb;
 
-	ctx->vlog = vlog_callback->vlog;
+	ctx->vlog = vlog_callback->vlog; /* engine logs */
+
+	if (!ctx->pkcs11_ctx)
+		ctx_init_libp11(ctx);
+	if (!ctx->pkcs11_ctx)
+		return 0;
+	PKCS11_vlog_a(ctx->pkcs11_ctx, vlog_callback); /* libp11 logs */
 	return 1;
 }
 

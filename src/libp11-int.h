@@ -53,6 +53,7 @@ struct pkcs11_ctx_private {
 	void *ui_user_data;
 	unsigned int forkid;
 	pthread_mutex_t fork_lock;
+	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
 };
 #define PRIVCTX(_ctx)		((PKCS11_CTX_private *) ((_ctx)->_private))
 
