@@ -67,20 +67,19 @@ void pkcs11_log(PKCS11_CTX *pctx, int level, const char *format, ...)
 	va_start(args, format);
 	if (pctx && PRIVCTX(pctx)->vlog_a) {
 		/* Log messages through a custom logging function */
-		va_list args_copy;
-		char *new_format = NULL;
-		int len = strlen("libp11: ") + strlen(format) + 1;
+		const char *prefix = "libp11: ";
+		char *vlog_format = OPENSSL_malloc(strlen(prefix) + strlen(format) + 1);
 
-		new_format = (char *)OPENSSL_malloc((size_t)len);
-		if (new_format == NULL) {
+		if (!vlog_format) {
 			va_end(args);
 			return;
 		}
-		va_copy(args_copy, args);
-		BIO_snprintf(new_format, (size_t)len, "libp11: %s", format);
-		PRIVCTX(pctx)->vlog_a(level, (const char *)new_format, args_copy);
-		va_end(args_copy);
-		OPENSSL_free(new_format);
+		/* Copy and concatenate strings */
+		strcpy(vlog_format, prefix);
+		strcat(vlog_format, format);
+
+		PRIVCTX(pctx)->vlog_a(level, (const char *)vlog_format, args);
+		OPENSSL_free(vlog_format);
 	} else if (level <= 3) { /* LOG_ERR */
 		vfprintf(stderr, format, args);
 	} else if (level >= 7) { /* LOG_DEBUG */
