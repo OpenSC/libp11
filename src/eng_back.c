@@ -74,13 +74,12 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 {
 	va_list args;
 
-	if (!ctx)
-		return;
-
 	va_start(args, format);
-	if (ctx->vlog) {
+	if (!ctx) {
+		vfprintf(stderr, format, args);
+	} else if (ctx->vlog) {
 		/* Log messages through a custom logging function */
-		const char *prefix = "libp11: ";
+		const char *prefix = "pkcs11: ";
 		char *vlog_format = OPENSSL_malloc(strlen(prefix) + strlen(format) + 1);
 
 		if (!vlog_format) {
@@ -100,6 +99,7 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 			vprintf(format, args);
 		}
 	}
+
 	va_end(args);
 }
 

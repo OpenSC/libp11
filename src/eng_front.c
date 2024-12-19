@@ -289,11 +289,11 @@ static void exit_callback(void)
 static int bind_fn(ENGINE *e, const char *id)
 {
 	if (id && (strcmp(id, PKCS11_ENGINE_ID) != 0)) {
-		fprintf(stderr, "bad engine id\n");
+		ctx_log(NULL, LOG_ERR, "bad engine id\n");
 		return 0;
 	}
 	if (!bind_helper(e)) {
-		fprintf(stderr, "bind failed\n");
+		ctx_log(NULL, LOG_ERR, "bind failed\n");
 		return 0;
 	}
 	atexit(exit_callback);

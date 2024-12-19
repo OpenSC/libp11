@@ -60,12 +60,12 @@ int pkcs11_atomic_add(int *value, int amount, pthread_mutex_t *lock)
 #endif
 }
 
-void pkcs11_log(PKCS11_CTX *pctx, int level, const char *format, ...)
+void pkcs11_log(PKCS11_CTX_private *pctx, int level, const char *format, ...)
 {
 	va_list args;
 
 	va_start(args, format);
-	if (pctx && PRIVCTX(pctx)->vlog_a) {
+	if (pctx && pctx->vlog_a) {
 		/* Log messages through a custom logging function */
 		const char *prefix = "libp11: ";
 		char *vlog_format = OPENSSL_malloc(strlen(prefix) + strlen(format) + 1);
@@ -78,9 +78,9 @@ void pkcs11_log(PKCS11_CTX *pctx, int level, const char *format, ...)
 		strcpy(vlog_format, prefix);
 		strcat(vlog_format, format);
 
-		PRIVCTX(pctx)->vlog_a(level, (const char *)vlog_format, args);
+		pctx->vlog_a(level, (const char *)vlog_format, args);
 		OPENSSL_free(vlog_format);
-	} else if (level <= 3) { /* LOG_ERR */
+	} else if (level <= 4) { /* LOG_WARNING */
 		vfprintf(stderr, format, args);
 	} else if (level >= 7) { /* LOG_DEBUG */
 #ifdef DEBUG
