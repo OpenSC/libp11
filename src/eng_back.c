@@ -1188,7 +1188,11 @@ static int ctx_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 		PKCS11_VLOG_A_CB vlog;
 	} *vlog_callback = cb;
 
-	ctx->vlog = vlog_callback->vlog; /* engine logs */
+	ctx->vlog = vlog_callback->vlog;
+
+	if (ctx->pkcs11_ctx) /* already initialized */
+		PKCS11_vlog_a(ctx->pkcs11_ctx, ctx->vlog); /* update */
+
 	return 1;
 }
 
