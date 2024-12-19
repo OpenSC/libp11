@@ -196,10 +196,10 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 				(ver >= 0x30100040L && ver <= 0x30100050L) ||
 				(ver >= 0x30200000L && ver <= 0x30200010L)) {
 			if (ENGINE_set_default_string(engine, "PKEY_CRYPTO")) {
-				ctx_log(ctx, 1, "Workaround for %s enabled\n",
+				ctx_log(ctx, LOG_NOTICE, "Workaround for %s enabled\n",
 					OpenSSL_version(OPENSSL_VERSION));
 			} else {
-				ctx_log(ctx, 1, "Failed to set PKEY_CRYPTO default engine\n");
+				ctx_log(ctx, LOG_WARNING, "Failed to set PKEY_CRYPTO default engine\n");
 			}
 		}
 	}
