@@ -333,6 +333,7 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 	ctx_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
 
 	pkcs11_ctx = PKCS11_CTX_new();
+	PKCS11_vlog_a(pkcs11_ctx, ctx->vlog);
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
@@ -1183,15 +1184,11 @@ static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
 
 static int ctx_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 {
-	PKCS11_VLOG_A_CB *vlog_callback = cb;
+	struct {
+		PKCS11_VLOG_A_CB vlog;
+	} *vlog_callback = cb;
 
 	ctx->vlog = vlog_callback->vlog; /* engine logs */
-
-	if (!ctx->pkcs11_ctx)
-		ctx_init_libp11(ctx);
-	if (!ctx->pkcs11_ctx)
-		return 0;
-	PKCS11_vlog_a(ctx->pkcs11_ctx, vlog_callback); /* libp11 logs */
 	return 1;
 }
 
