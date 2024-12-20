@@ -48,10 +48,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"PIN",
 		"Specifies the pin code",
 		ENGINE_CMD_FLAG_STRING},
-	{CMD_VERBOSE,
-		"VERBOSE",
-		"Print additional details",
-		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_DEBUG_LEVEL,
+		"DEBUG_LEVEL",
+		"Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug",
+		ENGINE_CMD_FLAG_NUMERIC},
 	{CMD_QUIET,
 		"QUIET",
 		"Remove additional details",
@@ -80,6 +80,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"RE_ENUMERATE",
 		"re enumerate slots",
 		ENGINE_CMD_FLAG_NO_INPUT},
+	{CMD_VLOG_A,
+		"VLOG_A",
+		"Set the logging callback",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 
@@ -192,10 +196,10 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 				(ver >= 0x30100040L && ver <= 0x30100050L) ||
 				(ver >= 0x30200000L && ver <= 0x30200010L)) {
 			if (ENGINE_set_default_string(engine, "PKEY_CRYPTO")) {
-				fprintf(stderr, "Workaround for %s enabled\n",
+				ctx_log(ctx, LOG_NOTICE, "Workaround for %s enabled\n",
 					OpenSSL_version(OPENSSL_VERSION));
 			} else {
-				fprintf(stderr, "Failed to set PKEY_CRYPTO default engine\n");
+				ctx_log(ctx, LOG_WARNING, "Failed to set PKEY_CRYPTO default engine\n");
 			}
 		}
 	}
@@ -285,11 +289,11 @@ static void exit_callback(void)
 static int bind_fn(ENGINE *e, const char *id)
 {
 	if (id && (strcmp(id, PKCS11_ENGINE_ID) != 0)) {
-		fprintf(stderr, "bad engine id\n");
+		ctx_log(NULL, LOG_ERR, "bad engine id\n");
 		return 0;
 	}
 	if (!bind_helper(e)) {
-		fprintf(stderr, "bind failed\n");
+		ctx_log(NULL, LOG_ERR, "bind failed\n");
 		return 0;
 	}
 	atexit(exit_callback);

@@ -48,7 +48,7 @@
 #define CMD_SO_PATH		ENGINE_CMD_BASE
 #define CMD_MODULE_PATH 	(ENGINE_CMD_BASE+1)
 #define CMD_PIN		(ENGINE_CMD_BASE+2)
-#define CMD_VERBOSE		(ENGINE_CMD_BASE+3)
+#define CMD_DEBUG_LEVEL 	(ENGINE_CMD_BASE+3)
 #define CMD_QUIET		(ENGINE_CMD_BASE+4)
 #define CMD_LOAD_CERT_CTRL	(ENGINE_CMD_BASE+5)
 #define CMD_INIT_ARGS	(ENGINE_CMD_BASE+6)
@@ -56,6 +56,21 @@
 #define CMD_SET_CALLBACK_DATA	(ENGINE_CMD_BASE + 8)
 #define CMD_FORCE_LOGIN	(ENGINE_CMD_BASE+9)
 #define CMD_RE_ENUMERATE	(ENGINE_CMD_BASE+10)
+#define CMD_VLOG_A		(ENGINE_CMD_BASE+11)
+
+#ifdef _WIN32
+#define LOG_EMERG       0
+#define LOG_ALERT       1
+#define LOG_CRIT        2
+#define LOG_ERR         3
+#define LOG_WARNING     4
+#define LOG_NOTICE      5
+#define LOG_INFO        6
+#define LOG_DEBUG       7
+#else
+#include "config.h"
+#include <syslog.h>
+#endif
 
 typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 

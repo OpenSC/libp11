@@ -60,7 +60,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 			else if ('A' <= c && c <= 'F')
 				c = c - 'A' + 10;
 			else {
-				ctx_log(ctx, 0,
+				ctx_log(ctx, LOG_ERR,
 					"hex_to_bin(): invalid char '%c' in hex string\n",
 					c);
 				*outlen = 0;
@@ -71,7 +71,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 		if (*in == ':')
 			in++;
 		if (left == 0) {
-			ctx_log(ctx, 0, "hex_to_bin(): hex string too long\n");
+			ctx_log(ctx, LOG_ERR, "hex_to_bin(): hex string too long\n");
 			*outlen = 0;
 			return 0;
 		}
@@ -98,7 +98,7 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	if (strspn(slot_id, HEXDIGITS) == strlen(slot_id)) {
 		/* ah, easiest case: only hex. */
 		if ((strlen(slot_id) + 1) / 2 > *id_len) {
-			ctx_log(ctx, 0, "ID string too long!\n");
+			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
@@ -110,7 +110,7 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 		i = strspn(slot_id, DIGITS);
 
 		if (slot_id[i] != ':') {
-			ctx_log(ctx, 0, "Could not parse string!\n");
+			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		i++;
@@ -120,12 +120,12 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 			return 1;
 		}
 		if (strspn(slot_id + i, HEXDIGITS) + i != strlen(slot_id)) {
-			ctx_log(ctx, 0, "Could not parse string!\n");
+			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i + 1) / 2 > *id_len) {
-			ctx_log(ctx, 0, "ID string too long!\n");
+			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
@@ -135,12 +135,12 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* third: id_<id>, slot is undefined */
 	if (strncmp(slot_id, "id_", 3) == 0) {
 		if (strspn(slot_id + 3, HEXDIGITS) + 3 != strlen(slot_id)) {
-			ctx_log(ctx, 0, "Could not parse string!\n");
+			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - 3 + 1) / 2 > *id_len) {
-			ctx_log(ctx, 0, "ID string too long!\n");
+			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
@@ -158,13 +158,13 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* last try: it has to be slot_<slot> and then "-id_<cert>" */
 
 	if (strncmp(slot_id, "slot_", 5) != 0) {
-		ctx_log(ctx, 0, "Format not recognized!\n");
+		ctx_log(ctx, LOG_ERR, "Format not recognized!\n");
 		return 0;
 	}
 
 	/* slot is an digital int. */
 	if (sscanf(slot_id + 5, "%d", &n) != 1) {
-		ctx_log(ctx, 0, "Could not decode slot number!\n");
+		ctx_log(ctx, LOG_ERR, "Could not decode slot number!\n");
 		return 0;
 	}
 
@@ -177,7 +177,7 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	}
 
 	if (slot_id[i + 5] != '-') {
-		ctx_log(ctx, 0, "Could not parse string!\n");
+		ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 		return 0;
 	}
 
@@ -186,12 +186,12 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* now followed by "id_" */
 	if (strncmp(slot_id + i, "id_", 3) == 0) {
 		if (strspn(slot_id + i + 3, HEXDIGITS) + 3 + i != strlen(slot_id)) {
-			ctx_log(ctx, 0, "Could not parse string!\n");
+			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i - 3 + 1) / 2 > *id_len) {
-			ctx_log(ctx, 0, "ID string too long!\n");
+			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
@@ -206,7 +206,7 @@ int parse_slot_id_string(ENGINE_CTX *ctx,
 		return *label != NULL;
 	}
 
-	ctx_log(ctx, 0, "Could not parse string!\n");
+	ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
 	return 0;
 }
 
@@ -278,7 +278,7 @@ static int read_from_file(ENGINE_CTX *ctx,
 
 	fp = BIO_new_file(path, "r");
 	if (!fp) {
-		ctx_log(ctx, 0, "Could not open file %s\n", path);
+		ctx_log(ctx, LOG_ERR, "Could not open file %s\n", path);
 		return 0;
 	}
 
@@ -310,7 +310,7 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 		ret = read_from_file(ctx, (const char *)(val + 5), field, field_len);
 	} else if (*val == '|') {
 		ret = 0;
-		ctx_log(ctx, 0, "Unsupported pin-source syntax\n");
+		ctx_log(ctx, LOG_ERR, "Unsupported pin-source syntax\n");
 	/* 'pin-source=/foo/bar' is commonly used */
 	} else {
 		ret = read_from_file(ctx, (const char *)val, field, field_len);
@@ -332,7 +332,7 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (!tok) {
-		ctx_log(ctx, 0, "Could not allocate memory for token info\n");
+		ctx_log(ctx, LOG_ERR, "Could not allocate memory for token info\n");
 		return 0;
 	}
 	memset(tok, 0, sizeof(PKCS11_TOKEN));
@@ -380,7 +380,7 @@ int parse_pkcs11_uri(ENGINE_CTX *ctx,
 					(end - p == 7 && !strncmp(p, "private", 7))) {
 				/* Actually, just ignore it */
 			} else {
-				ctx_log(ctx, 0, "Unknown object type\n");
+				ctx_log(ctx, LOG_ERR, "Unknown object type\n");
 				rv = 0;
 			}
 		} else {

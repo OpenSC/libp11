@@ -60,4 +60,36 @@ int pkcs11_atomic_add(int *value, int amount, pthread_mutex_t *lock)
 #endif
 }
 
+void pkcs11_log(PKCS11_CTX_private *pctx, int level, const char *format, ...)
+{
+	va_list args;
+
+	va_start(args, format);
+	if (pctx && pctx->vlog_a) {
+		/* Log messages through a custom logging function */
+		const char *prefix = "libp11: ";
+		char *vlog_format = OPENSSL_malloc(strlen(prefix) + strlen(format) + 1);
+
+		if (!vlog_format) {
+			va_end(args);
+			return;
+		}
+		/* Copy and concatenate strings */
+		strcpy(vlog_format, prefix);
+		strcat(vlog_format, format);
+
+		pctx->vlog_a(level, (const char *)vlog_format, args);
+		OPENSSL_free(vlog_format);
+	} else if (level <= 4) { /* LOG_WARNING */
+		vfprintf(stderr, format, args);
+	} else if (level >= 7) { /* LOG_DEBUG */
+#ifdef DEBUG
+		vprintf(format, args);
+#endif
+	} else {
+		vprintf(format, args);
+	}
+	va_end(args);
+}
+
 /* vim: set noexpandtab: */

@@ -130,9 +130,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	case CKO_PRIVATE_KEY:
 		if (pkcs11_getattr_val(ctx, session, object, CKA_ALWAYS_AUTHENTICATE,
 				&obj->always_authenticate, sizeof(CK_BBOOL))) {
-#ifdef DEBUG
-			fprintf(stderr, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
-#endif
+			pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_ALWAYS_AUTHENTICATE attribute\n");
 		}
 		break;
 	case CKO_CERTIFICATE:
@@ -512,7 +510,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 #endif
 		break;
 	default:
-		printf("Unsupported key type\n");
+		pkcs11_log(key0->slot->ctx, LOG_DEBUG, "Unsupported key type\n");
 	}
 err:
 	if (key != key0)

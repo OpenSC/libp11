@@ -477,4 +477,9 @@ int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 	return -1;
 }
 
+void PKCS11_set_vlog_a_method(PKCS11_CTX *pctx, PKCS11_VLOG_A_CB cb)
+{
+	PRIVCTX(pctx)->vlog_a = cb;
+}
+
 /* vim: set noexpandtab: */

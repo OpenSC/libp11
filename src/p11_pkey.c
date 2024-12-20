@@ -198,7 +198,7 @@ static CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
 }
 
 static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
-		EVP_PKEY_CTX *ctx)
+		EVP_PKEY_CTX *ctx, PKCS11_CTX_private *pctx)
 {
 	const EVP_MD *sig_md, *mgf1_md;
 	EVP_PKEY *evp_pkey;
@@ -216,6 +216,8 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
 		salt_len = EVP_MD_size(sig_md);
 		break;
 	case -2:
+		if (!ctx)
+			return -1;
 		evp_pkey = EVP_PKEY_CTX_get0_pkey(ctx);
 		if (!evp_pkey)
 			return -1;
@@ -225,10 +227,8 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
 		if (salt_len < 0) /* integer underflow detected */
 			return -1;
 	}
-#ifdef DEBUG
-	fprintf(stderr, "salt_len=%d sig_md=%s mdf1_md=%s\n",
+	pkcs11_log(pctx, LOG_DEBUG, "salt_len=%d sig_md=%s mdf1_md=%s\n",
 		salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md));
-#endif
 
 	/* fill the CK_RSA_PKCS_PSS_PARAMS structure */
 	memset(pss, 0, sizeof(CK_RSA_PKCS_PSS_PARAMS));
@@ -241,7 +241,7 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
 }
 
 static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
-		EVP_PKEY_CTX *ctx)
+		EVP_PKEY_CTX *ctx, PKCS11_CTX_private *pctx)
 {
 	const EVP_MD *oaep_md, *mgf1_md;
 
@@ -250,10 +250,9 @@ static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
 		return -1;
 	if (EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, &mgf1_md) <= 0)
 		return -1;
-#ifdef DEBUG
-	fprintf(stderr, "oaep_md=%s mdf1_md=%s\n",
+
+	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s\n",
 		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md));
-#endif
 
 	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
 	memset(oaep, 0, sizeof(CK_RSA_PKCS_OAEP_PARAMS));
@@ -284,14 +283,11 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	CK_MECHANISM mechanism;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_sign() "
-		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
-		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-#endif
 	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
 	 * the size inquiry internally. */
-	 if (!sig)
+	if (!sig)
+		return -1;
+	if (!evp_pkey_ctx)
 		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
@@ -307,8 +303,13 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	slot = key->slot;
 	ctx = slot->ctx;
-	if (!evp_pkey_ctx)
+	if (!ctx)
 		return -1;
+
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_sign() "
+		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
+
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		return -1;
 	if (tbslen != (size_t)EVP_MD_size(sig_md))
@@ -318,21 +319,17 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
 	switch (padding) {
 	case RSA_PKCS1_PSS_PADDING:
-#ifdef DEBUG
-		fprintf(stderr, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
 			__FILE__, __LINE__);
-#endif
-		if (pkcs11_params_pss(&pss_params, evp_pkey_ctx) < 0)
+		if (pkcs11_params_pss(&pss_params, evp_pkey_ctx, ctx) < 0)
 			return -1;
 		mechanism.mechanism = CKM_RSA_PKCS_PSS;
 		mechanism.pParameter = &pss_params;
 		mechanism.ulParameterLen = sizeof pss_params;
 		break;
 	default:
-#ifdef DEBUG
-		fprintf(stderr, "%s:%d unsupported padding: %d\n",
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d unsupported padding: %d\n",
 			__FILE__, __LINE__, padding);
-#endif
 		return -1;
 	} /* end switch(padding) */
 
@@ -341,16 +338,20 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_SignInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+	} else if (key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
-	if (!rv)
+	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+		if (rv != CKR_OK) {
+			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
+				__FILE__, __LINE__, rv);
+		}
+	}
 	pkcs11_put_session(slot, session);
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
-		__FILE__, __LINE__, rv);
-#endif
 
 	if (rv != CKR_OK)
 		return -1;
@@ -385,14 +386,11 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	CK_MECHANISM mechanism;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
 
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d pkcs11_try_pkey_rsa_decrypt() "
-		"out=%p *outlen=%lu in=%p inlen=%lu\n",
-		__FILE__, __LINE__, out, *outlen, in, inlen);
-#endif
 	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
 	 * the size inquiry internally. */
-	 if (!out)
+	if (!out)
+		return -1;
+	if (!evp_pkey_ctx)
 		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
@@ -408,38 +406,35 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	slot = key->slot;
 	ctx = slot->ctx;
-
-	if (!evp_pkey_ctx)
+	if (!ctx)
 		return -1;
+
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_decrypt() "
+		"out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__, out, *outlen, in, inlen);
 
 	memset(&mechanism, 0, sizeof mechanism);
 	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
 	switch (padding) {
 	case RSA_PKCS1_OAEP_PADDING:
-#ifdef DEBUG
-		fprintf(stderr, "%s:%d padding=RSA_PKCS1_OAEP_PADDING\n",
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_OAEP_PADDING\n",
 			__FILE__, __LINE__);
-#endif
-		if (pkcs11_params_oaep(&oaep_params, evp_pkey_ctx) < 0)
+		if (pkcs11_params_oaep(&oaep_params, evp_pkey_ctx, ctx) < 0)
 			return -1;
 		mechanism.mechanism = CKM_RSA_PKCS_OAEP;
 		mechanism.pParameter = &oaep_params;
 		mechanism.ulParameterLen = sizeof oaep_params;
 		break;
 	case RSA_PKCS1_PADDING:
-#ifdef DEBUG
-		fprintf(stderr, "%s:%d padding=RSA_PKCS1_PADDING\n",
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_PADDING\n",
 			__FILE__, __LINE__);
-#endif
 		mechanism.mechanism = CKM_RSA_PKCS;
 		mechanism.pParameter = NULL;
 		mechanism.ulParameterLen = 0;
 		break;
 	default:
-#ifdef DEBUG
-		fprintf(stderr, "%s:%d unsupported padding: %d\n",
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d unsupported padding: %d\n",
 			__FILE__, __LINE__, padding);
-#endif
 		return -1;
 	} /* end switch(padding) */
 
@@ -448,16 +443,20 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	rv = CRYPTOKI_call(ctx,
 		C_DecryptInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+	} else if (key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
-	if (!rv)
+	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
 			C_Decrypt(session, (CK_BYTE_PTR)in, inlen, out, &size));
+		if (rv != CKR_OK) {
+			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
+				__FILE__, __LINE__, rv);
+		}
+	}
 	pkcs11_put_session(slot, session);
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d C_DecryptInit or C_Decrypt rv=%d\n",
-		__FILE__, __LINE__, rv);
-#endif
 
 	if (rv != CKR_OK)
 		return -1;
@@ -519,14 +518,10 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ECDSA_SIG *ossl_sig;
 	CK_MECHANISM mechanism;
 
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d pkcs11_try_pkey_ec_sign() "
-		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
-		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-#endif
-
 	ossl_sig = ECDSA_SIG_new();
 	if (!ossl_sig)
+		goto error;
+	if (!evp_pkey_ctx)
 		goto error;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
@@ -552,9 +547,12 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	slot = key->slot;
 	ctx = slot->ctx;
-
-	if (!evp_pkey_ctx)
+	if (!ctx)
 		goto error;
+
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_ec_sign() "
+		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
 
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		goto error;
@@ -570,17 +568,20 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 	rv = CRYPTOKI_call(ctx,
 		C_SignInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_SignInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+	} else if (key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
-	if (!rv)
+	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
 			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+		if (rv != CKR_OK) {
+			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
+				__FILE__, __LINE__, rv);
+		}
+	}
 	pkcs11_put_session(slot, session);
-
-#ifdef DEBUG
-	fprintf(stderr, "%s:%d C_SignInit or C_Sign rv=%d\n",
-		__FILE__, __LINE__, rv);
-#endif
 
 	if (rv == CKR_OK) {
 		BIGNUM *r = BN_bin2bn(sig, size/2, NULL);
