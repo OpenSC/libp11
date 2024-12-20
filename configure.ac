@@ -149,6 +149,13 @@ AC_ARG_WITH(
 	]
 )
 
+AC_ARG_ENABLE(
+	[static-engine],
+	[AS_HELP_STRING([--enable-static-engine], [enable static engine (libpkcs11.a) build @<:@disabled@:>@])],
+	,
+	[enable_static_engine="no"]
+)
+
 AC_ARG_WITH(
 	[pkcs11-module],
 	[AS_HELP_STRING([--with-pkcs11-module], [default PKCS11 module])],
@@ -226,6 +233,7 @@ AC_SUBST([SHARED_EXT], $(eval echo "${shrext_cmds}"))
 AM_CONDITIONAL([WIN32], [test "${WIN32}" = "yes"])
 AM_CONDITIONAL([CYGWIN], [test "${CYGWIN}" = "yes"])
 AM_CONDITIONAL([ENABLE_API_DOC], [test "${enable_api_doc}" = "yes"])
+AM_CONDITIONAL([ENABLE_STATIC_ENGINE], [test "${enable_static_engine}" = "yes"])
 
 if test "${enable_pedantic}" = "yes"; then
 	enable_strict="yes";
@@ -283,6 +291,7 @@ libp11 directory:        $(eval eval eval echo "${libdir}")
 Engine directory:        ${enginesexecdir}
 Default PKCS11 module:   ${pkcs11_module}
 API doc support:         ${enable_api_doc}
+Static PKCS#11 engine    ${enable_static_engine}
 
 Host:                    ${host}
 Compiler:                ${CC}
