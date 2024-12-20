@@ -159,13 +159,14 @@ The supported engine controls are the following.
 * **SO_PATH**: Specifies the path to the 'pkcs11-engine' shared library 
 * **MODULE_PATH**: Specifies the path to the pkcs11 module shared library 
 * **PIN**: Specifies the pin code 
-* **VERBOSE**: Print additional details 
+* **DEBUG_LEVEL**: Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug
 * **QUIET**: Do not print additional details 
 * **LOAD_CERT_CTRL**: Load a certificate from token
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
 * **FORCE_LOGIN**: Force login to the PKCS#11 module
 * **RE_ENUMERATE**: re-enumerate the slots/tokens, required when adding/removing tokens/slots
+* **VLOG_A**: Set the logging callback
 
 An example code snippet setting specific module is shown below.
 
