@@ -6,7 +6,11 @@ EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
 noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h
 include_HEADERS= libp11.h p11_err.h
+if ENABLE_STATIC_ENGINE
 lib_LTLIBRARIES = libp11.la libpkcs11.la
+else
+lib_LTLIBRARIES = libp11.la
+endif
 enginesexec_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
@@ -49,12 +53,13 @@ pkcs11_la_LIBADD = $(libp11_la_OBJECTS) $(OPENSSL_LIBS)
 pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT) \
 	-avoid-version -export-symbols "$(srcdir)/pkcs11.exports"
 
+if ENABLE_STATIC_ENGINE
 # Create a static version of the engine as well to allow applications
 # to statically link into it.
-
 libpkcs11_la_SOURCES = $(pkcs11_la_SOURCES)
 libpkcs11_la_CFLAGS = $(pkcs11_la_CFLAGS)
 libpkcs11_la_LIBADD = $(pkcs11_la_LIBADD)
+endif
 
 # OpenSSL older than 1.1.0 expected libpkcs11.so instead of pkcs11.so
 check-local: $(LTLIBRARIES)
