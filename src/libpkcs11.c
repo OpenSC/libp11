@@ -69,7 +69,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 
 	if (!mod->handle) {
 #ifndef WIN32
-		fprintf(stderr, "%s\n", dlerror());
+		pkcs11_log(NULL, LOG_ERR, "%s\n", dlerror());
 #endif
 		goto failed;
 	}
@@ -89,7 +89,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 
 	if (!c_get_function_list) {
 #ifndef WIN32
-		fprintf(stderr, "%s\n", dlerror());
+		pkcs11_log(NULL, LOG_ERR, "%s\n", dlerror());
 #endif
 		goto failed;
 	}
