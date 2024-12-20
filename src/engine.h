@@ -58,6 +58,7 @@
 #define CMD_RE_ENUMERATE	(ENGINE_CMD_BASE+10)
 #define CMD_VLOG_A		(ENGINE_CMD_BASE+11)
 
+#ifdef _WIN32
 #define LOG_EMERG       0
 #define LOG_ALERT       1
 #define LOG_CRIT        2
@@ -66,6 +67,10 @@
 #define LOG_NOTICE      5
 #define LOG_INFO        6
 #define LOG_DEBUG       7
+#else
+#include "config.h"
+#include <syslog.h>
+#endif
 
 typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
 
