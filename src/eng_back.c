@@ -1145,12 +1145,6 @@ static int ctx_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
 	return 1;
 }
 
-static int ctx_ctrl_set_quiet(ENGINE_CTX *ctx)
-{
-	ctx->debug_level = 0;
-	return 1;
-}
-
 static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 {
 	OPENSSL_free(ctx->init_args);
@@ -1211,7 +1205,7 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case CMD_VERBOSE:
 		return ctx_ctrl_set_debug_level(ctx, 7);
 	case CMD_QUIET:
-		return ctx_ctrl_set_quiet(ctx);
+		return ctx_ctrl_set_debug_level(ctx, 0);
 	case CMD_LOAD_CERT_CTRL:
 		return ctx_ctrl_load_cert(ctx, p);
 	case CMD_INIT_ARGS:
