@@ -140,7 +140,7 @@ static char *dump_expiry(const PKCS11_CERT *cert)
 	}
 	/* Retrieve the data from the BIO */
 	len = BIO_get_mem_data(bio, &buf);
-	
+
 	result = OPENSSL_strndup((const char *)buf, (size_t)len);
 	BIO_free(bio);
 
@@ -352,7 +352,7 @@ static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
 static int ctx_init_libp11(ENGINE_CTX *ctx)
 {
 	int rv;
-	
+
 	pthread_mutex_lock(&ctx->lock);
 	rv = ctx_init_libp11_unlocked(ctx);
 	pthread_mutex_unlock(&ctx->lock);
@@ -362,7 +362,7 @@ static int ctx_init_libp11(ENGINE_CTX *ctx)
 static int ctx_enumerate_slots(ENGINE_CTX *ctx)
 {
 	int rv;
-	
+
 	if (!ctx->pkcs11_ctx)
 		ctx_init_libp11(ctx);
 	if (!ctx->pkcs11_ctx)
