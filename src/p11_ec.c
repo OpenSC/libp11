@@ -601,10 +601,9 @@ static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
 		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
 		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
 		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
-		{CKA_SENSITIVE, &_false, sizeof(_false) },
-		{CKA_EXTRACTABLE, &_true, sizeof(_true) },
-		{CKA_ENCRYPT, &_true, sizeof(_true)},
-		{CKA_DECRYPT, &_true, sizeof(_true)}
+		{CKA_SENSITIVE, &_false, sizeof(_false)},
+		{CKA_EXTRACTABLE, &_true, sizeof(_true)},
+		{CKA_DERIVE, &_true, sizeof(_true)},
 	};
 
 	memset(&mechanism, 0, sizeof(mechanism));
