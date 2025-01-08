@@ -1200,8 +1200,6 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_ctrl_set_module(ctx, (const char *)p);
 	case CMD_PIN:
 		return ctx_ctrl_set_pin(ctx, (const char *)p);
-	case CMD_DEBUG_LEVEL:
-		return ctx_ctrl_set_debug_level(ctx, (int)i);
 	case CMD_VERBOSE:
 		return ctx_ctrl_set_debug_level(ctx, 7);
 	case CMD_QUIET:
@@ -1222,6 +1220,8 @@ int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ctx_enumerate_slots(ctx);
 	case CMD_VLOG_A:
 		return ctx_ctrl_set_vlog(ctx, p);
+	case CMD_DEBUG_LEVEL:
+		return ctx_ctrl_set_debug_level(ctx, (int)i);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;

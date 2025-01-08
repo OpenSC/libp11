@@ -48,10 +48,6 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"PIN",
 		"Specifies the pin code",
 		ENGINE_CMD_FLAG_STRING},
-	{CMD_DEBUG_LEVEL,
-		"DEBUG_LEVEL",
-		"Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug",
-		ENGINE_CMD_FLAG_NUMERIC},
 	{CMD_VERBOSE,
 		"VERBOSE",
 		"Print additional details",
@@ -88,6 +84,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"VLOG_A",
 		"Set the logging callback",
 		ENGINE_CMD_FLAG_INTERNAL},
+	 {CMD_DEBUG_LEVEL,
+		"DEBUG_LEVEL",
+		"Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug",
+		ENGINE_CMD_FLAG_NUMERIC},
 	{0, NULL, NULL, 0}
 };
 
