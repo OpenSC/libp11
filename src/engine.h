@@ -45,6 +45,9 @@
 #include <openssl/engine.h>
 #include <openssl/ui.h>
 
+/* The maximum length of an internally-allocated PIN */
+#define MAX_PIN_LENGTH   256
+
 #define CMD_SO_PATH             ENGINE_CMD_BASE
 #define CMD_MODULE_PATH         (ENGINE_CMD_BASE + 1)
 #define CMD_PIN                 (ENGINE_CMD_BASE + 2)
@@ -93,32 +96,41 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD *ui_method, void *callback_data);
 
+int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin);
+
 void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 #ifdef __GNUC__
 	__attribute__((format(printf, 3, 4)))
 #endif
 	;
 
-/* defined in eng_parse.c */
+/* TODO: move back to eng_back.c when references are removed from util_uri.c */
+struct st_engine_ctx {
+	/* Engine configuration */
+	/*
+	 * The PIN used for login. Cache for the ctx_get_pin function.
+	 * The memory for this PIN is always owned internally,
+	 * and may be freed as necessary. Before freeing, the PIN
+	 * must be whitened, to prevent security holes.
+	 */
+	char *pin;
+	size_t pin_length;
+	int forced_pin;
+	int debug_level;                             /* level of debug output */
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
+	char *module;
+	char *init_args;
+	UI_METHOD *ui_method;
+	void *callback_data;
+	int force_login;
+	pthread_mutex_t lock;
 
-int parse_pkcs11_uri(ENGINE_CTX *ctx,
-	const char *uri, PKCS11_TOKEN **p_tok,
-	char *id, size_t *id_len, char *pin, size_t *pin_len,
-	char **label);
+	/* Current operations */
+	PKCS11_CTX *pkcs11_ctx;
+	PKCS11_SLOT *slot_list;
+	unsigned int slot_count;
+};
 
-int parse_slot_id_string(ENGINE_CTX *ctx,
-	const char *slot_id, int *slot,
-	char *id, size_t *id_len, char **label);
-
-/* switch to legacy call if get0 variant is not available */
-#ifndef HAVE_X509_GET0_NOTBEFORE
-#	define X509_get0_notBefore X509_get_notBefore
-#endif
-
-#ifndef HAVE_X509_GET0_NOTAFTER
-#	define X509_get0_notAfter X509_get_notAfter
-#endif
-
-#endif
+#endif /* _ENGINE_PKCS11_H */
 
 /* vim: set noexpandtab: */

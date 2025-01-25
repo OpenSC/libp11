@@ -9,7 +9,7 @@ LIBP11_OBJECTS = libpkcs11.obj p11_attr.obj p11_cert.obj \
 LIBP11_LIB = libp11.lib
 LIBP11_TARGET = libp11.dll
 
-PKCS11_OBJECTS = eng_front.obj eng_back.obj eng_parse.obj eng_err.obj
+PKCS11_OBJECTS = eng_front.obj eng_back.obj eng_err.obj util_uri.obj
 PKCS11_TARGET = pkcs11.dll
 
 OBJECTS = $(LIBP11_OBJECTS) $(PKCS11_OBJECTS)

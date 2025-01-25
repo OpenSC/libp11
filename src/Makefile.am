@@ -5,7 +5,7 @@ CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
 noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h
-include_HEADERS= libp11.h p11_err.h
+include_HEADERS= libp11.h p11_err.h util.h
 if ENABLE_STATIC_ENGINE
 lib_LTLIBRARIES = libp11.la libpkcs11.la
 else
@@ -38,8 +38,8 @@ else
 libp11_la_LDFLAGS += -export-symbols "$(srcdir)/libp11.exports"
 endif
 
-pkcs11_la_SOURCES = eng_front.c eng_back.c eng_parse.c eng_err.c \
-	engine.h eng_err.h pkcs11.exports
+pkcs11_la_SOURCES = eng_front.c eng_back.c eng_err.c util_uri.c \
+	engine.h eng_err.h util.h pkcs11.exports
 if WIN32
 pkcs11_la_SOURCES += pkcs11.rc
 else
