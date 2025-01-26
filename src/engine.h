@@ -104,33 +104,6 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 #endif
 	;
 
-/* TODO: move back to eng_back.c when references are removed from util_uri.c */
-struct st_engine_ctx {
-	/* Engine configuration */
-	/*
-	 * The PIN used for login. Cache for the ctx_get_pin function.
-	 * The memory for this PIN is always owned internally,
-	 * and may be freed as necessary. Before freeing, the PIN
-	 * must be whitened, to prevent security holes.
-	 */
-	char *pin;
-	size_t pin_length;
-	int forced_pin;
-	int debug_level;                             /* level of debug output */
-	void (*vlog)(int, const char *, va_list); /* for the logging callback */
-	char *module;
-	char *init_args;
-	UI_METHOD *ui_method;
-	void *callback_data;
-	int force_login;
-	pthread_mutex_t lock;
-
-	/* Current operations */
-	PKCS11_CTX *pkcs11_ctx;
-	PKCS11_SLOT *slot_list;
-	unsigned int slot_count;
-};
-
 #endif /* _ENGINE_PKCS11_H */
 
 /* vim: set noexpandtab: */

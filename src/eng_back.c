@@ -28,7 +28,6 @@
 
 #include "engine.h"
 #include "util.h"
-#include "p11_pthread.h"
 #include <stdio.h>
 #include <string.h>
 
