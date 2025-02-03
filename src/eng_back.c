@@ -28,8 +28,20 @@
 
 #include "engine.h"
 #include "util.h"
+#include "p11_pthread.h"
 #include <stdio.h>
 #include <string.h>
+
+struct engine_ctx_st {
+	/* Engine configuration */
+	int debug_level;                             /* level of debug output */
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
+	char *module;
+	char *init_args;
+	pthread_mutex_t lock;
+
+	UTIL_CTX *util_ctx;
+};
 
 #if defined(_WIN32) || defined(_WIN64)
 #define strncasecmp _strnicmp
@@ -39,7 +51,7 @@
 /* Utility functions                                                          */
 /******************************************************************************/
 
-void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
+void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 {
 	va_list args;
 
@@ -68,31 +80,14 @@ void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 			vprintf(format, args);
 		}
 	}
-
 	va_end(args);
-}
-
-/******************************************************************************/
-/* PIN handling                                                               */
-/******************************************************************************/
-
-/* Free PIN storage in secure way. */
-static void ctx_destroy_pin(ENGINE_CTX *ctx)
-{
-	if (ctx->pin) {
-		OPENSSL_cleanse(ctx->pin, ctx->pin_length);
-		OPENSSL_free(ctx->pin);
-		ctx->pin = NULL;
-		ctx->pin_length = 0;
-		ctx->forced_pin = 0;
-	}
 }
 
 /******************************************************************************/
 /* Initialization and cleanup                                                 */
 /******************************************************************************/
 
-ENGINE_CTX *ctx_new()
+ENGINE_CTX *ENGINE_CTX_new()
 {
 	ENGINE_CTX *ctx;
 	char *mod;
@@ -101,6 +96,9 @@ ENGINE_CTX *ctx_new()
 	if (!ctx)
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
+	ctx->util_ctx = UTIL_CTX_new();
+	if (!ctx->util_ctx)
+		return NULL;
 	pthread_mutex_init(&ctx->lock, 0);
 
 	mod = getenv("PKCS11_MODULE_PATH");
@@ -118,11 +116,11 @@ ENGINE_CTX *ctx_new()
 	return ctx;
 }
 
-/* Destroy the context allocated with ctx_new() */
-int ctx_destroy(ENGINE_CTX *ctx)
+/* Destroy the context allocated with ENGINE_CTX_new() */
+int ENGINE_CTX_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
-		ctx_destroy_pin(ctx);
+		UTIL_CTX_free(ctx->util_ctx);
 		OPENSSL_free(ctx->module);
 		OPENSSL_free(ctx->init_args);
 		pthread_mutex_destroy(&ctx->lock);
@@ -131,72 +129,72 @@ int ctx_destroy(ENGINE_CTX *ctx)
 	return 1;
 }
 
-static int ctx_enumerate_slots_unlocked(ENGINE_CTX *ctx)
+static int ENGINE_CTX_enumerate_slots_unlocked(ENGINE_CTX *ctx)
 {
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
-	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
-		ctx_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
+	if (PKCS11_update_slots(ctx->util_ctx->pkcs11_ctx, &ctx->util_ctx->slot_list, &ctx->util_ctx->slot_count) < 0) {
+		ENGINE_CTX_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
 		return 0;
 	}
-	ctx_log(ctx, LOG_NOTICE, "Found %u slot%s\n", ctx->slot_count,
-		ctx->slot_count <= 1 ? "" : "s");
+	ENGINE_CTX_log(ctx, LOG_NOTICE, "Found %u slot%s\n", ctx->util_ctx->slot_count,
+		ctx->util_ctx->slot_count <= 1 ? "" : "s");
 	return 1;
 }
 
-/* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
-static int ctx_init_libp11_unlocked(ENGINE_CTX *ctx)
+/* Initialize libp11 data: ctx->util_ctx->pkcs11_ctx and ctx->util_ctx->slot_list */
+static int ENGINE_CTX_init_libp11_unlocked(ENGINE_CTX *ctx)
 {
 	PKCS11_CTX *pkcs11_ctx;
 
-	if (ctx->pkcs11_ctx && ctx->slot_list)
+	if (ctx->util_ctx->pkcs11_ctx && ctx->util_ctx->slot_list)
 		return 0;
 
-	ctx_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
+	ENGINE_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
 
 	pkcs11_ctx = PKCS11_CTX_new();
 	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
 	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
-		ctx_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
+		ENGINE_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
 		PKCS11_CTX_free(pkcs11_ctx);
 		return -1;
 	}
-	ctx->pkcs11_ctx = pkcs11_ctx;
+	ctx->util_ctx->pkcs11_ctx = pkcs11_ctx;
 
-	if (ctx_enumerate_slots_unlocked(ctx) != 1)
+	if (ENGINE_CTX_enumerate_slots_unlocked(ctx) != 1)
 		return -1;
 
-	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+	return ctx->util_ctx->pkcs11_ctx && ctx->util_ctx->slot_list ? 0 : -1;
 }
 
-static int ctx_init_libp11(ENGINE_CTX *ctx)
+static int ENGINE_CTX_init_libp11(ENGINE_CTX *ctx)
 {
 	int rv;
 
 	pthread_mutex_lock(&ctx->lock);
-	rv = ctx_init_libp11_unlocked(ctx);
+	rv = ENGINE_CTX_init_libp11_unlocked(ctx);
 	pthread_mutex_unlock(&ctx->lock);
 	return rv;
 }
 
-static int ctx_enumerate_slots(ENGINE_CTX *ctx)
+static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
 {
 	int rv;
 
-	if (!ctx->pkcs11_ctx)
-		ctx_init_libp11(ctx);
-	if (!ctx->pkcs11_ctx)
+	if (!ctx->util_ctx->pkcs11_ctx)
+		ENGINE_CTX_init_libp11(ctx);
+	if (!ctx->util_ctx->pkcs11_ctx)
 		return -1;
 
 	pthread_mutex_lock(&ctx->lock);
-	rv = ctx_enumerate_slots_unlocked(ctx);
+	rv = ENGINE_CTX_enumerate_slots_unlocked(ctx);
 	pthread_mutex_unlock(&ctx->lock);
 	return rv;
 }
 
 /* Function called from ENGINE_init() */
-int ctx_init(ENGINE_CTX *ctx)
+int ENGINE_CTX_init(ENGINE_CTX *ctx)
 {
 	/* OpenSC implicitly locks CRYPTO_LOCK_ENGINE during C_GetSlotList().
 	 * OpenSSL also locks CRYPTO_LOCK_ENGINE in ENGINE_init().
@@ -207,20 +205,20 @@ int ctx_init(ENGINE_CTX *ctx)
 	return 1;
 }
 
-/* Finish engine operations initialized with ctx_init() */
-int ctx_finish(ENGINE_CTX *ctx)
+/* Finish engine operations initialized with ENGINE_CTX_init() */
+int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 {
 	if (ctx) {
-		if (ctx->slot_list) {
-			PKCS11_release_all_slots(ctx->pkcs11_ctx,
-				ctx->slot_list, ctx->slot_count);
-			ctx->slot_list = NULL;
-			ctx->slot_count = 0;
+		if (ctx->util_ctx->slot_list) {
+			PKCS11_release_all_slots(ctx->util_ctx->pkcs11_ctx,
+				ctx->util_ctx->slot_list, ctx->util_ctx->slot_count);
+			ctx->util_ctx->slot_list = NULL;
+			ctx->util_ctx->slot_count = 0;
 		}
-		if (ctx->pkcs11_ctx) {
-			PKCS11_CTX_unload(ctx->pkcs11_ctx);
-			PKCS11_CTX_free(ctx->pkcs11_ctx);
-			ctx->pkcs11_ctx = NULL;
+		if (ctx->util_ctx->pkcs11_ctx) {
+			PKCS11_CTX_unload(ctx->util_ctx->pkcs11_ctx);
+			PKCS11_CTX_free(ctx->util_ctx->pkcs11_ctx);
+			ctx->util_ctx->pkcs11_ctx = NULL;
 		}
 	}
 	return 1;
@@ -230,7 +228,7 @@ int ctx_finish(ENGINE_CTX *ctx)
 /* Engine load public/private key                                             */
 /******************************************************************************/
 
-EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	EVP_PKEY *evp_pkey;
@@ -238,18 +236,20 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ctx_init_libp11_unlocked(ctx)) {
+	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
 
-	evp_pkey = util_get_pubkey_from_uri(ctx, s_key_id, ui_method, callback_data);
+	ctx->util_ctx->ui_method = ui_method;
+	ctx->util_ctx->callback_data = callback_data;
+	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
 
 	if (!evp_pkey) {
-		ctx_log(ctx, LOG_ERR, "PKCS11_get_public_key returned NULL\n");
+		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_public_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PUBKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
@@ -257,7 +257,7 @@ EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	return evp_pkey;
 }
 
-EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	EVP_PKEY *evp_pkey;
@@ -265,18 +265,20 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ctx_init_libp11_unlocked(ctx)) {
+	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
 
-	evp_pkey = util_get_privkey_from_uri(ctx, s_key_id, ui_method, callback_data);
+	ctx->util_ctx->ui_method = ui_method;
+	ctx->util_ctx->callback_data = callback_data;
+	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
 
 	if (!evp_pkey) {
-		ctx_log(ctx, LOG_ERR, "PKCS11_get_private_key returned NULL\n");
+		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_private_key returned NULL\n");
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_LOAD_PRIVKEY, ENG_R_OBJECT_NOT_FOUND);
 		return NULL;
@@ -288,56 +290,20 @@ EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 /* Engine ctrl request handling                                               */
 /******************************************************************************/
 
-static int ctx_ctrl_set_module(ENGINE_CTX *ctx, const char *modulename)
+static int ENGINE_CTX_ctrl_set_module(ENGINE_CTX *ctx, const char *modulename)
 {
 	OPENSSL_free(ctx->module);
 	ctx->module = modulename ? OPENSSL_strdup(modulename) : NULL;
 	return 1;
 }
 
-/**
- * Set the PIN used for login. A copy of the PIN shall be made.
- *
- * If the PIN cannot be assigned, the value 0 shall be returned
- * and errno shall be set as follows:
- *
- *   EINVAL - a NULL PIN was supplied
- *   ENOMEM - insufficient memory to copy the PIN
- *
- * @param pin the pin to use for login. Must not be NULL.
- *
- * @return 1 on success, 0 on failure.
- */
-int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin)
-{
-	/* Pre-condition check */
-	if (!pin) {
-		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_PASSED_NULL_PARAMETER);
-		errno = EINVAL;
-		return 0;
-	}
-
-	/* Copy the PIN. If the string cannot be copied, NULL
-	 * shall be returned and errno shall be set. */
-	ctx_destroy_pin(ctx);
-	ctx->pin = OPENSSL_strdup(pin);
-	if (!ctx->pin) {
-		ENGerr(ENG_F_CTX_CTRL_SET_PIN, ERR_R_MALLOC_FAILURE);
-		errno = ENOMEM;
-		return 0;
-	}
-	ctx->pin_length = strlen(ctx->pin);
-	ctx->forced_pin = 1;
-	return 1;
-}
-
-static int ctx_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
+static int ENGINE_CTX_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
 {
 	ctx->debug_level = level;
 	return 1;
 }
 
-static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
+static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 {
 	struct {
 		const char *s_slot_cert_id;
@@ -356,15 +322,13 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ctx_init_libp11_unlocked(ctx)) {
+	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return 0;
 	}
 
-	parms->cert = util_get_cert_from_uri(ctx, parms->s_slot_cert_id,
-		ctx->ui_method, ctx->callback_data);
-
+	parms->cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
 	pthread_mutex_unlock(&ctx->lock);
 
 	if (!parms->cert) {
@@ -375,83 +339,84 @@ static int ctx_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	return 1;
 }
 
-static int ctx_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
+static int ENGINE_CTX_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
 {
 	OPENSSL_free(ctx->init_args);
 	ctx->init_args = init_args_orig ? OPENSSL_strdup(init_args_orig) : NULL;
 	return 1;
 }
 
-static int ctx_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
+static int ENGINE_CTX_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
 {
-	ctx->ui_method = ui_method;
-	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
+	ctx->util_ctx->ui_method = ui_method;
+	if (ctx->util_ctx->pkcs11_ctx) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->util_ctx->pkcs11_ctx,
+			ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
 	return 1;
 }
 
-static int ctx_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
+static int ENGINE_CTX_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
 {
-	ctx->callback_data = callback_data;
-	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
+	ctx->util_ctx->callback_data = callback_data;
+	if (ctx->util_ctx->pkcs11_ctx) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->util_ctx->pkcs11_ctx,
+			ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
 	return 1;
 }
 
-static int ctx_ctrl_force_login(ENGINE_CTX *ctx)
+static int ENGINE_CTX_ctrl_force_login(ENGINE_CTX *ctx)
 {
-	ctx->force_login = 1;
+	ctx->util_ctx->force_login = 1;
 	return 1;
 }
 
-static int ctx_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
+static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 {
 	struct {
 		PKCS11_VLOG_A_CB vlog;
 	} *vlog_callback = cb;
 
 	ctx->vlog = vlog_callback->vlog;
+	ctx->util_ctx->vlog = vlog_callback->vlog;
 
-	if (ctx->pkcs11_ctx) /* already initialized */
-		PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, ctx->vlog); /* update */
+	if (ctx->util_ctx->pkcs11_ctx) /* already initialized */
+		PKCS11_set_vlog_a_method(ctx->util_ctx->pkcs11_ctx, ctx->vlog); /* update */
 
 	return 1;
 }
 
-int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
+int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
 	(void)f; /* We don't currently take callback parameters */
 	/*int initialised = ((pkcs11_dso == NULL) ? 0 : 1); */
 	switch (cmd) {
 	case CMD_MODULE_PATH:
-		return ctx_ctrl_set_module(ctx, (const char *)p);
+		return ENGINE_CTX_ctrl_set_module(ctx, (const char *)p);
 	case CMD_PIN:
-		return ctx_ctrl_set_pin(ctx, (const char *)p);
+		return UTIL_CTX_set_pin(ctx->util_ctx, (const char *)p);
 	case CMD_VERBOSE:
-		return ctx_ctrl_set_debug_level(ctx, 7);
+		return ENGINE_CTX_ctrl_set_debug_level(ctx, 7);
 	case CMD_QUIET:
-		return ctx_ctrl_set_debug_level(ctx, 0);
+		return ENGINE_CTX_ctrl_set_debug_level(ctx, 0);
 	case CMD_LOAD_CERT_CTRL:
-		return ctx_ctrl_load_cert(ctx, p);
+		return ENGINE_CTX_ctrl_load_cert(ctx, p);
 	case CMD_INIT_ARGS:
-		return ctx_ctrl_set_init_args(ctx, (const char *)p);
+		return ENGINE_CTX_ctrl_set_init_args(ctx, (const char *)p);
 	case ENGINE_CTRL_SET_USER_INTERFACE:
 	case CMD_SET_USER_INTERFACE:
-		return ctx_ctrl_set_user_interface(ctx, (UI_METHOD *)p);
+		return ENGINE_CTX_ctrl_set_user_interface(ctx, (UI_METHOD *)p);
 	case ENGINE_CTRL_SET_CALLBACK_DATA:
 	case CMD_SET_CALLBACK_DATA:
-		return ctx_ctrl_set_callback_data(ctx, p);
+		return ENGINE_CTX_ctrl_set_callback_data(ctx, p);
 	case CMD_FORCE_LOGIN:
-		return ctx_ctrl_force_login(ctx);
+		return ENGINE_CTX_ctrl_force_login(ctx);
 	case CMD_RE_ENUMERATE:
-		return ctx_enumerate_slots(ctx);
+		return ENGINE_CTX_enumerate_slots(ctx);
 	case CMD_VLOG_A:
-		return ctx_ctrl_set_vlog(ctx, p);
+		return ENGINE_CTX_ctrl_set_vlog(ctx, p);
 	case CMD_DEBUG_LEVEL:
-		return ctx_ctrl_set_debug_level(ctx, (int)i);
+		return ENGINE_CTX_ctrl_set_debug_level(ctx, (int)i);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;

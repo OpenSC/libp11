@@ -22,27 +22,43 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef _UTIL_LIBP11_H
+#define _UTIL_LIBP11_H
+
+#include "libp11.h"
+#include <openssl/ui.h>
 #include <openssl/x509.h>
 
-typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
+/* The maximum length of an internally-allocated PIN */
+#define MAX_PIN_LENGTH   256
+
+#ifdef _WIN32
+#define LOG_EMERG       0
+#define LOG_ALERT       1
+#define LOG_CRIT        2
+#define LOG_ERR         3
+#define LOG_WARNING     4
+#define LOG_NOTICE      5
+#define LOG_INFO        6
+#define LOG_DEBUG       7
+#else
+#include <syslog.h>
+#include "config.h"
+#endif
+
+typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
 
 /* defined in util_uri.c */
 
-X509 *util_get_cert_from_uri(ENGINE_CTX *ctx, const char *object_uri,
-	UI_METHOD *ui_method, void *callback_data);
+typedef struct util_ctx_st UTIL_CTX;
 
-EVP_PKEY *util_get_pubkey_from_uri(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD *ui_method, void *callback_data);
+struct util_ctx_st {
+	/* Configuration */
+	int debug_level;                             /* level of debug output */
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
+	UI_METHOD *ui_method;
+	void *callback_data;
 
-EVP_PKEY *util_get_privkey_from_uri(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD *ui_method, void *callback_data);
-
-/* TODO: move the following code back to eng_back.c as soon as
- * all references to those fields are removed from util_uri.c */
-#include "engine.h"
-#include "p11_pthread.h"
-struct st_engine_ctx {
-	/* Engine configuration */
 	/*
 	 * The PIN used for login. Cache for the ctx_get_pin function.
 	 * The memory for this PIN is always owned internally,
@@ -52,19 +68,28 @@ struct st_engine_ctx {
 	char *pin;
 	size_t pin_length;
 	int forced_pin;
-	int debug_level;                             /* level of debug output */
-	void (*vlog)(int, const char *, va_list); /* for the logging callback */
-	char *module;
-	char *init_args;
-	UI_METHOD *ui_method;
-	void *callback_data;
 	int force_login;
-	pthread_mutex_t lock;
 
 	/* Current operations */
 	PKCS11_CTX *pkcs11_ctx;
 	PKCS11_SLOT *slot_list;
 	unsigned int slot_count;
 };
+
+UTIL_CTX *UTIL_CTX_new();
+
+void UTIL_CTX_free(UTIL_CTX *ctx);
+
+void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...);
+
+int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
+
+X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri);
+
+EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id);
+
+EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id);
+
+#endif /* _UTIL_LIBP11_H */
 
 /* vim: set noexpandtab: */

@@ -44,8 +44,55 @@
 #endif
 
 /******************************************************************************/
-/* helpers                                                                    */
+/* Utility functions                                                          */
 /******************************************************************************/
+
+UTIL_CTX *UTIL_CTX_new()
+{
+	return OPENSSL_zalloc(sizeof(UTIL_CTX));
+}
+
+void UTIL_CTX_free(UTIL_CTX *ctx)
+{
+	UTIL_CTX_set_pin(ctx, NULL);
+	OPENSSL_free(ctx);
+}
+
+/******************************************************************************/
+/* Utility functions                                                          */
+/******************************************************************************/
+
+void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
+{
+	va_list args;
+
+	va_start(args, format);
+	if (!ctx) {
+		vfprintf(stderr, format, args);
+	} else if (ctx->vlog) {
+		/* Log messages through a custom logging function */
+		const char *prefix = "util: ";
+		char *vlog_format = OPENSSL_malloc(strlen(prefix) + strlen(format) + 1);
+
+		if (!vlog_format) {
+			va_end(args);
+			return;
+		}
+		/* Copy and concatenate strings */
+		strcpy(vlog_format, prefix);
+		strcat(vlog_format, format);
+
+		ctx->vlog(level, (const char *)vlog_format, args);
+		OPENSSL_free(vlog_format);
+	} else if (level <= ctx->debug_level) {
+		if (level <= 4) { /* LOG_WARNING */
+			vfprintf(stderr, format, args);
+		} else {
+			vprintf(format, args);
+		}
+	}
+	va_end(args);
+}
 
 static char *dump_hex(unsigned char *val, const size_t len)
 {
@@ -91,7 +138,7 @@ static char *dump_expiry(const PKCS11_CERT *cert)
 	return result;
 }
 
-static int hex_to_bin(ENGINE_CTX *ctx,
+static int hex_to_bin(UTIL_CTX *ctx,
 		const char *in, char *out, size_t *outlen)
 {
 	size_t left, count = 0;
@@ -117,7 +164,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 			else if ('A' <= c && c <= 'F')
 				c = c - 'A' + 10;
 			else {
-				ctx_log(ctx, LOG_ERR,
+				UTIL_CTX_log(ctx, LOG_ERR,
 					"hex_to_bin(): invalid char '%c' in hex string\n",
 					c);
 				*outlen = 0;
@@ -128,7 +175,7 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 		if (*in == ':')
 			in++;
 		if (left == 0) {
-			ctx_log(ctx, LOG_ERR, "hex_to_bin(): hex string too long\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "hex_to_bin(): hex string too long\n");
 			*outlen = 0;
 			return 0;
 		}
@@ -144,37 +191,62 @@ static int hex_to_bin(ENGINE_CTX *ctx,
 /* PIN handling                                                               */
 /******************************************************************************/
 
-/* Free PIN storage in secure way. */
-static void ctx_destroy_pin(ENGINE_CTX *ctx)
+/**
+ * Set the PIN used for login. A copy of the PIN shall be made.
+ *
+ * If the PIN cannot be assigned, the value 0 shall be returned
+ * and errno shall be set as follows:
+ *
+ *   EINVAL - a NULL PIN was supplied
+ *   ENOMEM - insufficient memory to copy the PIN
+ *
+ * @param pin the pin to use for login. Must not be NULL.
+ *
+ * @return 1 on success, 0 on failure.
+ */
+int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin)
 {
-	if (ctx->pin) {
-		OPENSSL_cleanse(ctx->pin, ctx->pin_length);
-		OPENSSL_free(ctx->pin);
-		ctx->pin = NULL;
-		ctx->pin_length = 0;
-		ctx->forced_pin = 0;
-	}
+		/* Free PIN storage in secure way. */
+		if (ctx->pin) {
+			OPENSSL_cleanse(ctx->pin, ctx->pin_length);
+			OPENSSL_free(ctx->pin);
+			ctx->pin = NULL;
+			ctx->pin_length = 0;
+			ctx->forced_pin = 0;
+		}
+
+		if (!pin)
+			return 1; /* No new PIN to set */
+
+		ctx->pin = OPENSSL_strdup(pin);
+		if (!ctx->pin) {
+				errno = ENOMEM;
+				return 0;
+		}
+		ctx->pin_length = strlen(ctx->pin);
+		ctx->forced_pin = 1;
+		return 1;
 }
 
 /* Get the PIN via asking user interface. The supplied call-back data are
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int ctx_get_pin(ENGINE_CTX *ctx, const char *token_label, UI_METHOD *ui_method, void *callback_data)
+static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
 {
 	UI *ui;
 	char *prompt;
 
 	/* call ui to ask for a pin */
-	ui = UI_new_method(ui_method);
+	ui = UI_new_method(ctx->ui_method);
 	if (!ui) {
-		ctx_log(ctx, LOG_ERR, "UI_new failed\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "UI_new failed\n");
 		return 0;
 	}
-	if (callback_data)
-		UI_add_user_data(ui, callback_data);
+	if (ctx->callback_data)
+		UI_add_user_data(ui, ctx->callback_data);
 
-	ctx_destroy_pin(ctx);
+	UTIL_CTX_set_pin(ctx, NULL);
 	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 	if (!ctx->pin)
 		return 0;
@@ -186,7 +258,7 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char *token_label, UI_METHOD *ui_m
 	}
 	if (UI_dup_input_string(ui, prompt,
 			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH) <= 0) {
-		ctx_log(ctx, LOG_ERR, "UI_dup_input_string failed\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "UI_dup_input_string failed\n");
 		UI_free(ui);
 		OPENSSL_free(prompt);
 		return 0;
@@ -194,7 +266,7 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char *token_label, UI_METHOD *ui_m
 	OPENSSL_free(prompt);
 
 	if (UI_process(ui)) {
-		ctx_log(ctx, LOG_ERR, "UI_process failed\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "UI_process failed\n");
 		UI_free(ui);
 		return 0;
 	}
@@ -203,12 +275,12 @@ static int ctx_get_pin(ENGINE_CTX *ctx, const char *token_label, UI_METHOD *ui_m
 }
 
 /* Return 1 if the user has already logged in */
-static int slot_logged_in(ENGINE_CTX *ctx, PKCS11_SLOT *slot) {
+static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
 	int logged_in = 0;
 
 	/* Check if already logged in to avoid resetting state */
 	if (PKCS11_is_logged_in(slot, 0, &logged_in) != 0) {
-		ctx_log(ctx, LOG_WARNING, "Unable to check if already logged in\n");
+		UTIL_CTX_log(ctx, LOG_WARNING, "Unable to check if already logged in\n");
 		return 0;
 	}
 	return logged_in;
@@ -219,12 +291,9 @@ static int slot_logged_in(ENGINE_CTX *ctx, PKCS11_SLOT *slot) {
  *
  * @slot is PKCS11 slot to log in
  * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
- * @ui_method is OpenSSL user interface which is used to ask for a password
- * @callback_data are application data to the user interface
  * @return 1 on success, 0 on error.
  */
-static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
-		UI_METHOD *ui_method, void *callback_data)
+static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 {
 	if (!(ctx->force_login || tok->loginRequired) || slot_logged_in(ctx, slot))
 		return 1;
@@ -233,19 +302,19 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 	 * then use a NULL PIN. Otherwise, obtain a new PIN if needed. */
 	if (tok->secureLogin && !ctx->forced_pin) {
 		/* Free the PIN if it has already been
-		 * assigned (i.e, cached by ctx_get_pin) */
-		ctx_destroy_pin(ctx);
+		 * assigned (i.e, cached by UTIL_CTX_get_pin) */
+		UTIL_CTX_set_pin(ctx, NULL);
 	} else if (!ctx->pin) {
 		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 		ctx->pin_length = MAX_PIN_LENGTH;
 		if (ctx->pin == NULL) {
-			ctx_log(ctx, LOG_ERR, "Could not allocate memory for PIN\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for PIN\n");
 			return 0;
 		}
 		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-		if (!ctx_get_pin(ctx, tok->label, ui_method, callback_data)) {
-			ctx_destroy_pin(ctx);
-			ctx_log(ctx, LOG_ERR, "No PIN code was entered\n");
+		if (!UTIL_CTX_get_pin(ctx, tok->label)) {
+			UTIL_CTX_set_pin(ctx, NULL);
+			UTIL_CTX_log(ctx, LOG_ERR, "No PIN code was entered\n");
 			return 0;
 		}
 	}
@@ -253,8 +322,8 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 	/* Now login in with the (possibly NULL) PIN */
 	if (PKCS11_login(slot, 0, ctx->pin)) {
 		/* Login failed, so free the PIN if present */
-		ctx_destroy_pin(ctx);
-		ctx_log(ctx, LOG_ERR, "Login failed\n");
+		UTIL_CTX_set_pin(ctx, NULL);
+		UTIL_CTX_log(ctx, LOG_ERR, "Login failed\n");
 		return 0;
 	}
 	return 1;
@@ -265,7 +334,7 @@ static int ctx_login(ENGINE_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 /******************************************************************************/
 
 /* parse string containing slot and id information */
-static int parse_slot_id_string(ENGINE_CTX *ctx,
+static int parse_slot_id_string(UTIL_CTX *ctx,
 		const char *slot_id, int *slot,
 		char *id, size_t *id_len, char **label)
 {
@@ -279,7 +348,7 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 	if (strspn(slot_id, HEXDIGITS) == strlen(slot_id)) {
 		/* ah, easiest case: only hex. */
 		if ((strlen(slot_id) + 1) / 2 > *id_len) {
-			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
@@ -291,7 +360,7 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 		i = strspn(slot_id, DIGITS);
 
 		if (slot_id[i] != ':') {
-			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		i++;
@@ -301,12 +370,12 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 			return 1;
 		}
 		if (strspn(slot_id + i, HEXDIGITS) + i != strlen(slot_id)) {
-			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i + 1) / 2 > *id_len) {
-			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
@@ -316,12 +385,12 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* third: id_<id>, slot is undefined */
 	if (strncmp(slot_id, "id_", 3) == 0) {
 		if (strspn(slot_id + 3, HEXDIGITS) + 3 != strlen(slot_id)) {
-			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - 3 + 1) / 2 > *id_len) {
-			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = -1;
@@ -339,13 +408,13 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* last try: it has to be slot_<slot> and then "-id_<cert>" */
 
 	if (strncmp(slot_id, "slot_", 5) != 0) {
-		ctx_log(ctx, LOG_ERR, "Format not recognized!\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Format not recognized!\n");
 		return 0;
 	}
 
 	/* slot is an digital int. */
 	if (sscanf(slot_id + 5, "%d", &n) != 1) {
-		ctx_log(ctx, LOG_ERR, "Could not decode slot number!\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Could not decode slot number!\n");
 		return 0;
 	}
 
@@ -358,7 +427,7 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 	}
 
 	if (slot_id[i + 5] != '-') {
-		ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 		return 0;
 	}
 
@@ -367,12 +436,12 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 	/* now followed by "id_" */
 	if (strncmp(slot_id + i, "id_", 3) == 0) {
 		if (strspn(slot_id + i + 3, HEXDIGITS) + 3 + i != strlen(slot_id)) {
-			ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 			return 0;
 		}
 		/* ah, rest is hex */
 		if ((strlen(slot_id) - i - 3 + 1) / 2 > *id_len) {
-			ctx_log(ctx, LOG_ERR, "ID string too long!\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "ID string too long!\n");
 			return 0;
 		}
 		*slot = n;
@@ -387,11 +456,11 @@ static int parse_slot_id_string(ENGINE_CTX *ctx,
 		return *label != NULL;
 	}
 
-	ctx_log(ctx, LOG_ERR, "Could not parse string!\n");
+	UTIL_CTX_log(ctx, LOG_ERR, "Could not parse string!\n");
 	return 0;
 }
 
-static int parse_uri_attr_len(ENGINE_CTX *ctx,
+static int parse_uri_attr_len(UTIL_CTX *ctx,
 		const char *attr, int attrlen, char *field,
 		size_t *field_len)
 {
@@ -428,7 +497,7 @@ static int parse_uri_attr_len(ENGINE_CTX *ctx,
 	return ret;
 }
 
-static int parse_uri_attr(ENGINE_CTX *ctx,
+static int parse_uri_attr(UTIL_CTX *ctx,
 		const char *attr, int attrlen, char **field)
 {
 	int ret = 1;
@@ -451,7 +520,7 @@ static int parse_uri_attr(ENGINE_CTX *ctx,
 }
 
 
-static int read_from_file(ENGINE_CTX *ctx,
+static int read_from_file(UTIL_CTX *ctx,
 	const char *path, char *field, size_t *field_len)
 {
 	BIO *fp;
@@ -459,7 +528,7 @@ static int read_from_file(ENGINE_CTX *ctx,
 
 	fp = BIO_new_file(path, "r");
 	if (!fp) {
-		ctx_log(ctx, LOG_ERR, "Could not open file %s\n", path);
+		UTIL_CTX_log(ctx, LOG_ERR, "Could not open file %s\n", path);
 		return 0;
 	}
 
@@ -476,7 +545,7 @@ static int read_from_file(ENGINE_CTX *ctx,
 	return 1;
 }
 
-static int parse_pin_source(ENGINE_CTX *ctx,
+static int parse_pin_source(UTIL_CTX *ctx,
 		const char *attr, int attrlen, char *field,
 		size_t *field_len)
 {
@@ -491,7 +560,7 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 		ret = read_from_file(ctx, (const char *)(val + 5), field, field_len);
 	} else if (*val == '|') {
 		ret = 0;
-		ctx_log(ctx, LOG_ERR, "Unsupported pin-source syntax\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Unsupported pin-source syntax\n");
 	/* 'pin-source=/foo/bar' is commonly used */
 	} else {
 		ret = read_from_file(ctx, (const char *)val, field, field_len);
@@ -501,7 +570,7 @@ static int parse_pin_source(ENGINE_CTX *ctx,
 	return ret;
 }
 
-static int parse_pkcs11_uri(ENGINE_CTX *ctx,
+static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		const char *uri, PKCS11_TOKEN **p_tok,
 		char *id, size_t *id_len, char *pin, size_t *pin_len,
 		char **label)
@@ -513,7 +582,7 @@ static int parse_pkcs11_uri(ENGINE_CTX *ctx,
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (!tok) {
-		ctx_log(ctx, LOG_ERR, "Could not allocate memory for token info\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for token info\n");
 		return 0;
 	}
 	memset(tok, 0, sizeof(PKCS11_TOKEN));
@@ -561,7 +630,7 @@ static int parse_pkcs11_uri(ENGINE_CTX *ctx,
 					(end - p == 7 && !strncmp(p, "private", 7))) {
 				/* Actually, just ignore it */
 			} else {
-				ctx_log(ctx, LOG_ERR, "Unknown object type\n");
+				UTIL_CTX_log(ctx, LOG_ERR, "Unknown object type\n");
 				rv = 0;
 			}
 		} else {
@@ -590,12 +659,11 @@ static int parse_pkcs11_uri(ENGINE_CTX *ctx,
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-static void *ctx_try_load_object(ENGINE_CTX *ctx,
+static void *ctx_try_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
-		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
+		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
-		const char *object_uri, const int login,
-		UI_METHOD *ui_method, void *callback_data)
+		const char *object_uri, const int login)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
@@ -615,30 +683,29 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		obj_id_len = strlen(object_uri) + 1;
 		obj_id = OPENSSL_malloc(obj_id_len);
 		if (!obj_id) {
-			ctx_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
 			goto cleanup;
 		}
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
 			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
 				obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
 			if (!n) {
-				ctx_log(ctx, LOG_ERR,
+				UTIL_CTX_log(ctx, LOG_ERR,
 					"The %s ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n",
 					object_typestr);
-				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto cleanup;
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				tmp_pin[tmp_pin_len] = 0;
-				if (!ctx_ctrl_set_pin(ctx, tmp_pin)) {
+				if (!UTIL_CTX_set_pin(ctx, tmp_pin)) {
 					goto cleanup;
 				}
 			}
 			if (obj_id_len != 0) {
 				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
 			}
-			ctx_log(ctx, LOG_NOTICE, "Looking in slots for %s %s login:%s%s%s%s\n",
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slots for %s %s login:%s%s%s%s\n",
 				object_typestr,
 				login ? "with" : "without",
 				hexbuf ? " id=" : "",
@@ -650,19 +717,18 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
 				obj_id, &obj_id_len, &obj_label);
 			if (!n) {
-				ctx_log(ctx, LOG_ERR,
+				UTIL_CTX_log(ctx, LOG_ERR,
 					"The %s ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n"
 					"The legacy ENGINE_pkcs11 ID format is also "
 					"still accepted for now\n",
 					object_typestr);
-				ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_ID);
 				goto cleanup;
 			}
 			if (obj_id_len != 0) {
 				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
 			}
-			ctx_log(ctx, LOG_NOTICE, "Looking in slot %d for %s %s login:%s%s%s%s\n",
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slot %d for %s %s login:%s%s%s%s\n",
 				slot_nr, object_typestr,
 				login ? "with" : "without",
 				hexbuf ? " id=" : "",
@@ -676,7 +742,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
 		sizeof(PKCS11_SLOT *));
 	if (!matched_slots) {
-		ctx_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
 		goto cleanup;
 	}
 
@@ -715,7 +781,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 					!strcmp(match_tok->model, slot->token->model))) {
 			found_slot = slot;
 		}
-		ctx_log(ctx, LOG_NOTICE, "- [%lu] %-25.25s  %-36s  (%s)\n",
+		UTIL_CTX_log(ctx, LOG_NOTICE, "- [%lu] %-25.25s  %-36s  (%s)\n",
 			PKCS11_get_slotid_from_slot(slot),
 			slot->description, flags,
 			slot->token->label[0] ? slot->token->label : "no label");
@@ -731,25 +797,25 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 
 	if (matched_count == 0) {
 		if (match_tok) {
-			ctx_log(ctx, LOG_ERR, "No matching token was found for %s\n",
+			UTIL_CTX_log(ctx, LOG_ERR, "No matching token was found for %s\n",
 				object_typestr);
 			goto cleanup;
 		}
 
 		/* If the legacy slot ID format was used */
 		if (slot_nr != -1) {
-			ctx_log(ctx, LOG_ERR, "The %s was not found on slot %d\n", object_typestr, slot_nr);
+			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found on slot %d\n", object_typestr, slot_nr);
 			goto cleanup;
 		} else {
 			found_slot = PKCS11_find_token(ctx->pkcs11_ctx,
-								ctx->slot_list, ctx->slot_count);
+				ctx->slot_list, ctx->slot_count);
 			/* Ignore slots without tokens. Thales HSM (and potentially
 			 * other modules) allow objects on uninitialized tokens. */
 			if (found_slot && found_slot->token) {
 				matched_slots[matched_count] = found_slot;
 				matched_count++;
 			} else {
-				ctx_log(ctx, LOG_ERR, "No tokens found\n");
+				UTIL_CTX_log(ctx, LOG_ERR, "No tokens found\n");
 				goto cleanup;
 			}
 		}
@@ -763,17 +829,17 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		if (matched_count == 1) {
 			slot = matched_slots[0];
 			if (!slot->token) {
-				ctx_log(ctx, LOG_ERR, "Empty slot found:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_ERR, "Empty slot found:  %s\n", slot->description);
 				goto cleanup; /* failed */
 			}
-			ctx_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
-			ctx_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 				slot->token->label : "no label");
 
 			/* Only try to login if login is required */
 			if (slot->token->loginRequired || ctx->force_login) {
-				if (!ctx_login(ctx, slot, slot->token, ui_method, callback_data)) {
-					ctx_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
+				if (!UTIL_CTX_login(ctx, slot, slot->token)) {
+					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 					goto cleanup; /* failed */
 				}
 			}
@@ -785,12 +851,12 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 
 			init_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
 			if (!init_slots) {
-				ctx_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
+				UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
 				goto cleanup; /* failed */
 			}
 			uninit_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
 			if (!uninit_slots) {
-				ctx_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
+				UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
 				free(init_slots);
 				goto cleanup; /* failed */
 			}
@@ -798,7 +864,7 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			for (m = 0; m < matched_count; m++) {
 				slot = matched_slots[m];
 				if (!slot->token) {
-					ctx_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
+					UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
 					continue; /* skipped */
 				}
 				if (slot->token->initialized) {
@@ -813,14 +879,14 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			/* Initialized tokens */
 			if (init_count == 1) {
 				slot = init_slots[0];
-				ctx_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
-				ctx_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 					slot->token->label : "no label");
 
 				/* Only try to login if login is required */
 				if (slot->token->loginRequired || ctx->force_login) {
-					if (!ctx_login(ctx, slot, slot->token, ui_method, callback_data)) {
-						ctx_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
+					if (!UTIL_CTX_login(ctx, slot, slot->token)) {
+						UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 						free(init_slots);
 						free(uninit_slots);
 						goto cleanup; /* failed */
@@ -829,12 +895,12 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 			} else {
 				/* Multiple slots with initialized token */
 				if (init_count > 1) {
-					ctx_log(ctx, LOG_WARNING, "Multiple matching slots (%zu);"
+					UTIL_CTX_log(ctx, LOG_WARNING, "Multiple matching slots (%zu);"
 						" will not try to login\n", init_count);
 				}
 				for (m = 0; m < init_count; m++) {
 					slot = init_slots[m];
-					ctx_log(ctx, LOG_WARNING, "- [%u] %s: %s\n", m + 1,
+					UTIL_CTX_log(ctx, LOG_WARNING, "- [%u] %s: %s\n", m + 1,
 						slot->description? slot->description:
 						"(no description)",
 						(slot->token && slot->token->label)?
@@ -845,8 +911,8 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 				/* Uninitialized tokens, user PIN is unset */
 				for (m = 0; m < uninit_count; m++) {
 					slot = uninit_slots[m];
-					ctx_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
-					ctx_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
+					UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+					UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 						slot->token->label : "no label");
 					object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
 					if (object) {
@@ -865,11 +931,11 @@ static void *ctx_try_load_object(ENGINE_CTX *ctx,
 		for (n = 0; n < matched_count; n++) {
 			slot = matched_slots[n];
 			if (!slot->token) {
-				ctx_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
 				break;
 			}
-			ctx_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
-			ctx_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 				slot->token->label : "no label");
 			object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
 			if (object)
@@ -896,27 +962,27 @@ cleanup:
 	return object;
 }
 
-static void *ctx_load_object(ENGINE_CTX *ctx,
+static void *ctx_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
-		void *(*match_func)(ENGINE_CTX *, PKCS11_TOKEN *,
+		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
-		const char *object_uri, UI_METHOD *ui_method, void *callback_data)
+		const char *object_uri)
 {
 	void *obj = NULL;
 
 	if (!ctx->force_login) {
 		ERR_clear_error();
 		obj = ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 0, ui_method, callback_data);
+			object_uri, 0);
 	}
 
 	if (!obj) {
 		/* Try again with login */
 		ERR_clear_error();
 		obj = ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 1, ui_method, callback_data);
+			object_uri, 1);
 		if (!obj) {
-			ctx_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
+			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
 				object_typestr, object_uri);
 		}
 	}
@@ -961,7 +1027,7 @@ static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b)
 	}
 }
 
-static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_CERT *certs, *selected_cert = NULL;
@@ -973,13 +1039,13 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	errno = 0;
 	cert_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
 	if (errno != 0) {
-		ctx_log(ctx, LOG_ERR, "%s", strerror(errno));
+		UTIL_CTX_log(ctx, LOG_ERR, "%s", strerror(errno));
 		goto cleanup;
 	}
 	if (obj_id_len) {
 		cert_template.id = OPENSSL_malloc(obj_id_len);
 		if (!cert_template.id) {
-			ctx_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
 			goto cleanup;
 		}
 		memcpy(cert_template.id, obj_id, obj_id_len);
@@ -987,14 +1053,14 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	}
 
 	if (PKCS11_enumerate_certs_ext(tok, &cert_template, &certs, &cert_count)) {
-		ctx_log(ctx, LOG_ERR, "Unable to enumerate certificates\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Unable to enumerate certificates\n");
 		goto cleanup;
 	}
 	if (cert_count == 0) {
-		ctx_log(ctx, LOG_INFO, "No certificate found.\n");
+		UTIL_CTX_log(ctx, LOG_INFO, "No certificate found.\n");
 		goto cleanup;
 	}
-	ctx_log(ctx, LOG_NOTICE, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
+	UTIL_CTX_log(ctx, LOG_NOTICE, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
 		which = "longest expiry matching";
 		for (m = 0; m < cert_count; m++) {
@@ -1002,7 +1068,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 
 			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
 			expiry = dump_expiry(k);
-			ctx_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
+			UTIL_CTX_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
 				hexbuf ? " id=" : "",
 				hexbuf ? hexbuf : "",
 				k->label ? " label=" : "",
@@ -1036,7 +1102,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 
 			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
 			expiry = dump_expiry(k);
-			ctx_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
+			UTIL_CTX_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
 				hexbuf ? " id=" : "",
 				hexbuf ? hexbuf : "",
 				k->label ? " label=" : "",
@@ -1059,7 +1125,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	if (selected_cert) {
 		hexbuf = dump_hex((unsigned char *)selected_cert->id, selected_cert->id_len);
 		expiry = dump_expiry(selected_cert);
-		ctx_log(ctx, LOG_NOTICE, "Returning %s certificate:%s%s%s%s%s%s\n", which,
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Returning %s certificate:%s%s%s%s%s%s\n", which,
 			hexbuf ? " id=" : "",
 			hexbuf ? hexbuf : "",
 			selected_cert->label ? " label=" : "",
@@ -1069,7 +1135,7 @@ static void *match_cert(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 		OPENSSL_free(hexbuf);
 		OPENSSL_free(expiry);
 	} else {
-		ctx_log(ctx, LOG_ERR, "No matching certificate returned.\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "No matching certificate returned.\n");
 	}
 
 cleanup:
@@ -1078,13 +1144,11 @@ cleanup:
 	return selected_cert;
 }
 
-X509 *util_get_cert_from_uri(ENGINE_CTX *ctx, const char *object_uri,
-	UI_METHOD *ui_method, void *callback_data)
+X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri)
 {
 	PKCS11_CERT *cert;
 
-	cert = ctx_load_object(ctx, "certificate", match_cert, object_uri,
-		ui_method, callback_data);
+	cert = ctx_load_object(ctx, "certificate", match_cert, object_uri);
 	return cert ? X509_dup(cert->x509) : NULL;
 }
 
@@ -1092,7 +1156,7 @@ X509 *util_get_cert_from_uri(ENGINE_CTX *ctx, const char *object_uri,
 /* Private and public key handling                                            */
 /******************************************************************************/
 
-static void *match_key(ENGINE_CTX *ctx, const char *key_type,
+static void *match_key(UTIL_CTX *ctx, const char *key_type,
 		PKCS11_KEY *keys, unsigned int key_count,
 		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
@@ -1102,10 +1166,10 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 	char *hexbuf;
 
 	if (key_count == 0) {
-		ctx_log(ctx, LOG_INFO, "No %s key found.\n", key_type);
+		UTIL_CTX_log(ctx, LOG_INFO, "No %s key found.\n", key_type);
 		return NULL;
 	}
-	ctx_log(ctx, LOG_NOTICE, "Found %u %s key%s:\n", key_count, key_type,
+	UTIL_CTX_log(ctx, LOG_NOTICE, "Found %u %s key%s:\n", key_count, key_type,
 		key_count == 1 ? "" : "s");
 
 	if (obj_id_len != 0 || obj_label) {
@@ -1114,7 +1178,7 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 			PKCS11_KEY *k = keys + m;
 
 			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
-			ctx_log(ctx, LOG_NOTICE, "  %2u %c%c%s%s%s%s\n", m + 1,
+			UTIL_CTX_log(ctx, LOG_NOTICE, "  %2u %c%c%s%s%s%s\n", m + 1,
 				k->isPrivate ? 'P' : ' ',
 				k->needLogin ? 'L' : ' ',
 				hexbuf ? " id=" : "",
@@ -1147,20 +1211,20 @@ static void *match_key(ENGINE_CTX *ctx, const char *key_type,
 
 	if (selected_key) {
 		hexbuf = dump_hex((unsigned char *)selected_key->id, selected_key->id_len);
-		ctx_log(ctx, LOG_NOTICE, "Returning %s %s key:%s%s%s%s\n", which, key_type,
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Returning %s %s key:%s%s%s%s\n", which, key_type,
 			hexbuf ? " id=" : "",
 			hexbuf ? hexbuf : "",
 			selected_key->label ? " label=" : "",
 			selected_key->label ? selected_key->label : "");
 		OPENSSL_free(hexbuf);
 	} else {
-		ctx_log(ctx, LOG_ERR, "No matching %s key returned.\n", key_type);
+		UTIL_CTX_log(ctx, LOG_ERR, "No matching %s key returned.\n", key_type);
 	}
 
 	return selected_key;
 }
 
-static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+static void *match_key_int(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		const unsigned int isPrivate, const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	PKCS11_KEY *keys;
@@ -1172,13 +1236,13 @@ static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 	errno = 0;
 	key_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
 	if (errno != 0) {
-		ctx_log(ctx, LOG_ERR, "%s", strerror(errno));
+		UTIL_CTX_log(ctx, LOG_ERR, "%s", strerror(errno));
 		goto cleanup;
 	}
 	if (obj_id_len) {
 		key_template.id = OPENSSL_malloc(obj_id_len);
 		if (!key_template.id) {
-			ctx_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
 			goto cleanup;
 		}
 		memcpy(key_template.id, obj_id, obj_id_len);
@@ -1187,11 +1251,11 @@ static void *match_key_int(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
 
 	/* Make sure there is at least one private key on the token */
 	if (key_template.isPrivate != 0 && PKCS11_enumerate_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
-		ctx_log(ctx, LOG_ERR, "Unable to enumerate private keys\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Unable to enumerate private keys\n");
 		goto cleanup;
 	}
 	else if (key_template.isPrivate == 0 && PKCS11_enumerate_public_keys_ext(tok, (const PKCS11_KEY *) &key_template, &keys, &key_count)) {
-		ctx_log(ctx, LOG_ERR, "Unable to enumerate public keys\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Unable to enumerate public keys\n");
 		goto cleanup;
 	}
 	ret = match_key(ctx, key_template.isPrivate ? "private" : "public", keys, key_count, obj_id, obj_id_len, obj_label);
@@ -1201,33 +1265,33 @@ cleanup:
 	return ret;
 }
 
-static void *match_public_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+static void *match_public_key(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	return match_key_int(ctx, tok, 0, obj_id, obj_id_len, obj_label);
 }
 
-static void *match_private_key(ENGINE_CTX *ctx, PKCS11_TOKEN *tok,
+static void *match_private_key(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
 	return match_key_int(ctx, tok, 1, obj_id, obj_id_len, obj_label);
 }
 
-EVP_PKEY *util_get_pubkey_from_uri(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
 	PKCS11_KEY *key;
 
-	key = ctx_load_object(ctx, "public key", match_public_key,
-		s_key_id, ui_method, callback_data);
+	key = ctx_load_object(ctx, "public key",
+		match_public_key, s_key_id);
 	return key ? PKCS11_get_public_key(key) : NULL;
 }
 
-EVP_PKEY *util_get_privkey_from_uri(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
-	PKCS11_KEY *key = ctx_load_object(ctx, "private key", match_private_key,
-		s_key_id, ui_method, callback_data);
+	PKCS11_KEY *key;
+
+	key = ctx_load_object(ctx, "private key",
+		match_private_key, s_key_id);
 	return key ? PKCS11_get_private_key(key) : NULL;
 }
 

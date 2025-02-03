@@ -28,7 +28,17 @@
 #ifndef _ENGINE_PKCS11_H
 #define _ENGINE_PKCS11_H
 
-#ifndef _WIN32
+#ifdef _WIN32
+#define LOG_EMERG       0
+#define LOG_ALERT       1
+#define LOG_CRIT        2
+#define LOG_ERR         3
+#define LOG_WARNING     4
+#define LOG_NOTICE      5
+#define LOG_INFO        6
+#define LOG_DEBUG       7
+#else
+#include <syslog.h>
 #include "config.h"
 #endif
 
@@ -45,9 +55,6 @@
 #include <openssl/engine.h>
 #include <openssl/ui.h>
 
-/* The maximum length of an internally-allocated PIN */
-#define MAX_PIN_LENGTH   256
-
 #define CMD_SO_PATH             ENGINE_CMD_BASE
 #define CMD_MODULE_PATH         (ENGINE_CMD_BASE + 1)
 #define CMD_PIN                 (ENGINE_CMD_BASE + 2)
@@ -62,43 +69,27 @@
 #define CMD_VLOG_A              (ENGINE_CMD_BASE + 11)
 #define CMD_DEBUG_LEVEL         (ENGINE_CMD_BASE + 12)
 
-#ifdef _WIN32
-#define LOG_EMERG       0
-#define LOG_ALERT       1
-#define LOG_CRIT        2
-#define LOG_ERR         3
-#define LOG_WARNING     4
-#define LOG_NOTICE      5
-#define LOG_INFO        6
-#define LOG_DEBUG       7
-#else
-#include "config.h"
-#include <syslog.h>
-#endif
-
-typedef struct st_engine_ctx ENGINE_CTX; /* opaque */
+typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
 
 /* defined in eng_back.c */
 
-ENGINE_CTX *ctx_new();
+ENGINE_CTX *ENGINE_CTX_new();
 
-int ctx_destroy(ENGINE_CTX *ctx);
+int ENGINE_CTX_destroy(ENGINE_CTX *ctx);
 
-int ctx_init(ENGINE_CTX *ctx);
+int ENGINE_CTX_init(ENGINE_CTX *ctx);
 
-int ctx_finish(ENGINE_CTX *ctx);
+int ENGINE_CTX_finish(ENGINE_CTX *ctx);
 
-int ctx_engine_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
+int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
 
-EVP_PKEY *ctx_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD *ui_method, void *callback_data);
 
-EVP_PKEY *ctx_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD *ui_method, void *callback_data);
 
-int ctx_ctrl_set_pin(ENGINE_CTX *ctx, const char *pin);
-
-void ctx_log(ENGINE_CTX *ctx, int level, const char *format, ...)
+void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 #ifdef __GNUC__
 	__attribute__((format(printf, 3, 4)))
 #endif
