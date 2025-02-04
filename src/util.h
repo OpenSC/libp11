@@ -46,11 +46,8 @@
 #include "config.h"
 #endif
 
-typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
-
 /* defined in util_uri.c */
-
-typedef struct util_ctx_st UTIL_CTX;
+typedef struct util_ctx_st UTIL_CTX; /* opaque */
 
 UTIL_CTX *UTIL_CTX_new();
 void UTIL_CTX_free(UTIL_CTX *ctx);
