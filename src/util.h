@@ -63,6 +63,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx);
 int UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);
+void UTIL_CTX_set_debug_level(UTIL_CTX *ctx, int debug_level);
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...);
 
 int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);

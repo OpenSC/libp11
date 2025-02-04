@@ -235,6 +235,7 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 static int ENGINE_CTX_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
 {
 	ctx->debug_level = level;
+	UTIL_CTX_set_debug_level(ctx->util_ctx, level);
 	return 1;
 }
 

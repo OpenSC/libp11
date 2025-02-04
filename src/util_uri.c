@@ -191,6 +191,11 @@ void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog)
 		PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, vlog); /* update */
 }
 
+void UTIL_CTX_set_debug_level(UTIL_CTX *ctx, int debug_level)
+{
+	ctx->debug_level = debug_level;
+}
+
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 {
 	va_list args;
@@ -382,9 +387,8 @@ static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
 	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
 	ctx->pin_length = MAX_PIN_LENGTH;
 	prompt = UI_construct_prompt(ui, "PKCS#11 token PIN", token_label);
-	if (!prompt) {
+	if (!prompt)
 		return 0;
-	}
 	if (UI_dup_input_string(ui, prompt,
 			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH) <= 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "UI_dup_input_string failed\n");
