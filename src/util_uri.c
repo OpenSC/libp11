@@ -43,8 +43,36 @@
 #	define X509_get0_notAfter X509_get_notAfter
 #endif
 
+struct util_ctx_st {
+	/* Configuration */
+	char *module;
+	char *init_args;
+	UI_METHOD *ui_method;
+	void *callback_data;
+
+	/* Logging */
+	int debug_level;                             /* level of debug output */
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
+
+	/*
+	 * The PIN used for login. Cache for the ctx_get_pin function.
+	 * The memory for this PIN is always owned internally,
+	 * and may be freed as necessary. Before freeing, the PIN
+	 * must be whitened, to prevent security holes.
+	 */
+	char *pin;
+	size_t pin_length;
+	int forced_pin;
+	int force_login;
+
+	/* Current operations */
+	PKCS11_CTX *pkcs11_ctx;
+	PKCS11_SLOT *slot_list;
+	unsigned int slot_count;
+};
+
 /******************************************************************************/
-/* Utility functions                                                          */
+/* Initialization                                                             */
 /******************************************************************************/
 
 UTIL_CTX *UTIL_CTX_new()
@@ -55,12 +83,113 @@ UTIL_CTX *UTIL_CTX_new()
 void UTIL_CTX_free(UTIL_CTX *ctx)
 {
 	UTIL_CTX_set_pin(ctx, NULL);
+	OPENSSL_free(ctx->module);
+	OPENSSL_free(ctx->init_args);
 	OPENSSL_free(ctx);
+}
+
+int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module)
+{
+    OPENSSL_free(ctx->module);
+    ctx->module = module ? OPENSSL_strdup(module) : NULL;
+	return 1;
+}
+
+int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args)
+{
+	OPENSSL_free(ctx->init_args);
+	ctx->init_args = init_args ? OPENSSL_strdup(init_args) : NULL;
+	return 1;
+}
+
+int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method)
+{
+	ctx->ui_method = ui_method;
+	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->pkcs11_ctx,
+			ctx->ui_method, ctx->callback_data);
+	return 1;
+}
+
+int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data)
+{
+	ctx->callback_data = callback_data;
+	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
+		PKCS11_set_ui_method(ctx->pkcs11_ctx,
+			ctx->ui_method, ctx->callback_data);
+	return 1;
+}
+
+int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
+{
+	if (!ctx->pkcs11_ctx)
+		UTIL_CTX_init_libp11(ctx);
+	if (!ctx->pkcs11_ctx)
+		return -1;
+
+	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
+	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
+		UTIL_CTX_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
+		return 0;
+	}
+	UTIL_CTX_log(ctx, LOG_NOTICE, "Found %u slot%s\n", ctx->slot_count,
+		ctx->slot_count <= 1 ? "" : "s");
+	return 1;
+}
+
+/* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
+int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
+{
+	PKCS11_CTX *pkcs11_ctx;
+
+	if (ctx->pkcs11_ctx && ctx->slot_list)
+		return 0;
+
+	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
+
+	pkcs11_ctx = PKCS11_CTX_new();
+	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
+	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
+	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
+		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
+		PKCS11_CTX_free(pkcs11_ctx);
+		return -1;
+	}
+	ctx->pkcs11_ctx = pkcs11_ctx;
+
+	if (UTIL_CTX_enumerate_slots(ctx) != 1)
+		return -1;
+
+	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+}
+
+int UTIL_CTX_free_libp11(UTIL_CTX *ctx)
+{
+	if (ctx->slot_list) {
+		PKCS11_release_all_slots(ctx->pkcs11_ctx,
+			ctx->slot_list, ctx->slot_count);
+		ctx->slot_list = NULL;
+		ctx->slot_count = 0;
+	}
+	if (ctx->pkcs11_ctx) {
+		PKCS11_CTX_unload(ctx->pkcs11_ctx);
+		PKCS11_CTX_free(ctx->pkcs11_ctx);
+		ctx->pkcs11_ctx = NULL;
+	}
 }
 
 /******************************************************************************/
 /* Utility functions                                                          */
 /******************************************************************************/
+
+void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog)
+{
+	ctx->vlog = vlog;
+
+	if (ctx->pkcs11_ctx) /* already initialized */
+		PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, vlog); /* update */
+}
 
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 {
@@ -272,6 +401,11 @@ static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
 	}
 	UI_free(ui);
 	return 1;
+}
+
+void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login)
+{
+	ctx->force_login = force_login;
 }
 
 /* Return 1 if the user has already logged in */

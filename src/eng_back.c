@@ -33,14 +33,12 @@
 #include <string.h>
 
 struct engine_ctx_st {
-	/* Engine configuration */
-	int debug_level;                             /* level of debug output */
-	void (*vlog)(int, const char *, va_list); /* for the logging callback */
-	char *module;
-	char *init_args;
+	UTIL_CTX *util_ctx;
 	pthread_mutex_t lock;
 
-	UTIL_CTX *util_ctx;
+	/* Logging */
+	int debug_level;                             /* level of debug output */
+	void (*vlog)(int, const char *, va_list); /* for the logging callback */
 };
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -103,12 +101,12 @@ ENGINE_CTX *ENGINE_CTX_new()
 
 	mod = getenv("PKCS11_MODULE_PATH");
 	if (mod) {
-		ctx->module = OPENSSL_strdup(mod);
+		UTIL_CTX_set_module(ctx->util_ctx, mod);
 	} else {
 #ifdef DEFAULT_PKCS11_MODULE
-		ctx->module = OPENSSL_strdup(DEFAULT_PKCS11_MODULE);
+		UTIL_CTX_set_module(ctx->util_ctx, DEFAULT_PKCS11_MODULE);
 #else
-		ctx->module = NULL;
+		UTIL_CTX_set_module(ctx->util_ctx, NULL);
 #endif
 	}
 	ctx->debug_level = LOG_NOTICE;
@@ -121,51 +119,20 @@ int ENGINE_CTX_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
 		UTIL_CTX_free(ctx->util_ctx);
-		OPENSSL_free(ctx->module);
-		OPENSSL_free(ctx->init_args);
 		pthread_mutex_destroy(&ctx->lock);
 		OPENSSL_free(ctx);
 	}
 	return 1;
 }
 
-static int ENGINE_CTX_enumerate_slots_unlocked(ENGINE_CTX *ctx)
+static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
 {
-	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
-	if (PKCS11_update_slots(ctx->util_ctx->pkcs11_ctx, &ctx->util_ctx->slot_list, &ctx->util_ctx->slot_count) < 0) {
-		ENGINE_CTX_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
-		return 0;
-	}
-	ENGINE_CTX_log(ctx, LOG_NOTICE, "Found %u slot%s\n", ctx->util_ctx->slot_count,
-		ctx->util_ctx->slot_count <= 1 ? "" : "s");
-	return 1;
-}
+	int rv;
 
-/* Initialize libp11 data: ctx->util_ctx->pkcs11_ctx and ctx->util_ctx->slot_list */
-static int ENGINE_CTX_init_libp11_unlocked(ENGINE_CTX *ctx)
-{
-	PKCS11_CTX *pkcs11_ctx;
-
-	if (ctx->util_ctx->pkcs11_ctx && ctx->util_ctx->slot_list)
-		return 0;
-
-	ENGINE_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
-
-	pkcs11_ctx = PKCS11_CTX_new();
-	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
-	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
-	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
-		ENGINE_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
-		PKCS11_CTX_free(pkcs11_ctx);
-		return -1;
-	}
-	ctx->util_ctx->pkcs11_ctx = pkcs11_ctx;
-
-	if (ENGINE_CTX_enumerate_slots_unlocked(ctx) != 1)
-		return -1;
-
-	return ctx->util_ctx->pkcs11_ctx && ctx->util_ctx->slot_list ? 0 : -1;
+	pthread_mutex_lock(&ctx->lock);
+	rv = UTIL_CTX_enumerate_slots(ctx->util_ctx);
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
 }
 
 static int ENGINE_CTX_init_libp11(ENGINE_CTX *ctx)
@@ -173,22 +140,7 @@ static int ENGINE_CTX_init_libp11(ENGINE_CTX *ctx)
 	int rv;
 
 	pthread_mutex_lock(&ctx->lock);
-	rv = ENGINE_CTX_init_libp11_unlocked(ctx);
-	pthread_mutex_unlock(&ctx->lock);
-	return rv;
-}
-
-static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
-{
-	int rv;
-
-	if (!ctx->util_ctx->pkcs11_ctx)
-		ENGINE_CTX_init_libp11(ctx);
-	if (!ctx->util_ctx->pkcs11_ctx)
-		return -1;
-
-	pthread_mutex_lock(&ctx->lock);
-	rv = ENGINE_CTX_enumerate_slots_unlocked(ctx);
+	rv = UTIL_CTX_init_libp11(ctx->util_ctx);
 	pthread_mutex_unlock(&ctx->lock);
 	return rv;
 }
@@ -209,17 +161,7 @@ int ENGINE_CTX_init(ENGINE_CTX *ctx)
 int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 {
 	if (ctx) {
-		if (ctx->util_ctx->slot_list) {
-			PKCS11_release_all_slots(ctx->util_ctx->pkcs11_ctx,
-				ctx->util_ctx->slot_list, ctx->util_ctx->slot_count);
-			ctx->util_ctx->slot_list = NULL;
-			ctx->util_ctx->slot_count = 0;
-		}
-		if (ctx->util_ctx->pkcs11_ctx) {
-			PKCS11_CTX_unload(ctx->util_ctx->pkcs11_ctx);
-			PKCS11_CTX_free(ctx->util_ctx->pkcs11_ctx);
-			ctx->util_ctx->pkcs11_ctx = NULL;
-		}
+		UTIL_CTX_free_libp11(ctx->util_ctx);
 	}
 	return 1;
 }
@@ -236,14 +178,14 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
+	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
 
-	ctx->util_ctx->ui_method = ui_method;
-	ctx->util_ctx->callback_data = callback_data;
+	UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, ui_method);
+	UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, callback_data);
 	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
@@ -265,14 +207,14 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
+	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
 
-	ctx->util_ctx->ui_method = ui_method;
-	ctx->util_ctx->callback_data = callback_data;
+	UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, ui_method);
+	UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, callback_data);
 	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
@@ -289,13 +231,6 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 /******************************************************************************/
 /* Engine ctrl request handling                                               */
 /******************************************************************************/
-
-static int ENGINE_CTX_ctrl_set_module(ENGINE_CTX *ctx, const char *modulename)
-{
-	OPENSSL_free(ctx->module);
-	ctx->module = modulename ? OPENSSL_strdup(modulename) : NULL;
-	return 1;
-}
 
 static int ENGINE_CTX_ctrl_set_debug_level(ENGINE_CTX *ctx, int level)
 {
@@ -322,7 +257,7 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	if (ENGINE_CTX_init_libp11_unlocked(ctx)) {
+	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return 0;
@@ -339,37 +274,6 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	return 1;
 }
 
-static int ENGINE_CTX_ctrl_set_init_args(ENGINE_CTX *ctx, const char *init_args_orig)
-{
-	OPENSSL_free(ctx->init_args);
-	ctx->init_args = init_args_orig ? OPENSSL_strdup(init_args_orig) : NULL;
-	return 1;
-}
-
-static int ENGINE_CTX_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
-{
-	ctx->util_ctx->ui_method = ui_method;
-	if (ctx->util_ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->util_ctx->pkcs11_ctx,
-			ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
-	return 1;
-}
-
-static int ENGINE_CTX_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
-{
-	ctx->util_ctx->callback_data = callback_data;
-	if (ctx->util_ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->util_ctx->pkcs11_ctx,
-			ctx->util_ctx->ui_method, ctx->util_ctx->callback_data);
-	return 1;
-}
-
-static int ENGINE_CTX_ctrl_force_login(ENGINE_CTX *ctx)
-{
-	ctx->util_ctx->force_login = 1;
-	return 1;
-}
-
 static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 {
 	struct {
@@ -377,10 +281,7 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 	} *vlog_callback = cb;
 
 	ctx->vlog = vlog_callback->vlog;
-	ctx->util_ctx->vlog = vlog_callback->vlog;
-
-	if (ctx->util_ctx->pkcs11_ctx) /* already initialized */
-		PKCS11_set_vlog_a_method(ctx->util_ctx->pkcs11_ctx, ctx->vlog); /* update */
+	UTIL_CTX_set_vlog_a(ctx->util_ctx, vlog_callback->vlog);
 
 	return 1;
 }
@@ -392,7 +293,7 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	/*int initialised = ((pkcs11_dso == NULL) ? 0 : 1); */
 	switch (cmd) {
 	case CMD_MODULE_PATH:
-		return ENGINE_CTX_ctrl_set_module(ctx, (const char *)p);
+		return UTIL_CTX_set_module(ctx->util_ctx, (const char *)p);
 	case CMD_PIN:
 		return UTIL_CTX_set_pin(ctx->util_ctx, (const char *)p);
 	case CMD_VERBOSE:
@@ -402,15 +303,16 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 	case CMD_LOAD_CERT_CTRL:
 		return ENGINE_CTX_ctrl_load_cert(ctx, p);
 	case CMD_INIT_ARGS:
-		return ENGINE_CTX_ctrl_set_init_args(ctx, (const char *)p);
+		return UTIL_CTX_set_init_args(ctx->util_ctx, (const char *)p);
 	case ENGINE_CTRL_SET_USER_INTERFACE:
 	case CMD_SET_USER_INTERFACE:
-		return ENGINE_CTX_ctrl_set_user_interface(ctx, (UI_METHOD *)p);
+		return UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, (UI_METHOD *)p);
 	case ENGINE_CTRL_SET_CALLBACK_DATA:
 	case CMD_SET_CALLBACK_DATA:
-		return ENGINE_CTX_ctrl_set_callback_data(ctx, p);
+		return UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, p);
 	case CMD_FORCE_LOGIN:
-		return ENGINE_CTX_ctrl_force_login(ctx);
+		UTIL_CTX_set_force_login(ctx->util_ctx, 1);
+		return 1;
 	case CMD_RE_ENUMERATE:
 		return ENGINE_CTX_enumerate_slots(ctx);
 	case CMD_VLOG_A:

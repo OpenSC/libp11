@@ -52,42 +52,24 @@ typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
 
 typedef struct util_ctx_st UTIL_CTX;
 
-struct util_ctx_st {
-	/* Configuration */
-	int debug_level;                             /* level of debug output */
-	void (*vlog)(int, const char *, va_list); /* for the logging callback */
-	UI_METHOD *ui_method;
-	void *callback_data;
-
-	/*
-	 * The PIN used for login. Cache for the ctx_get_pin function.
-	 * The memory for this PIN is always owned internally,
-	 * and may be freed as necessary. Before freeing, the PIN
-	 * must be whitened, to prevent security holes.
-	 */
-	char *pin;
-	size_t pin_length;
-	int forced_pin;
-	int force_login;
-
-	/* Current operations */
-	PKCS11_CTX *pkcs11_ctx;
-	PKCS11_SLOT *slot_list;
-	unsigned int slot_count;
-};
-
 UTIL_CTX *UTIL_CTX_new();
-
 void UTIL_CTX_free(UTIL_CTX *ctx);
+int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
+int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);
+int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method);
+int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data);
+int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
+int UTIL_CTX_init_libp11(UTIL_CTX *ctx);
+int UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
+void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...);
 
 int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
+void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login);
 
 X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri);
-
 EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id);
-
 EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id);
 
 #endif /* _UTIL_LIBP11_H */
