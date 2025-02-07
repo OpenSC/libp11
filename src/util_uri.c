@@ -921,8 +921,8 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 		}
 		UTIL_CTX_log(ctx, LOG_NOTICE, "- [%lu] %-25.25s  %-36s  (%s)\n",
 			PKCS11_get_slotid_from_slot(slot),
-			slot->description, flags,
-			slot->token->label[0] ? slot->token->label : "no label");
+			slot->description ? slot->description : "(no description)",
+			flags, slot->token->label[0] ? slot->token->label : "no label");
 
 		/* Ignore slots without tokens. Thales HSM (and potentially
 		 * other modules) allow objects on uninitialized tokens. */
@@ -967,10 +967,12 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 		if (matched_count == 1) {
 			slot = matched_slots[0];
 			if (!slot->token) {
-				UTIL_CTX_log(ctx, LOG_ERR, "Empty slot found:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_ERR, "Empty slot found:  %s\n",
+					slot->description ? slot->description : "(no description)");
 				goto cleanup; /* failed */
 			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+				slot->description ? slot->description : "(no description)");
 			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 				slot->token->label : "no label");
 
@@ -1002,7 +1004,8 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 			for (m = 0; m < matched_count; m++) {
 				slot = matched_slots[m];
 				if (!slot->token) {
-					UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
+					UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
+						slot->description ? slot->description : "(no description)");
 					continue; /* skipped */
 				}
 				if (slot->token->initialized) {
@@ -1017,7 +1020,8 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 			/* Initialized tokens */
 			if (init_count == 1) {
 				slot = init_slots[0];
-				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+					slot->description ? slot->description : "(no description)");
 				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 					slot->token->label : "no label");
 
@@ -1030,6 +1034,8 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 						goto cleanup; /* failed */
 					}
 				}
+				free(init_slots);
+				free(uninit_slots);
 			} else {
 				/* Multiple slots with initialized token */
 				if (init_count > 1) {
@@ -1039,8 +1045,7 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 				for (m = 0; m < init_count; m++) {
 					slot = init_slots[m];
 					UTIL_CTX_log(ctx, LOG_WARNING, "- [%u] %s: %s\n", m + 1,
-						slot->description? slot->description:
-						"(no description)",
+						slot->description ? slot->description : "(no description)",
 						(slot->token && slot->token->label)?
 						slot->token->label: "no label");
 				}
@@ -1049,7 +1054,8 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 				/* Uninitialized tokens, user PIN is unset */
 				for (m = 0; m < uninit_count; m++) {
 					slot = uninit_slots[m];
-					UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+					UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+						slot->description ? slot->description : "(no description)");
 					UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 						slot->token->label : "no label");
 					object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
@@ -1069,10 +1075,12 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 		for (n = 0; n < matched_count; n++) {
 			slot = matched_slots[n];
 			if (!slot->token) {
-				UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n", slot->description);
+				UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
+					slot->description ? slot->description : "(no description)");
 				break;
 			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n", slot->description);
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+				slot->description ? slot->description : "(no description)");
 			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
 				slot->token->label : "no label");
 			object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
