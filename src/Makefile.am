@@ -14,6 +14,11 @@ endif
 enginesexec_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
+if LIBP11_OSSL_PROVIDER
+EXTRA_DIST += pkcs11prov.rc.in
+providersexec_LTLIBRARIES = pkcs11prov.la
+endif
+
 SHARED_EXT=@SHARED_EXT@
 
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_err.c p11_ckr.c \
@@ -67,6 +72,9 @@ check-local: $(LTLIBRARIES)
 
 install-exec-hook:
 	cd '$(DESTDIR)$(enginesexecdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
+if LIBP11_OSSL_PROVIDER
+	cd '$(DESTDIR)$(providersexecdir)' && $(LN_S) -f pkcs11prov$(SHARED_EXT) libpkcs11$(SHARED_EXT)
+endif
 
 if WIN32
 # def file required for MS users to build library
@@ -79,6 +87,20 @@ RCCOMPILE = $(RC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS)
 LTRCCOMPILE = $(LIBTOOL) --mode=compile --tag=RC $(RCCOMPILE)
 
+# openssl PKCS#11 provider
+pkcs11prov_la_SOURCES = provider.c util_uri.c pkcs11prov.exports
+if WIN32
+pkcs11prov_la_SOURCES += pkcs11prov.rc
+else
+dist_noinst_DATA += pkcs11prov.rc
+endif
+pkcs11prov_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS)
+pkcs11prov_la_LIBADD = $(libp11_la_OBJECTS) $(OPENSSL_LIBS)
+
+# We intentionally not version symbols in this module because no
+# application links with it. It is dynamically opened.
+pkcs11prov_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT) \
+	-avoid-version -export-symbols "$(srcdir)/pkcs11prov.exports"
 .rc.lo:
 	$(LTRCCOMPILE) -i "$<" -o "$@"
 

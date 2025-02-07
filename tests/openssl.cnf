@@ -1,0 +1,47 @@
+# Comment out the next line to ignore configuration errors
+config_diagnostics = 1
+
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = providers_sect
+
+[providers_sect]
+pkcs11 = pkcs11_sect
+default = default_sect
+legacy = legacy_sect
+fips = fips_sect
+
+# For FIPS
+.include /opt/openssl-3.4.1/fipsmodule.cnf
+
+[pkcs11_sect]
+# Some parameters could be overridden with environment variable values:
+# OPENSSL_MODULES, PKCS11_MODULE_PATH, PKCS11_DEBUG_LEVEL, PKCS11_FORCE_LOGIN
+
+# specify an alternate name, overriding the default name specified in the list of providers
+identity = pkcs11prov
+
+# specify the pathname of the module (typically a shared library) to load
+module = /usr/lib64/ossl-modules/pkcs11prov.so
+
+# specify the pathname to the pkcs11 module shared library
+pkcs11_module = /usr/lib64/opensc-pkcs11.so
+
+# set the debug level
+debug_level = 5
+
+# force login to the PKCS#11 module
+#force_login = 1
+
+# specify the pin code
+#pin = 1234
+
+# activate provider
+activate = 1
+
+[default_sect]
+activate = 1
+
+[legacy_sect]
+activate = 1

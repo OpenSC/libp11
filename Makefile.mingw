@@ -1,0 +1,10 @@
+
+SUBDIRS = src
+
+all::
+
+all depend install clean::
+	@for i in $(SUBDIRS); do \
+		(cd $$i && $(MAKE) BUILD_FOR=$(BUILD_FOR) OPENSSL_DIR=$(OPENSSL_DIR) -f Makefile.mak); \
+	done
+
