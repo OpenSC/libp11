@@ -145,7 +145,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 	if (ctx->pkcs11_ctx && ctx->slot_list)
 		return 0;
 
-	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the engine: %s\n", ctx->module);
+	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
 
 	pkcs11_ctx = PKCS11_CTX_new();
 	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
@@ -164,7 +164,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
 }
 
-int UTIL_CTX_free_libp11(UTIL_CTX *ctx)
+void UTIL_CTX_free_libp11(UTIL_CTX *ctx)
 {
 	if (ctx->slot_list) {
 		PKCS11_release_all_slots(ctx->pkcs11_ctx,
@@ -230,7 +230,8 @@ void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 
 static char *dump_hex(unsigned char *val, const size_t len)
 {
-	int i, j = 0, size = 2 * len + 1;
+	int j = 0;
+	size_t i, size = 2 * len + 1;
 	char *hexbuf = OPENSSL_malloc((size_t)size);
 
 	if (!hexbuf)

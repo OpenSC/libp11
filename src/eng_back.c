@@ -95,8 +95,10 @@ ENGINE_CTX *ENGINE_CTX_new()
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
 	ctx->util_ctx = UTIL_CTX_new();
-	if (!ctx->util_ctx)
+	if (!ctx->util_ctx) {
+		OPENSSL_free(ctx);
 		return NULL;
+	}
 	pthread_mutex_init(&ctx->lock, 0);
 
 	mod = getenv("PKCS11_MODULE_PATH");

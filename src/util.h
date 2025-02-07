@@ -57,7 +57,7 @@ int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method);
 int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data);
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
 int UTIL_CTX_init_libp11(UTIL_CTX *ctx);
-int UTIL_CTX_free_libp11(UTIL_CTX *ctx);
+void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);
 void UTIL_CTX_set_debug_level(UTIL_CTX *ctx, int debug_level);
