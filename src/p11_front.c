@@ -482,10 +482,14 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 		char *label, unsigned char *id, size_t id_len)
 {
 	PKCS11_params key_params = { .extractable = 0, .sensitive = 1 };
-	switch(algorithm) {
+	PKCS11_EC_KGEN ec_kgen;
+	PKCS11_RSA_KGEN rsa_kgen;
+	PKCS11_KGEN_ATTRS kgen_attrs = { 0 };
+
+	switch (algorithm) {
 	case EVP_PKEY_EC:
-		PKCS11_EC_KGEN ec_kgen = { .curve = OBJ_nid2sn(bits_or_nid) };
-		PKCS11_KGEN_ATTRS ec_attrs = {
+		ec_kgen.curve = OBJ_nid2sn(bits_or_nid);
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_EC,
 			.kgen.ec = &ec_kgen,
 			.token_label = (const char *)token->label,
@@ -494,10 +498,11 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 			.id_len = id_len,
 			.key_params = &key_params
 		};
-		return PKCS11_keygen(token, &ec_attrs);
+		break;
+
 	default:
-		PKCS11_RSA_KGEN rsa_kgen = { .bits = bits_or_nid };
-		PKCS11_KGEN_ATTRS rsa_attrs = {
+		rsa_kgen.bits = bits_or_nid;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_RSA,
 			.kgen.rsa = &rsa_kgen,
 			.token_label = (const char *)token->label,
@@ -506,10 +511,9 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 			.id_len = id_len,
 			.key_params = &key_params
 		};
-		return PKCS11_keygen(token, &rsa_attrs);
 	}
 
-	return -1;
+	return PKCS11_keygen(token, &kgen_attrs);
 }
 
 int PKCS11_get_key_size(PKCS11_KEY *pkey)
