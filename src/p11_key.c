@@ -350,7 +350,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	ec_params = OPENSSL_malloc(ec_params_len);
 	if (!ec_params)
 		return -1;
-	// ec_params points to begining of DER encoded object. Since we need this
+	// ec_params points to beginning of DER encoded object. Since we need this
 	// location later and OpenSSL changes it in i2d_ASN1_OBJECT to point to 1 byte
 	// after DER encoded object, we assign the pointer to temporary throw-away
 	// pointer tmp
