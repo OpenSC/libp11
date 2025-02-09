@@ -179,8 +179,7 @@ int pkcs11_get_session(PKCS11_SLOT_private *slot, int rw, CK_SESSION_HANDLE *ses
 			if (rv == CKR_OK) {
 				slot->num_sessions++;
 				break;
-			}
-			if (rv == CKR_TOKEN_NOT_RECOGNIZED) {
+			} else {
 				pthread_mutex_unlock(&slot->lock);
 				return -1;
 			}
