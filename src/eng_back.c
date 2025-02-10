@@ -95,7 +95,7 @@ static int ENGINE_CTX_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_met
 
 	ctx->ui_method = ui_method;
 	if (pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->ui_method);
+		PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 	return 1;
 }
 
