@@ -18,7 +18,8 @@ check_PROGRAMS = \
 	rsa-oaep \
 	check-privkey \
 	store-cert \
-	dup-key
+	dup-key \
+	keygen
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -36,7 +37,8 @@ dist_check_SCRIPTS = \
 	fork-change-slot.softhsm \
 	case-insensitive.softhsm \
 	pkcs11-uri-without-token.softhsm \
-	search-all-matching-tokens.softhsm
+	search-all-matching-tokens.softhsm \
+	keygen.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
 	ec-cert.der ec-privkey.der ec-pubkey.der

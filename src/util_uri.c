@@ -356,6 +356,11 @@ void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login)
 	ctx->force_login = force_login;
 }
 
+int UTIL_CTX_get_force_login(UTIL_CTX *ctx)
+{
+	return ctx->force_login;
+}
+
 /* Return 1 if the user has already logged in */
 static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
 	int logged_in = 0;
@@ -375,7 +380,7 @@ static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
  * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
  * @return 1 on success, 0 on error.
  */
-static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
+int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 {
 	if (!(ctx->force_login || tok->loginRequired) || slot_logged_in(ctx, slot))
 		return 1;
@@ -1077,6 +1082,12 @@ static void *ctx_load_object(UTIL_CTX *ctx,
 
 	return obj;
 }
+
+PKCS11_SLOT *UTIL_CTX_find_token(UTIL_CTX *ctx)
+{
+	return PKCS11_find_token(ctx->pkcs11_ctx, ctx->slot_list, ctx->slot_count);
+}
+
 
 /******************************************************************************/
 /* Certificate handling                                                       */

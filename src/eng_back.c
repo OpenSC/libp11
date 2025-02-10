@@ -392,6 +392,66 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 	return 1;
 }
 
+static int ENGINE_CTX_keygen(ENGINE_CTX *ctx, void *p)
+{
+	if (p == NULL)
+		return 0;
+	int rv = 0;
+	PKCS11_KGEN_ATTRS *kg_attrs = p;
+	PKCS11_SLOT* found_slot = NULL;
+
+	pthread_mutex_lock(&ctx->lock);
+
+	/* Delayed libp11 initialization */
+	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
+		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
+		goto done;
+	}
+
+	found_slot = UTIL_CTX_find_token(ctx->util_ctx);
+
+	if (!found_slot) {
+		ENGINE_CTX_log(ctx, LOG_ERR,
+			"Initialized token with matching label not found...\n");
+		goto done;
+	}
+
+	/* If login is not forced, try to generate key without logging in first.
+	 * PKCS11_generate_key will fail if login is required so function will
+	 * continue and try to login first
+	 */
+	if (!UTIL_CTX_get_force_login(ctx->util_ctx)) {
+		ERR_clear_error();
+		if (!PKCS11_keygen(found_slot->token, kg_attrs)) {
+			rv = 1;
+			goto done;
+		}
+	}
+
+	// Try with logging in
+	ERR_clear_error();
+	if (found_slot->token->loginRequired) {
+		if (!UTIL_CTX_login(ctx->util_ctx, found_slot, found_slot->token)) {
+			ENGINE_CTX_log(ctx, LOG_ERR,
+				"Login to token failed, returning 0...\n");
+			goto done;
+		}
+		rv = PKCS11_keygen(found_slot->token, kg_attrs);
+		if (rv < 0) {
+			ENGINE_CTX_log(ctx, LOG_ERR,
+				"Failed to generate a key pair on the token. Error code: %d\n",
+				rv);
+			rv = 0;
+		} else {
+			rv = 1;
+		}
+	}
+
+done:
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
+}
+
 int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
 	(void)i; /* We don't currently take integer parameters */
@@ -425,6 +485,8 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return ENGINE_CTX_ctrl_set_vlog(ctx, p);
 	case CMD_DEBUG_LEVEL:
 		return ENGINE_CTX_ctrl_set_debug_level(ctx, (int)i);
+	case CMD_KEYGEN:
+		return ENGINE_CTX_keygen(ctx, p);
 	default:
 		ENGerr(ENG_F_CTX_ENGINE_CTRL, ENG_R_UNKNOWN_COMMAND);
 		break;
