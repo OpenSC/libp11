@@ -250,6 +250,8 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	PKCS11_CTX *pkcs11_ctx;
+	UI_METHOD *orig_ui_method;
+	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -261,11 +263,18 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
+
+	orig_ui_method = ctx->ui_method;
+	orig_callback_data = ctx->callback_data;
 	ctx->ui_method = ui_method;
 	ctx->callback_data = callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ui_method, callback_data);
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
+
+	ctx->ui_method = orig_ui_method;
+	ctx->callback_data = orig_callback_data;
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -282,6 +291,8 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
 	PKCS11_CTX *pkcs11_ctx;
+	UI_METHOD *orig_ui_method;
+	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -293,11 +304,18 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
+
+	orig_ui_method = ctx->ui_method;
+	orig_callback_data = ctx->callback_data;
 	ctx->ui_method = ui_method;
 	ctx->callback_data = callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ui_method, callback_data);
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
+
+	ctx->ui_method = orig_ui_method;
+	ctx->callback_data = orig_callback_data;
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -347,6 +365,7 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		pthread_mutex_unlock(&ctx->lock);
 		return 0;
 	}
+
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	parms->cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
