@@ -137,16 +137,6 @@ static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
 	return rv;
 }
 
-static int ENGINE_CTX_init_libp11(ENGINE_CTX *ctx)
-{
-	int rv;
-
-	pthread_mutex_lock(&ctx->lock);
-	rv = UTIL_CTX_init_libp11(ctx->util_ctx);
-	pthread_mutex_unlock(&ctx->lock);
-	return rv;
-}
-
 /* Function called from ENGINE_init() */
 int ENGINE_CTX_init(ENGINE_CTX *ctx)
 {
