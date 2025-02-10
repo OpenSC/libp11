@@ -47,8 +47,8 @@ struct util_ctx_st {
 	/* Configuration */
 	char *module;
 	char *init_args;
-	UI_METHOD *ui_method;
-	void *callback_data;
+	util_pin_cb pin_callback;
+	void *pin_param;
 
 	/* Logging */
 	int debug_level;                             /* level of debug output */
@@ -75,14 +75,19 @@ struct util_ctx_st {
 /* Initialization                                                             */
 /******************************************************************************/
 
-UTIL_CTX *UTIL_CTX_new()
+UTIL_CTX *UTIL_CTX_new(util_pin_cb pin_callback, void *pin_param)
 {
-	return OPENSSL_zalloc(sizeof(UTIL_CTX));
+	UTIL_CTX *ctx = OPENSSL_zalloc(sizeof(UTIL_CTX));
+	if (!ctx)
+		return NULL;
+	ctx->pin_callback = pin_callback;
+	ctx->pin_param = pin_param;
+	return ctx;
 }
 
 void UTIL_CTX_free(UTIL_CTX *ctx)
 {
-	UTIL_CTX_set_pin(ctx, NULL);
+	UTIL_CTX_set_pin(ctx, NULL, 0);
 	OPENSSL_free(ctx->module);
 	OPENSSL_free(ctx->init_args);
 	OPENSSL_free(ctx);
@@ -102,31 +107,8 @@ int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args)
 	return 1;
 }
 
-int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method)
-{
-	ctx->ui_method = ui_method;
-	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
-	return 1;
-}
-
-int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data)
-{
-	ctx->callback_data = callback_data;
-	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
-	return 1;
-}
-
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 {
-	if (!ctx->pkcs11_ctx)
-		UTIL_CTX_init_libp11(ctx);
-	if (!ctx->pkcs11_ctx)
-		return -1;
-
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
 	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
 		UTIL_CTX_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
@@ -138,30 +120,36 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 }
 
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
-int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
+PKCS11_CTX *UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 {
-	PKCS11_CTX *pkcs11_ctx;
+	if (!ctx->pkcs11_ctx) {
+		PKCS11_CTX *pkcs11_ctx;
 
-	if (ctx->pkcs11_ctx && ctx->slot_list)
-		return 0;
-
-	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
-
-	pkcs11_ctx = PKCS11_CTX_new();
-	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
-	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
-	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
-		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
-		PKCS11_CTX_free(pkcs11_ctx);
-		return -1;
+		UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
+		pkcs11_ctx = PKCS11_CTX_new();
+		PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
+		PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
+		if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
+			PKCS11_CTX_free(pkcs11_ctx);
+			return NULL;
+		}
+		ctx->pkcs11_ctx = pkcs11_ctx;
 	}
-	ctx->pkcs11_ctx = pkcs11_ctx;
 
-	if (UTIL_CTX_enumerate_slots(ctx) != 1)
-		return -1;
+	if (!ctx->slot_list) {
+		if (UTIL_CTX_enumerate_slots(ctx) != 1) {
+			UTIL_CTX_free_libp11(ctx);
+			return NULL;
+		}
+	}
 
-	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+	return ctx->pkcs11_ctx;
+}
+
+PKCS11_CTX *UTIL_CTX_get_libp11_ctx(UTIL_CTX *ctx)
+{
+	return ctx->pkcs11_ctx;
 }
 
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx)
@@ -339,7 +327,7 @@ static int hex_to_bin(UTIL_CTX *ctx,
  *
  * @return 1 on success, 0 on failure.
  */
-int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin)
+int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin, int forced_pin)
 {
 		/* Free PIN storage in secure way. */
 		if (ctx->pin) {
@@ -359,53 +347,8 @@ int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin)
 				return 0;
 		}
 		ctx->pin_length = strlen(ctx->pin);
-		ctx->forced_pin = 1;
+		ctx->forced_pin = forced_pin;
 		return 1;
-}
-
-/* Get the PIN via asking user interface. The supplied call-back data are
- * passed to the user interface implemented by an application. Only the
- * application knows how to interpret the call-back data.
- * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
-{
-	UI *ui;
-	char *prompt;
-
-	/* call ui to ask for a pin */
-	ui = UI_new_method(ctx->ui_method);
-	if (!ui) {
-		UTIL_CTX_log(ctx, LOG_ERR, "UI_new failed\n");
-		return 0;
-	}
-	if (ctx->callback_data)
-		UI_add_user_data(ui, ctx->callback_data);
-
-	UTIL_CTX_set_pin(ctx, NULL);
-	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
-	if (!ctx->pin)
-		return 0;
-	memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-	ctx->pin_length = MAX_PIN_LENGTH;
-	prompt = UI_construct_prompt(ui, "PKCS#11 token PIN", token_label);
-	if (!prompt)
-		return 0;
-	if (UI_dup_input_string(ui, prompt,
-			UI_INPUT_FLAG_DEFAULT_PWD, ctx->pin, 4, MAX_PIN_LENGTH) <= 0) {
-		UTIL_CTX_log(ctx, LOG_ERR, "UI_dup_input_string failed\n");
-		UI_free(ui);
-		OPENSSL_free(prompt);
-		return 0;
-	}
-	OPENSSL_free(prompt);
-
-	if (UI_process(ui)) {
-		UTIL_CTX_log(ctx, LOG_ERR, "UI_process failed\n");
-		UI_free(ui);
-		return 0;
-	}
-	UI_free(ui);
-	return 1;
 }
 
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login)
@@ -442,7 +385,7 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 	if (tok->secureLogin && !ctx->forced_pin) {
 		/* Free the PIN if it has already been
 		 * assigned (i.e, cached by UTIL_CTX_get_pin) */
-		UTIL_CTX_set_pin(ctx, NULL);
+		UTIL_CTX_set_pin(ctx, NULL, 0);
 	} else if (!ctx->pin) {
 		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
 		ctx->pin_length = MAX_PIN_LENGTH;
@@ -451,8 +394,7 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 			return 0;
 		}
 		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-		if (!UTIL_CTX_get_pin(ctx, tok->label)) {
-			UTIL_CTX_set_pin(ctx, NULL);
+		if (!ctx->pin_callback(ctx->pin_param, tok->label)) {
 			UTIL_CTX_log(ctx, LOG_ERR, "No PIN code was entered\n");
 			return 0;
 		}
@@ -461,7 +403,7 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 	/* Now login in with the (possibly NULL) PIN */
 	if (PKCS11_login(slot, 0, ctx->pin)) {
 		/* Login failed, so free the PIN if present */
-		UTIL_CTX_set_pin(ctx, NULL);
+		UTIL_CTX_set_pin(ctx, NULL, 0);
 		UTIL_CTX_log(ctx, LOG_ERR, "Login failed\n");
 		return 0;
 	}
@@ -719,12 +661,11 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 	const char *end, *p;
 	int rv = 1, id_set = 0, pin_set = 0;
 
-	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
+	tok = OPENSSL_zalloc(sizeof(PKCS11_TOKEN));
 	if (!tok) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for token info\n");
 		return 0;
 	}
-	memset(tok, 0, sizeof(PKCS11_TOKEN));
 
 	/* We are only ever invoked if the string starts with 'pkcs11:' */
 	end = uri + 6;
@@ -837,7 +778,7 @@ static void *ctx_try_load_object(UTIL_CTX *ctx,
 			}
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				tmp_pin[tmp_pin_len] = 0;
-				if (!UTIL_CTX_set_pin(ctx, tmp_pin)) {
+				if (!UTIL_CTX_set_pin(ctx, tmp_pin, 1)) {
 					goto cleanup;
 				}
 			}
