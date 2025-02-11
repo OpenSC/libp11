@@ -47,15 +47,13 @@
 
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
-typedef char *(*util_pin_cb)(void *, const char *);
 
-UTIL_CTX *UTIL_CTX_new(util_pin_cb pin_callback, void *param);
+UTIL_CTX *UTIL_CTX_new(PKCS11_PIN_CB pin_callback, void *pin_param);
 void UTIL_CTX_free(UTIL_CTX *ctx);
 int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
 int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
 PKCS11_CTX *UTIL_CTX_init_libp11(UTIL_CTX *ctx);
-PKCS11_CTX *UTIL_CTX_get_libp11_ctx(UTIL_CTX *ctx);
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);

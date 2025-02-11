@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -91,21 +91,13 @@ void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 
 static int ENGINE_CTX_ctrl_set_user_interface(ENGINE_CTX *ctx, UI_METHOD *ui_method)
 {
-	PKCS11_CTX *pkcs11_ctx = UTIL_CTX_get_libp11_ctx(ctx->util_ctx);
-
 	ctx->ui_method = ui_method;
-	if (pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 	return 1;
 }
 
 static int ENGINE_CTX_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_data)
 {
-	PKCS11_CTX *pkcs11_ctx = UTIL_CTX_get_libp11_ctx(ctx->util_ctx);
-
 	ctx->callback_data = callback_data;
-	if (pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 	return 1;
 }
 
@@ -113,7 +105,7 @@ static int ENGINE_CTX_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_dat
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static char *get_pin_callback(void *param, const char *token_label)
+static char *engine_pin_callback(void *param, const char *token_label)
 {
 	ENGINE_CTX *ctx;
 	UI *ui;
@@ -163,7 +155,7 @@ ENGINE_CTX *ENGINE_CTX_new()
 	ctx = OPENSSL_zalloc(sizeof(ENGINE_CTX));
 	if (!ctx)
 		return NULL;
-	ctx->util_ctx = UTIL_CTX_new(get_pin_callback, ctx);
+	ctx->util_ctx = UTIL_CTX_new(engine_pin_callback, ctx);
 	if (!ctx->util_ctx) {
 		OPENSSL_free(ctx);
 		return NULL;
@@ -198,17 +190,14 @@ int ENGINE_CTX_destroy(ENGINE_CTX *ctx)
 
 static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
 {
-	PKCS11_CTX *pkcs11_ctx;
 	int rv;
 
 	pthread_mutex_lock(&ctx->lock);
 
-	pkcs11_ctx = UTIL_CTX_init_libp11(ctx->util_ctx);
-	if (!pkcs11_ctx) {
+	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		pthread_mutex_unlock(&ctx->lock);
 		return -1;
 	}
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	rv = UTIL_CTX_enumerate_slots(ctx->util_ctx);
 
@@ -244,7 +233,6 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	PKCS11_CTX *pkcs11_ctx;
 	UI_METHOD *orig_ui_method;
 	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
@@ -252,8 +240,7 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	pkcs11_ctx = UTIL_CTX_init_libp11(ctx->util_ctx);
-	if (!pkcs11_ctx) {
+	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
@@ -263,13 +250,11 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	orig_callback_data = ctx->callback_data;
 	ctx->ui_method = ui_method;
 	ctx->callback_data = callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
 
 	ctx->ui_method = orig_ui_method;
 	ctx->callback_data = orig_callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -285,7 +270,6 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	PKCS11_CTX *pkcs11_ctx;
 	UI_METHOD *orig_ui_method;
 	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
@@ -293,8 +277,7 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	pkcs11_ctx = UTIL_CTX_init_libp11(ctx->util_ctx);
-	if (!pkcs11_ctx) {
+	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
@@ -304,13 +287,11 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 	orig_callback_data = ctx->callback_data;
 	ctx->ui_method = ui_method;
 	ctx->callback_data = callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
 
 	ctx->ui_method = orig_ui_method;
 	ctx->callback_data = orig_callback_data;
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -340,7 +321,6 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		const char *s_slot_cert_id;
 		X509 *cert;
 	} *parms = p;
-	PKCS11_CTX *pkcs11_ctx;
 
 	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
@@ -354,14 +334,11 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	pthread_mutex_lock(&ctx->lock);
 
 	/* Delayed libp11 initialization */
-	pkcs11_ctx = UTIL_CTX_init_libp11(ctx->util_ctx);
-	if (!pkcs11_ctx) {
+	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return 0;
 	}
-
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
 	parms->cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
 

@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2016-2024 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -200,6 +200,17 @@ int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 		return -1;
 	ctx->ui_method = ui_method;
 	ctx->ui_user_data = ui_user_data;
+	return 0;
+}
+
+/* Set PIN UI callback for retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
+int pkcs11_set_pin_method(PKCS11_CTX_private *ctx,
+	PKCS11_PIN_CB pin_callback, void *pin_param)
+{
+	if (!ctx)
+		return -1;
+	ctx->pin_callback = pin_callback;
+	ctx->pin_param = pin_param;
 	return 0;
 }
 
@@ -526,9 +537,7 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 {
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
-	char pin[MAX_PIN_LENGTH+1];
-	char *prompt;
-	UI *ui;
+	char *pin;
 	int rv;
 
 	/* Handle CKF_PROTECTED_AUTHENTICATION_PATH */
@@ -538,36 +547,53 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 		return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 	}
 
-	/* Call UI to ask for a PIN */
-	ui = UI_new_method(ctx->ui_method);
-	if (!ui)
-		return P11_R_UI_FAILED;
-	if (ctx->ui_user_data)
-		UI_add_user_data(ui, ctx->ui_user_data);
-	memset(pin, 0, MAX_PIN_LENGTH+1);
-	prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
-	if (!prompt) {
-		return P11_R_UI_FAILED;
-	}
-	if (UI_dup_input_string(ui, prompt,
-			UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH) <= 0) {
-		UI_free(ui);
-		OPENSSL_free(prompt);
-		return P11_R_UI_FAILED;
-	}
-	OPENSSL_free(prompt);
+	if (ctx->pin_callback) { /* Use the modern pin_method */
+		pin = ctx->pin_callback(ctx->pin_param, key->label);
+	} else { /* Fall back to the deprecated ui_method */
+		char *prompt;
+		UI *ui;
 
-	if (UI_process(ui)) {
+		/* Call UI to ask for a PIN */
+		pin = OPENSSL_zalloc(MAX_PIN_LENGTH+1);
+		if (!pin)
+			return P11_R_UI_FAILED;
+		ui = UI_new_method(ctx->ui_method);
+		if (!ui) {
+			OPENSSL_free(pin);
+			return P11_R_UI_FAILED;
+		}
+		if (ctx->ui_user_data)
+			UI_add_user_data(ui, ctx->ui_user_data);
+		prompt = UI_construct_prompt(ui, "PKCS#11 key PIN", key->label);
+		if (!prompt) {
+			OPENSSL_free(pin);
+			return P11_R_UI_FAILED;
+		}
+		if (UI_dup_input_string(ui, prompt,
+				UI_INPUT_FLAG_DEFAULT_PWD, pin, 4, MAX_PIN_LENGTH) <= 0) {
+			OPENSSL_free(pin);
+			UI_free(ui);
+			OPENSSL_free(prompt);
+			return P11_R_UI_FAILED;
+		}
+		OPENSSL_free(prompt);
+
+		if (UI_process(ui)) {
+			OPENSSL_free(pin);
+			UI_free(ui);
+			return P11_R_UI_FAILED;
+		}
 		UI_free(ui);
-		return P11_R_UI_FAILED;
 	}
-	UI_free(ui);
+	if (!pin)
+		return P11_R_UI_FAILED;
 
 	/* Login with the PIN */
 	rv = CRYPTOKI_call(ctx,
 		C_Login(session, CKU_CONTEXT_SPECIFIC,
 			(CK_UTF8CHAR *)pin, strlen(pin)));
 	OPENSSL_cleanse(pin, MAX_PIN_LENGTH+1);
+	OPENSSL_free(pin);
 	return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 }
 

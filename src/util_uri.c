@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,7 +47,7 @@ struct util_ctx_st {
 	/* Configuration */
 	char *module;
 	char *init_args;
-	util_pin_cb pin_callback;
+	PKCS11_PIN_CB pin_callback;
 	void *pin_param;
 
 	/* Logging */
@@ -75,7 +75,7 @@ struct util_ctx_st {
 /* Initialization                                                             */
 /******************************************************************************/
 
-UTIL_CTX *UTIL_CTX_new(util_pin_cb pin_callback, void *pin_param)
+UTIL_CTX *UTIL_CTX_new(PKCS11_PIN_CB pin_callback, void *pin_param)
 {
 	UTIL_CTX *ctx = OPENSSL_zalloc(sizeof(UTIL_CTX));
 	if (!ctx)
@@ -128,6 +128,7 @@ PKCS11_CTX *UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 		UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
 		pkcs11_ctx = PKCS11_CTX_new();
 		PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
+		PKCS11_set_pin_method(pkcs11_ctx, ctx->pin_callback, ctx->pin_param);
 		PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
 		if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
 			UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
@@ -144,11 +145,6 @@ PKCS11_CTX *UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 		}
 	}
 
-	return ctx->pkcs11_ctx;
-}
-
-PKCS11_CTX *UTIL_CTX_get_libp11_ctx(UTIL_CTX *ctx)
-{
 	return ctx->pkcs11_ctx;
 }
 

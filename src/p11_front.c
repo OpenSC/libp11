@@ -1,5 +1,5 @@
 /* libp11, a simple layer on to of PKCS#11 API
- * Copyright (C) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -394,9 +394,20 @@ void ERR_load_PKCS11_strings(void)
 int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_data)
 {
 	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+
 	if (check_fork(ctx) < 0)
 		return -1;
 	return pkcs11_set_ui_method(ctx, ui_method, ui_user_data);
+}
+
+int PKCS11_set_pin_method(PKCS11_CTX *pctx,
+	PKCS11_PIN_CB pin_callback, void *pin_param)
+{
+	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+
+	if (check_fork(ctx) < 0)
+		return -1;
+	return pkcs11_set_pin_method(ctx, pin_callback, pin_param);
 }
 
 /* External interface to the deprecated features */
