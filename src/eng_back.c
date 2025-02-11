@@ -340,6 +340,7 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		const char *s_slot_cert_id;
 		X509 *cert;
 	} *parms = p;
+	X509 *cert;
 	PKCS11_CTX *pkcs11_ctx;
 
 	if (!parms) {
@@ -363,15 +364,16 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 
 	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
 
-	parms->cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
+	cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
 
 	pthread_mutex_unlock(&ctx->lock);
 
-	if (!parms->cert) {
+	if (!cert) {
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
 	}
+	parms->cert = cert;
 	return 1;
 }
 
