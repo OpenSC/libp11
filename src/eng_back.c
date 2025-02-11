@@ -315,6 +315,7 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		const char *s_slot_cert_id;
 		X509 *cert;
 	} *parms = p;
+	X509 *cert;
 
 	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
@@ -326,23 +327,21 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 	}
 
 	pthread_mutex_lock(&ctx->lock);
-
 	/* Delayed libp11 initialization */
 	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return 0;
 	}
-
-	parms->cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
-
+	cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
 	pthread_mutex_unlock(&ctx->lock);
 
-	if (!parms->cert) {
+	if (!cert) {
 		if (!ERR_peek_last_error())
 			ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ENG_R_OBJECT_NOT_FOUND);
 		return 0;
 	}
+	parms->cert = cert;
 	return 1;
 }
 
