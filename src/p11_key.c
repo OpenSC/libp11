@@ -75,15 +75,19 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	unsigned char *data;
 
 	if (pkcs11_getattr_val(ctx, session, object, CKA_CLASS,
-			(CK_BYTE *) &object_class, sizeof(object_class)))
+			(CK_BYTE *) &object_class, sizeof(object_class))) {
+		pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_CLASS attribute\n");
 		return NULL;
+	}
 
 	switch (object_class) {
 	case CKO_PUBLIC_KEY:
 	case CKO_PRIVATE_KEY:
 		if (pkcs11_getattr_val(ctx, session, object, CKA_KEY_TYPE,
-				(CK_BYTE *)&key_type, sizeof(key_type)))
+				(CK_BYTE *)&key_type, sizeof(key_type))) {
+			pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_KEY_TYPE attribute\n");
 			return NULL;
+		}
 		switch (key_type) {
 		case CKK_RSA:
 			ops = &pkcs11_rsa_ops;
@@ -95,16 +99,25 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 #endif
 		default:
 			/* Ignore any keys we don't understand */
-			return 0;
+			pkcs11_log(ctx, LOG_DEBUG,
+				"Unsupported CKA_KEY_TYPE attribute value: %d\n",
+				key_type);
+			return NULL;
 		}
 		break;
 	case CKO_CERTIFICATE:
 		if (pkcs11_getattr_val(ctx, session, object, CKA_CERTIFICATE_TYPE,
-				(CK_BYTE *)&cert_type, sizeof(cert_type)))
+				(CK_BYTE *)&cert_type, sizeof(cert_type))) {
+			pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_CERTIFICATE_TYPE attribute\n");
 			return NULL;
+		}
 		/* Ignore unknown certificate types */
-		if (cert_type != CKC_X_509)
-			return 0;
+		if (cert_type != CKC_X_509) {
+			pkcs11_log(ctx, LOG_DEBUG,
+				"Unsupported CKA_CERTIFICATE_TYPE attribute value: %d\n",
+				cert_type);
+			return NULL;
+		}
 		break;
 	default:
 		return NULL;
@@ -121,9 +134,12 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 	obj->object = object;
 	obj->slot = pkcs11_slot_ref(slot);
 	obj->id_len = sizeof(obj->id);
-	if (pkcs11_getattr_var(ctx, session, object, CKA_ID, obj->id, &obj->id_len))
+	if (pkcs11_getattr_var(ctx, session, object, CKA_ID, obj->id, &obj->id_len)) {
+		pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_ID attribute\n");
 		obj->id_len = 0;
-	pkcs11_getattr_alloc(ctx, session, object, CKA_LABEL, (CK_BYTE **)&obj->label, NULL);
+	}
+	if (pkcs11_getattr_alloc(ctx, session, object, CKA_LABEL, (CK_BYTE **)&obj->label, NULL))
+		pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_LABEL attribute\n");
 	obj->ops = ops;
 	obj->forkid = get_forkid();
 	switch (object_class) {
@@ -134,9 +150,11 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		}
 		break;
 	case CKO_CERTIFICATE:
-		if (!pkcs11_getattr_alloc(ctx, session, object, CKA_VALUE,
-				&data, &size)) {
+		if (pkcs11_getattr_alloc(ctx, session, object, CKA_VALUE, &data, &size)) {
+			pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_VALUE attribute\n");
+		} else {
 			const unsigned char *p = data;
+
 			obj->x509 = d2i_X509(NULL, &p, (long)size);
 			OPENSSL_free(data);
 		}
