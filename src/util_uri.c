@@ -609,6 +609,10 @@ static int read_from_file(UTIL_CTX *ctx,
 	}
 
 	txt = OPENSSL_malloc(*field_len + 1); /* + 1 for '\0' */
+	if (!txt) {
+		BIO_free(fp);
+		return 0;
+	}
 	if (BIO_gets(fp, txt, *field_len + 1) > 0) {
 		memcpy(field, txt, *field_len);
 		*field_len = strlen(txt);
