@@ -738,7 +738,7 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-static void *ctx_try_load_object(UTIL_CTX *ctx,
+static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
@@ -1049,7 +1049,7 @@ cleanup:
 	return object;
 }
 
-static void *ctx_load_object(UTIL_CTX *ctx,
+static void *UTIL_CTX_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
@@ -1059,14 +1059,14 @@ static void *ctx_load_object(UTIL_CTX *ctx,
 
 	if (!ctx->force_login) {
 		ERR_clear_error();
-		obj = ctx_try_load_object(ctx, object_typestr, match_func,
+		obj = UTIL_CTX_try_load_object(ctx, object_typestr, match_func,
 			object_uri, 0);
 	}
 
 	if (!obj) {
 		/* Try again with login */
 		ERR_clear_error();
-		obj = ctx_try_load_object(ctx, object_typestr, match_func,
+		obj = UTIL_CTX_try_load_object(ctx, object_typestr, match_func,
 			object_uri, 1);
 		if (!obj) {
 			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
@@ -1235,7 +1235,7 @@ X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri)
 {
 	PKCS11_CERT *cert;
 
-	cert = ctx_load_object(ctx, "certificate", match_cert, object_uri);
+	cert = UTIL_CTX_load_object(ctx, "certificate", match_cert, object_uri);
 	return cert ? X509_dup(cert->x509) : NULL;
 }
 
@@ -1368,7 +1368,7 @@ EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
 	PKCS11_KEY *key;
 
-	key = ctx_load_object(ctx, "public key",
+	key = UTIL_CTX_load_object(ctx, "public key",
 		match_public_key, s_key_id);
 	return key ? PKCS11_get_public_key(key) : NULL;
 }
@@ -1377,7 +1377,7 @@ EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
 	PKCS11_KEY *key;
 
-	key = ctx_load_object(ctx, "private key",
+	key = UTIL_CTX_load_object(ctx, "private key",
 		match_private_key, s_key_id);
 	return key ? PKCS11_get_private_key(key) : NULL;
 }
