@@ -609,7 +609,7 @@ int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
 	/* Login with the PIN */
 	rv = CRYPTOKI_call(ctx,
 		C_Login(session, CKU_CONTEXT_SPECIFIC,
-			(CK_UTF8CHAR *)pin, strlen(pin)));
+			(CK_UTF8CHAR *)pin, (CK_ULONG)strlen(pin)));
 	OPENSSL_cleanse(pin, MAX_PIN_LENGTH+1);
 	OPENSSL_free(pin);
 	return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;

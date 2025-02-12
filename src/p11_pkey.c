@@ -274,7 +274,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	RSA *rsa;
 	int rv = 0, padding;
-	CK_ULONG size = *siglen;
+	CK_ULONG size = (CK_ULONG)*siglen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
@@ -345,7 +345,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		rv = pkcs11_authenticate(key, session);
 	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+			C_Sign(session, (CK_BYTE_PTR)tbs, (CK_ULONG)tbslen, sig, &size));
 		if (rv != CKR_OK) {
 			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
 				__FILE__, __LINE__, rv);
@@ -378,7 +378,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	RSA *rsa;
 	int rv = 0, padding;
-	CK_ULONG size = *outlen;
+	CK_ULONG size = (CK_ULONG)*outlen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
@@ -450,7 +450,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		rv = pkcs11_authenticate(key, session);
 	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(session, (CK_BYTE_PTR)in, inlen, out, &size));
+			C_Decrypt(session, (CK_BYTE_PTR)in, (CK_ULONG)inlen, out, &size));
 		if (rv != CKR_OK) {
 			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
 				__FILE__, __LINE__, rv);
@@ -509,7 +509,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	EC_KEY *eckey;
 	int rv = CKR_GENERAL_ERROR;
-	CK_ULONG size = *siglen;
+	CK_ULONG size = (CK_ULONG)*siglen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
@@ -575,7 +575,7 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		rv = pkcs11_authenticate(key, session);
 	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, tbslen, sig, &size));
+			C_Sign(session, (CK_BYTE_PTR)tbs, (CK_ULONG)tbslen, sig, &size));
 		if (rv != CKR_OK) {
 			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
 				__FILE__, __LINE__, rv);

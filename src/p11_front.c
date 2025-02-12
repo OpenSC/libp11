@@ -148,7 +148,7 @@ PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
 		return NULL;
 
 	if (current) {
-		offset = current + 1 - slots;
+		offset = (int)(current + 1 - slots);
 		if (offset < 1 || (unsigned int)offset >= nslots)
 			return NULL;
 	} else {

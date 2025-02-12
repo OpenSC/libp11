@@ -220,7 +220,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 	return pkey;
 }
 
-static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) ())
+static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) (void))
 {
 	ENGINE_CTX *ctx;
 
