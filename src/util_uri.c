@@ -863,7 +863,7 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 		UTIL_CTX_log(ctx, LOG_NOTICE, "- [%lu] %-25.25s  %-36s  (%s)\n",
 			PKCS11_get_slotid_from_slot(slot),
 			slot->description ? slot->description : "(no description)",
-			flags, slot->token->label[0] ? slot->token->label : "no label");
+			flags, slot->token && slot->token->label[0] ? slot->token->label : "no label");
 
 		/* Ignore slots without tokens. Thales HSM (and potentially
 		 * other modules) allow objects on uninitialized tokens. */
@@ -914,8 +914,8 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 			}
 			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
 				slot->description ? slot->description : "(no description)");
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
-				slot->token->label : "no label");
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+				slot->token->label[0] ?	slot->token->label : "no label");
 
 			/* Only try to login if login is required */
 			if (slot->token->loginRequired || ctx->force_login) {
@@ -963,8 +963,8 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 				slot = init_slots[0];
 				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
 					slot->description ? slot->description : "(no description)");
-				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
-					slot->token->label : "no label");
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+					slot->token->label[0] ?	slot->token->label : "no label");
 
 				/* Only try to login if login is required */
 				if (slot->token->loginRequired || ctx->force_login) {
@@ -997,8 +997,8 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 					slot = uninit_slots[m];
 					UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
 						slot->description ? slot->description : "(no description)");
-					UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
-						slot->token->label : "no label");
+					UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+						slot->token->label[0] ? slot->token->label : "no label");
 					object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
 					if (object) {
 						free(uninit_slots);
@@ -1022,8 +1022,8 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 			}
 			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
 				slot->description ? slot->description : "(no description)");
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n", slot->token->label[0]?
-				slot->token->label : "no label");
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+				slot->token && slot->token->label[0] ? slot->token->label : "no label");
 			object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
 			if (object)
 				break; /* success */
