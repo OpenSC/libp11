@@ -558,7 +558,7 @@ static CK_ECDH1_DERIVE_PARAMS *pkcs11_ecdh_params_alloc(
 	parms->pSharedData = NULL;
 	parms->ulSharedDataLen = 0;
 	parms->pPublicData = buf;
-	parms->ulPublicDataLen = len;
+	parms->ulPublicDataLen = (CK_ULONG)len;
 	return parms;
 }
 
