@@ -727,6 +727,10 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		*label = newlabel;
 		*p_tok = tok;
 	} else {
+		OPENSSL_free(tok->model);
+		OPENSSL_free(tok->manufacturer);
+		OPENSSL_free(tok->serialnr);
+		OPENSSL_free(tok->label);
 		OPENSSL_free(tok);
 		tok = NULL;
 		OPENSSL_free(newlabel);
