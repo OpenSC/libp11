@@ -82,7 +82,7 @@ static unsigned int _P11_update_forkid(void)
 
 unsigned int get_forkid()
 {
-	_P11_update_forkid();
+	(void)_P11_update_forkid();
 	return P11_forkid;
 }
 
