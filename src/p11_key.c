@@ -100,8 +100,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		default:
 			/* Ignore any keys we don't understand */
 			pkcs11_log(ctx, LOG_DEBUG,
-				"Unsupported CKA_KEY_TYPE attribute value: %d\n",
-				key_type);
+				"Unsupported CKA_KEY_TYPE attribute value: %lu\n",
+				(unsigned long)key_type);
 			return NULL;
 		}
 		break;
@@ -114,8 +114,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		/* Ignore unknown certificate types */
 		if (cert_type != CKC_X_509) {
 			pkcs11_log(ctx, LOG_DEBUG,
-				"Unsupported CKA_CERTIFICATE_TYPE attribute value: %d\n",
-				cert_type);
+				"Unsupported CKA_CERTIFICATE_TYPE attribute value: %lu\n",
+				(unsigned long)cert_type);
 			return NULL;
 		}
 		break;
