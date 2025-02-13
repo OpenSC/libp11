@@ -152,12 +152,16 @@ void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, void
 	size_t n;
 
 	n = enc(obj, NULL);
+	if (n == 0)
+		return;
+
 	buf = p = OPENSSL_malloc(n);
-	if (n && p) {
-		enc(obj, &p);
-		i = pkcs11_addattr(tmpl, type, buf, n);
-		tmpl->allocated |= 1<<i;
-	}
+	if (!buf)
+		return;
+
+	enc(obj, &p);
+	i = pkcs11_addattr(tmpl, type, buf, n);
+	tmpl->allocated |= 1<<i;
 }
 
 void pkcs11_zap_attrs(PKCS11_TEMPLATE *tmpl)
