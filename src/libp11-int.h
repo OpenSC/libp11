@@ -1,6 +1,6 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2015-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (C) 2015-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -63,9 +63,7 @@ struct pkcs11_ctx_private {
 	void *ui_user_data;
 	unsigned int forkid;
 	pthread_mutex_t fork_lock;
-	void (*vlog_a)(int, const char *, va_list); /* the logging callback */
-	PKCS11_PIN_CB pin_callback; /* the PIN UI callback */
-	void *pin_param;
+	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
 };
 #define PRIVCTX(_ctx)		((PKCS11_CTX_private *) ((_ctx)->_private))
 
@@ -302,10 +300,6 @@ extern int pkcs11_remove_object(PKCS11_OBJECT_private *object);
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
-
-/* Set PIN UI callback for retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
-extern int pkcs11_set_pin_method(PKCS11_CTX_private *ctx,
-	PKCS11_PIN_CB pin_callback, void *pin_param);
 
 /* Initialize a token */
 extern int pkcs11_init_token(PKCS11_SLOT_private *, const char *pin,

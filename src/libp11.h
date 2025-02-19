@@ -1,6 +1,5 @@
 /* libp11, a simple layer on to of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -36,28 +35,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#if defined(_LIBP11_INT_H)
-	/* Deprecated functions will no longer be exported in libp11 0.5.0 */
-	/* They are, however, used internally in OpenSSL method definitions */
-#define P11_DEPRECATED(msg)
-#elif defined(_MSC_VER)
-#define P11_DEPRECATED(msg) __declspec(deprecated(msg))
-#elif defined(__GNUC__)
-#if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) >= 40500
-	/* GCC >= 4.5.0 supports printing a message */
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated(msg)))
-#else
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated))
-#endif
-#elif defined(__clang__)
-#define P11_DEPRECATED(msg) __attribute__ ((deprecated(msg)))
-#else
-#define P11_DEPRECATED(msg)
-#endif
-
-#define P11_DEPRECATED_FUNC \
-	P11_DEPRECATED("This function will be removed removed from libp11")
 
 int ERR_load_CKR_strings(void);
 void ERR_unload_CKR_strings(void);
@@ -131,9 +108,6 @@ typedef struct PKCS11_ctx_st {
 
 /** PKCS11 ASCII logging callback */
 typedef void (*PKCS11_VLOG_A_CB)(int, const char *, va_list);
-
-/** PKCS11 PIN UI callback */
-typedef char *(*PKCS11_PIN_CB)(void *, const char *);
 
 /**
  * Create a new libp11 context
@@ -344,12 +318,8 @@ extern int PKCS11_enumerate_certs_ext(PKCS11_TOKEN *,
 extern int PKCS11_remove_certificate(PKCS11_CERT *);
 
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
-P11_DEPRECATED_FUNC extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
+extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
-
-/* Set PIN UI callback for retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
-extern int PKCS11_set_pin_method(PKCS11_CTX *ctx,
-	PKCS11_PIN_CB pin_callback, void *pin_param);
 
 /**
  * Initialize a token
