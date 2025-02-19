@@ -233,27 +233,30 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	UI_METHOD *orig_ui_method = ctx->ui_method;
-	void *orig_callback_data = ctx->callback_data;
+	UI_METHOD *orig_ui_method;
+	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
 
-	ctx->ui_method = ui_method;
-	ctx->callback_data = callback_data;
-
 	pthread_mutex_lock(&ctx->lock);
+
 	/* Delayed libp11 initialization */
 	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
-	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
-	pthread_mutex_unlock(&ctx->lock);
 
-	if (orig_ui_method)
-		ctx->ui_method = orig_ui_method;
-	if (orig_callback_data)
-		ctx->callback_data = orig_callback_data;
+	orig_ui_method = ctx->ui_method;
+	orig_callback_data = ctx->callback_data;
+	ctx->ui_method = ui_method;
+	ctx->callback_data = callback_data;
+
+	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
+
+	ctx->ui_method = orig_ui_method;
+	ctx->callback_data = orig_callback_data;
+
+	pthread_mutex_unlock(&ctx->lock);
 
 	if (!evp_pkey) {
 		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_public_key returned NULL\n");
@@ -267,27 +270,30 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		UI_METHOD *ui_method, void *callback_data)
 {
-	UI_METHOD *orig_ui_method = ctx->ui_method;
-	void *orig_callback_data = ctx->callback_data;
+	UI_METHOD *orig_ui_method;
+	void *orig_callback_data;
 	EVP_PKEY *evp_pkey;
 
-	ctx->ui_method = ui_method;
-	ctx->callback_data = callback_data;
-
 	pthread_mutex_lock(&ctx->lock);
+
 	/* Delayed libp11 initialization */
 	if (!UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
-	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
-	pthread_mutex_unlock(&ctx->lock);
 
-	if (orig_ui_method)
-		ctx->ui_method = orig_ui_method;
-	if (orig_callback_data)
-		ctx->callback_data = orig_callback_data;
+	orig_ui_method = ctx->ui_method;
+	orig_callback_data = ctx->callback_data;
+	ctx->ui_method = ui_method;
+	ctx->callback_data = callback_data;
+
+	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
+
+	ctx->ui_method = orig_ui_method;
+	ctx->callback_data = orig_callback_data;
+
+	pthread_mutex_unlock(&ctx->lock);
 
 	if (!evp_pkey) {
 		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_private_key returned NULL\n");
