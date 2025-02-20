@@ -113,12 +113,13 @@ static int ENGINE_CTX_ctrl_set_callback_data(ENGINE_CTX *ctx, void *callback_dat
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static char *get_pin_callback(void *param, const char *token_label)
+static int get_pin_callback(void *param, const char *token_label)
 {
 	ENGINE_CTX *ctx;
 	UI *ui;
 	char *prompt = NULL;
 	char *pin = NULL;
+	int rv = 0;
 
 	ctx = param;
 	ui = UI_new_method(ctx->ui_method);
@@ -129,6 +130,7 @@ static char *get_pin_callback(void *param, const char *token_label)
 	if (ctx->callback_data)
 		UI_add_user_data(ui, ctx->callback_data);
 
+	UTIL_CTX_set_pin(ctx->util_ctx, NULL, 0);
 	pin = OPENSSL_zalloc(MAX_PIN_LENGTH+1);
 	if (!pin)
 		goto cleanup;
@@ -144,11 +146,14 @@ static char *get_pin_callback(void *param, const char *token_label)
 		ENGINE_CTX_log(ctx, LOG_ERR, "UI_process failed\n");
 		goto cleanup;
 	}
+	UTIL_CTX_set_pin(ctx->util_ctx, pin, 0);
+	rv = 1;
 
 cleanup:
 	UI_free(ui);
 	OPENSSL_free(prompt);
-	return pin;
+	OPENSSL_free(pin);
+	return rv;
 }
 
 /******************************************************************************/

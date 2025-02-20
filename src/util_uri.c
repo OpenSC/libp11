@@ -55,7 +55,7 @@ struct util_ctx_st {
 	void (*vlog)(int, const char *, va_list); /* for the logging callback */
 
 	/*
-	 * The PIN used for login. Cache for the UTIL_CTX_set_pin function.
+	 * The PIN used for login. Cache for the ctx_get_pin function.
 	 * The memory for this PIN is always owned internally,
 	 * and may be freed as necessary. Before freeing, the PIN
 	 * must be whitened, to prevent security holes.
@@ -384,19 +384,20 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 	 * then use a NULL PIN. Otherwise, obtain a new PIN if needed. */
 	if (tok->secureLogin && !ctx->forced_pin) {
 		/* Free the PIN if it has already been
-		 * assigned (i.e, cached by UTIL_CTX_set_pin) */
+		 * assigned (i.e, cached by UTIL_CTX_get_pin) */
 		UTIL_CTX_set_pin(ctx, NULL, 0);
 	} else if (!ctx->pin) {
-		char *pin;
-
-		UTIL_CTX_set_pin(ctx, NULL, 0);
-		pin = ctx->pin_callback(ctx->pin_param, tok->label);
-		if (!pin) {
+		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
+		ctx->pin_length = MAX_PIN_LENGTH;
+		if (ctx->pin == NULL) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for PIN\n");
+			return 0;
+		}
+		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
+		if (!ctx->pin_callback(ctx->pin_param, tok->label)) {
 			UTIL_CTX_log(ctx, LOG_ERR, "No PIN code was entered\n");
 			return 0;
 		}
-		UTIL_CTX_set_pin(ctx, pin, 0);
-		OPENSSL_free(pin);
 	}
 
 	/* Now login in with the (possibly NULL) PIN */

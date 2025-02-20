@@ -47,7 +47,7 @@
 
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
-typedef char *(*util_pin_cb)(void *, const char *);
+typedef int (*util_pin_cb)(void *, const char *);
 
 UTIL_CTX *UTIL_CTX_new(util_pin_cb pin_callback, void *param);
 void UTIL_CTX_free(UTIL_CTX *ctx);
