@@ -98,6 +98,7 @@ struct ecdsa_method {
 ECDSA_METHOD *ECDSA_METHOD_new(const ECDSA_METHOD *m)
 {
 	ECDSA_METHOD *out;
+
 	out = OPENSSL_malloc(sizeof(ECDSA_METHOD));
 	if (!out)
 		return NULL;
@@ -140,6 +141,7 @@ struct ecdh_method {
 ECDH_METHOD *ECDH_METHOD_new(const ECDH_METHOD *m)
 {
 	ECDH_METHOD *out;
+
 	out = OPENSSL_malloc(sizeof(ECDH_METHOD));
 	if (!out)
 		return NULL;
@@ -170,7 +172,7 @@ void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
 /********** Manage EC ex_data */
 
 /* NOTE: ECDH also uses ECDSA ex_data and *not* ECDH ex_data */
-static void alloc_ec_ex_index()
+static void alloc_ec_ex_index(void)
 {
 	if (ec_ex_index == 0) {
 		while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
@@ -186,7 +188,7 @@ static void alloc_ec_ex_index()
 	}
 }
 
-static void free_ec_ex_index()
+static void free_ec_ex_index(void)
 {
 	if (ec_ex_index > 0) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L

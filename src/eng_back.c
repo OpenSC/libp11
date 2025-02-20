@@ -236,7 +236,6 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		X509 *cert;
 	} *parms = p;
 	X509 *cert;
-	PKCS11_CTX *pkcs11_ctx;
 
 	if (!parms) {
 		ENGerr(ENG_F_CTX_CTRL_LOAD_CERT, ERR_R_PASSED_NULL_PARAMETER);
@@ -281,7 +280,7 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 	return 1;
 }
 
-int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
+int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void))
 {
 	static UI_METHOD *ui_method = NULL;
 	static void *ui_data = NULL;

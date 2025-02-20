@@ -36,15 +36,10 @@
  * list the keys matching provided id or label.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
 #include <libp11.h>
-#include <unistd.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
 #define RANDOM_SIZE 20
@@ -123,8 +118,8 @@ int hex2bin(unsigned char *dst, const char *str, size_t *op_len)
 	while(byte_len--) {
 		/* start parsing from end of hexstring to beginning of hex string */
 		/* len is including '\0' so use pre-decrement */
-		int lsb = getbin(str[--len]); // this never goes out of bounds, we will have at least one byte to process!
-		int msb = len-- > 0 ? getbin(str[len]) : 0; // avoid underflow on str (when len is not even we assume 0)
+		int lsb = getbin(str[--len]); /* this never goes out of bounds, we will have at least one byte to process! */
+		int msb = len-- > 0 ? getbin(str[len]) : 0; /* avoid underflow on str (when len is not even we assume 0) */
 
 		/* combine msb and lsb to make uint8_t; */
 		dst[byte_len] = msb << 4 | lsb;

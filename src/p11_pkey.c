@@ -476,7 +476,7 @@ static int pkcs11_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	return ret;
 }
 
-static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa()
+static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa(void)
 {
 	EVP_PKEY_METHOD *orig_meth, *new_meth;
 
@@ -619,7 +619,7 @@ static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	return ret;
 }
 
-static EVP_PKEY_METHOD *pkcs11_pkey_method_ec()
+static EVP_PKEY_METHOD *pkcs11_pkey_method_ec(void)
 {
 	EVP_PKEY_METHOD *orig_meth, *new_meth;
 

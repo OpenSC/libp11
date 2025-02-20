@@ -150,7 +150,7 @@ extern char *pkcs11_strdup(char *, size_t);
 extern void pkcs11_log(PKCS11_CTX_private *pctx, int level, const char *format, ...);
 
 /* Reinitializing the module after fork (if detected) */
-extern unsigned int get_forkid();
+extern unsigned int get_forkid(void);
 extern int check_fork(PKCS11_CTX_private *ctx);
 extern int check_slot_fork(PKCS11_SLOT_private *slot);
 extern int check_object_fork(PKCS11_OBJECT_private *key);

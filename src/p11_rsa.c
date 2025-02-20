@@ -33,6 +33,7 @@ static RSA *pkcs11_rsa(PKCS11_OBJECT_private *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->object_class);
 	RSA *rsa;
+
 	if (!evp_key)
 		return NULL;
 	rsa = (RSA *)EVP_PKEY_get0_RSA(evp_key);
@@ -52,6 +53,7 @@ int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_OBJECT_private *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
+
 	if (!rsa)
 		return -1;
 	return RSA_sign(type, m, m_len, sigret, siglen, rsa);
@@ -361,6 +363,7 @@ int pkcs11_get_key_exponent(PKCS11_OBJECT_private *key, BIGNUM **bn)
 int pkcs11_get_key_size(PKCS11_OBJECT_private *key)
 {
 	RSA *rsa = pkcs11_rsa(key);
+
 	if (!rsa)
 		return 0;
 	return RSA_size(rsa);
@@ -395,6 +398,7 @@ static int pkcs11_rsa_priv_dec_method(int flen, const unsigned char *from,
 	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_dec) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
+
 	if (check_object_fork(key) < 0) {
 		priv_dec = RSA_meth_get_priv_dec(RSA_get_default_method());
 		return priv_dec(flen, from, to, rsa, padding);
@@ -408,6 +412,7 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
 	int (*priv_enc) (int flen, const unsigned char *from,
 		unsigned char *to, RSA *rsa, int padding);
+
 	if (check_object_fork(key) < 0) {
 		priv_enc = RSA_meth_get_priv_enc(RSA_get_default_method());
 		return priv_enc(flen, from, to, rsa, padding);
@@ -418,19 +423,20 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 static int pkcs11_rsa_free_method(RSA *rsa)
 {
 	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_rsa(rsa);
+	int (*orig_rsa_free_method)(RSA *rsa) =
+		RSA_meth_get_finish(RSA_get_default_method());
+
 	if (key) {
 		pkcs11_set_ex_data_rsa(rsa, NULL);
 		pkcs11_object_free(key);
 	}
-	int (*orig_rsa_free_method)(RSA *rsa) =
-		RSA_meth_get_finish(RSA_get_default_method());
 	if (orig_rsa_free_method) {
 		return orig_rsa_free_method(rsa);
 	}
 	return 1;
 }
 
-static void alloc_rsa_ex_index()
+static void alloc_rsa_ex_index(void)
 {
 	if (rsa_ex_index == 0) {
 		while (rsa_ex_index == 0) /* Workaround for OpenSSL RT3710 */
@@ -441,7 +447,7 @@ static void alloc_rsa_ex_index()
 	}
 }
 
-static void free_rsa_ex_index()
+static void free_rsa_ex_index(void)
 {
 	/* CRYPTO_free_ex_index requires OpenSSL version >= 1.1.0-pre1 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100001L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -457,6 +463,7 @@ static void free_rsa_ex_index()
 static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 {
 	RSA_METHOD *ret = OPENSSL_malloc(sizeof(RSA_METHOD));
+
 	if (!ret)
 		return NULL;
 	memcpy(ret, meth, sizeof(RSA_METHOD));
@@ -471,6 +478,7 @@ static RSA_METHOD *RSA_meth_dup(const RSA_METHOD *meth)
 static int RSA_meth_set1_name(RSA_METHOD *meth, const char *name)
 {
 	char *tmp = OPENSSL_strdup(name);
+
 	if (!tmp)
 		return 0;
 	OPENSSL_free((char *)meth->name);

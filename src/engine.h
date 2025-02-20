@@ -73,7 +73,7 @@ typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
 
 /* defined in eng_back.c */
 
-ENGINE_CTX *ENGINE_CTX_new();
+ENGINE_CTX *ENGINE_CTX_new(void);
 
 int ENGINE_CTX_destroy(ENGINE_CTX *ctx);
 
@@ -81,7 +81,7 @@ int ENGINE_CTX_init(ENGINE_CTX *ctx);
 
 int ENGINE_CTX_finish(ENGINE_CTX *ctx);
 
-int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
+int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void));
 
 EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	UI_METHOD *ui_method, void *ui_data);

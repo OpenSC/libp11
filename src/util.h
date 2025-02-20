@@ -49,7 +49,7 @@
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
 
-UTIL_CTX *UTIL_CTX_new();
+UTIL_CTX *UTIL_CTX_new(void);
 void UTIL_CTX_free(UTIL_CTX *ctx);
 int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
 int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);

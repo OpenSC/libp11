@@ -28,7 +28,7 @@
 
 #include "util.h"
 #include <stdio.h>
-#include <string.h>
+#include <strings.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #define strncasecmp _strnicmp
