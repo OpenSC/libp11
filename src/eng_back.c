@@ -163,7 +163,7 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 /******************************************************************************/
 
 EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *ui_data)
 {
 	EVP_PKEY *evp_pkey;
 
@@ -176,8 +176,7 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 		return NULL;
 	}
 
-	UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, ui_method);
-	UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, callback_data);
+	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
@@ -192,7 +191,7 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 }
 
 EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *ui_data)
 {
 	EVP_PKEY *evp_pkey;
 
@@ -205,8 +204,7 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 		return NULL;
 	}
 
-	UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, ui_method);
-	UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, callback_data);
+	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
 
 	pthread_mutex_unlock(&ctx->lock);
@@ -285,6 +283,9 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 
 int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 {
+	static UI_METHOD *ui_method = NULL;
+	static void *ui_data = NULL;
+
 	(void)i; /* We don't currently take integer parameters */
 	(void)f; /* We don't currently take callback parameters */
 	/*int initialised = ((pkcs11_dso == NULL) ? 0 : 1); */
@@ -303,10 +304,12 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
 		return UTIL_CTX_set_init_args(ctx->util_ctx, (const char *)p);
 	case ENGINE_CTRL_SET_USER_INTERFACE:
 	case CMD_SET_USER_INTERFACE:
-		return UTIL_CTX_ctrl_set_user_interface(ctx->util_ctx, (UI_METHOD *)p);
+		ui_method = p;
+		return UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	case ENGINE_CTRL_SET_CALLBACK_DATA:
 	case CMD_SET_CALLBACK_DATA:
-		return UTIL_CTX_ctrl_set_callback_data(ctx->util_ctx, p);
+		ui_data = p;
+		return UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	case CMD_FORCE_LOGIN:
 		UTIL_CTX_set_force_login(ctx->util_ctx, 1);
 		return 1;

@@ -84,10 +84,10 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx);
 int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)());
 
 EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD *ui_method, void *callback_data);
+	UI_METHOD *ui_method, void *ui_data);
 
 EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
-	UI_METHOD *ui_method, void *callback_data);
+	UI_METHOD *ui_method, void *ui_data);
 
 void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 #ifdef __GNUC__

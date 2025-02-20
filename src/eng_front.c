@@ -161,7 +161,7 @@ static int engine_finish(ENGINE *engine)
 }
 
 static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *ui_data)
 {
 	ENGINE_CTX *ctx;
 
@@ -169,11 +169,11 @@ static EVP_PKEY *load_pubkey(ENGINE *engine, const char *s_key_id,
 	if (!ctx)
 		return 0;
 	bind_helper_methods(engine);
-	return ENGINE_CTX_load_pubkey(ctx, s_key_id, ui_method, callback_data);
+	return ENGINE_CTX_load_pubkey(ctx, s_key_id, ui_method, ui_data);
 }
 
 static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
-		UI_METHOD *ui_method, void *callback_data)
+		UI_METHOD *ui_method, void *ui_data)
 {
 	ENGINE_CTX *ctx;
 	EVP_PKEY *pkey;
@@ -208,7 +208,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		}
 	}
 #endif
-	pkey = ENGINE_CTX_load_privkey(ctx, s_key_id, ui_method, callback_data);
+	pkey = ENGINE_CTX_load_privkey(ctx, s_key_id, ui_method, ui_data);
 #ifdef EVP_F_EVP_PKEY_SET1_ENGINE
 	/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
 	 * but otherwise setting pkey->engine breaks OpenSSL 1.0.2 */

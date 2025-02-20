@@ -48,17 +48,16 @@ struct util_ctx_st {
 	char *module;
 	char *init_args;
 	UI_METHOD *ui_method;
-	void *callback_data;
+	void *ui_data;
 
 	/* Logging */
 	int debug_level;                             /* level of debug output */
 	void (*vlog)(int, const char *, va_list); /* for the logging callback */
 
 	/*
-	 * The PIN used for login. Cache for the ctx_get_pin function.
-	 * The memory for this PIN is always owned internally,
-	 * and may be freed as necessary. Before freeing, the PIN
-	 * must be whitened, to prevent security holes.
+	 * The PIN used for login, cached by the UTIL_CTX_set_pin function.
+	 * The memory for this PIN is always owned internally, and may be freed
+	 * as necessary. Before freeing, the PIN must be cleansed.
 	 */
 	char *pin;
 	size_t pin_length;
@@ -102,21 +101,12 @@ int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args)
 	return 1;
 }
 
-int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method)
+int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data)
 {
 	ctx->ui_method = ui_method;
+	ctx->ui_data = ui_data;
 	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
-	return 1;
-}
-
-int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data)
-{
-	ctx->callback_data = callback_data;
-	if (ctx->pkcs11_ctx) /* libp11 is already initialized */
-		PKCS11_set_ui_method(ctx->pkcs11_ctx,
-			ctx->ui_method, ctx->callback_data);
+		PKCS11_set_ui_method(ctx->pkcs11_ctx, ui_method, ui_data);
 	return 1;
 }
 
@@ -150,7 +140,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 	pkcs11_ctx = PKCS11_CTX_new();
 	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
 	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->callback_data);
+	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->ui_data);
 	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
 		PKCS11_CTX_free(pkcs11_ctx);
@@ -378,8 +368,8 @@ static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
 		UTIL_CTX_log(ctx, LOG_ERR, "UI_new failed\n");
 		return 0;
 	}
-	if (ctx->callback_data)
-		UI_add_user_data(ui, ctx->callback_data);
+	if (ctx->ui_data)
+		UI_add_user_data(ui, ctx->ui_data);
 
 	UTIL_CTX_set_pin(ctx, NULL);
 	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
