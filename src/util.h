@@ -26,6 +26,7 @@
 #define _UTIL_LIBP11_H
 
 #include "libp11.h"
+#include <openssl/ui.h>
 #include <openssl/x509.h>
 
 /* The maximum length of an internally-allocated PIN */
@@ -47,22 +48,22 @@
 
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
-typedef int (*util_pin_cb)(void *, const char *);
 
-UTIL_CTX *UTIL_CTX_new(util_pin_cb pin_callback, void *param);
+UTIL_CTX *UTIL_CTX_new();
 void UTIL_CTX_free(UTIL_CTX *ctx);
 int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
 int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);
+int UTIL_CTX_ctrl_set_user_interface(UTIL_CTX *ctx, UI_METHOD *ui_method);
+int UTIL_CTX_ctrl_set_callback_data(UTIL_CTX *ctx, void *callback_data);
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
-PKCS11_CTX *UTIL_CTX_init_libp11(UTIL_CTX *ctx);
-PKCS11_CTX *UTIL_CTX_get_libp11_ctx(UTIL_CTX *ctx);
+int UTIL_CTX_init_libp11(UTIL_CTX *ctx);
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);
 void UTIL_CTX_set_debug_level(UTIL_CTX *ctx, int debug_level);
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...);
 
-int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin, int forced_pin);
+int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login);
 
 X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri);
