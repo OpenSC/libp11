@@ -28,10 +28,11 @@
 
 #include "util.h"
 #include <stdio.h>
-#include <strings.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #define strncasecmp _strnicmp
+#else
+#include <strings.h>
 #endif
 
 /* switch to legacy call if get0 variant is not available */

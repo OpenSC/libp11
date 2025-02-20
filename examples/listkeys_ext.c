@@ -39,6 +39,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <libp11.h>
 
 #define RANDOM_SOURCE "/dev/urandom"
