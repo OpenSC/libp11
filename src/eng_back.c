@@ -36,6 +36,11 @@ struct engine_ctx_st {
 	UTIL_CTX *util_ctx;
 	pthread_mutex_t lock;
 
+	/* UI */
+	int ui_method_provided;
+	UI_METHOD *ui_method;
+	void *ui_data;
+
 	/* Logging */
 	int debug_level;                             /* level of debug output */
 	void (*vlog)(int, const char *, va_list); /* for the logging callback */
@@ -111,6 +116,13 @@ ENGINE_CTX *ENGINE_CTX_new()
 		UTIL_CTX_set_module(ctx->util_ctx, NULL);
 #endif
 	}
+
+	/* UI */
+	ctx->ui_method_provided = 0;
+	ctx->ui_method = NULL;
+	ctx->ui_data = NULL;
+
+	/* Logging */
 	ctx->debug_level = LOG_NOTICE;
 
 	return ctx;
@@ -178,6 +190,7 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 
 	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
+	UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -197,6 +210,9 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 
 	pthread_mutex_lock(&ctx->lock);
 
+	if (!ctx->ui_method_provided) /* Cache ui_method, but not ui_data) */
+		ctx->ui_method = ui_method;
+
 	/* Delayed libp11 initialization */
 	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
 		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
@@ -206,6 +222,7 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 
 	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
 	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
+	UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
 
 	pthread_mutex_unlock(&ctx->lock);
 
@@ -282,9 +299,6 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 
 int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void))
 {
-	static UI_METHOD *ui_method = NULL;
-	static void *ui_data = NULL;
-
 	(void)i; /* We don't currently take integer parameters */
 	(void)f; /* We don't currently take callback parameters */
 	/*int initialised = ((pkcs11_dso == NULL) ? 0 : 1); */
@@ -303,12 +317,13 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void))
 		return UTIL_CTX_set_init_args(ctx->util_ctx, (const char *)p);
 	case ENGINE_CTRL_SET_USER_INTERFACE:
 	case CMD_SET_USER_INTERFACE:
-		ui_method = p;
-		return UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
+		ctx->ui_method_provided = 1;
+		ctx->ui_method = p;
+		return UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
 	case ENGINE_CTRL_SET_CALLBACK_DATA:
 	case CMD_SET_CALLBACK_DATA:
-		ui_data = p;
-		return UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
+		ctx->ui_data = p;
+		return UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
 	case CMD_FORCE_LOGIN:
 		UTIL_CTX_set_force_login(ctx->util_ctx, 1);
 		return 1;
