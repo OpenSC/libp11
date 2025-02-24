@@ -358,7 +358,7 @@ int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin)
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int UTIL_CTX_get_pin(UTIL_CTX *ctx, const char *token_label)
+static int util_ctx_get_pin(UTIL_CTX *ctx, const char *token_label)
 {
 	UI *ui;
 	char *prompt;
@@ -423,7 +423,7 @@ static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
  * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
  * @return 1 on success, 0 on error.
  */
-static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
+static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 {
 	if (!(ctx->force_login || tok->loginRequired) || slot_logged_in(ctx, slot))
 		return 1;
@@ -432,7 +432,7 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 	 * then use a NULL PIN. Otherwise, obtain a new PIN if needed. */
 	if (tok->secureLogin && !ctx->forced_pin) {
 		/* Free the PIN if it has already been
-		 * assigned (i.e, cached by UTIL_CTX_get_pin) */
+		 * assigned (i.e, cached by util_ctx_get_pin) */
 		UTIL_CTX_set_pin(ctx, NULL);
 	} else if (!ctx->pin) {
 		ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
@@ -442,7 +442,7 @@ static int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 			return 0;
 		}
 		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-		if (!UTIL_CTX_get_pin(ctx, tok->label)) {
+		if (!util_ctx_get_pin(ctx, tok->label)) {
 			UTIL_CTX_set_pin(ctx, NULL);
 			UTIL_CTX_log(ctx, LOG_ERR, "No PIN code was entered\n");
 			return 0;
@@ -798,7 +798,7 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
+static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
@@ -979,7 +979,7 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 
 			/* Only try to login if login is required */
 			if (slot->token->loginRequired || ctx->force_login) {
-				if (!UTIL_CTX_login(ctx, slot, slot->token)) {
+				if (!util_ctx_login(ctx, slot, slot->token)) {
 					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 					goto cleanup; /* failed */
 				}
@@ -1028,7 +1028,7 @@ static void *UTIL_CTX_try_load_object(UTIL_CTX *ctx,
 
 				/* Only try to login if login is required */
 				if (slot->token->loginRequired || ctx->force_login) {
-					if (!UTIL_CTX_login(ctx, slot, slot->token)) {
+					if (!util_ctx_login(ctx, slot, slot->token)) {
 						UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 						free(init_slots);
 						free(uninit_slots);
@@ -1109,7 +1109,7 @@ cleanup:
 	return object;
 }
 
-static void *UTIL_CTX_load_object(UTIL_CTX *ctx,
+static void *util_ctx_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
@@ -1119,14 +1119,14 @@ static void *UTIL_CTX_load_object(UTIL_CTX *ctx,
 
 	if (!ctx->force_login) {
 		ERR_clear_error();
-		obj = UTIL_CTX_try_load_object(ctx, object_typestr, match_func,
+		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
 			object_uri, 0);
 	}
 
 	if (!obj) {
 		/* Try again with login */
 		ERR_clear_error();
-		obj = UTIL_CTX_try_load_object(ctx, object_typestr, match_func,
+		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
 			object_uri, 1);
 		if (!obj) {
 			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
@@ -1295,7 +1295,7 @@ X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri)
 {
 	PKCS11_CERT *cert;
 
-	cert = UTIL_CTX_load_object(ctx, "certificate", match_cert, object_uri);
+	cert = util_ctx_load_object(ctx, "certificate", match_cert, object_uri);
 	return cert ? X509_dup(cert->x509) : NULL;
 }
 
@@ -1428,7 +1428,7 @@ EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
 	PKCS11_KEY *key;
 
-	key = UTIL_CTX_load_object(ctx, "public key",
+	key = util_ctx_load_object(ctx, "public key",
 		match_public_key, s_key_id);
 	return key ? PKCS11_get_public_key(key) : NULL;
 }
@@ -1437,7 +1437,7 @@ EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
 {
 	PKCS11_KEY *key;
 
-	key = UTIL_CTX_load_object(ctx, "private key",
+	key = util_ctx_load_object(ctx, "private key",
 		match_private_key, s_key_id);
 	return key ? PKCS11_get_private_key(key) : NULL;
 }
