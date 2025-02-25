@@ -26,15 +26,8 @@ ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CANONICAL_HOST
 AC_PROG_CC
-AC_C_BIGENDIAN
-
-AC_ARG_WITH([pkg-config],
-	AS_HELP_STRING([--with-pkg-config=PATH],
-		[Specify the pkg-config program to use (default: pkg-config)]),
-	[PKG_CONFIG="$withval"],
-	[PKG_CONFIG="pkg-config"])
-AC_SUBST([PKG_CONFIG])
 PKG_PROG_PKG_CONFIG
+AC_C_BIGENDIAN
 
 # we need to set our soversion based on openssl's soversion to avoid
 # issues with applications linking to new openssl, old libp11, and vice versa
