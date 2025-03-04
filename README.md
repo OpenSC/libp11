@@ -179,6 +179,133 @@ In systems with p11-kit, if this engine control is not called engine_pkcs11
 defaults to loading the p11-kit proxy module.
 
 
+# PKCS#11 provider configuration
+
+## PKCS#11 URI format
+
+Only the PKCS#11 URI format defined by
+[RFC 7512](https://datatracker.ietf.org/doc/html/rfc7512) is supported.
+
+## Copying the provider shared object to the proper location
+
+OpenSSL has a designated location where provider shared objects can be placed
+for automatic loading. To simplify usage, it is recommended to copy
+provider_pkcs11 to that location as `pkcs11prov.so`. This is handled by the
+`make install` process of provider_pkcs11.
+
+## Using the openssl configuration file
+
+OpenSSL 3.x does not automatically load custom providers, so `openssl.cnf` must
+explicitly define them. Without this configuration, OpenSSL will not detect or
+load `pkcs11prov`.
+
+```
+[openssl_init]
+providers = provider_sect
+
+[provider_sect]
+default = default_sect
+pkcs11 = pkcs11_sect
+
+[default_sect]
+activate = 1
+
+[pkcs11_sect]
+identity = pkcs11prov
+module = /usr/lib64/ossl-modules/pkcs11prov.so
+pkcs11_module = /usr/lib64/opensc-pkcs11.so
+debug_level = 7
+force_login = 1
+pin = XXXX
+activate = 1
+```
+
+Some parameters can be overridden using environment variables:
+`OPENSSL_MODULES`, `PKCS11_MODULE_PATH`, `PKCS11_DEBUG_LEVEL`,
+`PKCS11_FORCE_LOGIN`, `PKCS11_PIN`
+
+## Testing the provider operation
+
+To verify that the provider is functioning correctly, run the following command:
+
+```
+$ openssl list -providers -verbose -provider pkcs11prov
+Providers:
+  pkcs11prov
+    name: libp11 PKCS#11 provider (pkcs11prov)
+    version: 3.4.1
+    status: active
+    build info: 3.4.1
+    gettable provider parameters:
+      name: pointer to a UTF8 encoded string (arbitrary size)
+      version: pointer to a UTF8 encoded string (arbitrary size)
+      buildinfo: pointer to a UTF8 encoded string (arbitrary size)
+      status: integer (arbitrary size)
+
+```
+
+## Using OpenSSL with the provider from the command line
+
+To enable automatic provider loading, ensure your `openssl.cnf` includes:
+
+```
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = provider_sect
+
+[provider_sect]
+default = default_sect
+pkcs11 = pkcs11_sect
+
+[default_sect]
+activate = 1
+
+[pkcs11_sect]
+identity = pkcs11prov
+pkcs11_module = /usr/lib64/opensc-pkcs11.so
+activate = 1
+```
+
+To generate a certificate with its key stored in the PKCS#11 module, use:
+
+```
+$ openssl req -new -key "pkcs11:object=test-key;type=private;pin-value=XXXX" \
+         -out req.pem -text -x509 -subj "/CN=Andreas Jellinghaus"
+$ openssl x509 -signkey "pkcs11:object=test-key;type=private;pin-value=XXXX" \
+         -in req.pem -out cert.pem
+```
+
+Alternatively, you can use environment variables:
+
+```
+$ PKCS11_MODULE_PATH=/usr/lib64/opensc-pkcs11.so PKCS11_PIN=XXXX \
+         openssl req -new -key "pkcs11:object=test-key;type=private" \
+         -out req.pem -text -x509 -subj "/CN=Andreas Jellinghaus" \
+         -provider pkcs11prov -provider default
+$ PKCS11_MODULE_PATH=/usr/lib64/opensc-pkcs11.so PKCS11_PIN=XXXX \
+         openssl x509 -signkey "pkcs11:object=test-key;type=private" \
+         -in req.pem -out cert.pem \
+         -provider pkcs11prov -provider default
+```
+
+## Provider controls
+
+The following provider controls are supported:
+* **pkcs11_module**: Specifies the path to the PKCS#11 module shared library
+* **pin**: Specifies the PIN code
+* **debug_level**: Sets the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug
+* **force_login**: Forces login to the PKCS#11 module
+* **init_args**: Specifies additional initialization arguments to the PKCS#11 module
+
+Example code snippet for setting a specific module (requires OpenSSL 3.5):
+
+```
+OSSL_PROVIDER *provider=OSSL_PROVIDER_load(NULL, "pkcs11prov");
+OSSL_PROVIDER_add_conf_parameter(provider, "pkcs11_module",
+		"/path/to/pkcs11module.so");
+```
+
 # Developer information
 
 ## Thread safety in libp11
