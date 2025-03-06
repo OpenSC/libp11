@@ -28,6 +28,7 @@
 
 #include "util.h"
 #include <stdio.h>
+#include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #define strncasecmp _strnicmp
@@ -77,7 +78,12 @@ struct util_ctx_st {
 
 UTIL_CTX *UTIL_CTX_new()
 {
-	return OPENSSL_zalloc(sizeof(UTIL_CTX));
+	UTIL_CTX *ctx;
+
+	ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
+	if (ctx)
+		memset(ctx, 0, sizeof(UTIL_CTX));
+	return ctx;
 }
 
 void UTIL_CTX_free(UTIL_CTX *ctx)
@@ -236,6 +242,24 @@ static char *dump_hex(unsigned char *val, const size_t len)
 	}
 	return hexbuf;
 }
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+static char *OPENSSL_strndup(const char *str, size_t s)
+{
+	size_t len;
+	char *ret;
+
+	if (!str || !s)
+		return NULL;
+	len = strnlen(str, s);
+	ret = OPENSSL_malloc(len + 1);
+	if (ret) {
+		memcpy(ret, str, len);
+		ret[len] = '\0';
+	}
+	return ret;
+}
+#endif
 
 static char *dump_expiry(const PKCS11_CERT *cert)
 {
