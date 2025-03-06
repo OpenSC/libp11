@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -210,7 +210,7 @@ EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
 
 	pthread_mutex_lock(&ctx->lock);
 
-	if (!ctx->ui_method_provided) /* Cache ui_method, but not ui_data) */
+	if (!ctx->ui_method_provided) /* Cache ui_method, but not ui_data */
 		ctx->ui_method = ui_method;
 
 	/* Delayed libp11 initialization */

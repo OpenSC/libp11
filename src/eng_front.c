@@ -5,7 +5,7 @@
  * Portions Copyright (c) 2003 Kevin Stefanik (kstef@mtppi.org)
  * Copied/modified by Kevin Stefanik (kstef@mtppi.org) for the OpenSC
  * project 2003.
- * Copyright (c) 2016-2018 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
