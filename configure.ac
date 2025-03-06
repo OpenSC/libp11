@@ -201,9 +201,9 @@ fi
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
-	[libcrypto >= 0.9.8],
+	[libcrypto >= 1.0.0],
 	,
-	[AC_MSG_ERROR([libcrypto >= 0.9.8 is required])]
+	[AC_MSG_ERROR([libcrypto >= 1.0.0 is required])]
 )
 
 AC_CHECK_FUNCS([ X509_get0_notAfter X509_get0_notBefore ])
