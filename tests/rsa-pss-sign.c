@@ -220,8 +220,6 @@ int main(int argc, char **argv)
 
 	printf("Signature created\n");
 
-#if OPENSSL_VERSION_NUMBER >= 0x1000000fL
-
 	pkey_ctx = EVP_PKEY_CTX_new(public_key, e);
 
 	if (pkey_ctx == NULL) {
@@ -265,12 +263,6 @@ int main(int argc, char **argv)
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
-
-#else /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
-
-	printf("Unable to verify signature with %s\n", OPENSSL_VERSION_TEXT);
-
-#endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
 	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(e);

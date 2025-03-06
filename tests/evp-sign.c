@@ -287,8 +287,6 @@ int main(int argc, char **argv)
 
 	printf("Signature created\n");
 
-#if OPENSSL_VERSION_NUMBER >= 0x1000000fL
-
 	ctx = EVP_MD_CTX_create();
 	if (EVP_DigestInit(ctx, digest_algo) <= 0) {
 		display_openssl_errors(__LINE__);
@@ -313,12 +311,6 @@ int main(int argc, char **argv)
 	EVP_PKEY_free(public_key);
 
 	printf("Signature verified\n");
-
-#else /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
-
-	printf("Unable to verify signature with %s\n", OPENSSL_VERSION_TEXT);
-
-#endif /* OPENSSL_VERSION_NUMBER >= 0x1000000fL */
 
 	CONF_modules_unload(1);
 	UI_destroy_method(ui_detect_failed_ctrl);
