@@ -1,6 +1,9 @@
 AUTOMAKE_OPTIONS = foreign 1.10
 ACLOCAL_AMFLAGS = -I m4
 
+# prevent "make distcheck" from requiring root privileges
+DISTCHECK_CONFIGURE_FLAGS = --with-enginesdir='$(abs_top_builddir)/$(distdir)/_inst/lib/engines'
+
 MAINTAINERCLEANFILES = \
 	config.log config.status \
 	$(srcdir)/configure $(srcdir)/Makefile.in \
