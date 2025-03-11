@@ -28,14 +28,10 @@
 
 #include "engine.h"
 #include "util.h"
-#include "p11_pthread.h"
 #include <stdio.h>
 #include <string.h>
 
 struct engine_ctx_st {
-	UTIL_CTX *util_ctx;
-	pthread_mutex_t lock;
-
 	/* UI */
 	int ui_method_provided;
 	UI_METHOD *ui_method;
@@ -44,6 +40,9 @@ struct engine_ctx_st {
 	/* Logging */
 	int debug_level;                             /* level of debug output */
 	void (*vlog)(int, const char *, va_list); /* for the logging callback */
+
+	/* Current operations */
+	UTIL_CTX *util_ctx;
 };
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -104,7 +103,6 @@ ENGINE_CTX *ENGINE_CTX_new()
 		OPENSSL_free(ctx);
 		return NULL;
 	}
-	pthread_mutex_init(&ctx->lock, 0);
 
 	mod = getenv("PKCS11_MODULE_PATH");
 	if (mod) {
@@ -133,7 +131,6 @@ int ENGINE_CTX_destroy(ENGINE_CTX *ctx)
 {
 	if (ctx) {
 		UTIL_CTX_free(ctx->util_ctx);
-		pthread_mutex_destroy(&ctx->lock);
 		OPENSSL_free(ctx);
 	}
 	return 1;
@@ -141,12 +138,7 @@ int ENGINE_CTX_destroy(ENGINE_CTX *ctx)
 
 static int ENGINE_CTX_enumerate_slots(ENGINE_CTX *ctx)
 {
-	int rv;
-
-	pthread_mutex_lock(&ctx->lock);
-	rv = UTIL_CTX_enumerate_slots(ctx->util_ctx);
-	pthread_mutex_unlock(&ctx->lock);
-	return rv;
+	return UTIL_CTX_enumerate_slots(ctx->util_ctx);
 }
 
 /* Function called from ENGINE_init() */
@@ -174,25 +166,13 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 /* Engine load public/private key                                             */
 /******************************************************************************/
 
-EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *uri,
 		UI_METHOD *ui_method, void *ui_data)
 {
 	EVP_PKEY *evp_pkey;
 
-	pthread_mutex_lock(&ctx->lock);
-
-	/* Delayed libp11 initialization */
-	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
-		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
-		pthread_mutex_unlock(&ctx->lock);
-		return NULL;
-	}
-
-	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
-	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, s_key_id);
-	UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
-
-	pthread_mutex_unlock(&ctx->lock);
+	evp_pkey = UTIL_CTX_get_pubkey_from_uri(ctx->util_ctx, uri,
+		ui_method, ui_data);
 
 	if (!evp_pkey) {
 		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_public_key returned NULL\n");
@@ -203,28 +183,18 @@ EVP_PKEY *ENGINE_CTX_load_pubkey(ENGINE_CTX *ctx, const char *s_key_id,
 	return evp_pkey;
 }
 
-EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *s_key_id,
+EVP_PKEY *ENGINE_CTX_load_privkey(ENGINE_CTX *ctx, const char *uri,
 		UI_METHOD *ui_method, void *ui_data)
 {
 	EVP_PKEY *evp_pkey;
 
-	pthread_mutex_lock(&ctx->lock);
-
-	if (!ctx->ui_method_provided) /* Cache ui_method, but not ui_data */
+	if (!ctx->ui_method_provided) { /* Cache ui_method, but not ui_data */
 		ctx->ui_method = ui_method;
-
-	/* Delayed libp11 initialization */
-	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
-		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
-		pthread_mutex_unlock(&ctx->lock);
-		return NULL;
+		UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
 	}
 
-	UTIL_CTX_set_ui_method(ctx->util_ctx, ui_method, ui_data);
-	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, s_key_id);
-	UTIL_CTX_set_ui_method(ctx->util_ctx, ctx->ui_method, ctx->ui_data);
-
-	pthread_mutex_unlock(&ctx->lock);
+	evp_pkey = UTIL_CTX_get_privkey_from_uri(ctx->util_ctx, uri,
+		ui_method, ui_data);
 
 	if (!evp_pkey) {
 		ENGINE_CTX_log(ctx, LOG_ERR, "PKCS11_get_private_key returned NULL\n");
@@ -263,18 +233,8 @@ static int ENGINE_CTX_ctrl_load_cert(ENGINE_CTX *ctx, void *p)
 		return 0;
 	}
 
-	pthread_mutex_lock(&ctx->lock);
-
-	/* Delayed libp11 initialization */
-	if (UTIL_CTX_init_libp11(ctx->util_ctx)) {
-		ENGerr(ENG_F_CTX_LOAD_OBJECT, ENG_R_INVALID_PARAMETER);
-		pthread_mutex_unlock(&ctx->lock);
-		return 0;
-	}
-
-	cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id);
-
-	pthread_mutex_unlock(&ctx->lock);
+	cert = UTIL_CTX_get_cert_from_uri(ctx->util_ctx, parms->s_slot_cert_id,
+		ctx->ui_method, ctx->ui_data);
 
 	if (!cert) {
 		if (!ERR_peek_last_error())

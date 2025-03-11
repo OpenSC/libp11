@@ -27,6 +27,7 @@
  */
 
 #include "util.h"
+#include "p11_pthread.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -70,6 +71,8 @@ struct util_ctx_st {
 	PKCS11_CTX *pkcs11_ctx;
 	PKCS11_SLOT *slot_list;
 	unsigned int slot_count;
+	pthread_mutex_t lock;
+
 };
 
 /******************************************************************************/
@@ -83,6 +86,7 @@ UTIL_CTX *UTIL_CTX_new()
 	ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
 	if (ctx)
 		memset(ctx, 0, sizeof(UTIL_CTX));
+	pthread_mutex_init(&ctx->lock, 0);
 	return ctx;
 }
 
@@ -91,6 +95,7 @@ void UTIL_CTX_free(UTIL_CTX *ctx)
 	UTIL_CTX_set_pin(ctx, NULL);
 	OPENSSL_free(ctx->module);
 	OPENSSL_free(ctx->init_args);
+	pthread_mutex_destroy(&ctx->lock);
 	OPENSSL_free(ctx);
 }
 
@@ -117,7 +122,7 @@ int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data)
 	return 1;
 }
 
-int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
+static int UTIL_CTX_enumerate_slots_unlocked(UTIL_CTX *ctx)
 {
 	if (!ctx->pkcs11_ctx)
 		UTIL_CTX_init_libp11(ctx);
@@ -134,7 +139,18 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 	return 1;
 }
 
+int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
+{
+	int rv;
+
+	pthread_mutex_lock(&ctx->lock);
+	rv = UTIL_CTX_enumerate_slots_unlocked(ctx);
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
+}
+
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
+
 int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 {
 	PKCS11_CTX *pkcs11_ctx;
@@ -155,7 +171,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 	}
 	ctx->pkcs11_ctx = pkcs11_ctx;
 
-	if (UTIL_CTX_enumerate_slots(ctx) != 1)
+	if (UTIL_CTX_enumerate_slots_unlocked(ctx) != 1)
 		return -1;
 
 	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
@@ -382,19 +398,20 @@ int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin)
  * passed to the user interface implemented by an application. Only the
  * application knows how to interpret the call-back data.
  * A (strdup'ed) copy of the PIN code will be stored in the pin variable. */
-static int util_ctx_get_pin(UTIL_CTX *ctx, const char *token_label)
+static int util_ctx_get_pin(UTIL_CTX *ctx, const char *token_label,
+		UI_METHOD *ui_method, void *ui_data)
 {
 	UI *ui;
 	char *prompt;
 
 	/* call ui to ask for a pin */
-	ui = UI_new_method(ctx->ui_method);
+	ui = UI_new_method(ui_method);
 	if (!ui) {
 		UTIL_CTX_log(ctx, LOG_ERR, "UI_new failed\n");
 		return 0;
 	}
-	if (ctx->ui_data)
-		UI_add_user_data(ui, ctx->ui_data);
+	if (ui_data)
+		UI_add_user_data(ui, ui_data);
 
 	UTIL_CTX_set_pin(ctx, NULL);
 	ctx->pin = OPENSSL_malloc(MAX_PIN_LENGTH+1);
@@ -447,7 +464,8 @@ static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
  * @tok is PKCS11 token to log in (??? could be derived as @slot->token)
  * @return 1 on success, 0 on error.
  */
-static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
+static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
+		UI_METHOD *ui_method, void *ui_data)
 {
 	if (!(ctx->force_login || tok->loginRequired) || slot_logged_in(ctx, slot))
 		return 1;
@@ -466,7 +484,7 @@ static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok)
 			return 0;
 		}
 		memset(ctx->pin, 0, MAX_PIN_LENGTH+1);
-		if (!util_ctx_get_pin(ctx, tok->label)) {
+		if (!util_ctx_get_pin(ctx, tok->label, ui_method, ui_data)) {
 			UTIL_CTX_set_pin(ctx, NULL);
 			UTIL_CTX_log(ctx, LOG_ERR, "No PIN code was entered\n");
 			return 0;
@@ -826,7 +844,8 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
-		const char *object_uri, const int login)
+		const char *object_uri, UI_METHOD *ui_method, void *ui_data,
+		const int login)
 {
 	PKCS11_SLOT *slot;
 	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
@@ -1003,7 +1022,7 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 
 			/* Only try to login if login is required */
 			if (slot->token->loginRequired || ctx->force_login) {
-				if (!util_ctx_login(ctx, slot, slot->token)) {
+				if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
 					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 					goto cleanup; /* failed */
 				}
@@ -1052,7 +1071,7 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 
 				/* Only try to login if login is required */
 				if (slot->token->loginRequired || ctx->force_login) {
-					if (!util_ctx_login(ctx, slot, slot->token)) {
+					if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
 						UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
 						free(init_slots);
 						free(uninit_slots);
@@ -1137,26 +1156,35 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
 				const char *, size_t, const char *),
-		const char *object_uri)
+		const char *object_uri, UI_METHOD *ui_method, void *ui_data)
 {
 	void *obj = NULL;
+
+	pthread_mutex_lock(&ctx->lock);
+
+	if (UTIL_CTX_init_libp11(ctx)) {
+		pthread_mutex_unlock(&ctx->lock);
+		return NULL;
+	}
 
 	if (!ctx->force_login) {
 		ERR_clear_error();
 		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 0);
+			object_uri, ui_method, ui_data, 0);
 	}
 
 	if (!obj) {
 		/* Try again with login */
 		ERR_clear_error();
 		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, 1);
+			object_uri, ui_method, ui_data, 1);
 		if (!obj) {
 			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
 				object_typestr, object_uri);
 		}
 	}
+
+	pthread_mutex_unlock(&ctx->lock);
 
 	return obj;
 }
@@ -1315,11 +1343,13 @@ cleanup:
 	return selected_cert;
 }
 
-X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *object_uri)
+X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *uri,
+		UI_METHOD *ui_method, void *ui_data)
 {
 	PKCS11_CERT *cert;
 
-	cert = util_ctx_load_object(ctx, "certificate", match_cert, object_uri);
+	cert = util_ctx_load_object(ctx, "certificate",
+		match_cert, uri, ui_method, ui_data);
 	return cert ? X509_dup(cert->x509) : NULL;
 }
 
@@ -1448,21 +1478,23 @@ static void *match_private_key(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 	return match_key_int(ctx, tok, 1, obj_id, obj_id_len, obj_label);
 }
 
-EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
+EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *uri,
+		UI_METHOD *ui_method, void *ui_data)
 {
 	PKCS11_KEY *key;
 
 	key = util_ctx_load_object(ctx, "public key",
-		match_public_key, s_key_id);
+		match_public_key, uri, ui_method, ui_data);
 	return key ? PKCS11_get_public_key(key) : NULL;
 }
 
-EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *s_key_id)
+EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *uri,
+		UI_METHOD *ui_method, void *ui_data)
 {
 	PKCS11_KEY *key;
 
 	key = util_ctx_load_object(ctx, "private key",
-		match_private_key, s_key_id);
+		match_private_key, uri, ui_method, ui_data);
 	return key ? PKCS11_get_private_key(key) : NULL;
 }
 
