@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+# This test checks if the search for objects in tokens will continue past the
+# first token found.
+#
+# Generic PKCS#11 URIs are used to make the search to match more than one
+# token. The search should be able to find the objects in each device, which are
+# labeled differently per token.
+#
+# This test also contains a negative test to verify that the provider will not try
+# to login to a token if more than one token matched the search. This is why it
+# is required to have only one match to be able to use a private key.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+PRIVATE_KEY="pkcs11:token=libp11-3;object=label-3;type=private;pin-value=${PIN}"
+PRIVATE_KEY_WITHOUT_TOKEN="pkcs11:object=label-3;type=private;pin-value=${PIN}"
+PUBLIC_KEY_ANY="pkcs11:type=public"
+CERTIFICATE="pkcs11:object=label-3;type=cert"
+NUM_DEVICES=5
+
+if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
+# Do the token initialization, create some devices
+init_token "rsa" ${NUM_DEVICES} "libp11" ${ID} "label" "privkey" "pubkey" "cert"
+
+# Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Create the input file
+echo "secret" > "${outdir}/in.txt"
+
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+# Run the test
+# Verify that it doesn't try to login if more than one token matched the search
+${WRAPPER} ${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+	-inkey ${PRIVATE_KEY_WITHOUT_TOKEN} -sign \
+	-out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if [[ $? -eq 0 ]]; then
+	echo "Did not fail when the PKCS#11 URI matched multiple tokens"
+	exit 1
+fi
+
+# Generate signature specifying the token in the PKCS#11 URI
+${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+	-inkey ${PRIVATE_KEY} -sign -out "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to sign file using PKCS#11 URI ${PRIVATE_KEY}"
+	exit 1
+fi
+
+# Verify the signature using the public key from each token
+i=0
+while [[ $i -lt ${NUM_DEVICES} ]]; do
+	pubkey="pkcs11:object=label-$i;type=public"
+	${OPENSSL} pkeyutl -provider pkcs11prov -provider default -pubin \
+		-inkey ${pubkey} -verify -sigfile "${outdir}/signature.bin" \
+		-in "${outdir}/in.txt"
+	if [[ $? -ne 0 ]]; then
+		echo "Failed to verify the signature using the PKCS#11 URI ${pubkey}"
+		exit 1
+	fi
+	i=$(($i + 1))
+done
+
+# Verify the signature using a certificate without specifying the token
+${OPENSSL} pkeyutl -provider pkcs11prov -provider default -certin \
+	-inkey ${CERTIFICATE} -verify -sigfile "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verify the signature using the PKCS#11 URI ${CERTIFICATE}"
+	exit 1
+fi
+
+# Verify the signature using the first public key found
+${OPENSSL} pkeyutl -provider pkcs11prov -provider default -pubin \
+	-inkey ${PUBLIC_KEY_ANY} -verify -sigfile "${outdir}/signature.bin" \
+	-in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verify the signature using the PKCS#11 URI ${PUBLIC_KEY_ANY}."
+	exit 1
+fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
+
+rm -rf "$outdir"
+
+exit 0

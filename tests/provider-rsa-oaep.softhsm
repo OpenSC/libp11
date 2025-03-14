@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
+PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=public"
+
+if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
+# Do the token initialization
+init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
+
+# Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+# Run the test
+${WRAPPER} ./rsa-oaep-prov ${PRIVATE_KEY} ${PUBLIC_KEY}
+if [[ $? -ne 0 ]]; then
+	echo "RSA-OAEP encryption/decryption test failed."
+	exit 1
+fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
+
+rm -rf "$outdir"
+
+exit 0

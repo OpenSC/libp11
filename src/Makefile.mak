@@ -12,13 +12,16 @@ LIBP11_TARGET = libp11.dll
 PKCS11_OBJECTS = eng_front.obj eng_back.obj eng_err.obj util_uri.obj
 PKCS11_TARGET = pkcs11.dll
 
-OBJECTS = $(LIBP11_OBJECTS) $(PKCS11_OBJECTS)
-TARGETS = $(LIBP11_TARGET) $(PKCS11_TARGET)
+PKCS11PROV_OBJECTS = provider.obj util_uri.obj
+PKCS11PROV_TARGET = pkcs11prov.dll
+
+OBJECTS = $(LIBP11_OBJECTS) $(PKCS11_OBJECTS) $(PKCS11PROV_OBJECTS)
+TARGETS = $(LIBP11_TARGET) $(PKCS11_TARGET) $(PKCS11PROV_TARGET)
 
 all: $(TARGETS)
 
 clean:
-	del $(OBJECTS) $(TARGETS) *.lib *.def *.res libp11.exp pkcs11.exp
+	del $(OBJECTS) $(TARGETS) *.lib *.def *.res libp11.exp pkcs11.exp pkcs11prov.exp
 
 .rc.res:
 	rc /r /fo$@ $<
@@ -38,6 +41,11 @@ $(LIBP11_TARGET): $(LIBP11_OBJECTS) $*.def $*.res
 $(PKCS11_TARGET): $(PKCS11_OBJECTS) $(LIBP11_OBJECTS) $*.def $*.res
 	link $(LINKFLAGS) /dll /def:$*.def /implib:$*.lib /out:$@ \
 		$(PKCS11_OBJECTS) $(LIBP11_OBJECTS) $(LIBS) $*.res
+	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
+
+$(PKCS11PROV_TARGET): $(PKCS11PROV_OBJECTS) $(LIBP11_OBJECTS) pkcs11prov.def $*.res
+	link $(LINKFLAGS) /dll /def:pkcs11prov.def /implib:pkcs11prov.lib /out:$@ \
+		$(PKCS11PROV_OBJECTS) $(LIBP11_OBJECTS) $(LIBS) $*.res
 	if EXIST $*.dll.manifest mt -manifest $*.dll.manifest -outputresource:$*.dll;2
 
 .SUFFIXES: .exports

@@ -74,8 +74,17 @@ tests/rsa-pss-sign
 tests/check-privkey
 tests/dup-key
 tests/store-cert
+tests/check-privkey-prov
+tests/dup-key-prov
+tests/evp-sign-prov
+tests/fork-change-slot-prov
+tests/rsa-oaep-prov
+tests/rsa-pss-sign-prov
+tests/store-cert-prov
+
 tests/*.log
 tests/*.trs
+tests/*.a
 tests/output.*
 
 doc/doxygen.conf

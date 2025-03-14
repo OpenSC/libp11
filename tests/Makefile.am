@@ -1,4 +1,4 @@
-EXTRA_DIST = engines.cnf.in common.sh openssl-settings.sh
+EXTRA_DIST = engines.cnf.in common.sh openssl-settings.sh helpers_prov.h
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
@@ -11,14 +11,22 @@ LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
 check_PROGRAMS = \
 	openssl_version \
-	fork-test evp-sign \
+	evp-sign \
+	evp-sign-prov \
+	fork-test \
 	fork-change-slot \
+	fork-change-slot-prov \
 	list-tokens \
 	rsa-pss-sign \
+	rsa-pss-sign-prov \
 	rsa-oaep \
+	rsa-oaep-prov \
 	check-privkey \
+	check-privkey-prov \
 	store-cert \
-	dup-key
+	store-cert-prov \
+	dup-key \
+	dup-key-prov
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -36,10 +44,30 @@ dist_check_SCRIPTS = \
 	fork-change-slot.softhsm \
 	case-insensitive.softhsm \
 	pkcs11-uri-without-token.softhsm \
-	search-all-matching-tokens.softhsm
+	search-all-matching-tokens.softhsm \
+	provider-rsa-evp-sign.softhsm \
+	provider-rsa-pss-sign.softhsm \
+	provider-rsa-oaep.softhsm \
+	provider-rsa-check-privkey.softhsm \
+	provider-ec-evp-sign.softhsm \
+	provider-ec-check-privkey.softhsm \
+	provider-ec-cert-store.softhsm \
+	provider-ec-copy.softhsm \
+	provider-fork-change-slot.softhsm \
+	provider-case-insensitive.softhsm \
+	provider-pkcs11-uri-without-token.softhsm \
+	provider-search-all-matching-tokens.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
 	ec-cert.der ec-privkey.der ec-pubkey.der
+
+evp_sign_prov_SOURCES = evp-sign-prov.c helpers_prov.c
+fork_change_slot_prov_SOURCES = fork-change-slot-prov.c helpers_prov.c
+dup_key_prov_SOURCES = dup-key-prov.c helpers_prov.c
+check_privkey_prov_SOURCES = check-privkey-prov.c helpers_prov.c
+rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
+rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
+store_cert_prov_SOURCES = store-cert-prov.c helpers_prov.c
 
 TESTS = $(dist_check_SCRIPTS)
 
