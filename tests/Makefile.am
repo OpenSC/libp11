@@ -26,7 +26,8 @@ check_PROGRAMS = \
 	store-cert \
 	store-cert-prov \
 	dup-key \
-	dup-key-prov
+	dup-key-prov \
+	check-all-prov
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -49,8 +50,10 @@ dist_check_SCRIPTS = \
 	provider-rsa-pss-sign.softhsm \
 	provider-rsa-oaep.softhsm \
 	provider-rsa-check-privkey.softhsm \
+	provider-rsa-check-all.softhsm \
 	provider-ec-evp-sign.softhsm \
 	provider-ec-check-privkey.softhsm \
+	provider-ec-check-all.softhsm \
 	provider-ec-cert-store.softhsm \
 	provider-ec-copy.softhsm \
 	provider-fork-change-slot.softhsm \
@@ -68,6 +71,7 @@ check_privkey_prov_SOURCES = check-privkey-prov.c helpers_prov.c
 rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
 rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
 store_cert_prov_SOURCES = store-cert-prov.c helpers_prov.c
+check_all_prov_SOURCES = check-all-prov.c helpers_prov.c
 
 TESTS = $(dist_check_SCRIPTS)
 

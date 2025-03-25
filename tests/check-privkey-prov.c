@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_FAILURE;
 
 	if (argc < 2) {
-		fprintf(stderr, "usage: %s [certificate (PEM or URL)] [private key URL]n", argv[0]);
+		fprintf(stderr, "usage: %s [certificate (PEM or URL)] [private key URL]\n", argv[0]);
 		return ret;
 	}
 

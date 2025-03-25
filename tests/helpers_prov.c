@@ -49,6 +49,40 @@ void display_openssl_errors(void)
 	}
 }
 
+ /* store_type == 0 means here multiple types of credentials are to be loaded */
+void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *obj_set) {
+    OSSL_STORE_CTX *store_ctx;
+    int type;
+
+    store_ctx = OSSL_STORE_open(uri, ui_method, NULL, NULL, NULL);
+    if (!store_ctx)
+        return; /* FAILED */
+
+    while (!OSSL_STORE_eof(store_ctx)) {
+        OSSL_STORE_INFO *object = OSSL_STORE_load(store_ctx);
+
+        if (!object)
+            continue;
+
+        type = OSSL_STORE_INFO_get_type(object);
+        switch (type) {
+        case OSSL_STORE_INFO_PKEY:
+            obj_set->private_key = OSSL_STORE_INFO_get1_PKEY(object);
+            break;
+        case OSSL_STORE_INFO_PUBKEY:
+            obj_set->public_key = OSSL_STORE_INFO_get1_PUBKEY(object);
+            break;
+        case OSSL_STORE_INFO_CERT:
+            obj_set->cert = OSSL_STORE_INFO_get1_CERT(object);
+            break;
+        default:
+            break; /* skip any other type */
+        }
+        OSSL_STORE_INFO_free(object);
+    }
+    OSSL_STORE_close(store_ctx);
+}
+
 EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method)
 {
 	EVP_PKEY *pkey = NULL;
