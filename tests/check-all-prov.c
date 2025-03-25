@@ -3,7 +3,7 @@
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  * All rights reserved.
  *
- * PKCS#11 provider tests support library
+ * PKCS#11 provider test
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,32 +27,69 @@
  * SUCH DAMAGE.
  */
 
-/* Common functions */
-
-#include <openssl/opensslv.h>
+#include "helpers_prov.h"
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 
-#include <openssl/err.h>
-#include <openssl/store.h>
-#include <openssl/provider.h>
-#include <openssl/ui.h>
+int main(int argc, char *argv[])
+{
+	OBJ_SET *obj_set;
+	int ret = EXIT_FAILURE;
 
-typedef struct {
-	EVP_PKEY *private_key;
-	EVP_PKEY *public_key;
-	X509 *cert;
-} OBJ_SET;
+	if (argc < 1) {
+		fprintf(stderr, "usage: %s [object URL]\n", argv[0]);
+		return ret;
+	}
 
-void display_openssl_errors(void);
-void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *set);
-EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method);
-EVP_PKEY *load_pubkey(const char *uri);
-X509 *load_cert(const char *uri);
-void provider_free(OSSL_PROVIDER *prov);
-void providers_cleanup(void);
-int provider_load(const char *pname);
-int providers_load(void);
+	obj_set = OPENSSL_zalloc(sizeof(OBJ_SET));
+	if (!obj_set)
+		return ret;
+
+	/* Load pkcs11prov and default providers */
+        if (!providers_load()) {
+		display_openssl_errors();
+		return ret;
+        }
+
+	/* Load private key, public key and certificate */
+	load_objects(argv[1], NULL, obj_set);
+
+	if (!obj_set->private_key) {
+		printf("Cannot load private key: %s\n", argv[1]);
+		goto cleanup;
+	}
+	if (!obj_set->public_key) {
+		printf("Cannot load public key: %s\n", argv[1]);
+		goto cleanup;
+	}
+	if (!obj_set->cert) {
+		printf("Cannot load certificate: %s\n", argv[1]);
+		goto cleanup;
+	}
+	ret = X509_check_private_key(obj_set->cert, obj_set->private_key);
+	if (!ret) {
+		printf("Could not check private key.\n");
+		display_openssl_errors();
+		goto cleanup;
+	}
+	printf("Key and certificate matched.\n");
+	ret = EXIT_SUCCESS;
+
+cleanup:
+	EVP_PKEY_free(obj_set->private_key);
+	EVP_PKEY_free(obj_set->public_key);
+	X509_free(obj_set->cert);
+	OPENSSL_free(obj_set);
+	providers_cleanup();
+	printf("\n");
+	return ret;
+}
+
+#else
+
+int main() {
+	return 0;
+}
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
