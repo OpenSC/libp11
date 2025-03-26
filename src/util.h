@@ -61,9 +61,13 @@ void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);
 void UTIL_CTX_set_debug_level(UTIL_CTX *ctx, int debug_level);
 void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...);
+int UTIL_CTX_hex_to_bin(UTIL_CTX *ctx, const char *in, char *out, size_t *outlen);
 
 int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login);
+int UTIL_CTX_get_force_login(UTIL_CTX *ctx);
+int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, UI_METHOD *ui_method,
+	void *ui_data);
 
 X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *uri,
 	UI_METHOD *ui_method, void *ui_data);
@@ -71,6 +75,8 @@ EVP_PKEY *UTIL_CTX_get_pubkey_from_uri(UTIL_CTX *ctx, const char *uri,
 	UI_METHOD *ui_method, void *ui_data);
 EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *uri,
 	UI_METHOD *ui_method, void *ui_data);
+
+PKCS11_SLOT *UTIL_CTX_find_token(UTIL_CTX *ctx, const char *token_label);
 
 #endif /* _UTIL_LIBP11_H */
 

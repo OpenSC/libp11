@@ -26,7 +26,9 @@ check_PROGRAMS = \
 	store-cert \
 	store-cert-prov \
 	dup-key \
-	dup-key-prov
+	dup-key-prov \
+	keygen \
+	keygen-prov
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -45,6 +47,7 @@ dist_check_SCRIPTS = \
 	case-insensitive.softhsm \
 	pkcs11-uri-without-token.softhsm \
 	search-all-matching-tokens.softhsm \
+	keygen.softhsm \
 	provider-rsa-evp-sign.softhsm \
 	provider-rsa-pss-sign.softhsm \
 	provider-rsa-oaep.softhsm \
@@ -56,7 +59,8 @@ dist_check_SCRIPTS = \
 	provider-fork-change-slot.softhsm \
 	provider-case-insensitive.softhsm \
 	provider-pkcs11-uri-without-token.softhsm \
-	provider-search-all-matching-tokens.softhsm
+	provider-search-all-matching-tokens.softhsm \
+	provider-keygen.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
 	ec-cert.der ec-privkey.der ec-pubkey.der
@@ -68,6 +72,7 @@ check_privkey_prov_SOURCES = check-privkey-prov.c helpers_prov.c
 rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
 rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
 store_cert_prov_SOURCES = store-cert-prov.c helpers_prov.c
+keygen_prov_SOURCES = keygen-prov.c helpers_prov.c
 
 TESTS = $(dist_check_SCRIPTS)
 

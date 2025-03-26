@@ -445,6 +445,11 @@ void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login)
 	ctx->force_login = force_login;
 }
 
+int UTIL_CTX_get_force_login(UTIL_CTX *ctx)
+{
+	return ctx->force_login;
+}
+
 /* Return 1 if the user has already logged in */
 static int slot_logged_in(UTIL_CTX *ctx, PKCS11_SLOT *slot) {
 	int logged_in = 0;
@@ -499,6 +504,15 @@ static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 		return 0;
 	}
 	return 1;
+}
+
+int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, UI_METHOD *ui_method,
+	void *ui_data)
+{
+	if (!slot->token)
+		return 0;
+
+	return util_ctx_login(ctx, slot, slot->token, ui_method, ui_data);
 }
 
 /******************************************************************************/
@@ -1187,6 +1201,28 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 	pthread_mutex_unlock(&ctx->lock);
 
 	return obj;
+}
+
+PKCS11_SLOT *UTIL_CTX_find_token(UTIL_CTX *ctx, const char *tok_lbl)
+{
+	PKCS11_SLOT *slot = NULL;
+
+	if (!ctx->pkcs11_ctx)
+		return NULL;
+
+	do {
+		slot = PKCS11_find_next_token(ctx->pkcs11_ctx, ctx->slot_list,
+					      ctx->slot_count, slot);
+		if (slot && slot->token && slot->token->initialized
+		    && slot->token->label
+		    && !strncmp(slot->token->label, tok_lbl, 32)) {
+			return slot;
+		}
+	} while (!slot);
+
+	UTIL_CTX_log(ctx, LOG_ERR,
+		     "Initialized token with matching label not found...\n");
+	return NULL;
 }
 
 /******************************************************************************/
