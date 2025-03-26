@@ -15,8 +15,12 @@
  *  License along with this library; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
  */
+#include <openssl/objects.h>
 
 #include "libp11-int.h"
+
+/* The maximum length of PIN */
+#define MAX_PIN_LENGTH   256
 
 /* The following exported functions are *not* implemented here:
  * PKCS11_get_rsa_method
@@ -401,14 +405,63 @@ int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_d
 
 /* External interface to the deprecated features */
 
-int PKCS11_generate_key(PKCS11_TOKEN *token,
-		int algorithm, unsigned int bits,
-		char *label, unsigned char *id, size_t id_len)
+int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 {
+	if (token == NULL || kg == NULL || kg->id_len > MAX_PIN_LENGTH)
+		return -1;
 	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_generate_key(slot, algorithm, bits, label, id, id_len);
+
+	switch(kg->type) {
+	case EVP_PKEY_RSA:
+		return pkcs11_rsa_keygen(slot, kg->kgen.rsa->bits,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+	case EVP_PKEY_EC:
+		return pkcs11_ec_keygen(slot, kg->kgen.ec->curve,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+	default:
+		return -1;
+	}
+}
+
+int PKCS11_generate_key(PKCS11_TOKEN *token,
+		int algorithm, unsigned int bits_or_nid,
+		char *label, unsigned char *id, size_t id_len)
+{
+	PKCS11_params key_params = { .extractable = 0, .sensitive = 1 };
+	PKCS11_EC_KGEN ec_kgen;
+	PKCS11_RSA_KGEN rsa_kgen;
+	PKCS11_KGEN_ATTRS kgen_attrs = { 0 };
+
+	switch (algorithm) {
+	case EVP_PKEY_EC:
+		ec_kgen.curve = OBJ_nid2sn(bits_or_nid);
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_EC,
+			.kgen.ec = &ec_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+
+	default:
+		rsa_kgen.bits = bits_or_nid;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_RSA,
+			.kgen.rsa = &rsa_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+	}
+
+	return PKCS11_keygen(token, &kgen_attrs);
 }
 
 int PKCS11_get_key_size(PKCS11_KEY *pkey)
