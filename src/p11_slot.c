@@ -117,6 +117,7 @@ int pkcs11_open_session(PKCS11_SLOT_private *slot, int rw)
 	if (rw != slot->rw_mode) {
 		CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
 		slot->rw_mode = rw;
+		slot->logged_in = -1;
 	}
 	slot->num_sessions = 0;
 	slot->session_head = slot->session_tail = 0;

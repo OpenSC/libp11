@@ -68,6 +68,7 @@
 #define CMD_RE_ENUMERATE        (ENGINE_CMD_BASE + 10)
 #define CMD_VLOG_A              (ENGINE_CMD_BASE + 11)
 #define CMD_DEBUG_LEVEL         (ENGINE_CMD_BASE + 12)
+#define CMD_KEYGEN              (ENGINE_CMD_BASE + 13)
 
 typedef struct engine_ctx_st ENGINE_CTX; /* opaque */
 

@@ -106,6 +106,35 @@ typedef struct PKCS11_ctx_st {
 	void *_private;
 } PKCS11_CTX;
 
+typedef struct PKCS11_ec_kgen_st {
+	const char *curve;
+} PKCS11_EC_KGEN;
+
+typedef struct PKCS11_rsa_kgen_st {
+	unsigned int bits;
+} PKCS11_RSA_KGEN;
+
+typedef struct PKCS11_params {
+	unsigned char extractable;
+	unsigned char sensitive;
+} PKCS11_params;
+
+typedef struct PKCS11_kgen_attrs_st {
+	/* Key generation type from OpenSSL. Given the union below this should
+	 * be either EVP_PKEY_EC or EVP_PKEY_RSA
+	 */
+	int type;
+	union {
+		PKCS11_EC_KGEN *ec;
+		PKCS11_RSA_KGEN *rsa;
+	} kgen;
+	const char *token_label;
+	const char *key_label;
+	const unsigned char *key_id;
+	size_t id_len;
+	const PKCS11_params *key_params;
+} PKCS11_KGEN_ATTRS;
+
 /** PKCS11 ASCII logging callback */
 typedef void (*PKCS11_VLOG_A_CB)(int, const char *, va_list);
 
@@ -432,11 +461,22 @@ extern void ERR_load_PKCS11_strings(void);
  */
 
 /**
+ * Generate key pair on the token
+ *
+ * @param token on which the key should be generated
+ * @param kgen_attrs struct describing key generation (selection of algorithm,
+ * algorithm parameters...)
+ * @retval 0 on success
+ * @retval -1 error
+ */
+extern int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kgen_attrs);
+
+/**
  * Generate a private key on the token
  *
  * @param token token returned by PKCS11_find_token()
- * @param algorithm IGNORED (still here for backward compatibility)
- * @param bits size of the modulus in bits
+ * @param algorithm EVP_PKEY_EC any other value select EVP_PKEY_RSA
+ * @param bits_or_nid size of the modulus in bits or the nid of the curve
  * @param label label for this key
  * @param id bytes to use as the id value
  * @param id_len length of the id value
@@ -444,7 +484,7 @@ extern void ERR_load_PKCS11_strings(void);
  * @retval -1 error
  */
 extern int PKCS11_generate_key(PKCS11_TOKEN *token,
-	int algorithm, unsigned int bits,
+	int algorithm, unsigned int bits_or_nid,
 	char *label, unsigned char *id, size_t id_len);
 
 /* Get the RSA key modulus size (in bytes) */

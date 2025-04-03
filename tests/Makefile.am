@@ -27,7 +27,9 @@ check_PROGRAMS = \
 	store-cert-prov \
 	dup-key \
 	dup-key-prov \
-	check-all-prov
+	check-all-prov \
+	rsa-keygen \
+	ec-keygen
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -37,11 +39,13 @@ dist_check_SCRIPTS = \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
 	rsa-check-privkey.softhsm \
+	rsa-keygen.softhsm \
 	ec-testfork.softhsm \
 	ec-evp-sign.softhsm \
 	ec-check-privkey.softhsm \
 	ec-cert-store.softhsm \
 	ec-copy.softhsm \
+	ec-keygen.softhsm \
 	fork-change-slot.softhsm \
 	case-insensitive.softhsm \
 	pkcs11-uri-without-token.softhsm \
