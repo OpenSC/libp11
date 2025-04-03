@@ -88,6 +88,10 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"DEBUG_LEVEL",
 		"Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug",
 		ENGINE_CMD_FLAG_NUMERIC},
+	{CMD_KEYGEN,
+		"KEYGEN",
+		"Generate asymmetric key pair",
+		ENGINE_CMD_FLAG_INTERNAL},
 	{0, NULL, NULL, 0}
 };
 

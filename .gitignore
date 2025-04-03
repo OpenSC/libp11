@@ -81,6 +81,8 @@ tests/fork-change-slot-prov
 tests/rsa-oaep-prov
 tests/rsa-pss-sign-prov
 tests/store-cert-prov
+tests/rsa-keygen
+tests/ec-keygen
 
 tests/*.log
 tests/*.trs
