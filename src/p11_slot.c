@@ -163,9 +163,9 @@ int pkcs11_get_session(PKCS11_SLOT_private *slot, int rw, CK_SESSION_HANDLE *ses
 				slot->num_sessions--;
 				if (slot->num_sessions == 0) {
 					/* Object handles are valid across
-					   sessions, so the cache should only be
-					   cleared when there are no valid
-					   sessions.*/
+					 * sessions, so the cache should only be
+					 * cleared when there are no valid
+					 * sessions.*/
 					pkcs11_wipe_cache(slot);
 				}
 				continue;

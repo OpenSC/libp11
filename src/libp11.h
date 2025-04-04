@@ -257,7 +257,7 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *ctx,
  */
 PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
 			PKCS11_SLOT *slots, unsigned int nslots,
-		   	PKCS11_SLOT *slot);
+			PKCS11_SLOT *slot);
 
 /**
  * Check if user is already authenticated to a card

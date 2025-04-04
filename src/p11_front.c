@@ -407,9 +407,12 @@ int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_d
 
 int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 {
+	PKCS11_SLOT_private *slot;
+
 	if (token == NULL || kg == NULL || kg->id_len > MAX_PIN_LENGTH)
 		return -1;
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+
+	slot = PRIVSLOT(token->slot);
 	if (check_slot_fork(slot) < 0)
 		return -1;
 

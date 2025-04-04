@@ -279,7 +279,7 @@ static int ENGINE_CTX_keygen(ENGINE_CTX *ctx, void *p)
 	/* Try logging in */
 	ERR_clear_error();
 	if (!(found_slot->token->loginRequired && UTIL_CTX_login(ctx->util_ctx,
-	    found_slot, ctx->ui_method, ctx->ui_data)))
+		found_slot, ctx->ui_method, ctx->ui_data)))
 		return 0;
 
 	rv = PKCS11_keygen(found_slot->token, kg_attrs);
