@@ -51,7 +51,7 @@ test ! -f Makefile || make distclean
 for pkg_config_libdir in /opt/openssl-[0-9]*/lib*/pkgconfig /usr/local/ssl-[0-9]*/lib*/pkgconfig; do
     test -d "$pkg_config_libdir" || continue
     openssl_version=$(echo "$pkg_config_libdir" | sed 's/.*ssl-\([0-9.]*\).*/\1/')
-    awk -v "ver=$openssl_version" 'BEGIN {exit !(ver >= "1.0.0")}' || continue
+    awk -v "ver=$openssl_version" 'BEGIN {exit !(ver >= "1.0.2")}' || continue
     testone "$pkg_config_libdir"
 done
 
