@@ -815,14 +815,17 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 
 static int pkcs11_init_keygen(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE *session)
 {
+	pthread_mutex_lock(&slot->lock);
 	/* R/W session is mandatory for key generation. */
 	if (slot->rw_mode != 1) {
+		pthread_mutex_unlock(&slot->lock);
 		if (pkcs11_open_session(slot, 1))
 			return -1;
 		/* open_session will call C_CloseAllSessions which logs everyone out */
 		if (pkcs11_login(slot, 0, slot->prev_pin))
 			return -1;
 	}
+	pthread_mutex_unlock(&slot->lock);
 	return pkcs11_get_session(slot, 1, session);
 }
 
