@@ -334,11 +334,11 @@ extern int pkcs11_generate_random(PKCS11_SLOT_private *, unsigned char *r, unsig
 /* Generate and store a private key on the token */
 extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
 	unsigned int bits, const char *label, const unsigned char *id,
-	size_t id_len, const PKCS11_params* params);
+	size_t id_len, const PKCS11_params *params);
 
 extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
 	const char *curve , const char *label, const unsigned char *id,
-	size_t id_len, const PKCS11_params* params);
+	size_t id_len, const PKCS11_params *params);
 
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);

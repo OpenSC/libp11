@@ -101,8 +101,8 @@ void UTIL_CTX_free(UTIL_CTX *ctx)
 
 int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module)
 {
-    OPENSSL_free(ctx->module);
-    ctx->module = module ? OPENSSL_strdup(module) : NULL;
+	OPENSSL_free(ctx->module);
+	ctx->module = module ? OPENSSL_strdup(module) : NULL;
 	return 1;
 }
 
@@ -1207,16 +1207,16 @@ PKCS11_SLOT *UTIL_CTX_find_token(UTIL_CTX *ctx, const char *tok_lbl)
 
 	do {
 		slot = PKCS11_find_next_token(ctx->pkcs11_ctx, ctx->slot_list,
-					      ctx->slot_count, slot);
+			ctx->slot_count, slot);
 		if (slot && slot->token && slot->token->initialized
-		    && slot->token->label
-		    && !strncmp(slot->token->label, tok_lbl, 32)) {
+			&& slot->token->label
+			&& !strncmp(slot->token->label, tok_lbl, 32)) {
 			return slot;
 		}
 	} while (!slot);
 
 	UTIL_CTX_log(ctx, LOG_ERR,
-		     "Initialized token with matching label not found...\n");
+		"Initialized token with matching label not found...\n");
 	return NULL;
 }
 

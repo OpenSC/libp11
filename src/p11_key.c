@@ -331,7 +331,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
  */
 int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 		const char *label, const unsigned char *id, size_t id_len,
-		const PKCS11_params* params)
+		const PKCS11_params *params)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
@@ -852,7 +852,6 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 	pkcs11_addattr_bool(privtmpl, CKA_EXTRACTABLE, params->extractable);
 	pkcs11_addattr_bool(privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(privtmpl, CKA_UNWRAP, TRUE);
-
 }
 
 /*
