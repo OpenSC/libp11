@@ -55,12 +55,13 @@ static int parse_hex_key_id(const char *input, unsigned char **output, size_t *s
 		return -1;
 	}
 	*size = len / 2;
-	*output = OPENSSL_zalloc(*size);
+	*output = OPENSSL_malloc(*size);
 	if (!*output) {
 		return -1;
 	}
+	memset(*output, 0, *size);
 	for (i = 0; i < *size; i++) {
-		sscanf(input + (i * 2), "%2hhx", &(*output)[i]);
+		sscanf(input + (i * 2), "%2hhx", *output + i);
 	}
 	return 0;
 }

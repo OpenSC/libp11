@@ -62,8 +62,11 @@ typedef int (*compute_key_fn)(void *, size_t,
 	void *(*)(const void *, size_t, void *, size_t *));
 #endif
 static compute_key_fn ossl_ecdh_compute_key;
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 static void (*ossl_ec_finish)(EC_KEY *);
 static int (*ossl_ec_copy)(EC_KEY *, const EC_KEY *);
+#endif /* OPENSSL_VERSION_NUMBER */
 
 static int ec_ex_index = 0;
 
@@ -445,6 +448,8 @@ static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
 	return ck_sigsize;
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+
 static void pkcs11_ec_finish(EC_KEY *ec)
 {
 	PKCS11_OBJECT_private *key;
@@ -457,6 +462,8 @@ static void pkcs11_ec_finish(EC_KEY *ec)
 	if (ossl_ec_finish)
 		ossl_ec_finish(ec);
 }
+
+#endif /* OPENSSL_VERSION_NUMBER */
 
 /**
  * ECDSA signing method (replaces ossl_ecdsa_sign_sig)
