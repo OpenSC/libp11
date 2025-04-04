@@ -55,9 +55,9 @@ display_openssl_errors(int l)
 
 static int
 extract_url_fields(char* address,
-		   char** out_token,
-		   char** out_label,
-		   char** out_pin)
+		char** out_token,
+		char** out_label,
+		char** out_pin)
 {
 	static const char DELIMITERS[] = ":;?&=";
 	char *str, *token;
@@ -107,16 +107,14 @@ store_certificate(char* address, X509* cert)
 		return -1;
 	}
 
-	PKCS11_SLOT* slot = PKCS11_find_token(
-	  global_pkcs11_ctx, global_pkcs11_slots, global_pkcs11_slot_num);
+	PKCS11_SLOT* slot = PKCS11_find_token(global_pkcs11_ctx,
+		global_pkcs11_slots, global_pkcs11_slot_num);
 	while (slot) {
 		if (strcmp(token, slot->token->label) == 0) {
 			break;
 		}
 		slot = PKCS11_find_next_token(global_pkcs11_ctx,
-					      global_pkcs11_slots,
-					      global_pkcs11_slot_num,
-					      slot);
+			global_pkcs11_slots, global_pkcs11_slot_num, slot);
 	}
 
 	if (!slot) {
@@ -134,17 +132,13 @@ store_certificate(char* address, X509* cert)
 		return -1;
 	}
 
-	if (PKCS11_store_certificate(slot->token,
-				     cert,
-				     label,
-				     (unsigned char*)label,
-				     strlen(label),
-				     NULL)) {
+	if (PKCS11_store_certificate(slot->token, cert, label,
+			(unsigned char*)label, strlen(label), NULL)) {
 		printf("Could not store certificate\n");
 		return -1;
 	}
-	PKCS11_release_all_slots(global_pkcs11_ctx, global_pkcs11_slots,
-	        global_pkcs11_slot_num);
+	PKCS11_release_all_slots(global_pkcs11_ctx,
+		global_pkcs11_slots, global_pkcs11_slot_num);
 
 	return 0;
 }
@@ -187,9 +181,9 @@ main(int argc, char* argv[])
 	ENGINE_add_conf_module();
 #if OPENSSL_VERSION_NUMBER >= 0x10100000
 	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS |
-			      OPENSSL_INIT_ADD_ALL_DIGESTS |
-			      OPENSSL_INIT_LOAD_CONFIG,
-			    NULL);
+		OPENSSL_INIT_ADD_ALL_DIGESTS |
+		OPENSSL_INIT_LOAD_CONFIG,
+		NULL);
 #else
 	OpenSSL_add_all_algorithms();
 	OpenSSL_add_all_digests();
@@ -231,10 +225,8 @@ main(int argc, char* argv[])
 
 	if (!strncmp(certfile, "pkcs11:", 7)) {
 		params.cert_id = certfile;
-		if (!ENGINE_ctrl_cmd(
-		      engine, "LOAD_CERT_CTRL", 0, &params, NULL, 1)) {
-			fprintf(
-			  stderr, "Could not get certificate %s\n", certfile);
+		if (!ENGINE_ctrl_cmd(engine, "LOAD_CERT_CTRL", 0, &params, NULL, 1)) {
+			fprintf(stderr, "Could not get certificate %s\n", certfile);
 			ret = 1;
 			goto end;
 		}
@@ -266,8 +258,7 @@ main(int argc, char* argv[])
 		printf("Could not load PKCS11 module\n");
 		ret = 1;
 	} else if (PKCS11_enumerate_slots(global_pkcs11_ctx,
-					  &global_pkcs11_slots,
-					  &global_pkcs11_slot_num)) {
+			&global_pkcs11_slots, &global_pkcs11_slot_num)) {
 		printf("Could not enumerate slots\n");
 		ret = 1;
 	} else if (!(ret = store_certificate(target, cert) ? 1 : 0)) {
@@ -285,3 +276,5 @@ end:
 
 	return ret;
 }
+
+/* vim: set noexpandtab: */

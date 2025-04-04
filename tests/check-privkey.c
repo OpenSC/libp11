@@ -34,7 +34,7 @@
 static void usage(char *argv[])
 {
 	fprintf(stderr, "%s [certificate (PEM or URL)] [private key URL] "
-            "[module] [conf]\n", argv[0]);
+		"[module] [conf]\n", argv[0]);
 }
 
 static void display_openssl_errors(int l)
@@ -187,3 +187,5 @@ end:
 
 	return ret;
 }
+
+/* vim: set noexpandtab: */

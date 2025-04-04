@@ -92,3 +92,5 @@ static int pthread_cond_signal(pthread_cond_t *cond)
 #error Locking not supported on this platform.
 
 #endif
+
+/* vim: set noexpandtab: */

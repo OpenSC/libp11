@@ -318,15 +318,17 @@ int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *la
 			(CK_UTF8CHAR *) ck_label));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
-	/* FIXME: how to update the token?
-	 * PKCS11_CTX_private *cpriv;
-	 * int n;
-	 * cpriv = PRIVCTX(ctx);
-	 * for (n = 0; n < cpriv->nslots; n++) {
-	 * 	if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
-	 * 		return -1;
-	 * }
-	 */
+	/* FIXME: how to update the token? */
+#if 0
+	PKCS11_CTX_private *cpriv;
+	int n;
+	cpriv = PRIVCTX(ctx);
+
+	for (n = 0; n < cpriv->nslots; n++) {
+		if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
+			return -1;
+	}
+#endif
 
 	return 0;
 }

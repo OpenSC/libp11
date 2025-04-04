@@ -68,7 +68,7 @@ static int setup_ui()
 	UI_method_set_writer(ui_console_with_default, UI_method_get_writer(default_method));
 	UI_method_set_flusher(ui_console_with_default, UI_method_get_flusher(default_method));
 	UI_method_set_closer(ui_console_with_default, UI_method_get_closer(default_method));
-    return 1; /* OK */
+	return 1; /* OK */
 }
 
 int main(int argc, char **argv)
@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 		display_openssl_errors();
 		goto cleanup;
 	}
-	
+
 	switch (pin_method) {
 	case BY_DEFAULT:
 		ui_method = ui_console_with_default;
@@ -115,10 +115,10 @@ int main(int argc, char **argv)
 	}
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load keys */
 	private_key = load_pkey(argv[2], ui_method);

@@ -71,7 +71,7 @@ static int do_wait(pid_t pids[], int num)
 			perror("waitpid");
 		}
 	}
-    return 0;
+	return 0;
 }
 
 static int spawn_processes(int num)
@@ -153,10 +153,10 @@ int main(int argc, char *argv[])
 	printf("pid %d is the parent\n", pid);
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load private key */
 	private_key = load_pkey(argv[1], NULL);

@@ -288,7 +288,7 @@ static int PROVIDER_CTX_set_parameters(PROVIDER_CTX *prov_ctx)
 	if (!PROVIDER_CTX_get_specific_parameters(prov_ctx)) {
 		return 0;
 	}
-		
+
 	if (prov_ctx->p_debug_level && *prov_ctx->p_debug_level != '\0') {
 		prov_ctx->debug_level = atoi(prov_ctx->p_debug_level);
 	}
@@ -470,7 +470,7 @@ static int provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in
 
 	/* Get all core functions and check existence of required ones */
 	PROVIDER_CTX_get_core_functions(prov_ctx, in);
-	
+
 	/* Get core default parameters */
 	if (!PROVIDER_CTX_get_core_parameters(prov_ctx))
 		goto err;

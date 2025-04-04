@@ -47,10 +47,10 @@ int main(int argc, char **argv)
 	}
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load keys */
 	private_key = load_pkey(argv[1], NULL);

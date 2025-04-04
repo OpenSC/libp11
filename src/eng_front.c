@@ -84,7 +84,7 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		"VLOG_A",
 		"Set the logging callback",
 		ENGINE_CMD_FLAG_INTERNAL},
-	 {CMD_DEBUG_LEVEL,
+	{CMD_DEBUG_LEVEL,
 		"DEBUG_LEVEL",
 		"Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug",
 		ENGINE_CMD_FLAG_NUMERIC},

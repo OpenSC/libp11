@@ -96,8 +96,8 @@ extern "C" {
 #endif
 
 #ifdef CRYPTOKI_COMPAT
-  /* If we are in compatibility mode, switch all exposed names to the
-     PKCS #11 variant.  There are corresponding #undefs below.  */
+/* If we are in compatibility mode, switch all exposed names to the
+ * PKCS #11 variant.  There are corresponding #undefs below. */
 
 #define ck_flags_t CK_FLAGS
 #define ck_version _CK_VERSION

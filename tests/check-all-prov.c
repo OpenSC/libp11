@@ -46,10 +46,10 @@ int main(int argc, char *argv[])
 		return ret;
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load private key, public key and certificate */
 	load_objects(argv[1], NULL, obj_set);

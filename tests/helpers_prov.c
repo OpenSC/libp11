@@ -51,36 +51,36 @@ void display_openssl_errors(void)
 
  /* store_type == 0 means here multiple types of credentials are to be loaded */
 void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *obj_set) {
-    OSSL_STORE_CTX *store_ctx;
-    int type;
+	OSSL_STORE_CTX *store_ctx;
+	int type;
 
-    store_ctx = OSSL_STORE_open(uri, ui_method, NULL, NULL, NULL);
-    if (!store_ctx)
-        return; /* FAILED */
+	store_ctx = OSSL_STORE_open(uri, ui_method, NULL, NULL, NULL);
+	if (!store_ctx)
+		return; /* FAILED */
 
-    while (!OSSL_STORE_eof(store_ctx)) {
-        OSSL_STORE_INFO *object = OSSL_STORE_load(store_ctx);
+	while (!OSSL_STORE_eof(store_ctx)) {
+		OSSL_STORE_INFO *object = OSSL_STORE_load(store_ctx);
 
-        if (!object)
-            continue;
+		if (!object)
+			continue;
 
-        type = OSSL_STORE_INFO_get_type(object);
-        switch (type) {
-        case OSSL_STORE_INFO_PKEY:
-            obj_set->private_key = OSSL_STORE_INFO_get1_PKEY(object);
-            break;
-        case OSSL_STORE_INFO_PUBKEY:
-            obj_set->public_key = OSSL_STORE_INFO_get1_PUBKEY(object);
-            break;
-        case OSSL_STORE_INFO_CERT:
-            obj_set->cert = OSSL_STORE_INFO_get1_CERT(object);
-            break;
-        default:
-            break; /* skip any other type */
-        }
-        OSSL_STORE_INFO_free(object);
-    }
-    OSSL_STORE_close(store_ctx);
+		type = OSSL_STORE_INFO_get_type(object);
+		switch (type) {
+		case OSSL_STORE_INFO_PKEY:
+			obj_set->private_key = OSSL_STORE_INFO_get1_PKEY(object);
+			break;
+		case OSSL_STORE_INFO_PUBKEY:
+			obj_set->public_key = OSSL_STORE_INFO_get1_PUBKEY(object);
+			break;
+		case OSSL_STORE_INFO_CERT:
+			obj_set->cert = OSSL_STORE_INFO_get1_CERT(object);
+			break;
+		default:
+			break; /* skip any other type */
+		}
+		OSSL_STORE_INFO_free(object);
+	}
+	OSSL_STORE_close(store_ctx);
 }
 
 EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method)
@@ -166,49 +166,50 @@ X509 *load_cert(const char *uri)
 
 void provider_free(OSSL_PROVIDER *prov)
 {
-        printf("Provider \"%s\" unloaded.\n", OSSL_PROVIDER_get0_name(prov));
-        OSSL_PROVIDER_unload(prov);
+	printf("Provider \"%s\" unloaded.\n", OSSL_PROVIDER_get0_name(prov));
+	OSSL_PROVIDER_unload(prov);
 }
 
 void providers_cleanup(void)
 {
-        sk_OSSL_PROVIDER_pop_free(providers, provider_free);
-        providers = NULL;
+	sk_OSSL_PROVIDER_pop_free(providers, provider_free);
+	providers = NULL;
 }
 
 int provider_load(const char *pname)
 {
-        OSSL_PROVIDER *prov = OSSL_PROVIDER_load(NULL, pname);
-        if (prov == NULL) {
-                fprintf(stderr, "Unable to load provider: %s\n", pname);
-                return 0; /* FAILED */
-        }
-        if (providers == NULL) {
-                providers = sk_OSSL_PROVIDER_new_null();
-        }
-        if (providers == NULL || !sk_OSSL_PROVIDER_push(providers, prov)) {
-                providers_cleanup();
-                return 0; /* FAILED */
-        }
-        printf("Provider \"%s\" set.\n", OSSL_PROVIDER_get0_name(prov));
-        return 1; /* OK */
+	OSSL_PROVIDER *prov = OSSL_PROVIDER_load(NULL, pname);
+
+	if (prov == NULL) {
+		fprintf(stderr, "Unable to load provider: %s\n", pname);
+		return 0; /* FAILED */
+	}
+	if (providers == NULL) {
+		providers = sk_OSSL_PROVIDER_new_null();
+	}
+	if (providers == NULL || !sk_OSSL_PROVIDER_push(providers, prov)) {
+		providers_cleanup();
+		return 0; /* FAILED */
+	}
+	printf("Provider \"%s\" set.\n", OSSL_PROVIDER_get0_name(prov));
+	return 1; /* OK */
 }
 
 int providers_load(void)
 {
-        /* Load PKCS#11 provider */
-        if (!OSSL_PROVIDER_available(NULL, "pkcs11prov")) {
-                if (!provider_load("pkcs11prov")) {
-                        fprintf(stderr, "Failed to load \"pkcs11prov\" provider\n");
-                        return 0; /* FAILED */
-                }
-                /* load the default provider explicitly */
-                if (!provider_load("default")) {
-                        fprintf(stderr, "Failed to load \"default\" provider\n");
-                        return 0; /* FAILED */
-                }
-        }
-        return 1; /* OK */
+	/* Load PKCS#11 provider */
+	if (!OSSL_PROVIDER_available(NULL, "pkcs11prov")) {
+		if (!provider_load("pkcs11prov")) {
+			fprintf(stderr, "Failed to load \"pkcs11prov\" provider\n");
+			return 0; /* FAILED */
+		}
+		/* load the default provider explicitly */
+		if (!provider_load("default")) {
+			fprintf(stderr, "Failed to load \"default\" provider\n");
+			return 0; /* FAILED */
+		}
+	}
+	return 1; /* OK */
 }
 
 #else

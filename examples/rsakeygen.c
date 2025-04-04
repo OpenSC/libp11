@@ -92,16 +92,16 @@ int main(int argc, char *argv[])
 	PKCS11_params params = {.sensitive = 1, .extractable = 0};
 	PKCS11_RSA_KGEN rsa = {.bits = 2048};
 	PKCS11_KGEN_ATTRS rsakg = {0};
-	
+
 	if (argc < 6) {
 		fprintf(stderr, "usage: %s [module] [TOKEN] [KEY-LABEL] [KEY-ID] [PIN]\n", argv[0]);
 		return 1;
 	}
-	
+
 	key_id_len = strlen(argv[4]);
 	rc = parse_hex_key_id(argv[4], &key_id, &key_id_len);
 	CHECK_ERR(rc < 0, "Invalid key ID format", 1);
-	
+
 	ctx = PKCS11_CTX_new();
 	error_queue("PKCS11_CTX_new");
 
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 	printf("Slot description.......: %s\n", slot->description);
 	printf("Slot token label.......: %s\n", slot->token->label);
 	printf("Slot token serialnr....: %s\n", slot->token->serialnr);
-	
+
 	rc = PKCS11_login(slot, 0, argv[5]);
 	error_queue("PKCS11_login");
 	CHECK_ERR(rc < 0, "PKCS11_login failed", 5);

@@ -85,7 +85,7 @@ UTIL_CTX *UTIL_CTX_new()
 
 	if (!ctx)
 		return NULL;
-	
+
 	memset(ctx, 0, sizeof(UTIL_CTX));
 	pthread_mutex_init(&ctx->lock, 0);
 	return ctx;

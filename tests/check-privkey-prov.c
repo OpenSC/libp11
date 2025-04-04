@@ -43,10 +43,10 @@ int main(int argc, char *argv[])
 	}
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load certificate */
 	cert = load_cert(argv[1]);

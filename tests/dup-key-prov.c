@@ -43,10 +43,10 @@ int main(int argc, char *argv[])
 	}
 
 	/* Load pkcs11prov and default providers */
-        if (!providers_load()) {
+	if (!providers_load()) {
 		display_openssl_errors();
 		return ret;
-        }
+	}
 
 	/* Load private key */
 	private_key = load_pkey(argv[1], NULL);
@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Cannot duplicate private key\n");
 		display_openssl_errors();
 		goto cleanup;
-	}	
+	}
 	printf("Duplicate private key created.\n");
 
 	EVP_PKEY_free(private_key_dup);
