@@ -62,6 +62,8 @@ examples/decrypt
 examples/getrandom
 examples/listkeys
 examples/listkeys_ext
+examples/eckeygen
+examples/rsakeygen
 
 test-driver
 tests/openssl_version
@@ -83,6 +85,7 @@ tests/rsa-pss-sign-prov
 tests/store-cert-prov
 tests/rsa-keygen
 tests/ec-keygen
+tests/check-all-prov
 
 tests/*.log
 tests/*.trs

@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir)/src \
 
 EXTRA_DIST = README
 
-noinst_PROGRAMS = auth decrypt getrandom listkeys listkeys_ext
+noinst_PROGRAMS = auth decrypt getrandom listkeys listkeys_ext eckeygen rsakeygen
 
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
 
