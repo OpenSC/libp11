@@ -81,11 +81,12 @@ struct util_ctx_st {
 
 UTIL_CTX *UTIL_CTX_new()
 {
-	UTIL_CTX *ctx;
+	UTIL_CTX *ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
 
-	ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
-	if (ctx)
-		memset(ctx, 0, sizeof(UTIL_CTX));
+	if (!ctx)
+		return NULL;
+	
+	memset(ctx, 0, sizeof(UTIL_CTX));
 	pthread_mutex_init(&ctx->lock, 0);
 	return ctx;
 }
