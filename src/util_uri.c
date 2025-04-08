@@ -130,7 +130,7 @@ static int UTIL_CTX_enumerate_slots_unlocked(UTIL_CTX *ctx)
 		UTIL_CTX_log(ctx, LOG_ERR, "Failed to enumerate slots\n");
 		return 0;
 	}
-	if (ctx->slot_count < 1) {
+	if (!ctx->slot_list || ctx->slot_count < 1) {
 		UTIL_CTX_log(ctx, LOG_ERR, "No slot found\n");
 		return 0;
 	}
@@ -156,28 +156,27 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 
 int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 {
-	PKCS11_CTX *pkcs11_ctx;
-
-	if (ctx->pkcs11_ctx && ctx->slot_list)
+	if (ctx->pkcs11_ctx && ctx->slot_list && ctx->slot_count > 0)
 		return 0;
 
 	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
 
-	pkcs11_ctx = PKCS11_CTX_new();
-	PKCS11_set_vlog_a_method(pkcs11_ctx, ctx->vlog);
-	PKCS11_CTX_init_args(pkcs11_ctx, ctx->init_args);
-	PKCS11_set_ui_method(pkcs11_ctx, ctx->ui_method, ctx->ui_data);
-	if (PKCS11_CTX_load(pkcs11_ctx, ctx->module) < 0) {
+	ctx->pkcs11_ctx = PKCS11_CTX_new();
+	if (!ctx->pkcs11_ctx)
+		return -1;
+	PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, ctx->vlog);
+	PKCS11_CTX_init_args(ctx->pkcs11_ctx, ctx->init_args);
+	PKCS11_set_ui_method(ctx->pkcs11_ctx, ctx->ui_method, ctx->ui_data);
+	if (PKCS11_CTX_load(ctx->pkcs11_ctx, ctx->module) < 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
-		PKCS11_CTX_free(pkcs11_ctx);
+		UTIL_CTX_free_libp11(ctx);
 		return -1;
 	}
-	ctx->pkcs11_ctx = pkcs11_ctx;
-
-	if (UTIL_CTX_enumerate_slots_unlocked(ctx) != 1)
+	if (UTIL_CTX_enumerate_slots_unlocked(ctx) != 1) {
+		UTIL_CTX_free_libp11(ctx);
 		return -1;
-
-	return ctx->pkcs11_ctx && ctx->slot_list ? 0 : -1;
+	}
+	return 0;
 }
 
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx)
