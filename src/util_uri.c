@@ -125,17 +125,16 @@ int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data)
 
 static int UTIL_CTX_enumerate_slots_unlocked(UTIL_CTX *ctx)
 {
-	if (!ctx->pkcs11_ctx)
-		UTIL_CTX_init_libp11(ctx);
-	if (!ctx->pkcs11_ctx)
-		return -1;
-
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
 	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
-		UTIL_CTX_log(ctx, LOG_INFO, "Failed to enumerate slots\n");
+		UTIL_CTX_log(ctx, LOG_ERR, "Failed to enumerate slots\n");
 		return 0;
 	}
-	UTIL_CTX_log(ctx, LOG_NOTICE, "Found %u slot%s\n", ctx->slot_count,
+	if (ctx->slot_count < 1) {
+		UTIL_CTX_log(ctx, LOG_ERR, "No slot found\n");
+		return 0;
+	}
+	UTIL_CTX_log(ctx, LOG_INFO, "Found %u slot%s\n", ctx->slot_count,
 		ctx->slot_count <= 1 ? "" : "s");
 	return 1;
 }
@@ -145,7 +144,10 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 	int rv;
 
 	pthread_mutex_lock(&ctx->lock);
-	rv = UTIL_CTX_enumerate_slots_unlocked(ctx);
+	if (ctx->pkcs11_ctx)
+		rv = UTIL_CTX_enumerate_slots_unlocked(ctx);
+	else
+		rv = UTIL_CTX_init_libp11(ctx) == 0;
 	pthread_mutex_unlock(&ctx->lock);
 	return rv;
 }
