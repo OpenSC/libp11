@@ -47,21 +47,14 @@ static void error_queue(const char *name)
 	}
 }
 
-static int parse_hex_key_id(const char *input, unsigned char **output, size_t *size)
+static int hex_to_bytes(const char *hex, unsigned char *out, size_t out_len)
 {
-	size_t i, len = strlen(input);
+	size_t i;
 
-	if (len % 2 != 0) {
-		return -1;
-	}
-	*size = len / 2;
-	*output = OPENSSL_malloc(*size);
-	if (!*output) {
-		return -1;
-	}
-	memset(*output, 0, *size);
-	for (i = 0; i < *size; i++) {
-		sscanf(input + (i * 2), "%2hhx", *output + i);
+	for (i = 0; i < out_len; i++) {
+		if (sscanf(hex + (i * 2), "%2hhx", &out[i]) != 1) {
+			return -1;
+		}
 	}
 	return 0;
 }
@@ -87,7 +80,8 @@ int main(int argc, char *argv[])
 	PKCS11_KEY *keys;
 	unsigned int nslots, nkeys;
 	unsigned char *key_id = NULL;
-	size_t key_id_len = 0;
+	const char *key_id_str;
+	size_t len, key_id_len;
 	int rc = 0;
 	PKCS11_params params = {.sensitive = 1, .extractable = 0};
 	PKCS11_RSA_KGEN rsa = {.bits = 2048};
@@ -97,10 +91,17 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "usage: %s [module] [TOKEN] [KEY-LABEL] [KEY-ID] [PIN]\n", argv[0]);
 		return 1;
 	}
+	key_id_str = argv[4];
+	len = strlen(key_id_str);
+	CHECK_ERR(len % 2 != 0, "Invalid key ID format: odd length", 1);
 
-	key_id_len = strlen(argv[4]);
-	rc = parse_hex_key_id(argv[4], &key_id, &key_id_len);
-	CHECK_ERR(rc < 0, "Invalid key ID format", 1);
+	/* key_id_str is a null-terminated string, but key_id is not */
+	key_id_len = len / 2;
+	key_id = OPENSSL_malloc(key_id_len);
+	CHECK_ERR(!key_id, "Memory allocation failed for key ID", 2);
+
+	rc = hex_to_bytes(key_id_str, key_id, key_id_len);
+	CHECK_ERR(rc != 0, "Invalid hex digit in key ID", 3);
 
 	ctx = PKCS11_CTX_new();
 	error_queue("PKCS11_CTX_new");
@@ -108,12 +109,12 @@ int main(int argc, char *argv[])
 	/* load PKCS#11 module */
 	rc = PKCS11_CTX_load(ctx, argv[1]);
 	error_queue("PKCS11_CTX_load");
-	CHECK_ERR(rc < 0, "loading PKCS#11 module failed", 2);
+	CHECK_ERR(rc < 0, "loading PKCS#11 module failed", 4);
 
 	/* get information on all slots */
 	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
 	error_queue("PKCS11_enumerate_slots");
-	CHECK_ERR(rc < 0, "no slots available", 3);
+	CHECK_ERR(rc < 0, "no slots available", 5);
 
 	slot = PKCS11_find_token(ctx, slots, nslots);
 	error_queue("PKCS11_find_token");
@@ -123,7 +124,7 @@ int main(int argc, char *argv[])
 			break;
 		slot = PKCS11_find_next_token(ctx, slots, nslots, slot);
 	};
-	CHECK_ERR(!slot || !slot->token, "no token available", 4);
+	CHECK_ERR(!slot || !slot->token, "no token available", 6);
 
 	printf("Found token:\n");
 	printf("Slot manufacturer......: %s\n", slot->manufacturer);
@@ -133,27 +134,28 @@ int main(int argc, char *argv[])
 
 	rc = PKCS11_login(slot, 0, argv[5]);
 	error_queue("PKCS11_login");
-	CHECK_ERR(rc < 0, "PKCS11_login failed", 5);
+	CHECK_ERR(rc < 0, "PKCS11_login failed", 7);
 
 	rsakg.type = EVP_PKEY_RSA;
 	rsakg.kgen.rsa = &rsa;
 	rsakg.token_label = argv[2];
 	rsakg.key_label = argv[3];
+	/* key_id is a raw binary buffer of length key_id_len */
 	rsakg.key_id = (const unsigned char *)key_id;
 	rsakg.id_len = key_id_len;
 	rsakg.key_params = &params;
 
 	rc = PKCS11_keygen(slot->token, &rsakg);
 	error_queue("PKCS11_keygen");
-	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 6);
+	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 8);
 
 	printf("\nRSA keys generated\n");
 
 	/* get private keys */
 	rc = PKCS11_enumerate_keys(slot->token, &keys, &nkeys);
 	error_queue("PKCS11_enumerate_keys");
-	CHECK_ERR(rc < 0, "PKCS11_enumerate_keys failed", 7);
-	CHECK_ERR(nkeys == 0, "No private keys found", 8);
+	CHECK_ERR(rc < 0, "PKCS11_enumerate_keys failed", 9);
+	CHECK_ERR(nkeys == 0, "No private keys found", 10);
 	list_keys("Private keys", keys, nkeys);
 
 end:
