@@ -123,7 +123,7 @@ int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data)
 	return 1;
 }
 
-static int UTIL_CTX_enumerate_slots_unlocked(UTIL_CTX *ctx)
+static int util_ctx_enumerate_slots_unlocked(UTIL_CTX *ctx)
 {
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
 	if (PKCS11_update_slots(ctx->pkcs11_ctx, &ctx->slot_list, &ctx->slot_count) < 0) {
@@ -145,7 +145,7 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 
 	pthread_mutex_lock(&ctx->lock);
 	if (ctx->pkcs11_ctx)
-		rv = UTIL_CTX_enumerate_slots_unlocked(ctx);
+		rv = util_ctx_enumerate_slots_unlocked(ctx);
 	else
 		rv = UTIL_CTX_init_libp11(ctx) == 0;
 	pthread_mutex_unlock(&ctx->lock);
@@ -172,7 +172,7 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 		UTIL_CTX_free_libp11(ctx);
 		return -1;
 	}
-	if (UTIL_CTX_enumerate_slots_unlocked(ctx) != 1) {
+	if (util_ctx_enumerate_slots_unlocked(ctx) != 1) {
 		UTIL_CTX_free_libp11(ctx);
 		return -1;
 	}
@@ -501,15 +501,6 @@ static int util_ctx_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, PKCS11_TOKEN *tok,
 		return 0;
 	}
 	return 1;
-}
-
-int UTIL_CTX_login(UTIL_CTX *ctx, PKCS11_SLOT *slot, UI_METHOD *ui_method,
-	void *ui_data)
-{
-	if (!slot->token)
-		return 0;
-
-	return util_ctx_login(ctx, slot, slot->token, ui_method, ui_data);
 }
 
 /******************************************************************************/
@@ -1200,28 +1191,6 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 	return obj;
 }
 
-PKCS11_SLOT *UTIL_CTX_find_token(UTIL_CTX *ctx, const char *tok_lbl)
-{
-	PKCS11_SLOT *slot = NULL;
-
-	if (!ctx->pkcs11_ctx)
-		return NULL;
-
-	do {
-		slot = PKCS11_find_next_token(ctx->pkcs11_ctx, ctx->slot_list,
-			ctx->slot_count, slot);
-		if (slot && slot->token && slot->token->initialized
-			&& slot->token->label
-			&& !strncmp(slot->token->label, tok_lbl, 32)) {
-			return slot;
-		}
-	} while (!slot);
-
-	UTIL_CTX_log(ctx, LOG_ERR,
-		"Initialized token with matching label not found...\n");
-	return NULL;
-}
-
 /******************************************************************************/
 /* Certificate handling                                                       */
 /******************************************************************************/
@@ -1529,6 +1498,65 @@ EVP_PKEY *UTIL_CTX_get_privkey_from_uri(UTIL_CTX *ctx, const char *uri,
 	key = util_ctx_load_object(ctx, "private key",
 		match_private_key, uri, ui_method, ui_data);
 	return key ? PKCS11_get_private_key(key) : NULL;
+}
+
+/******************************************************************************/
+/* Key pair generation                                                        */
+/******************************************************************************/
+
+static PKCS11_SLOT *util_ctx_find_token(UTIL_CTX *ctx, const char *tok_lbl)
+{
+	PKCS11_SLOT *slot = NULL;
+
+	if (!ctx->pkcs11_ctx)
+		return NULL;
+
+	do {
+		slot = PKCS11_find_next_token(ctx->pkcs11_ctx, ctx->slot_list,
+			ctx->slot_count, slot);
+		if (slot && slot->token && slot->token->initialized
+				&& slot->token->label
+				&& !strncmp(slot->token->label, tok_lbl, 32))
+			return slot;
+	} while (!slot);
+
+	UTIL_CTX_log(ctx, LOG_ERR,
+		"Initialized token with matching label not found...\n");
+	return NULL;
+}
+
+int UTIL_CTX_keygen(UTIL_CTX *ctx, PKCS11_KGEN_ATTRS *kg_attrs)
+{
+	int rv;
+	PKCS11_SLOT *slot = NULL;
+
+	if (kg_attrs == NULL)
+		return 0;
+
+	/* Delayed libp11 initialization */
+	if (UTIL_CTX_init_libp11(ctx))
+		return 0;
+
+	slot = util_ctx_find_token(ctx, kg_attrs->token_label);
+	if (!slot || !slot->token)
+		return 0;
+
+	/* Try logging in */
+	ERR_clear_error();
+	if (slot->token->loginRequired)
+		if (!util_ctx_login(ctx, slot, slot->token,
+				ctx->ui_method, ctx->ui_data))
+			return 0;
+
+	rv = PKCS11_keygen(slot->token, kg_attrs);
+	if (rv < 0) {
+		UTIL_CTX_log(ctx, LOG_ERR,
+			"Failed to generate a key pair on the token. Error code: %d\n",
+			rv);
+		return 0;
+	}
+
+	return 1;
 }
 
 /* vim: set noexpandtab: */
