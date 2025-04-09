@@ -1175,7 +1175,7 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 			object_uri, ui_method, ui_data, 0);
 	}
 
-	if (!obj) {
+	if (!obj && (!strcmp(object_typestr, "private key") || ctx->force_login)) {
 		/* Try again with login */
 		ERR_clear_error();
 		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
