@@ -842,37 +842,39 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-static void *util_ctx_try_load_object(UTIL_CTX *ctx,
-		const char *object_typestr,
-		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
-				const char *, size_t, const char *),
-		const char *object_uri, UI_METHOD *ui_method, void *ui_data,
-		const int login)
+typedef struct {
+	char *obj_id;
+	size_t obj_id_len;
+	char *obj_label;
+	PKCS11_SLOT **matched_slots;
+	size_t matched_count;
+} PARSED;
+
+static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
+		const char *object_typestr, const char *object_uri)
 {
 	PKCS11_SLOT *slot;
-	PKCS11_SLOT *found_slot = NULL, **matched_slots = NULL;
+	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *match_tok = NULL;
 	unsigned int n, m;
-	char *obj_id = NULL, *hexbuf = NULL;
-	size_t obj_id_len = 0;
-	char *obj_label = NULL;
-	char tmp_pin[MAX_PIN_LENGTH+1];
-	size_t tmp_pin_len = MAX_PIN_LENGTH;
+	char *hexbuf = NULL;
 	int slot_nr = -1;
 	char flags[64];
-	size_t matched_count = 0;
-	void *object = NULL;
+	int rv = 0;
 
 	if (object_uri && *object_uri) {
-		obj_id_len = strlen(object_uri) + 1;
-		obj_id = OPENSSL_malloc(obj_id_len);
-		if (!obj_id) {
+		parsed->obj_id_len = strlen(object_uri) + 1;
+		parsed->obj_id = OPENSSL_malloc(parsed->obj_id_len);
+		if (!parsed->obj_id) {
 			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
 			goto cleanup;
 		}
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
+			char tmp_pin[MAX_PIN_LENGTH+1];
+			size_t tmp_pin_len = MAX_PIN_LENGTH;
+
 			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
-				obj_id, &obj_id_len, tmp_pin, &tmp_pin_len, &obj_label);
+				parsed->obj_id, &parsed->obj_id_len, tmp_pin, &tmp_pin_len, &parsed->obj_label);
 			if (!n) {
 				UTIL_CTX_log(ctx, LOG_ERR,
 					"The %s ID is not a valid PKCS#11 URI\n"
@@ -886,20 +888,19 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 					goto cleanup;
 				}
 			}
-			if (obj_id_len != 0) {
-				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
+			if (parsed->obj_id_len != 0) {
+				hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
 			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slots for %s %s login:%s%s%s%s\n",
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slots for %s:%s%s%s%s\n",
 				object_typestr,
-				login ? "with" : "without",
 				hexbuf ? " id=" : "",
 				hexbuf ? hexbuf : "",
-				obj_label ? " label=" : "",
-				obj_label ? obj_label : "");
+				parsed->obj_label ? " label=" : "",
+				parsed->obj_label ? parsed->obj_label : "");
 			OPENSSL_free(hexbuf);
 		} else {
 			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
-				obj_id, &obj_id_len, &obj_label);
+				parsed->obj_id, &parsed->obj_id_len, &parsed->obj_label);
 			if (!n) {
 				UTIL_CTX_log(ctx, LOG_ERR,
 					"The %s ID is not a valid PKCS#11 URI\n"
@@ -909,23 +910,22 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 					object_typestr);
 				goto cleanup;
 			}
-			if (obj_id_len != 0) {
-				hexbuf = dump_hex((unsigned char *)obj_id, obj_id_len);
+			if (parsed->obj_id_len != 0) {
+				hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
 			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slot %d for %s %s login:%s%s%s%s\n",
-				slot_nr, object_typestr,
-				login ? "with" : "without",
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slot %d for %s:%s%s%s%s\n",
+				slot_nr,
+				object_typestr,
 				hexbuf ? " id=" : "",
 				hexbuf ? hexbuf : "",
-				obj_label ? " label=" : "",
-				obj_label ? obj_label : "");
+				parsed->obj_label ? " label=" : "",
+				parsed->obj_label ? parsed->obj_label : "");
 			OPENSSL_free(hexbuf);
 		}
 	}
 
-	matched_slots = (PKCS11_SLOT **)calloc(ctx->slot_count,
-		sizeof(PKCS11_SLOT *));
-	if (!matched_slots) {
+	parsed->matched_slots = (PKCS11_SLOT **)OPENSSL_malloc(ctx->slot_count * sizeof(PKCS11_SLOT *));
+	if (!parsed->matched_slots) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
 		goto cleanup;
 	}
@@ -973,13 +973,13 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 		/* Ignore slots without tokens. Thales HSM (and potentially
 		 * other modules) allow objects on uninitialized tokens. */
 		if (found_slot && found_slot->token) {
-			matched_slots[matched_count] = found_slot;
-			matched_count++;
+			parsed->matched_slots[parsed->matched_count] = found_slot;
+			parsed->matched_count++;
 		}
 		found_slot = NULL;
 	}
 
-	if (matched_count == 0) {
+	if (parsed->matched_count == 0) {
 		if (match_tok) {
 			UTIL_CTX_log(ctx, LOG_ERR, "No matching token was found for %s\n",
 				object_typestr);
@@ -996,8 +996,8 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 			/* Ignore slots without tokens. Thales HSM (and potentially
 			 * other modules) allow objects on uninitialized tokens. */
 			if (found_slot && found_slot->token) {
-				matched_slots[matched_count] = found_slot;
-				matched_count++;
+				parsed->matched_slots[parsed->matched_count] = found_slot;
+				parsed->matched_count++;
 			} else {
 				UTIL_CTX_log(ctx, LOG_ERR, "No tokens found\n");
 				goto cleanup;
@@ -1005,135 +1005,7 @@ static void *util_ctx_try_load_object(UTIL_CTX *ctx,
 		}
 	}
 
-	/* In several tokens certificates are marked as private */
-	if (login) {
-		/* Only try to login if a single slot matched to avoiding trying
-		 * the PIN against all matching slots */
-
-		if (matched_count == 1) {
-			slot = matched_slots[0];
-			if (!slot->token) {
-				UTIL_CTX_log(ctx, LOG_ERR, "Empty slot found:  %s\n",
-					slot->description ? slot->description : "(no description)");
-				goto cleanup; /* failed */
-			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
-				slot->description ? slot->description : "(no description)");
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
-				slot->token->label[0] ?	slot->token->label : "no label");
-
-			/* Only try to login if login is required */
-			if (slot->token->loginRequired || ctx->force_login) {
-				if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
-					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
-					goto cleanup; /* failed */
-				}
-			}
-		} else {
-			/* Multiple matching slots */
-			size_t init_count = 0;
-			size_t uninit_count = 0;
-			PKCS11_SLOT **init_slots = NULL, **uninit_slots = NULL;
-
-			init_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
-			if (!init_slots) {
-				UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
-				goto cleanup; /* failed */
-			}
-			uninit_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
-			if (!uninit_slots) {
-				UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
-				free(init_slots);
-				goto cleanup; /* failed */
-			}
-
-			for (m = 0; m < matched_count; m++) {
-				slot = matched_slots[m];
-				if (!slot->token) {
-					UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
-						slot->description ? slot->description : "(no description)");
-					continue; /* skipped */
-				}
-				if (slot->token->initialized) {
-					init_slots[init_count] = slot;
-					init_count++;
-				} else {
-					uninit_slots[uninit_count] = slot;
-					uninit_count++;
-				}
-			}
-
-			/* Initialized tokens */
-			if (init_count == 1) {
-				slot = init_slots[0];
-				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
-					slot->description ? slot->description : "(no description)");
-				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
-					slot->token->label[0] ?	slot->token->label : "no label");
-
-				/* Only try to login if login is required */
-				if (slot->token->loginRequired || ctx->force_login) {
-					if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
-						UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
-						free(init_slots);
-						free(uninit_slots);
-						goto cleanup; /* failed */
-					}
-				}
-				free(init_slots);
-				free(uninit_slots);
-			} else {
-				/* Multiple slots with initialized token */
-				if (init_count > 1) {
-					UTIL_CTX_log(ctx, LOG_WARNING, "Multiple matching slots (%zu);"
-						" will not try to login\n", init_count);
-				}
-				for (m = 0; m < init_count; m++) {
-					slot = init_slots[m];
-					UTIL_CTX_log(ctx, LOG_WARNING, "- [%u] %s: %s\n", m + 1,
-						slot->description ? slot->description : "(no description)",
-						(slot->token && slot->token->label)?
-						slot->token->label: "no label");
-				}
-				free(init_slots);
-
-				/* Uninitialized tokens, user PIN is unset */
-				for (m = 0; m < uninit_count; m++) {
-					slot = uninit_slots[m];
-					UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
-						slot->description ? slot->description : "(no description)");
-					UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
-						slot->token->label[0] ? slot->token->label : "no label");
-					object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
-					if (object) {
-						free(uninit_slots);
-						goto cleanup; /* success */
-					}
-				}
-				free(uninit_slots);
-				goto cleanup; /* failed */
-			}
-		}
-		object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
-
-	} else {
-		/* Find public object */
-		for (n = 0; n < matched_count; n++) {
-			slot = matched_slots[n];
-			if (!slot->token) {
-				UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
-					slot->description ? slot->description : "(no description)");
-				break;
-			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
-				slot->description ? slot->description : "(no description)");
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
-				slot->token && slot->token->label[0] ? slot->token->label : "no label");
-			object = match_func(ctx, slot->token, obj_id, obj_id_len, obj_label);
-			if (object)
-				break; /* success */
-		}
-	}
+	rv = 1; /* Success */
 
 cleanup:
 	/* Free the searched token data */
@@ -1144,13 +1016,155 @@ cleanup:
 		OPENSSL_free(match_tok->label);
 		OPENSSL_free(match_tok);
 	}
+	return rv;
+}
 
-	if (obj_label)
-		OPENSSL_free(obj_label);
-	if (matched_slots)
-		free(matched_slots);
-	if (obj_id)
-		OPENSSL_free(obj_id);
+	/* In several tokens certificates are marked as private */
+static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
+		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
+				const char *, size_t, const char *),
+		UI_METHOD *ui_method, void *ui_data)
+{
+	PKCS11_SLOT *slot;
+	void *object = NULL;
+	unsigned int m;
+
+	/* Only try to login if a single slot matched to avoiding trying
+	 * the PIN against all matching slots */
+
+	if (parsed->matched_count == 1) {
+		slot = parsed->matched_slots[0];
+		if (!slot->token) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Empty slot found:  %s\n",
+				slot->description ? slot->description : "(no description)");
+			goto cleanup; /* failed */
+		}
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+			slot->description ? slot->description : "(no description)");
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+			slot->token->label[0] ?	slot->token->label : "no label");
+
+		/* Only try to login if login is required */
+		if (slot->token->loginRequired || ctx->force_login) {
+			if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
+				UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
+				goto cleanup; /* failed */
+			}
+		}
+	} else {
+		/* Multiple matching slots */
+		size_t init_count = 0;
+		size_t uninit_count = 0;
+		PKCS11_SLOT **init_slots = NULL, **uninit_slots = NULL;
+
+		init_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
+		if (!init_slots) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
+			goto cleanup; /* failed */
+		}
+		uninit_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
+		if (!uninit_slots) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
+			free(init_slots);
+			goto cleanup; /* failed */
+		}
+
+		for (m = 0; m < parsed->matched_count; m++) {
+			slot = parsed->matched_slots[m];
+			if (!slot->token) {
+				UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
+					slot->description ? slot->description : "(no description)");
+				continue; /* skipped */
+			}
+			if (slot->token->initialized) {
+				init_slots[init_count] = slot;
+				init_count++;
+			} else {
+				uninit_slots[uninit_count] = slot;
+				uninit_count++;
+			}
+		}
+
+		/* Initialized tokens */
+		if (init_count == 1) {
+			slot = init_slots[0];
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+				slot->description ? slot->description : "(no description)");
+			UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+				slot->token->label[0] ?	slot->token->label : "no label");
+
+			/* Only try to login if login is required */
+			if (slot->token->loginRequired || ctx->force_login) {
+				if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
+					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
+					free(init_slots);
+					free(uninit_slots);
+					goto cleanup; /* failed */
+				}
+			}
+			free(init_slots);
+			free(uninit_slots);
+		} else {
+			/* Multiple slots with initialized token */
+			if (init_count > 1) {
+				UTIL_CTX_log(ctx, LOG_WARNING, "Multiple matching slots (%zu);"
+					" will not try to login\n", init_count);
+			}
+			for (m = 0; m < init_count; m++) {
+				slot = init_slots[m];
+				UTIL_CTX_log(ctx, LOG_WARNING, "- [%u] %s: %s\n", m + 1,
+					slot->description ? slot->description : "(no description)",
+					(slot->token && slot->token->label)?
+					slot->token->label: "no label");
+			}
+			free(init_slots);
+
+			/* Uninitialized tokens, user PIN is unset */
+			for (m = 0; m < uninit_count; m++) {
+				slot = uninit_slots[m];
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+					slot->description ? slot->description : "(no description)");
+				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+					slot->token->label[0] ? slot->token->label : "no label");
+				object = match_func(ctx, slot->token, parsed->obj_id, parsed->obj_id_len, parsed->obj_label);
+				if (object) {
+					free(uninit_slots);
+					goto cleanup; /* success */
+				}
+			}
+			free(uninit_slots);
+			goto cleanup; /* failed */
+		}
+	}
+	object = match_func(ctx, slot->token, parsed->obj_id, parsed->obj_id_len, parsed->obj_label);
+cleanup:
+	return object;
+}
+
+	/* Find public object */
+static void *util_ctx_load_object_without_login(UTIL_CTX *ctx, PARSED *parsed,
+		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
+				const char *, size_t, const char *))
+{
+	PKCS11_SLOT *slot;
+	void *object = NULL;
+	unsigned int n;
+
+	for (n = 0; n < parsed->matched_count; n++) {
+		slot = parsed->matched_slots[n];
+		if (!slot->token) {
+			UTIL_CTX_log(ctx, LOG_INFO, "Empty slot found:  %s\n",
+				slot->description ? slot->description : "(no description)");
+			break;
+		}
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot:  %s\n",
+			slot->description ? slot->description : "(no description)");
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
+			slot->token && slot->token->label[0] ? slot->token->label : "no label");
+		object = match_func(ctx, slot->token, parsed->obj_id, parsed->obj_id_len, parsed->obj_label);
+		if (object)
+			break; /* success */
+	}
 	return object;
 }
 
@@ -1161,6 +1175,9 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 		const char *object_uri, UI_METHOD *ui_method, void *ui_data)
 {
 	void *obj = NULL;
+	PARSED parsed;
+
+	memset(&parsed, 0, sizeof parsed);
 
 	pthread_mutex_lock(&ctx->lock);
 
@@ -1169,25 +1186,30 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 		return NULL;
 	}
 
-	if (!ctx->force_login) {
-		ERR_clear_error();
-		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, ui_method, ui_data, 0);
-	}
-
-	if (!obj && (!strcmp(object_typestr, "private key") || ctx->force_login)) {
-		/* Try again with login */
-		ERR_clear_error();
-		obj = util_ctx_try_load_object(ctx, object_typestr, match_func,
-			object_uri, ui_method, ui_data, 1);
-		if (!obj) {
-			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
-				object_typestr, object_uri);
+	if (util_ctx_parse_uri(ctx, &parsed, object_typestr, object_uri)) {
+		/* Try again without login */
+		if (!ctx->force_login) {
+			ERR_clear_error();
+			obj = util_ctx_load_object_without_login(ctx, &parsed, match_func);
+		}
+		/* Try (again) with login */
+		if (!obj && (!strcmp(object_typestr, "private key") || ctx->force_login)) {
+			ERR_clear_error();
+			obj = util_ctx_load_object_with_login(ctx, &parsed, match_func,
+				ui_method, ui_data);
 		}
 	}
 
 	pthread_mutex_unlock(&ctx->lock);
 
+	OPENSSL_free(parsed.obj_label);
+	OPENSSL_free(parsed.matched_slots);
+	OPENSSL_free(parsed.obj_id);
+
+	if (!obj) {
+		UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
+			object_typestr, object_uri);
+	}
 	return obj;
 }
 
