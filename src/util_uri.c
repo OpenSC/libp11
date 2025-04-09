@@ -1028,6 +1028,8 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 	PKCS11_SLOT *slot;
 	void *object = NULL;
 	unsigned int m;
+	PKCS11_SLOT **init_slots = NULL, **uninit_slots = NULL;
+	size_t init_count = 0, uninit_count = 0;
 
 	/* Only try to login if a single slot matched to avoiding trying
 	 * the PIN against all matching slots */
@@ -1053,19 +1055,14 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 		}
 	} else {
 		/* Multiple matching slots */
-		size_t init_count = 0;
-		size_t uninit_count = 0;
-		PKCS11_SLOT **init_slots = NULL, **uninit_slots = NULL;
-
-		init_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
+		init_slots = (PKCS11_SLOT **)OPENSSL_malloc(ctx->slot_count * sizeof(PKCS11_SLOT *));
 		if (!init_slots) {
 			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
 			goto cleanup; /* failed */
 		}
-		uninit_slots = (PKCS11_SLOT **)calloc(ctx->slot_count, sizeof(PKCS11_SLOT *));
+		uninit_slots = (PKCS11_SLOT **)OPENSSL_malloc(ctx->slot_count * sizeof(PKCS11_SLOT *));
 		if (!uninit_slots) {
 			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for slots\n");
-			free(init_slots);
 			goto cleanup; /* failed */
 		}
 
@@ -1097,13 +1094,9 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 			if (slot->token->loginRequired || ctx->force_login) {
 				if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
 					UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
-					free(init_slots);
-					free(uninit_slots);
 					goto cleanup; /* failed */
 				}
 			}
-			free(init_slots);
-			free(uninit_slots);
 		} else {
 			/* Multiple slots with initialized token */
 			if (init_count > 1) {
@@ -1117,7 +1110,6 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 					(slot->token && slot->token->label)?
 					slot->token->label: "no label");
 			}
-			free(init_slots);
 
 			/* Uninitialized tokens, user PIN is unset */
 			for (m = 0; m < uninit_count; m++) {
@@ -1127,17 +1119,17 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 				UTIL_CTX_log(ctx, LOG_NOTICE, "Found token: %s\n",
 					slot->token->label[0] ? slot->token->label : "no label");
 				object = match_func(ctx, slot->token, parsed->obj_id, parsed->obj_id_len, parsed->obj_label);
-				if (object) {
-					free(uninit_slots);
+				if (object)
 					goto cleanup; /* success */
-				}
 			}
-			free(uninit_slots);
 			goto cleanup; /* failed */
 		}
 	}
 	object = match_func(ctx, slot->token, parsed->obj_id, parsed->obj_id_len, parsed->obj_label);
+
 cleanup:
+	OPENSSL_free(init_slots);
+	OPENSSL_free(uninit_slots);
 	return object;
 }
 
