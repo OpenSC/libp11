@@ -843,6 +843,7 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 /******************************************************************************/
 
 typedef struct {
+	int slot_nr;
 	char *obj_id;
 	size_t obj_id_len;
 	char *obj_label;
@@ -857,11 +858,10 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 	PKCS11_SLOT *found_slot = NULL;
 	PKCS11_TOKEN *match_tok = NULL;
 	unsigned int n, m;
-	char *hexbuf = NULL;
-	int slot_nr = -1;
 	char flags[64];
 	int rv = 0;
 
+	parsed->slot_nr = -1;
 	if (object_uri && *object_uri) {
 		parsed->obj_id_len = strlen(object_uri) + 1;
 		parsed->obj_id = OPENSSL_malloc(parsed->obj_id_len);
@@ -888,18 +888,8 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 					goto cleanup;
 				}
 			}
-			if (parsed->obj_id_len != 0) {
-				hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
-			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slots for %s:%s%s%s%s\n",
-				object_typestr,
-				hexbuf ? " id=" : "",
-				hexbuf ? hexbuf : "",
-				parsed->obj_label ? " label=" : "",
-				parsed->obj_label ? parsed->obj_label : "");
-			OPENSSL_free(hexbuf);
 		} else {
-			n = parse_slot_id_string(ctx, object_uri, &slot_nr,
+			n = parse_slot_id_string(ctx, object_uri, &parsed->slot_nr,
 				parsed->obj_id, &parsed->obj_id_len, &parsed->obj_label);
 			if (!n) {
 				UTIL_CTX_log(ctx, LOG_ERR,
@@ -910,17 +900,6 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 					object_typestr);
 				goto cleanup;
 			}
-			if (parsed->obj_id_len != 0) {
-				hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
-			}
-			UTIL_CTX_log(ctx, LOG_NOTICE, "Looking in slot %d for %s:%s%s%s%s\n",
-				slot_nr,
-				object_typestr,
-				hexbuf ? " id=" : "",
-				hexbuf ? hexbuf : "",
-				parsed->obj_label ? " label=" : "",
-				parsed->obj_label ? parsed->obj_label : "");
-			OPENSSL_free(hexbuf);
 		}
 	}
 
@@ -949,8 +928,8 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 			flags[m - 2] = '\0';
 		}
 
-		if (slot_nr != -1 &&
-			slot_nr == (int)PKCS11_get_slotid_from_slot(slot)) {
+		if (parsed->slot_nr != -1 &&
+			parsed->slot_nr == (int)PKCS11_get_slotid_from_slot(slot)) {
 			found_slot = slot;
 		}
 
@@ -987,8 +966,9 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 		}
 
 		/* If the legacy slot ID format was used */
-		if (slot_nr != -1) {
-			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found on slot %d\n", object_typestr, slot_nr);
+		if (parsed->slot_nr != -1) {
+			UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found on slot %d\n",
+				 object_typestr, parsed->slot_nr);
 			goto cleanup;
 		} else {
 			found_slot = PKCS11_find_token(ctx->pkcs11_ctx,
@@ -1120,6 +1100,37 @@ static void *util_ctx_load_object_without_login(UTIL_CTX *ctx, PARSED *parsed,
 	return object;
 }
 
+void util_ctx_log_looking(UTIL_CTX *ctx, PARSED *parsed,
+		const char *object_typestr, int initialized, int login)
+{
+	char *hexbuf = NULL;
+
+	if (parsed->obj_id_len != 0) {
+		hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
+	}
+	if (parsed->slot_nr == -1) { /* RFC7512 URI */
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slots %s login for %s token containing %s %s%s%s%s\n",
+			login ? "with" : "without",
+			initialized ? "an initialized" : "a uninitialized",
+			object_typestr,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			parsed->obj_label ? " label=" : "",
+			parsed->obj_label ? parsed->obj_label : "");
+	} else { /* Legacy ENGINE_pkcs11 ID */
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slot %d %s login for %s token containing %s %s%s%s%s\n",
+			parsed->slot_nr,
+			login ? "with" : "without",
+			initialized ? "an initialized" : "a uninitialized",
+			object_typestr,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			parsed->obj_label ? " label=" : "",
+			parsed->obj_label ? parsed->obj_label : "");
+	}
+	OPENSSL_free(hexbuf);
+}
+
 static void *util_ctx_load_object(UTIL_CTX *ctx,
 		const char *object_typestr,
 		void *(*match_func)(UTIL_CTX *, PKCS11_TOKEN *,
@@ -1141,18 +1152,18 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 	if (util_ctx_parse_uri(ctx, &parsed, object_typestr, object_uri)) {
 		/* First try without login unless FORCE_LOGIN is used */
 		if (!ctx->force_login) {
-			ERR_clear_error();
+			util_ctx_log_looking(ctx, &parsed, object_typestr, 1, 0);
 			obj = util_ctx_load_object_without_login(ctx, &parsed, match_func, 1);
 		}
 		/* Then try (possibly again) with login */
 		if (!obj && (!strcmp(object_typestr, "private key") || ctx->force_login)) {
-			ERR_clear_error();
+			util_ctx_log_looking(ctx, &parsed, object_typestr, 1, 1);
 			obj = util_ctx_load_object_with_login(ctx, &parsed, match_func,
 				ui_method, ui_data);
 		}
 		/* Last try slots with an uninitialized token, user PIN is unset */
 		if (!obj) {
-			ERR_clear_error();
+			util_ctx_log_looking(ctx, &parsed, object_typestr, 0, 0);
 			obj = util_ctx_load_object_without_login(ctx, &parsed, match_func, 0);
 		}
 	}
