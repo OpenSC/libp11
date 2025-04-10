@@ -1032,7 +1032,9 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 
 	/* Only try to login if a single slot with an initialized token
 	 * matched to avoiding trying the PIN against all matching slots */
-	if (init_count == 1 && init_slot) {
+	if (init_count == 0 || !init_slot) {
+		UTIL_CTX_log(ctx, LOG_NOTICE, "No matching slots found\n");
+	} else if (init_count == 1) {
 		slot = init_slot;
 		UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot: %s\n",
 			slot->description ? slot->description : "(no description)");
@@ -1041,7 +1043,7 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 		/* Only try to login if login is required */
 		if (slot->token->loginRequired || ctx->force_login) {
 			if (!util_ctx_login(ctx, slot, slot->token, ui_method, ui_data)) {
-				UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed, returning NULL...\n");
+				UTIL_CTX_log(ctx, LOG_ERR, "Login to token failed\n");
 				return NULL;
 			}
 		}
@@ -1070,7 +1072,7 @@ static void *util_ctx_load_object_without_login(UTIL_CTX *ctx, PARSED *parsed,
 		int initialized)
 {
 	PKCS11_SLOT *slot;
-	unsigned int n;
+	unsigned int n, matching_slots = 0;
 	void *object = NULL;
 
 	for (n = 0; n < parsed->matched_count; n++) {
@@ -1088,6 +1090,7 @@ static void *util_ctx_load_object_without_login(UTIL_CTX *ctx, PARSED *parsed,
 				slot->description ? slot->description : "(no description)");
 			continue;
 		}
+		matching_slots++;
 		UTIL_CTX_log(ctx, LOG_NOTICE, "Found slot: %s\n",
 			slot->description ? slot->description : "(no description)");
 		UTIL_CTX_log(ctx, LOG_NOTICE, "Found %s token: %s\n",
@@ -1097,6 +1100,8 @@ static void *util_ctx_load_object_without_login(UTIL_CTX *ctx, PARSED *parsed,
 		if (object)
 			break; /* success */
 	}
+	if (matching_slots == 0)
+		UTIL_CTX_log(ctx, LOG_NOTICE, "No matching slots found\n");
 	return object;
 }
 
