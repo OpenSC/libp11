@@ -1109,19 +1109,19 @@ void util_ctx_log_looking(UTIL_CTX *ctx, PARSED *parsed,
 		hexbuf = dump_hex((unsigned char *)parsed->obj_id, parsed->obj_id_len);
 	}
 	if (parsed->slot_nr == -1) { /* RFC7512 URI */
-		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slots %s login for %s token containing %s %s%s%s%s\n",
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slots %s login for an %s token containing %s %s%s%s%s\n",
 			login ? "with" : "without",
-			initialized ? "an initialized" : "a uninitialized",
+			initialized ? "initialized" : "uninitialized",
 			object_typestr,
 			hexbuf ? " id=" : "",
 			hexbuf ? hexbuf : "",
 			parsed->obj_label ? " label=" : "",
 			parsed->obj_label ? parsed->obj_label : "");
 	} else { /* Legacy ENGINE_pkcs11 ID */
-		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slot %d %s login for %s token containing %s %s%s%s%s\n",
+		UTIL_CTX_log(ctx, LOG_NOTICE, "Searching slot %d %s login for an %s token containing %s %s%s%s%s\n",
 			parsed->slot_nr,
 			login ? "with" : "without",
-			initialized ? "an initialized" : "a uninitialized",
+			initialized ? "initialized" : "uninitialized",
 			object_typestr,
 			hexbuf ? " id=" : "",
 			hexbuf ? hexbuf : "",
