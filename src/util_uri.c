@@ -1061,8 +1061,8 @@ static void *util_ctx_load_object_with_login(UTIL_CTX *ctx, PARSED *parsed,
 				(slot->token && slot->token->label)?
 				slot->token->label: "no label");
 		}
-		return NULL;
 	}
+	return NULL;
 }
 
 /* Find an object without logging in */
