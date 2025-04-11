@@ -130,7 +130,6 @@ extern PKCS11_OBJECT_ops pkcs11_ec_ops;
 			CKRerr(f, rv); \
 			return -1; \
 		} \
-		ERR_clear_error(); \
 	} while (0)
 #define CRYPTOKI_call(ctx, func_and_args) \
 	ctx->method->func_and_args
