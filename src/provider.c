@@ -583,10 +583,9 @@ static const OSSL_ITEM *provider_get_reason_strings(void *ctx)
 	static const OSSL_ITEM reason_strings[] = {
 		{1, "Memory allocation failed"},
 		{2, "Failed to set provider parameters"},
-		{3, "Failed to init libp11"},
+		{3, "Failed to retrieve OSSL_STORE_PARAM_EXPECT"},
 		{4, "Failed to encode X.509 certificate"},
 		{5, "No object available for OSSL_STORE_INFO"},
-		{6, "Failed to retrieve OSSL_STORE_PARAM_EXPECT"},
 		{0, NULL} /* Sentinel value */
 	};
 
@@ -613,11 +612,6 @@ static void *store_open(void *ctx, const char *uri)
 			PROVIDER_CTX_log(prov_ctx, LOG_ERR, 2, OPENSSL_LINE, OPENSSL_FUNC, NULL);
 			return NULL;
 		}
-	}
-	/* Delayed libp11 initialization */
-	if (UTIL_CTX_init_libp11(prov_ctx->util_ctx)) {
-		PROVIDER_CTX_log(prov_ctx, LOG_ERR, 3, OPENSSL_LINE, OPENSSL_FUNC, NULL);
-		return NULL;
 	}
 	prov_ctx->initialized = 1;
 
@@ -664,7 +658,7 @@ static int store_set_ctx_params(void *ctx, const OSSL_PARAM params[])
 
 	param = OSSL_PARAM_locate_const(params, OSSL_STORE_PARAM_EXPECT);
 	if (param != NULL && !OSSL_PARAM_get_int(param, &store_ctx->expected_type)) {
-		PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 6, OPENSSL_LINE, OPENSSL_FUNC, NULL);
+		PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 3, OPENSSL_LINE, OPENSSL_FUNC, NULL);
 		return 0;
 	}
 
