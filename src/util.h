@@ -55,7 +55,6 @@ int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
 int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);
 int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data);
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
-int UTIL_CTX_init_libp11(UTIL_CTX *ctx);
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 
 void UTIL_CTX_set_vlog_a(UTIL_CTX *ctx, PKCS11_VLOG_A_CB vlog);

@@ -139,22 +139,9 @@ static int util_ctx_enumerate_slots_unlocked(UTIL_CTX *ctx)
 	return 1;
 }
 
-int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
-{
-	int rv;
-
-	pthread_mutex_lock(&ctx->lock);
-	if (ctx->pkcs11_ctx)
-		rv = util_ctx_enumerate_slots_unlocked(ctx);
-	else
-		rv = UTIL_CTX_init_libp11(ctx) == 0;
-	pthread_mutex_unlock(&ctx->lock);
-	return rv;
-}
-
 /* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
 
-int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
+static int util_ctx_init_libp11(UTIL_CTX *ctx)
 {
 	if (ctx->pkcs11_ctx && ctx->slot_list && ctx->slot_count > 0)
 		return 0;
@@ -177,6 +164,19 @@ int UTIL_CTX_init_libp11(UTIL_CTX *ctx)
 		return -1;
 	}
 	return 0;
+}
+
+int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
+{
+	int rv;
+
+	pthread_mutex_lock(&ctx->lock);
+	if (ctx->pkcs11_ctx)
+		rv = util_ctx_enumerate_slots_unlocked(ctx);
+	else
+		rv = util_ctx_init_libp11(ctx) == 0;
+	pthread_mutex_unlock(&ctx->lock);
+	return rv;
 }
 
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx)
@@ -1149,7 +1149,7 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 
 	pthread_mutex_lock(&ctx->lock);
 
-	if (UTIL_CTX_init_libp11(ctx)) {
+	if (util_ctx_init_libp11(ctx)) {
 		pthread_mutex_unlock(&ctx->lock);
 		return NULL;
 	}
@@ -1529,7 +1529,7 @@ int UTIL_CTX_keygen(UTIL_CTX *ctx, PKCS11_KGEN_ATTRS *kg_attrs)
 		return 0;
 
 	/* Delayed libp11 initialization */
-	if (UTIL_CTX_init_libp11(ctx))
+	if (util_ctx_init_libp11(ctx))
 		return 0;
 
 	slot = util_ctx_find_token(ctx, kg_attrs->token_label);
