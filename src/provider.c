@@ -143,8 +143,6 @@ typedef struct {
 	void *ui_method_data;
 } PASSPHRASE_DATA;
 
-static int g_shutdown_mode = 0;
-
 #if defined(_WIN32) || defined(_WIN64)
 #define strcasecmp _stricmp
 #endif
@@ -172,19 +170,6 @@ static void PROVIDER_CTX_log(PROVIDER_CTX *prov_ctx, int level, int reason, int 
 		}
 	}
 	va_end(args);
-}
-
-/*
- * PKCS#11 modules that register their own atexit() callbacks may
- * already have been cleaned up by the time OpenSSL's atexit() callback
- * is executed. As a result, a crash occurs with certain versions of
- * OpenSSL and SoftHSM2. The workaround skips the execution of
- * ENGINE_CTX_finish() during OpenSSL's cleanup, converting the crash into
- * a harmless memory leak at exit.
- */
-static void exit_callback(void)
-{
-	g_shutdown_mode = 1;
 }
 
 /*
@@ -341,8 +326,7 @@ static PROVIDER_CTX *PROVIDER_CTX_new(void)
  */
 static void PROVIDER_CTX_destroy(PROVIDER_CTX *prov_ctx)
 {
-	if (!g_shutdown_mode)
-		UTIL_CTX_free_libp11(prov_ctx->util_ctx);
+	UTIL_CTX_free_libp11(prov_ctx->util_ctx);
 	UTIL_CTX_free(prov_ctx->util_ctx);
 	OPENSSL_free(prov_ctx->provider_name);
 	OPENSSL_free(prov_ctx->pkcs11_module);
@@ -479,7 +463,6 @@ static int provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in
 	*out = provider_functions;
 	*ctx = prov_ctx;
 
-	atexit(exit_callback);
 	return 1;
 
 err:

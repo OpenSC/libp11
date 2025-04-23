@@ -75,6 +75,8 @@ struct util_ctx_st {
 
 };
 
+static int g_shutdown_mode = 0;
+
 /******************************************************************************/
 /* Initialization                                                             */
 /******************************************************************************/
@@ -139,8 +141,19 @@ static int util_ctx_enumerate_slots_unlocked(UTIL_CTX *ctx)
 	return 1;
 }
 
-/* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
+/*
+ * PKCS#11 modules that register their own atexit() callbacks may already have
+ * been cleaned up by the time OpenSSL's atexit() callback is executed.
+ * As a result, a crash occurs with certain versions of OpenSSL and SoftHSM2.
+ * The workaround skips libp11 cleanup during OpenSSL's cleanup, converting
+ * the crash into a harmless memory leak at exit.
+ */
+static void exit_callback(void)
+{
+	g_shutdown_mode = 1;
+}
 
+/* Initialize libp11 data: ctx->pkcs11_ctx and ctx->slot_list */
 static int util_ctx_init_libp11(UTIL_CTX *ctx)
 {
 	if (ctx->pkcs11_ctx && ctx->slot_list && ctx->slot_count > 0)
@@ -163,6 +176,7 @@ static int util_ctx_init_libp11(UTIL_CTX *ctx)
 		UTIL_CTX_free_libp11(ctx);
 		return -1;
 	}
+	atexit(exit_callback);
 	return 0;
 }
 
@@ -182,14 +196,17 @@ int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx)
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx)
 {
 	if (ctx->slot_list) {
-		PKCS11_release_all_slots(ctx->pkcs11_ctx,
-			ctx->slot_list, ctx->slot_count);
+		if (!g_shutdown_mode)
+			PKCS11_release_all_slots(ctx->pkcs11_ctx,
+				ctx->slot_list, ctx->slot_count);
 		ctx->slot_list = NULL;
 		ctx->slot_count = 0;
 	}
 	if (ctx->pkcs11_ctx) {
-		PKCS11_CTX_unload(ctx->pkcs11_ctx);
-		PKCS11_CTX_free(ctx->pkcs11_ctx);
+		if (!g_shutdown_mode) {
+			PKCS11_CTX_unload(ctx->pkcs11_ctx);
+			PKCS11_CTX_free(ctx->pkcs11_ctx);
+		}
 		ctx->pkcs11_ctx = NULL;
 	}
 }
