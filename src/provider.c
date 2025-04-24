@@ -143,10 +143,6 @@ typedef struct {
 	void *ui_method_data;
 } PASSPHRASE_DATA;
 
-#if defined(_WIN32) || defined(_WIN64)
-#define strcasecmp _stricmp
-#endif
-
 /******************************************************************************/
 /* Utility functions                                                          */
 /******************************************************************************/

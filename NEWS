@@ -4,6 +4,8 @@ New in 0.4.14; unreleased
 * Added support for the "pkcs11prov" provider with OpenSSL 3.0
   (Małgorzata Olszówka)
 * Removed support for OpenSSL older than 1.0.2 (Michał Trojnara)
+* Added PKCS11_FORCE_CLEANUP to force cleanup on exit and avoid memory leaks
+  with certain PKCS#11 modules
 
 New in 0.4.13; 2024-12-13; Michał Trojnara
 * Increased maximum PIN length (Michał Trojnara)

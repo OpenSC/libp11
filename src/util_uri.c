@@ -150,6 +150,10 @@ static int util_ctx_enumerate_slots_unlocked(UTIL_CTX *ctx)
  */
 static void exit_callback(void)
 {
+	const char *str = getenv("PKCS11_FORCE_CLEANUP");
+
+	if (str && (!strcmp(str, "1") || !strcasecmp(str, "yes")))
+		return;
 	g_shutdown_mode = 1;
 }
 
