@@ -46,6 +46,10 @@
 #include "config.h"
 #endif
 
+#if defined(_WIN32) || defined(_WIN64)
+#define strcasecmp _stricmp
+#endif
+
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
 
