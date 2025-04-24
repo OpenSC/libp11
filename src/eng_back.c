@@ -257,7 +257,7 @@ static int ENGINE_CTX_ctrl_set_vlog(ENGINE_CTX *ctx, void *cb)
 	return 1;
 }
 
-int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)())
+int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void))
 {
 	(void)i; /* We don't currently take integer parameters */
 	(void)f; /* We don't currently take callback parameters */
