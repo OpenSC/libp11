@@ -569,9 +569,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 			EVP_PKEY_free(ret);
 			goto err;
 		}
-		if (key->object_class == CKO_PRIVATE_KEY)
-			pkcs11_object_ref(key);
-		else /* Public key -> detach PKCS11_OBJECT */
+		if (key->object_class != CKO_PRIVATE_KEY)
 			pkcs11_set_ex_data_rsa(rsa, NULL);
 		break;
 	case EVP_PKEY_EC:
