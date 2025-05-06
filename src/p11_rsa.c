@@ -538,6 +538,7 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		RSA_meth_set_priv_enc(pkcs11_rsa_method, pkcs11_rsa_priv_enc_method);
 		RSA_meth_set_priv_dec(pkcs11_rsa_method, pkcs11_rsa_priv_dec_method);
 		RSA_meth_set_finish(pkcs11_rsa_method, pkcs11_rsa_free_method);
+		atexit(pkcs11_rsa_method_free);
 	}
 	return pkcs11_rsa_method;
 }
