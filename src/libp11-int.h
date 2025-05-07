@@ -121,6 +121,8 @@ struct pkcs11_object_ops {
 extern PKCS11_OBJECT_ops pkcs11_rsa_ops;
 extern PKCS11_OBJECT_ops pkcs11_ec_ops;
 
+extern int pkcs11_global_data_refs;
+
 /*
  * Internal functions
  */

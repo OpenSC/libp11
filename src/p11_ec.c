@@ -811,7 +811,7 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 
 void pkcs11_ec_key_method_free(void)
 {
-	if (pkcs11_ec_key_method) {
+	if (pkcs11_global_data_refs == 0 && pkcs11_ec_key_method) {
 		free_ec_ex_index();
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		if (meth->pkcs11_ecdh_method & EC_KEY_METHOD_DYNAMIC)
@@ -855,7 +855,7 @@ ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
 
 void pkcs11_ecdsa_method_free(void)
 {
-	if (pkcs11_ecdsa_method) {
+	if (pkcs11_global_data_refs == 0 && pkcs11_ecdsa_method) {
 		free_ec_ex_index();
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		if (pkcs11_ecdsa_method->flags & EC_KEY_METHOD_DYNAMIC)
@@ -881,7 +881,7 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void)
 
 void pkcs11_ecdh_method_free(void)
 {
-	if (pkcs11_ecdh_method) {
+	if (pkcs11_global_data_refs == 0 && pkcs11_ecdh_method) {
 		free_ec_ex_index();
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		if (pkcs11_ecdh_method->flags & EC_KEY_METHOD_DYNAMIC)
