@@ -21,35 +21,23 @@ outdir="output.$$"
 # Load common test functions
 . ${srcdir}/common.sh
 
-CERTIFICATE_URL="pkcs11:token=libp11-0;object=stored-cert;pin-value=${PIN}"
-
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Do the token initialization
-init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
-
-# Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
-unset OPENSSL_ENGINES
-export OPENSSL_MODULES="../src/.libs/"
-export PKCS11_MODULE_PATH=${MODULE}
-echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
-echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
 
 # Load openssl settings
 TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
 
-${OPENSSL} x509 -in ${srcdir}/ec-cert.der -inform DER -outform PEM \
-	-out ${outdir}/ec-cert.pem
-CERTIFICATE="${outdir}/ec-cert.pem"
+# RSA certificate to store
+${OPENSSL} x509 -in ${srcdir}/rsa-cert.der -inform DER -outform PEM \
+	-out ${outdir}/rsa-cert.pem
+CERTIFICATE="${outdir}/rsa-cert.pem"
+CERTIFICATE_URL="pkcs11:token=libp11-0;id=04030201;object=stored-cert;pin-value=1234"
 
 # Run the test
-${WRAPPER} ./store-cert-prov ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE}
+${WRAPPER} ../examples/storecert ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "The certificate storing couldn't be performed"
+	echo "RSA certificate storing couldn't be performed"
 	exit 1
 fi
 
@@ -58,7 +46,7 @@ export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 list_objects && list_objects | grep -q stored-cert
 if [[ $? -ne 0 ]]; then
-	echo "The certificate was not properly stored"
+	echo "The RSA certificate was not properly stored"
 	exit 1
 fi
 
