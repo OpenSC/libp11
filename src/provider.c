@@ -32,7 +32,6 @@
 #endif /* _WIN32 */
 
 #include "util.h"
-#include "p11_pthread.h"
 
 #include <ctype.h> /* isdigit() */
 

@@ -64,6 +64,7 @@ examples/listkeys
 examples/listkeys_ext
 examples/eckeygen
 examples/rsakeygen
+examples/storecert
 
 test-driver
 tests/openssl_version
@@ -75,14 +76,12 @@ tests/rsa-oaep
 tests/rsa-pss-sign
 tests/check-privkey
 tests/dup-key
-tests/store-cert
 tests/check-privkey-prov
 tests/dup-key-prov
 tests/evp-sign-prov
 tests/fork-change-slot-prov
 tests/rsa-oaep-prov
 tests/rsa-pss-sign-prov
-tests/store-cert-prov
 tests/rsa-keygen
 tests/ec-keygen
 tests/check-all-prov
