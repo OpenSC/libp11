@@ -1,11 +1,17 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.14; unreleased
-* Added support for the "pkcs11prov" provider with OpenSSL 3.0
-  (Małgorzata Olszówka)
+* Added the "pkcs11prov" provider for OpenSSL 3.x (Małgorzata Olszówka)
+* Added generic keypair generation interface and engine ctrl command
+  (Rafael Junio da Cruz)
+* Added static engine support (Lucas Mülling)
+* Added PKCS11_FORCE_CLEANUP env variable to force cleanup on exit and
+  stop memory leaks with certain PKCS#11 modules (Małgorzata Olszówka)
+* Fixed a number of resource leaks (Małgorzata Olszówka, Hazem Zaghloul,
+  Michał Trojnara)
+* Fixed C_OpenSession error hadling (Rafael Junio da Cruz)
+* Fixed handling of uninitialized tokens (Michał Trojnara)
 * Removed support for OpenSSL older than 1.0.2 (Michał Trojnara)
-* Added PKCS11_FORCE_CLEANUP to force cleanup on exit and avoid memory leaks
-  with certain PKCS#11 modules
 
 New in 0.4.13; 2024-12-13; Michał Trojnara
 * Increased maximum PIN length (Michał Trojnara)

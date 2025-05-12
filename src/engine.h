@@ -2,7 +2,7 @@
  * Copyright (c) 2001 Markus Friedl
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016 Michał Trojnara
+ * Copyright (c) 2016-2025 Michał Trojnara
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
