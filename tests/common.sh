@@ -20,7 +20,7 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 # Uncomment the following line to enable debugging with Valgrind
-# WRAPPER="valgrind -s --track-origins=yes --leak-check=full --show-leak-kinds=all --tool=memcheck --show-reachable=yes --keep-debuginfo=yes"
+# WRAPPER="libtool --mode=execute valgrind -s --track-origins=yes --leak-check=full --show-leak-kinds=all --tool=memcheck --show-reachable=yes --keep-debuginfo=yes"
 
 echo "Current directory: $(pwd)"
 echo "Source directory: ${srcdir}"
