@@ -1,4 +1,4 @@
-/* libp11, a simple layer on to of PKCS#11 API
+/* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2011, 2013 Douglas E. Engert <deengert@anl.gov>
  * Copyright (C) 2014, 2016 Douglas E. Engert <deengert@gmail.com>
