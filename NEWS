@@ -9,7 +9,7 @@ New in 0.4.14; unreleased
   stop memory leaks with certain PKCS#11 modules (Małgorzata Olszówka)
 * Fixed a number of resource leaks (Małgorzata Olszówka, Hazem Zaghloul,
   Michał Trojnara)
-* Fixed C_OpenSession error hadling (Rafael Junio da Cruz)
+* Fixed C_OpenSession error handling (Rafael Junio da Cruz)
 * Fixed handling of uninitialized tokens (Michał Trojnara)
 * Removed support for OpenSSL older than 1.0.2 (Michał Trojnara)
 
