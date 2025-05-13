@@ -1,6 +1,6 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.14; unreleased
+New in 0.4.14; 2025-05-13; Michał Trojnara
 * Added the "pkcs11prov" provider for OpenSSL 3.x (Małgorzata Olszówka)
 * Added generic keypair generation interface and engine ctrl command
   (Rafael Junio da Cruz)
