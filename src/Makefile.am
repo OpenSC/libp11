@@ -4,8 +4,8 @@ DISTCLEANFILES = libp11.map
 CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
-noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h
-include_HEADERS= libp11.h p11_err.h util.h
+noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h util.h
+include_HEADERS= libp11.h p11_err.h
 if ENABLE_STATIC_ENGINE
 lib_LTLIBRARIES = libp11.la libpkcs11.la
 else
