@@ -45,10 +45,6 @@ struct engine_ctx_st {
 	UTIL_CTX *util_ctx;
 };
 
-#if defined(_WIN32) || defined(_WIN64)
-#define strncasecmp _strnicmp
-#endif
-
 /******************************************************************************/
 /* Utility functions                                                          */
 /******************************************************************************/

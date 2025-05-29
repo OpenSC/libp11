@@ -35,6 +35,10 @@
 
 #include <ctype.h> /* isdigit() */
 
+#if defined(_WIN32) && !defined(strncasecmp)
+#define strncasecmp _strnicmp
+#endif
+
 #include <openssl/core.h>
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>

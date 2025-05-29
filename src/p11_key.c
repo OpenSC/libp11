@@ -22,10 +22,6 @@
 #include <openssl/ui.h>
 #include <openssl/bn.h>
 
-#if defined(_WIN32) && !defined(strncasecmp)
-#define strncasecmp strnicmp
-#endif
-
 /* The maximum length of PIN */
 #define MAX_PIN_LENGTH   256
 
