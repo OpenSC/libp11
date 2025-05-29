@@ -584,6 +584,9 @@ static void *store_open(void *ctx, const char *uri)
 	P11_STORE_CTX *store_ctx;
 	PROVIDER_CTX *prov_ctx = (PROVIDER_CTX *)ctx;
 
+	if (!uri || strncasecmp(uri, "pkcs11:", 7) != 0) {
+		return NULL; /* This provider doesn't handle this URI */
+	}
 	if (!prov_ctx->initialized) {
 		/* Set parameters into the util_ctx */
 		if (!PROVIDER_CTX_set_parameters(prov_ctx)) {
