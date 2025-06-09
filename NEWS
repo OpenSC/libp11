@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.15; unreleased
+New in 0.4.15; 2025-06-09; Michał Trojnara
+* Fixed incorrectly installing an internal header file (Alex Dupre)
+* Fixed handling URI schemes of other providers (Małgorzata Olszówka)
 
 New in 0.4.14; 2025-05-13; Michał Trojnara
 * Added the "pkcs11prov" provider for OpenSSL 3.x (Małgorzata Olszówka)
