@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  version: 0.4.15_git
+  version: 0.4.16_git
 
 jobs:
   build:
