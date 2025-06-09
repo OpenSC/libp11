@@ -77,7 +77,7 @@ static int pkcs11_initialize(PKCS11_CTX_private *cpriv)
 
 	memset(&args, 0, sizeof(args));
 	/* Unconditionally say using OS locking primitives is OK */
-	// args.flags |= CKF_OS_LOCKING_OK;
+	args.flags |= CKF_OS_LOCKING_OK;
 	args.pReserved = cpriv->init_args;
 	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
