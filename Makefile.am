@@ -16,7 +16,7 @@ MAINTAINERCLEANFILES = \
 	$(srcdir)/m4/ltversion.m4 $(srcdir)/m4/lt~obsolete.m4 \
 	$(srcdir)/m4/ltoptions.m4 \
 	$(srcdir)/packaged
-EXTRA_DIST = Makefile.mak make.rules.mak README.md
+EXTRA_DIST = Makefile.mak make.rules.mak README.md .github/workflows/ci.yml.in
 
 dist_noinst_DATA = COPYING INSTALL.md
 

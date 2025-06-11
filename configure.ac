@@ -299,6 +299,7 @@ AC_CONFIG_FILES([
 	doc/doxygen.conf
 	examples/Makefile
 	tests/Makefile
+	.github/workflows/ci.yml
 ])
 AC_OUTPUT
 
