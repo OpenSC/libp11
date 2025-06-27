@@ -47,6 +47,7 @@ dist_check_SCRIPTS = \
 	ec-keygen.softhsm \
 	fork-change-slot.softhsm \
 	case-insensitive.softhsm \
+	pkcs11-uri-pin-source.softhsm \
 	pkcs11-uri-without-token.softhsm \
 	search-all-matching-tokens.softhsm \
 	provider-rsa-evp-sign.softhsm \

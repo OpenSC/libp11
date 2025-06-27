@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Copyright (C) 2025 Tobias Deiminger
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+outdir="output.$$"
+
+URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+# Generate test input files
+printf ${PIN} > $outdir/pin.txt
+printf "${PIN}\n" > $outdir/pin_with_trailing_newline.txt
+
+# Do the token initialization
+init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
+
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+# Run the test
+for PIN_SOURCE_ATTR in \
+	"pin-source=$outdir/pin.txt" \
+	"pin-source=$outdir/pin_with_trailing_newline.txt" \
+	"pin-source=file:$outdir/pin.txt" \
+	"pin-source=file:$outdir/pin_with_trailing_newline.txt"
+do
+
+	${WRAPPER} ./check-privkey "${URL};type=cert" "${URL};type=private;${PIN_SOURCE_ATTR}" \
+		${MODULE} "${outdir}/engines.cnf"
+	if [[ $? -ne 0 ]]; then
+		echo "The private key loading couldn't get the public key from the certificate URL"
+		exit 1
+	fi
+
+done
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
+
+rm -rf "$outdir"
+
+exit 0
