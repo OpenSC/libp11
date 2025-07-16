@@ -734,23 +734,15 @@ static int read_from_file(UTIL_CTX *ctx,
 		return 0;
 	}
 	if (BIO_gets(fp, txt, (int)*field_len + 1) > 0) {
-		*field_len = strlen(txt);
+		size_t len = strlen(txt);
+
+		while (len > 0 && (txt[len - 1] == '\n' || txt[len - 1] == '\r'))
+			len--;
+		memcpy(field, txt, len);
+		*field_len = len;
 	} else {
 		*field_len = 0;
-		goto done;
 	}
-
-	/* files may contain trailing newlines, remove them */
-	while (*field_len > 0) {
-		if (txt[*field_len - 1] == '\n' || txt[*field_len - 1] == '\r') {
-			(*field_len)--;
-		} else {
-			break;
-		}
-	}
-	memcpy(field, txt, *field_len);
-
-done:
 	OPENSSL_free(txt);
 
 	BIO_free(fp);
