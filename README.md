@@ -13,15 +13,15 @@
 
 This code repository provides three libraries:
 * libp11 – Provides a higher-level interface (compared to the PKCS#11 library)
-for accessing PKCS#11 objects. It is designed to integrate with applications
-that use OpenSSL.
+  for accessing PKCS#11 objects. It is designed to integrate with applications
+  that use OpenSSL.
 * pkcs11prov – An OpenSSL 3.x provider plugin that allows transparent access to
-PKCS#11 modules.
-* pkcs11 – A plugin for legacy versions of the OpenSSL library that allows
-semi-transparent access to PKCS#11 modules.
+  PKCS#11 modules.
+* pkcs11 – A legacy OpenSSL engine plugin that allows semi-transparent access
+  to PKCS#11 modules.
 
 The wiki page for this project is available at
-https://github.com/OpenSC/libp11/wiki.  It includes a bug tracker and source
+https://github.com/OpenSC/libp11/wiki. It includes a bug tracker and source
 browser.
 
 ## PKCS#11
@@ -276,7 +276,7 @@ configuration explicitly. The following line loads the pkcs11 engine with the
 PKCS#11 module opensc-pkcs11.so:
 
 ```
-OpenSSL> engine -t dynamic 
+OpenSSL> engine -t dynamic
          -pre SO_PATH:/usr/lib/x86_64-linux-gnu/engines-3/pkcs11.so
          -pre ID:pkcs11 -pre LIST_ADD:1 -pre LOAD
          -pre MODULE_PATH:opensc-pkcs11.so
@@ -332,13 +332,15 @@ The following engine controls are supported:
 * **SO_PATH**: Specifies the path to the 'pkcs11-engine' shared library
 * **MODULE_PATH**: Specifies the path to the pkcs11 module shared library
 * **PIN**: Specifies the PIN
-* **DEBUG_LEVEL**: Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice (default), 6=info, 7=debug
+* **DEBUG_LEVEL**: Set the debug level: 0=emerg, 1=alert, 2=crit, 3=err,
+  4=warning, 5=notice (default), 6=info, 7=debug
 * **QUIET**: Do not print additional details
 * **LOAD_CERT_CTRL**: Load a certificate from token
 * **SET_USER_INTERFACE**: Set the global user interface
 * **SET_CALLBACK_DATA**: Set the global user interface extra data
 * **FORCE_LOGIN**: Force login to the PKCS#11 module
-* **RE_ENUMERATE**: re-enumerate the slots/tokens, required when adding/removing tokens/slots
+* **RE_ENUMERATE**: re-enumerate the slots/tokens, required when
+  adding/removing tokens/slots
 * **VLOG_A**: Set the logging callback
 
 The following example demonstrates how to set a specific module:
@@ -360,7 +362,7 @@ libp11 internally uses OS locking, and configures the PKCS#11 module to do
 the same.
 
 Access to PKCS#11 tokens and objects is provided via a pool of PKCS#11
-sessions.  This allows concurrent usage of crypto operations in a thread-safe
+sessions. This allows concurrent usage of crypto operations in a thread-safe
 manner.
 
 ## Submitting pull requests
