@@ -45,7 +45,7 @@ static const ENGINE_CMD_DEFN engine_cmd_defns[] = {
 		ENGINE_CMD_FLAG_STRING},
 	{CMD_PIN,
 		"PIN",
-		"Specifies the pin code",
+		"Specifies the PIN",
 		ENGINE_CMD_FLAG_STRING},
 	{CMD_VERBOSE,
 		"VERBOSE",
