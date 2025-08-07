@@ -61,8 +61,9 @@ struct pkcs11_ctx_private {
 	CK_VERSION cryptoki_version;
 	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
 	void *ui_user_data;
-	unsigned int forkid;
 	pthread_mutex_t fork_lock;
+	unsigned int forkid;
+	int initialized;
 	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
 };
 #define PRIVCTX(_ctx)		((PKCS11_CTX_private *) ((_ctx)->_private))

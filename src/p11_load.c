@@ -81,9 +81,11 @@ static int pkcs11_initialize(PKCS11_CTX_private *cpriv)
 	args.pReserved = cpriv->init_args;
 	rv = cpriv->method->C_Initialize(&args);
 	if (rv && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+		cpriv->initialized = 0;
 		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
+	cpriv->initialized = 1;
 	return 0;
 }
 
@@ -103,8 +105,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	}
 
 	if (pkcs11_initialize(cpriv)) {
-		C_UnloadModule(cpriv->handle);
-		cpriv->handle = NULL;
+		pkcs11_CTX_unload(ctx);
 		return -1;
 	}
 
@@ -112,9 +113,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	memset(&ck_info, 0, sizeof(ck_info));
 	rv = cpriv->method->C_GetInfo(&ck_info);
 	if (rv) {
-		cpriv->method->C_Finalize(NULL);
-		C_UnloadModule(cpriv->handle);
-		cpriv->handle = NULL;
+		pkcs11_CTX_unload(ctx);
 		CKRerr(P11_F_PKCS11_CTX_LOAD, rv);
 		return -1;
 	}
@@ -144,16 +143,18 @@ void pkcs11_CTX_unload(PKCS11_CTX *ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	if (!cpriv->method || !cpriv->handle) /* Module not loaded */
-		return;
-
 	/* Tell the PKCS11 library to shut down */
-	if (cpriv->forkid == get_forkid())
-		cpriv->method->C_Finalize(NULL);
+	if (cpriv->method) {
+		if (cpriv->initialized && cpriv->forkid == get_forkid())
+			cpriv->method->C_Finalize(NULL);
+		cpriv->method = NULL;
+	}
 
 	/* Unload the module */
-	C_UnloadModule(cpriv->handle);
-	cpriv->handle = NULL;
+	if (cpriv->handle) {
+		C_UnloadModule(cpriv->handle);
+		cpriv->handle = NULL;
+	}
 }
 
 /*
