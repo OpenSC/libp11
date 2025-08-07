@@ -49,7 +49,12 @@ void *
 C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 {
 	sc_pkcs11_module_t *mod;
-	CK_RV (*c_get_function_list)(CK_FUNCTION_LIST_PTR_PTR);
+	/* POSIX requires that the result of dlsym() is safely convertible
+	 * to a function pointer, even though ISO C doesn't guarantee this. */
+	union {
+		CK_RV (*func)(CK_FUNCTION_LIST_PTR_PTR);
+		void *data;
+	} c_get_function_list;
 	int rv;
 
 	if (!mspec)
@@ -75,25 +80,19 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	}
 
 #ifdef WIN32
-	c_get_function_list = (CK_C_GetFunctionList)
+	c_get_function_list.func = (CK_C_GetFunctionList)
 		GetProcAddress(mod->handle, "C_GetFunctionList");
 #else
-	{
-		/*
-		 * Make compiler happy!
-		 */
-		void *p = dlsym(mod->handle, "C_GetFunctionList");
-		memmove(&c_get_function_list, &p, sizeof(void *));
-	}
+	c_get_function_list.data = dlsym(mod->handle, "C_GetFunctionList");
 #endif
 
-	if (!c_get_function_list) {
+	if (!c_get_function_list.func) {
 #ifndef WIN32
 		pkcs11_log(NULL, LOG_ERR, "%s\n", dlerror());
 #endif
 		goto failed;
 	}
-	rv = c_get_function_list(funcs);
+	rv = c_get_function_list.func(funcs);
 	if (rv == CKR_OK)
 		return mod;
 
