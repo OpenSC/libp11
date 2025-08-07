@@ -144,7 +144,7 @@ void pkcs11_CTX_unload(PKCS11_CTX *ctx)
 {
 	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
 
-	if (!cpriv->method) /* Module not loaded */
+	if (!cpriv->method || !cpriv->handle) /* Module not loaded */
 		return;
 
 	/* Tell the PKCS11 library to shut down */
