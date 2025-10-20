@@ -338,9 +338,11 @@ extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
 	unsigned int bits, const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
 
+#ifndef OPENSSL_NO_EC
 extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
 	const char *curve , const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_NO_EC */
 
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);
