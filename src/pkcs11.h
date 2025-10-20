@@ -359,6 +359,7 @@ typedef unsigned long ck_key_type_t;
 #define CKK_GOSTR3410		(0x30UL)
 #define CKK_GOSTR3411		(0x31UL)
 #define CKK_GOST28147		(0x32UL)
+#define CKK_EC_EDWARDS		(0x40UL)
 #define CKK_VENDOR_DEFINED	(1UL << 31)
 
 /*
@@ -715,6 +716,8 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_ECDH1_DERIVE		(0x1050UL)
 #define CKM_ECDH1_COFACTOR_DERIVE	(0x1051UL)
 #define CKM_ECMQV_DERIVE		(0x1052UL)
+#define CKM_EC_EDWARDS_KEY_PAIR_GEN	(0x1055UL)
+#define CKM_EDDSA			(0x1057UL)
 #define CKM_JUNIPER_KEY_GEN		(0x1060UL)
 #define CKM_JUNIPER_ECB128		(0x1061UL)
 #define CKM_JUNIPER_CBC128		(0x1062UL)
@@ -857,6 +860,15 @@ typedef struct CK_RSA_PKCS_PSS_PARAMS {
 	CK_RSA_PKCS_MGF_TYPE mgf;
 	unsigned long sLen;
 } CK_RSA_PKCS_PSS_PARAMS;
+
+/* EDDSA */
+typedef struct CK_EDDSA_PARAMS {
+	unsigned char phFlag;
+	unsigned long ulContextDataLen;
+	unsigned char *pContextData;
+} CK_EDDSA_PARAMS;
+
+typedef CK_EDDSA_PARAMS *CK_EDDSA_PARAMS_PTR;
 
 #define CKG_MGF1_SHA1			(0x00000001UL)
 #define CKG_MGF1_SHA224		(0x00000005UL)

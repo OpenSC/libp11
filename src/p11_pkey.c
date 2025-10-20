@@ -1,6 +1,7 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2017 Douglas E. Engert <deengert@gmail.com>
  * Copyright (C) 2017-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -32,6 +33,16 @@ static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
 #ifndef OPENSSL_NO_EC
 static int (*orig_pkey_ec_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+
+static int (*orig_pkey_ed448_sign_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_ed448_sign) (EVP_PKEY_CTX *ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+
+static int (*orig_pkey_ed25519_sign_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_ed25519_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 #endif /* OPENSSL_NO_EC */
@@ -607,6 +618,89 @@ error:
 	return 1;
 }
 
+static int pkcs11_try_pkey_eddsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	EVP_PKEY *pkey;
+	size_t expected_size;
+	int type;
+	int rv = CKR_GENERAL_ERROR;
+	CK_ULONG size = (CK_ULONG)*siglen;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_MECHANISM mechanism;
+
+	if (!evp_pkey_ctx)
+		return -1;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
+	if (!pkey)
+		return -1;
+
+	key = pkcs11_get_ex_data_pkey(pkey);
+	if (!key)
+		return -1;
+
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	slot = key->slot;
+	ctx  = slot->ctx;
+	if (!ctx)
+		return -1;
+
+	type = EVP_PKEY_id(pkey);
+	if (type == EVP_PKEY_ED25519)
+		expected_size = 64;
+	else if (type == EVP_PKEY_ED448)
+		expected_size = 114;
+	else
+		return -1;
+
+	if (!sig) {
+		*siglen = expected_size;
+		return 1;
+	}
+	if (*siglen < expected_size)
+		return -1;
+
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_eddsa_sign() "
+		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
+
+	memset(&mechanism, 0, sizeof mechanism);
+	mechanism.mechanism = CKM_EDDSA;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
+
+	rv = CRYPTOKI_call(ctx, C_SignInit(session, &mechanism, key->object));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_SignInit rv=%d\n",
+		__FILE__, __LINE__, rv);
+	} else if (key->always_authenticate == CK_TRUE)
+		rv = pkcs11_authenticate(key, session);
+
+	if (rv == CKR_OK) {
+		rv = CRYPTOKI_call(ctx,
+			C_Sign(session, (CK_BYTE_PTR)tbs, (CK_ULONG)tbslen, sig, &size));
+		if (rv != CKR_OK) {
+			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
+				__FILE__, __LINE__, rv);
+		}
+	}
+	pkcs11_put_session(slot, session);
+
+	if (rv != CKR_OK)
+		return -1;
+
+	*siglen = size;
+	return 1;
+}
+
 static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
 		const unsigned char *tbs, size_t tbslen)
@@ -616,6 +710,30 @@ static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ret = pkcs11_try_pkey_ec_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
 	if (ret < 0)
 		ret = (*orig_pkey_ec_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	return ret;
+}
+
+static int pkcs11_pkey_ed448_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_try_pkey_eddsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_pkey_ed448_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	return ret;
+}
+
+static int pkcs11_pkey_ed25519_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_try_pkey_eddsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_pkey_ed25519_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
 	return ret;
 }
 
@@ -637,6 +755,44 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ec(void)
 	return new_meth;
 }
 
+static EVP_PKEY_METHOD *pkcs11_pkey_method_ed448(void)
+{
+	EVP_PKEY_METHOD *orig_meth, *new_meth;
+
+	orig_meth = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_ED448);
+	EVP_PKEY_meth_get_sign(orig_meth,
+		&orig_pkey_ed448_sign_init, &orig_pkey_ed448_sign);
+
+	/* don't assume any digest related defaults */
+	new_meth = EVP_PKEY_meth_new(EVP_PKEY_ED448, EVP_PKEY_FLAG_SIGCTX_CUSTOM);
+
+	EVP_PKEY_meth_copy(new_meth, orig_meth);
+
+	EVP_PKEY_meth_set_sign(new_meth,
+		orig_pkey_ed448_sign_init, pkcs11_pkey_ed448_sign);
+
+	return new_meth;
+}
+
+static EVP_PKEY_METHOD *pkcs11_pkey_method_ed25519(void)
+{
+	EVP_PKEY_METHOD *orig_meth, *new_meth;
+
+	orig_meth = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_ED25519);
+	EVP_PKEY_meth_get_sign(orig_meth,
+		&orig_pkey_ed25519_sign_init, &orig_pkey_ed25519_sign);
+
+	/* don't assume any digest related defaults */
+	new_meth = EVP_PKEY_meth_new(EVP_PKEY_ED25519, EVP_PKEY_FLAG_SIGCTX_CUSTOM);
+
+	EVP_PKEY_meth_copy(new_meth, orig_meth);
+
+	EVP_PKEY_meth_set_sign(new_meth,
+		orig_pkey_ed25519_sign_init, pkcs11_pkey_ed25519_sign);
+
+	return new_meth;
+}
+
 #endif /* OPENSSL_NO_EC */
 
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
@@ -646,12 +802,16 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		EVP_PKEY_RSA,
 #ifndef OPENSSL_NO_EC
 		EVP_PKEY_EC,
+		EVP_PKEY_ED25519,
+		EVP_PKEY_ED448,
 #endif /* OPENSSL_NO_EC */
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
 #ifndef OPENSSL_NO_EC
 	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
+	static EVP_PKEY_METHOD *pkey_method_ed448 = NULL;
+	static EVP_PKEY_METHOD *pkey_method_ed25519 = NULL;
 #endif /* OPENSSL_NO_EC */
 
 	(void)e; /* squash the unused parameter warning */
@@ -678,6 +838,20 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		if (!pkey_method_ec)
 			return 0;
 		*pmeth = pkey_method_ec;
+		return 1; /* success */
+	case EVP_PKEY_ED448:
+		if (!pkey_method_ed448)
+			pkey_method_ed448 = pkcs11_pkey_method_ed448();
+		if (!pkey_method_ed448)
+			return 0;
+		*pmeth = pkey_method_ed448;
+		return 1; /* success */
+	case EVP_PKEY_ED25519:
+		if (!pkey_method_ed25519)
+			pkey_method_ed25519 = pkcs11_pkey_method_ed25519();
+		if (!pkey_method_ed25519)
+			return 0;
+		*pmeth = pkey_method_ed25519;
 		return 1; /* success */
 #endif /* OPENSSL_NO_EC */
 	}

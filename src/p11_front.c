@@ -1,5 +1,6 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -424,24 +425,29 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 	case EVP_PKEY_EC:
 		return pkcs11_ec_keygen(slot, kg->kgen.ec->curve,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+		return pkcs11_eddsa_keygen(slot, kg->kgen.eddsa->nid,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
 #endif /* OPENSSL_NO_EC */
 	default:
 		return -1;
 	}
 }
 
-int PKCS11_generate_key(PKCS11_TOKEN *token,
-		int algorithm, unsigned int bits_or_nid,
+int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
+		unsigned int param, /* bits for RSA, nid for EC, unused for EdDSA */
 		char *label, unsigned char *id, size_t id_len)
 {
 	PKCS11_params key_params = { .extractable = 0, .sensitive = 1 };
 	PKCS11_EC_KGEN ec_kgen;
+	PKCS11_EDDSA_KGEN eddsa_kgen;
 	PKCS11_RSA_KGEN rsa_kgen;
 	PKCS11_KGEN_ATTRS kgen_attrs = { 0 };
 
 	switch (algorithm) {
 	case EVP_PKEY_EC:
-		ec_kgen.curve = OBJ_nid2sn(bits_or_nid);
+		ec_kgen.curve = OBJ_nid2sn(param);
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_EC,
 			.kgen.ec = &ec_kgen,
@@ -452,9 +458,33 @@ int PKCS11_generate_key(PKCS11_TOKEN *token,
 			.key_params = &key_params
 		};
 		break;
+	case EVP_PKEY_ED25519:
+		eddsa_kgen.nid = NID_ED25519;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_ED25519,
+			.kgen.eddsa = &eddsa_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
 
+	case EVP_PKEY_ED448:
+		eddsa_kgen.nid = NID_ED448;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_ED448,
+			.kgen.eddsa = &eddsa_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
 	default:
-		rsa_kgen.bits = bits_or_nid;
+		rsa_kgen.bits = param;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_RSA,
 			.kgen.rsa = &rsa_kgen,

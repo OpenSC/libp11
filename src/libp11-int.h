@@ -1,6 +1,7 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2015-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -121,6 +122,8 @@ struct pkcs11_object_ops {
 
 extern PKCS11_OBJECT_ops pkcs11_rsa_ops;
 extern PKCS11_OBJECT_ops pkcs11_ec_ops;
+extern PKCS11_OBJECT_ops pkcs11_ed25519_ops;
+extern PKCS11_OBJECT_ops pkcs11_ed448_ops;
 
 extern int pkcs11_global_data_refs;
 
@@ -342,6 +345,10 @@ extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
 extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
 	const char *curve , const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
+
+extern int pkcs11_eddsa_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
 #endif /* OPENSSL_NO_EC */
 
 /* Get the RSA key modulus size (in bytes) */
@@ -379,11 +386,19 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 /* Set PKCS11_KEY for an RSA key */
 void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key);
 
+#ifndef OPENSSL_NO_EC
 /* Retrieve PKCS11_KEY from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 
 /* Set PKCS11_KEY for an EC_KEY */
 extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
+
+/* Retrieve PKCS11_KEY from an EVP_PKEY */
+extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
+
+/* Set PKCS11_KEY for an EVP_PKEY */
+extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);
+#endif /* OPENSSL_NO_EC */
 
 /* Free the global RSA_METHOD */
 extern void pkcs11_rsa_method_free(void);
@@ -396,6 +411,11 @@ extern void pkcs11_ecdsa_method_free(void);
 
 /* Free the global ECDH_METHOD */
 extern void pkcs11_ecdh_method_free(void);
+
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Free the global ED25519/ED448 EVP_PKEY_METHOD */
+extern void pkcs11_ed_key_method_free(void);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #endif
 

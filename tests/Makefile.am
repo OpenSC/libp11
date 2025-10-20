@@ -27,7 +27,8 @@ check_PROGRAMS = \
 	dup-key-prov \
 	check-all-prov \
 	rsa-keygen \
-	ec-keygen
+	ec-keygen \
+	ed25519-keygen
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -45,6 +46,7 @@ dist_check_SCRIPTS = \
 	ec-cert-store.softhsm \
 	ec-copy.softhsm \
 	ec-keygen.softhsm \
+	ed25519-keygen.softhsm \
 	fork-change-slot.softhsm \
 	case-insensitive.softhsm \
 	pkcs11-uri-pin-source.softhsm \
@@ -74,6 +76,7 @@ check_privkey_prov_SOURCES = check-privkey-prov.c helpers_prov.c
 rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
 rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
 check_all_prov_SOURCES = check-all-prov.c helpers_prov.c
+ed25519_keygen_SOURCES = ed25519-keygen.c helpers_prov.c
 
 TESTS = $(dist_check_SCRIPTS)
 

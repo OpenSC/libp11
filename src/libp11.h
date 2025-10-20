@@ -1,5 +1,6 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -110,6 +111,10 @@ typedef struct PKCS11_ec_kgen_st {
 	const char *curve;
 } PKCS11_EC_KGEN;
 
+typedef struct PKCS11_eddsa_kgen_st {
+	int nid;                 /* NID_ED25519 or NID_ED448 */
+} PKCS11_EDDSA_KGEN;
+
 typedef struct PKCS11_rsa_kgen_st {
 	unsigned int bits;
 } PKCS11_RSA_KGEN;
@@ -121,11 +126,12 @@ typedef struct PKCS11_params {
 
 typedef struct PKCS11_kgen_attrs_st {
 	/* Key generation type from OpenSSL. Given the union below this should
-	 * be either EVP_PKEY_EC or EVP_PKEY_RSA
+	 * be either EVP_PKEY_EC or EVP_PKEY_RSA or EVP_PKEY_ED25519 or EVP_PKEY_ED448
 	 */
 	int type;
 	union {
 		PKCS11_EC_KGEN *ec;
+		PKCS11_EDDSA_KGEN *eddsa;
 		PKCS11_RSA_KGEN *rsa;
 	} kgen;
 	const char *token_label;
@@ -566,6 +572,7 @@ extern void PKCS11_set_vlog_a_method(PKCS11_CTX *pctx, PKCS11_VLOG_A_CB cb);
 # define CKR_F_PKCS11_GENERATE_KEY                        130
 # define CKR_F_PKCS11_RELOAD_CERTIFICATE                  131
 # define CKR_F_PKCS11_GET_SESSION                         132
+# define CKR_F_PKCS11_EDDSA_SIGN                          133
 
 /* Backward compatibility of error function codes */
 #define PKCS11_F_PKCS11_CHANGE_PIN CKR_F_PKCS11_CHANGE_PIN
