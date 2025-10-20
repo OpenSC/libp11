@@ -322,6 +322,8 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 	return 0;
 }
 
+#ifndef OPENSSL_NO_EC
+
 /**
  * Generate EC key pair directly on token
  */
@@ -399,6 +401,8 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
 }
+
+#endif /* OPENSSL_NO_EC */
 
 /*
  * Store a private key on the token

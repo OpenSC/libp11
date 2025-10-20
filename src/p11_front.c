@@ -420,9 +420,11 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 	case EVP_PKEY_RSA:
 		return pkcs11_rsa_keygen(slot, kg->kgen.rsa->bits,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+#ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 		return pkcs11_ec_keygen(slot, kg->kgen.ec->curve,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+#endif /* OPENSSL_NO_EC */
 	default:
 		return -1;
 	}

@@ -907,7 +907,7 @@ PKCS11_OBJECT_ops pkcs11_ec_ops = {
  * require further changes */
 #warning "ECDSA support not built with libp11"
 
-ECDSA_METHOD *PKCS11_get_ecdsa_method(void)
+void *PKCS11_get_ecdsa_method(void)
 {
 	return NULL;
 }
