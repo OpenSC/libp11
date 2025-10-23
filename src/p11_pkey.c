@@ -36,6 +36,7 @@ static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static int (*orig_pkey_ed448_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ed448_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
@@ -45,6 +46,7 @@ static int (*orig_pkey_ed25519_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ed25519_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -618,6 +620,7 @@ error:
 	return 1;
 }
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static int pkcs11_try_pkey_eddsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen)
@@ -700,6 +703,7 @@ static int pkcs11_try_pkey_eddsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	*siglen = size;
 	return 1;
 }
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
@@ -713,6 +717,7 @@ static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	return ret;
 }
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static int pkcs11_pkey_ed448_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
 		const unsigned char *tbs, size_t tbslen)
@@ -736,6 +741,7 @@ static int pkcs11_pkey_ed25519_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		ret = (*orig_pkey_ed25519_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
 	return ret;
 }
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 static EVP_PKEY_METHOD *pkcs11_pkey_method_ec(void)
 {
@@ -755,6 +761,7 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ec(void)
 	return new_meth;
 }
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static EVP_PKEY_METHOD *pkcs11_pkey_method_ed448(void)
 {
 	EVP_PKEY_METHOD *orig_meth, *new_meth;
@@ -792,6 +799,7 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ed25519(void)
 
 	return new_meth;
 }
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #endif /* OPENSSL_NO_EC */
 
@@ -802,16 +810,20 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		EVP_PKEY_RSA,
 #ifndef OPENSSL_NO_EC
 		EVP_PKEY_EC,
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		EVP_PKEY_ED25519,
 		EVP_PKEY_ED448,
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
 #ifndef OPENSSL_NO_EC
 	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	static EVP_PKEY_METHOD *pkey_method_ed448 = NULL;
 	static EVP_PKEY_METHOD *pkey_method_ed25519 = NULL;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
 	(void)e; /* squash the unused parameter warning */
@@ -839,6 +851,7 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 			return 0;
 		*pmeth = pkey_method_ec;
 		return 1; /* success */
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED448:
 		if (!pkey_method_ed448)
 			pkey_method_ed448 = pkcs11_pkey_method_ed448();
@@ -853,6 +866,7 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 			return 0;
 		*pmeth = pkey_method_ed25519;
 		return 1; /* success */
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 	}
 	*pmeth = NULL;

@@ -27,6 +27,8 @@
  * SUCH DAMAGE.
  */
 
+#if !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+
 #include <libp11.h>
 #include <string.h>
 
@@ -173,5 +175,14 @@ end:
 		printf("Success.\n");
 	return rc;
 }
+
+#else /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+int main(void)
+{
+	return 0;
+}
+
+#endif /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* vim: set noexpandtab: */

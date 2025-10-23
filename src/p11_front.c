@@ -425,10 +425,12 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 	case EVP_PKEY_EC:
 		return pkcs11_ec_keygen(slot, kg->kgen.ec->curve,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
 		return pkcs11_eddsa_keygen(slot, kg->kgen.eddsa->nid,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 	default:
 		return -1;
@@ -440,12 +442,17 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 		char *label, unsigned char *id, size_t id_len)
 {
 	PKCS11_params key_params = { .extractable = 0, .sensitive = 1 };
+#ifndef OPENSSL_NO_EC
 	PKCS11_EC_KGEN ec_kgen;
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	PKCS11_EDDSA_KGEN eddsa_kgen;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* OPENSSL_NO_EC */
 	PKCS11_RSA_KGEN rsa_kgen;
 	PKCS11_KGEN_ATTRS kgen_attrs = { 0 };
 
 	switch (algorithm) {
+#ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 		ec_kgen.curve = OBJ_nid2sn(param);
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
@@ -458,6 +465,7 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 			.key_params = &key_params
 		};
 		break;
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 		eddsa_kgen.nid = NID_ED25519;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
@@ -483,6 +491,8 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 			.key_params = &key_params
 		};
 		break;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* OPENSSL_NO_EC */
 	default:
 		rsa_kgen.bits = param;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){

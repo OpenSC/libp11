@@ -121,9 +121,14 @@ struct pkcs11_object_ops {
 };
 
 extern PKCS11_OBJECT_ops pkcs11_rsa_ops;
+
+#ifndef OPENSSL_NO_EC
 extern PKCS11_OBJECT_ops pkcs11_ec_ops;
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 extern PKCS11_OBJECT_ops pkcs11_ed25519_ops;
 extern PKCS11_OBJECT_ops pkcs11_ed448_ops;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* OPENSSL_NO_EC */
 
 extern int pkcs11_global_data_refs;
 
@@ -393,8 +398,10 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 /* Set PKCS11_KEY for an EC_KEY */
 extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* Retrieve PKCS11_KEY from an EVP_PKEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Set PKCS11_KEY for an EVP_PKEY */
 extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);

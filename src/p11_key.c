@@ -27,6 +27,7 @@
 #define MAX_PIN_LENGTH   256
 
 #ifndef OPENSSL_NO_EC
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* DER OIDs */
 static const unsigned char OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
 static const unsigned char OID_ED448[]   = { 0x06, 0x03, 0x2B, 0x65, 0x71 };
@@ -40,6 +41,7 @@ static const unsigned char STR_ED448[] = {
     0x13, 0x0A, /* tag + length */
     'e','d','w','a','r','d','s','4','4','8'
 };
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
 static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int,
@@ -115,6 +117,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		case CKK_EC:
 			ops = &pkcs11_ec_ops;
 			break;
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		case CKK_EC_EDWARDS:
 			/* Read the CKA_EC_PARAMS to distinguish Ed25519 vs Ed448 */
 			if (pkcs11_getattr_alloc(ctx, session, object,
@@ -139,6 +142,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 			}
 			OPENSSL_free(data);
 			break;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 		default:
 			/* Ignore any keys we don't understand */
@@ -443,6 +447,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	return 0;
 }
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
 /**
  * Generate EdDSA (Ed25519 / Ed448) key pair directly on token
  */
@@ -498,7 +503,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
 }
-
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
 /*
@@ -692,11 +697,13 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 		ret = EVP_PKEY_dup(key->evp_key);
 #endif
 		break;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
 		ret = key->evp_key;
 		EVP_PKEY_up_ref(key->evp_key);
 		break;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	default:
 		pkcs11_log(key0->slot->ctx, LOG_DEBUG, "Unsupported key type\n");
 	}
