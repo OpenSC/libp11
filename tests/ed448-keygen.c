@@ -45,14 +45,14 @@ int main(int argc, char *argv[])
 	int ret = EXIT_FAILURE;
 	EVP_PKEY *private_key = NULL, *public_key = NULL;
 	PKCS11_EDDSA_KGEN eddsa = {
-		.nid = NID_ED25519
+		.nid = NID_ED448
 	};
 	PKCS11_params params = {
 		.sensitive = 1,
 		.extractable = 0,
 	};
 	PKCS11_KGEN_ATTRS eckg = {
-		.type = EVP_PKEY_ED25519,
+		.type = EVP_PKEY_ED448,
 		.kgen.eddsa = &eddsa,
 		.token_label = NULL,
 		.key_label = NULL,
@@ -119,13 +119,13 @@ int main(int argc, char *argv[])
 	ENGINE_free(engine);
 
 	/*
-	 * Ed25519 key generation test
+	 * Ed448 key generation test
 	 */
 	if (!ENGINE_ctrl_cmd(engine, "KEYGEN", 0, &eckg, NULL, 1)) {
 		printf("Could not generate  keys\n");
 		goto cleanup;
 	}
-	printf("Ed25519 keys generated\n");
+	printf("Ed448 keys generated\n");
 
 	/* Load keys */
 	private_key = ENGINE_load_private_key(engine, "2233", NULL, NULL);
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 		display_openssl_errors();
 		goto cleanup;
 	}
-	printf("Ed25519 Sign-verify success\n");
+	printf("Ed448 Sign-verify success\n");
 
 	ret = 0;
 cleanup:

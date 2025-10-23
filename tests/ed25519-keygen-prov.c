@@ -17,32 +17,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#define OPENSSL_SUPPRESS_DEPRECATED
-
-#include <openssl/engine.h>
+#include "helpers_prov.h"
 #include "eddsa_common.h"
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 
-void display_openssl_errors(void)
+static void error_queue(const char *name)
 {
-	unsigned long e;
-	const char *file = NULL, *func = NULL, *reason = NULL;
-	int line = 0, flags = 0;
-	char err_buf[256];
-
-	while ((e = ERR_get_error_all(&file, &line, &func, &reason, &flags))) {
-		ERR_error_string_n(e, err_buf, sizeof(err_buf));
-		fprintf(stderr, "%s:%d: %s: %s: %s\n", file ? file : "unknown file",
-			line, func ? func : "unknown function",
-			err_buf, reason ? reason : "unknown reason");
+	if (ERR_peek_last_error()) {
+		fprintf(stderr, "%s generated errors:\n", name);
+		ERR_print_errors_fp(stderr);
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	ENGINE *engine = NULL;
 	int ret = EXIT_FAILURE;
+	int rc = 0;
+	PKCS11_CTX *ctx = NULL;
+	PKCS11_SLOT *slots = NULL, *slot;
+	unsigned int nslots;
 	EVP_PKEY *private_key = NULL, *public_key = NULL;
 	PKCS11_EDDSA_KGEN eddsa = {
 		.nid = NID_ED25519
@@ -61,74 +55,62 @@ int main(int argc, char *argv[])
 		.key_params = &params,
 	};
 
-	if (argc < 5) {
+	if (argc < 4) {
 		printf("Too few arguments\n");
-		printf("%s /usr/lib/opensc-pkcs11.so [MODULE] [TOKEN1] [KEY-LABEL] [PIN] [CONF]\n", argv[0]);
+		printf("%s /usr/lib/opensc-pkcs11.so [MODULE] [TOKEN1] [KEY-LABEL] [PIN]\n", argv[0]);
 		goto cleanup;
 	}
 	eckg.token_label = argv[2];
 	eckg.key_label = argv[3];
 
-	if (CONF_modules_load_file(argv[5], "engines", 0) <= 0) {
-		printf("cannot load %s\n", argv[5]);
-		display_openssl_errors();
-		goto cleanup;
-	}
+	ctx = PKCS11_CTX_new();
+	error_queue("PKCS11_CTX_new");
 
-	ENGINE_add_conf_module();
-# if OPENSSL_VERSION_NUMBER>=0x10100000
-	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
-		| OPENSSL_INIT_ADD_ALL_DIGESTS \
-		| OPENSSL_INIT_LOAD_CONFIG, NULL);
-# else
-	OpenSSL_add_all_algorithms();
-	OpenSSL_add_all_digests();
-	ERR_load_crypto_strings();
-# endif
-	ERR_clear_error();
+	/* load PKCS#11 module */
+	rc = PKCS11_CTX_load(ctx, argv[1]);
+	error_queue("PKCS11_CTX_load");
+	CHECK_ERR(rc < 0, "loading PKCS#11 module failed", 4);
 
-	ENGINE_load_builtin_engines();
-	engine = ENGINE_by_id("pkcs11");
-	if (engine == NULL) {
-		printf("Could not get engine\n");
-		display_openssl_errors();
-		goto cleanup;
-	}
+	/* get information on all slots */
+	rc = PKCS11_enumerate_slots(ctx, &slots, &nslots);
+	error_queue("PKCS11_enumerate_slots");
+	CHECK_ERR(rc < 0, "no slots available", 5);
 
-	if (!ENGINE_ctrl_cmd_string(engine, "PIN", argv[4], 0)) {
-		display_openssl_errors();
-		goto cleanup;
-	}
-	if (!ENGINE_ctrl_cmd_string(engine, "DEBUG_LEVEL", "7", 0)) {
-		display_openssl_errors();
-		goto cleanup;
-	}
-	if (!ENGINE_ctrl_cmd_string(engine, "MODULE_PATH", argv[1], 0)) {
-		display_openssl_errors();
-		goto cleanup;
-	}
-	if (!ENGINE_init(engine)) {
-		printf("Could not initialize engine\n");
-		display_openssl_errors();
-		goto cleanup;
-	}
-	/*
-	 * ENGINE_init() returned a functional reference, so free the structural
-	 * reference from ENGINE_by_id().
-	 */
-	ENGINE_free(engine);
+	slot = PKCS11_find_token(ctx, slots, nslots);
+	error_queue("PKCS11_find_token");
+	while (slot) {
+		if (slot->token && slot->token->initialized && slot->token->label
+			&& strcmp(argv[2], slot->token->label) == 0)
+			break;
+		slot = PKCS11_find_next_token(ctx, slots, nslots, slot);
+	};
+	CHECK_ERR(!slot || !slot->token, "no token available", 6);
 
+	printf("Found token:\n");
+	printf("Slot manufacturer......: %s\n", slot->manufacturer);
+	printf("Slot description.......: %s\n", slot->description);
+	printf("Slot token label.......: %s\n", slot->token->label);
+	printf("Slot token serialnr....: %s\n", slot->token->serialnr);
+
+	rc = PKCS11_login(slot, 0, argv[4]);
+	error_queue("PKCS11_login");
+	CHECK_ERR(rc < 0, "PKCS11_login failed", 7);
 	/*
 	 * Ed25519 key generation test
 	 */
-	if (!ENGINE_ctrl_cmd(engine, "KEYGEN", 0, &eckg, NULL, 1)) {
-		printf("Could not generate  keys\n");
-		goto cleanup;
-	}
+	rc = PKCS11_keygen(slot->token, &eckg);
+	error_queue("PKCS11_keygen");
+	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 8);
 	printf("Ed25519 keys generated\n");
 
+	/* Load pkcs11prov and default providers */
+	if (!providers_load()) {
+		display_openssl_errors();
+		goto cleanup;
+	}
+
 	/* Load keys */
-	private_key = ENGINE_load_private_key(engine, "2233", NULL, NULL);
+	private_key = load_pkey("pkcs11:token=token1;object=libp11-keylabel;type=private", NULL);
 	if (!private_key) {
 		printf("Cannot load private key: %s\n", argv[3]);
 		display_openssl_errors();
@@ -136,7 +118,7 @@ int main(int argc, char *argv[])
 	}
 	printf("Private key found.\n");
 
-	public_key = ENGINE_load_public_key(engine, "2233", NULL, NULL);
+	public_key = load_pubkey("pkcs11:token=token1;object=libp11-keylabel;type=public");
 	if (!public_key) {
 		printf("Cannot load public key: %s\n", argv[3]);
 		display_openssl_errors();
@@ -158,9 +140,15 @@ int main(int argc, char *argv[])
 
 	ret = 0;
 cleanup:
-	ENGINE_finish(engine);
 	EVP_PKEY_free(private_key);
 	EVP_PKEY_free(public_key);
+	if (slots)
+		PKCS11_release_all_slots(ctx, slots, nslots);
+	if (ctx) {
+		PKCS11_CTX_unload(ctx);
+		PKCS11_CTX_free(ctx);
+	}
+	providers_cleanup();
 	printf("\n");
 	return ret;
 }

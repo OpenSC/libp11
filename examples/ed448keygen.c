@@ -3,7 +3,7 @@
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  * All rights reserved.
  *
- * Elliptic Curve Ed25519 key generation
+ * Elliptic Curve Ed448 key generation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 	const char *key_id_str;
 	int rc = 0;
 	PKCS11_params params = {.sensitive = 1, .extractable = 0};
-	PKCS11_EDDSA_KGEN eddsa = {.nid = NID_ED25519};
+	PKCS11_EDDSA_KGEN eddsa = {.nid = NID_ED448};
 	PKCS11_KGEN_ATTRS eckg = {0};
 
 	if (argc < 5) {
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 	error_queue("PKCS11_login");
 	CHECK_ERR(rc < 0, "PKCS11_login failed", 7);
 
-	eckg.type = EVP_PKEY_ED25519;
+	eckg.type = EVP_PKEY_ED448;
 	eckg.kgen.eddsa = &eddsa;
 	eckg.token_label = argv[2];
 	eckg.key_label = argv[3];
@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
 	error_queue("PKCS11_keygen");
 	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 8);
 
-	printf("\nEd25519 keys generated\n");
+	printf("\nEd448 keys generated\n");
 
 	/* get private keys */
 	rc = PKCS11_enumerate_keys(slot->token, &keys, &nkeys);

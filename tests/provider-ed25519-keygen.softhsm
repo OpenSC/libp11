@@ -32,11 +32,17 @@ init_db
 # Create token
 init_card "token1"
 
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
 # Load openssl settings
 TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
 
-${WRAPPER} ./ed25519-keygen ${MODULE} token1 libp11-keylabel ${PIN} "${outdir}/engines.cnf"
+${WRAPPER} ./ed25519-keygen-prov ${MODULE} token1 libp11-keylabel ${PIN}
 if test $? != 0; then
 	echo "Key generation failed"
 	exit 1
