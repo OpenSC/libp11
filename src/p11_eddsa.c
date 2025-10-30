@@ -74,17 +74,13 @@ static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
 	PKCS11_SLOT_private *slot = key->slot;
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
-	CK_EDDSA_PARAMS eddsa_params;
 	CK_MECHANISM mechanism;
 	CK_ULONG ck_siglen = (CK_ULONG)(*siglen);
 	CK_ULONG ck_tbslen = (CK_ULONG)tbslen;
 
-	/* eddsa_params.phFlag = 0 => PureEdDSA, no prehash */
-	memset(&eddsa_params, 0, sizeof(eddsa_params));
+	/* PureEdDSA, no prehash */
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_EDDSA;
-	mechanism.pParameter = &eddsa_params;
-	mechanism.ulParameterLen = sizeof(eddsa_params);
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
@@ -105,7 +101,6 @@ static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
 	*siglen = (unsigned int)ck_siglen;
 	return (int)ck_siglen;
 }
-
 
 /*
  * EVP_PKEY method sign wrapper for EdDSA.
@@ -160,19 +155,12 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 
 	pkey = EVP_PKEY_CTX_get0_pkey(EVP_MD_CTX_pkey_ctx(ctx));
 	if (!pkey)
-		return 0;
+		return -1;
 
 	key = pkcs11_get_ex_data_pkey(pkey);
-	if (!key) {
-		/* assume a foreign key */
-		if (EVP_PKEY_id(pkey) == EVP_PKEY_ED25519)
-			return orig_ed25519_digestsign(ctx, sig, siglen, tbs, tbslen);
-		else if (EVP_PKEY_id(pkey) == EVP_PKEY_ED448)
-			return orig_ed448_digestsign(ctx, sig, siglen, tbs, tbslen);
-		else
-			return 0;
-		
-        }
+	if (!key)
+		return -1;
+
 	/* Step 1: caller asks for signature length only */
 	if (sig == NULL) {
 		if (EVP_PKEY_id(pkey) == EVP_PKEY_ED25519)
@@ -180,7 +168,7 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 		else if (EVP_PKEY_id(pkey) == EVP_PKEY_ED448)
 			*siglen = 114; /* fixed size for Ed448 */
 		else
-			return 0;
+			return -1;
 		/* success: report the expected signature length only,
 		 * no signing is performed in this call */
 		return 1;
@@ -190,10 +178,35 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 	tmp_len = (unsigned int)*siglen;
 	rv = pkcs11_eddsa_sign(sig, &tmp_len, tbs, (unsigned int)tbslen, key);
 	if (rv < 0)
-		return 0;
+		return -1;
 
 	*siglen = tmp_len;
 	return 1;
+}
+
+static int pkcs11_pkey_ed25519_digestsign(EVP_MD_CTX *ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_eddsa_pmeth_digestsign(ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		/* assume a foreign key */
+		ret = (*orig_ed25519_digestsign)(ctx, sig, siglen, tbs, tbslen);
+	return ret;
+}
+
+static int pkcs11_pkey_ed448_digestsign(EVP_MD_CTX *ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_eddsa_pmeth_digestsign(ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_ed448_digestsign)(ctx, sig, siglen, tbs, tbslen);
+	return ret;
 }
 
 /*
@@ -231,11 +244,12 @@ static int pkcs11_ed25519_method_new()
 	if (orig_id != EVP_PKEY_ED25519 || !(orig_flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM))
 		return 0;
 
+	/* The digestsign() method is used to generate a signature in a one-shot mode */
 	EVP_PKEY_meth_get_digestsign(orig_ed25519_method, &orig_ed25519_digestsign);
 	if (!orig_ed25519_digestsign)
 		return 0;
 
-	/* don't assume any digest related defaults */
+	/* Don't assume any digest related defaults */
 	pkcs11_ed25519_method = EVP_PKEY_meth_new(EVP_PKEY_ED25519, EVP_PKEY_FLAG_SIGCTX_CUSTOM);
 	if (!pkcs11_ed25519_method)
 		return 0;
@@ -245,7 +259,7 @@ static int pkcs11_ed25519_method_new()
 
 	/* Override selected ED25519 method callbacks with PKCS#11 implementations */
 	EVP_PKEY_meth_set_sign(pkcs11_ed25519_method, NULL, pkcs11_eddsa_pmeth_sign);
-	EVP_PKEY_meth_set_digestsign(pkcs11_ed25519_method, pkcs11_eddsa_pmeth_digestsign);
+	EVP_PKEY_meth_set_digestsign(pkcs11_ed25519_method, pkcs11_pkey_ed25519_digestsign);
 	EVP_PKEY_meth_set_ctrl(pkcs11_ed25519_method, pkcs11_eddsa_pmeth_ctrl, NULL);
 
 	/* Register the method globally */
@@ -273,11 +287,12 @@ static int pkcs11_ed448_method_new()
 	if (orig_id != EVP_PKEY_ED448 || !(orig_flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM))
 		return 0;
 
+	/* The digestsign() method is used to generate a signature in a one-shot mode */
 	EVP_PKEY_meth_get_digestsign(orig_ed448_method, &orig_ed448_digestsign);
 	if (!orig_ed448_digestsign)
 		return 0;
 
-	/* don't assume any digest related defaults */
+	/* Don't assume any digest related defaults */
 	pkcs11_ed448_method = EVP_PKEY_meth_new(EVP_PKEY_ED448, EVP_PKEY_FLAG_SIGCTX_CUSTOM);
 	if (!pkcs11_ed448_method)
 		return 0;
@@ -287,7 +302,7 @@ static int pkcs11_ed448_method_new()
 
 	/* Override selected ED448 method callbacks with PKCS#11 implementations */
 	EVP_PKEY_meth_set_sign(pkcs11_ed448_method, NULL, pkcs11_eddsa_pmeth_sign);
-	EVP_PKEY_meth_set_digestsign(pkcs11_ed448_method, pkcs11_eddsa_pmeth_digestsign);
+	EVP_PKEY_meth_set_digestsign(pkcs11_ed448_method, pkcs11_pkey_ed448_digestsign);
 	EVP_PKEY_meth_set_ctrl(pkcs11_ed448_method, pkcs11_eddsa_pmeth_ctrl, NULL);
 
 	/* Register the method globally */
