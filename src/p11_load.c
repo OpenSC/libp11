@@ -1,5 +1,6 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -183,6 +184,9 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 #ifndef OPENSSL_NO_EC
 	pkcs11_ec_key_method_free();
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	pkcs11_ed_key_method_free();
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 #else /* OPENSSL_VERSION_NUMBER */
 #ifndef OPENSSL_NO_ECDSA

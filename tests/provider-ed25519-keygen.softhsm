@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
+# Initialize SoftHSM DB
+init_db
+
+# Create token
+init_card "token1"
+
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Load openssl settings
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+. ${srcdir}/openssl-settings.sh
+
+${WRAPPER} ./ed25519-keygen-prov ${MODULE} token1 libp11-keylabel ${PIN}
+if test $? != 0; then
+	echo "Key generation failed"
+	exit 1
+fi
+
+# Restore settings
+export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
+
+echo "Checking pkcs11-tool result..."
+list_objects | grep -q libp11-keylabel
+if test $? != 0; then
+	echo "The key was not properly generated"
+	exit 1
+fi
+
+rm -rf "$outdir"
+
+exit 0

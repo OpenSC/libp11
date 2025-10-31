@@ -1,6 +1,7 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,24 @@
 
 /* The maximum length of PIN */
 #define MAX_PIN_LENGTH   256
+
+#ifndef OPENSSL_NO_EC
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* DER OIDs */
+static const unsigned char OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
+static const unsigned char OID_ED448[]   = { 0x06, 0x03, 0x2B, 0x65, 0x71 };
+
+/* PrintableString forms used by some tokens (e.g. SoftHSM) */
+static const unsigned char STR_ED25519[] = {
+    0x13, 0x0C, /* tag + length */
+    'e','d','w','a','r','d','s','2','5','5','1','9'
+};
+static const unsigned char STR_ED448[] = {
+    0x13, 0x0A, /* tag + length */
+    'e','d','w','a','r','d','s','4','4','8'
+};
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* OPENSSL_NO_EC */
 
 static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned int,
 	PKCS11_TEMPLATE *);
@@ -98,7 +117,33 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		case CKK_EC:
 			ops = &pkcs11_ec_ops;
 			break;
-#endif
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		case CKK_EC_EDWARDS:
+			/* Read the CKA_EC_PARAMS to distinguish Ed25519 vs Ed448 */
+			if (pkcs11_getattr_alloc(ctx, session, object,
+				CKA_EC_PARAMS, &data, &size)) {
+				pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_EC_PARAMS attribute\n");
+				return NULL;
+			}
+			if ((size == sizeof(OID_ED25519) &&
+				!memcmp(data, OID_ED25519, sizeof(OID_ED25519))) ||
+				(size == sizeof(STR_ED25519) &&
+				!memcmp(data, STR_ED25519, sizeof(STR_ED25519)))) {
+				ops = &pkcs11_ed25519_ops;
+			} else if ((size == sizeof(OID_ED448) &&
+				!memcmp(data, OID_ED448, sizeof(OID_ED448))) ||
+				(size == sizeof(STR_ED448) &&
+				!memcmp(data, STR_ED448, sizeof(STR_ED448)))) {
+				ops = &pkcs11_ed448_ops;
+			} else {
+				pkcs11_log(ctx, LOG_DEBUG, "Unsupported EdDSA OID\n");
+				OPENSSL_free(data);
+				return NULL;
+			}
+			OPENSSL_free(data);
+			break;
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* OPENSSL_NO_EC */
 		default:
 			/* Ignore any keys we don't understand */
 			pkcs11_log(ctx, LOG_DEBUG,
@@ -402,6 +447,63 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	return 0;
 }
 
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/**
+ * Generate EdDSA (Ed25519 / Ed448) key pair directly on token
+ */
+int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session;
+	PKCS11_TEMPLATE pubtmpl = {0}, privtmpl = {0};
+	CK_MECHANISM mechanism = {
+		CKM_EC_EDWARDS_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	int rv;
+	unsigned char *eddsa_params = NULL;
+	size_t eddsa_params_len = 0;
+
+	if (pkcs11_init_keygen(slot, &session))
+		return -1;
+
+	if (nid == NID_ED25519) {
+		eddsa_params = (unsigned char *)OID_ED25519;
+		eddsa_params_len = sizeof(OID_ED25519);
+	} else if (nid == NID_ED448) {
+		eddsa_params = (unsigned char *)OID_ED448;
+		eddsa_params_len = sizeof(OID_ED448);
+	} else {
+		return -1; /* unsupported */
+	}
+
+	/* public key attributes */
+	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
+	pkcs11_addattr(&pubtmpl, CKA_EC_PARAMS, eddsa_params, eddsa_params_len);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
+
+	/* private key attributes */
+	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
+	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
+
+	/* generate key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+		session, &mechanism,
+		pubtmpl.attrs, pubtmpl.nattr,
+		privtmpl.attrs, privtmpl.nattr,
+		&pub_key_obj, &priv_key_obj));
+	pkcs11_put_session(slot, session);
+
+	/* cleanup */
+	pkcs11_zap_attrs(&privtmpl);
+	pkcs11_zap_attrs(&pubtmpl);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
+	return 0;
+}
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
 /*
@@ -595,6 +697,13 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 		ret = EVP_PKEY_dup(key->evp_key);
 #endif
 		break;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+		ret = key->evp_key;
+		EVP_PKEY_up_ref(key->evp_key);
+		break;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	default:
 		pkcs11_log(key0->slot->ctx, LOG_DEBUG, "Unsupported key type\n");
 	}
@@ -678,7 +787,6 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PK
 		if (key_template->label)
 			pkcs11_addattr_s(&tmpl, CKA_LABEL, key_template->label);
 	}
-
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
@@ -688,7 +796,6 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PK
 		pkcs11_destroy_keys(slot, type);
 		return -1;
 	}
-
 	if (keyp)
 		*keyp = keys->keys;
 	if (countp)
