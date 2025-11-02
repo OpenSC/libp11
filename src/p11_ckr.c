@@ -57,6 +57,7 @@ static ERR_STRING_DATA CKR_str_functs[] = {
 	{ERR_FUNC(CKR_F_PKCS11_STORE_KEY), "pkcs11_store_key"},
 	{ERR_FUNC(CKR_F_PKCS11_RELOAD_CERTIFICATE), "pkcs11_reload_certificate"},
 	{ERR_FUNC(CKR_F_PKCS11_GET_SESSION), "pkcs11_get_session"},
+	{ERR_FUNC(CKR_F_PKCS11_EDDSA_SIGN), "pkcs11_eddsa_sign"},
 	{0, NULL}
 };
 
