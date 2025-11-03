@@ -638,7 +638,7 @@ static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
 	mechanism.mechanism = CKM_EDDSA;
 
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_eddsa_sign() "
-		"sigret=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		"sigret=%p *siglen=%u tbs=%p tbslen=%u\n",
 		__FILE__, __LINE__, sigret, *siglen, tbs, tbslen);
 
 	if (pkcs11_get_session(slot, 0, &session))
