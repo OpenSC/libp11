@@ -150,6 +150,9 @@ typedef struct {
 /* Utility functions                                                          */
 /******************************************************************************/
 
+#ifdef __GNUC__
+	__attribute__((format(printf, 6, 7)))
+#endif
 static void PROVIDER_CTX_log(PROVIDER_CTX *prov_ctx, int level, int reason, int line, const char *file, const char *format, ...)
 {
 	va_list args;
@@ -735,13 +738,13 @@ static int store_load(void *ctx, OSSL_CALLBACK *object_cb, void *object_cbarg,
 				int len = i2d_X509(cert, NULL);
 
 				if (len < 0) {
-					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 4, OPENSSL_LINE, OPENSSL_FUNC, store_ctx->uri);
+					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 4, OPENSSL_LINE, OPENSSL_FUNC, "%s", store_ctx->uri);
 					X509_free(cert);
 					return 0;
 				}
 				tmp = data = OPENSSL_malloc((size_t)len);
 				if (!tmp) {
-					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 1, OPENSSL_LINE, OPENSSL_FUNC, store_ctx->uri);
+					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 1, OPENSSL_LINE, OPENSSL_FUNC, "%s", store_ctx->uri);
 					X509_free(cert);
 					return 0;
 				}
@@ -755,7 +758,7 @@ static int store_load(void *ctx, OSSL_CALLBACK *object_cb, void *object_cbarg,
 
 				if (!object_cb(params, object_cbarg)) {
 					/* callback failed */
-					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 5, OPENSSL_LINE, OPENSSL_FUNC, store_ctx->uri);
+					PROVIDER_CTX_log(store_ctx->prov_ctx, LOG_ERR, 5, OPENSSL_LINE, OPENSSL_FUNC, "%s", store_ctx->uri);
 					OPENSSL_free(data);
 					return 0;
 				}

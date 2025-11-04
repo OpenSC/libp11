@@ -157,7 +157,11 @@ extern char *pkcs11_strdup(char *, size_t);
 #define EVP_PKEY_get0_EC_KEY(key) ((key)->pkey.ec)
 #endif
 
-extern void pkcs11_log(PKCS11_CTX_private *pctx, int level, const char *format, ...);
+extern void pkcs11_log(PKCS11_CTX_private *pctx, int level, const char *format, ...)
+#ifdef __GNUC__
+	__attribute__((format(printf, 3, 4)))
+#endif
+	;
 
 /* Reinitializing the module after fork (if detected) */
 extern unsigned int get_forkid(void);
