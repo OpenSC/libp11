@@ -693,37 +693,8 @@ static int store_load(void *ctx, OSSL_CALLBACK *object_cb, void *object_cbarg,
 			"No custom UI method provided, using the default UI method.\n");
 	}
 
-	/* try fetching a private key */
-	if (store_ctx->types_tried == 0) {
-		store_ctx->types_tried++;
-		if (store_ctx->expected_type == 0 || store_ctx->expected_type == OSSL_STORE_INFO_PKEY) {
-			EVP_PKEY *key = UTIL_CTX_get_privkey_from_uri(store_ctx->prov_ctx->util_ctx,
-				store_ctx->uri, ui_method, ui_data);
-
-			UTIL_CTX_set_ui_method(store_ctx->prov_ctx->util_ctx, ui_method, NULL);
-			if (key != NULL) {
-				/* Workaround for EVP_PKEY without key management, needed since
-				 * ossl_store_handle_load_result() doesn't support this case. */
-				cbdata->v = OSSL_STORE_INFO_new_PKEY(key);
-				return 1;
-			}
-		}
-	}
-	/* try fetching a public key */
-	if (store_ctx->types_tried == 1) {
-		store_ctx->types_tried++;
-		if (store_ctx->expected_type == 0 || store_ctx->expected_type == OSSL_STORE_INFO_PUBKEY) {
-			EVP_PKEY *key = UTIL_CTX_get_pubkey_from_uri(store_ctx->prov_ctx->util_ctx,
-				store_ctx->uri, ui_method, ui_data);
-
-			if (key != NULL) {
-				cbdata->v = OSSL_STORE_INFO_new_PUBKEY(key);
-				return 1;
-			}
-		}
-	}
 	/* try fetching a certificate  */
-	if (store_ctx->types_tried == 2) {
+	if (store_ctx->types_tried == 0) {
 		store_ctx->types_tried++;
 		if (store_ctx->expected_type == 0 || store_ctx->expected_type ==  OSSL_STORE_INFO_CERT) {
 			X509 *cert = UTIL_CTX_get_cert_from_uri(store_ctx->prov_ctx->util_ctx,
@@ -767,12 +738,46 @@ static int store_load(void *ctx, OSSL_CALLBACK *object_cb, void *object_cbarg,
 			}
 		}
 	}
+	/* try fetching a public key */
+	if (store_ctx->types_tried == 1) {
+		store_ctx->types_tried++;
+		if (store_ctx->expected_type == 0 || store_ctx->expected_type == OSSL_STORE_INFO_PUBKEY) {
+			EVP_PKEY *key = UTIL_CTX_get_pubkey_from_uri(store_ctx->prov_ctx->util_ctx,
+				store_ctx->uri, ui_method, ui_data);
+
+			if (key != NULL) {
+				/* Workaround for EVP_PKEY without key management, needed since
+				 * ossl_store_handle_load_result() doesn't support this case. */
+				cbdata->v = OSSL_STORE_INFO_new_PUBKEY(key);
+				return 1;
+			}
+		}
+	}
+	/* try fetching a private key */
+	if (store_ctx->types_tried == 2) {
+		store_ctx->types_tried++;
+		if (store_ctx->expected_type == 0 || store_ctx->expected_type == OSSL_STORE_INFO_PKEY) {
+			EVP_PKEY *key = UTIL_CTX_get_privkey_from_uri(store_ctx->prov_ctx->util_ctx,
+				store_ctx->uri, ui_method, ui_data);
+
+			UTIL_CTX_set_ui_method(store_ctx->prov_ctx->util_ctx, ui_method, NULL);
+			if (key != NULL) {
+				/* Workaround for EVP_PKEY without key management, needed since
+				 * ossl_store_handle_load_result() doesn't support this case. */
+				cbdata->v = OSSL_STORE_INFO_new_PKEY(key);
+				return 1;
+			}
+		}
+	}
 	return 0;
 }
 
 /*
  * Indicates whether all expected objects from the URI have been processed.
- * The expected sequence is: a private key, a public key, and a certificate.
+ * The expected sequence is:
+ * 0 - OSSL_STORE_INFO_CERT   - X.509 certificate (X509 *)
+ * 1 - OSSL_STORE_INFO_PUBKEY - public key (EVP_PKEY *)
+ * 2 - OSSL_STORE_INFO_PKEY   - private key (EVP_PKEY *)
  * Once the counter reaches 3, all objects have been handled, making further
  * loading attempts unnecessary.
  */
