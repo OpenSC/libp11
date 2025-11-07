@@ -48,7 +48,7 @@ static int ui_open_fail(UI *ui)
 /* method that's to be used for prompting with a default */
 static UI_METHOD *ui_console_with_default = NULL;
 
-static int setup_ui()
+static int setup_ui(void)
 {
 	UI_METHOD *default_method = UI_OpenSSL();
 

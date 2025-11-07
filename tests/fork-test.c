@@ -52,7 +52,7 @@
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 1024
 
-static void do_fork();
+static void do_fork(void);
 static void error_queue(const char *name);
 
 int main(int argc, char *argv[])
@@ -288,7 +288,7 @@ nolib:
 	return 1;
 }
 
-static void do_fork()
+static void do_fork(void)
 {
 	int status = 0;
 	pid_t pid = fork();

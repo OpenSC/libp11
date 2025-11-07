@@ -34,7 +34,7 @@
 #include <openssl/opensslconf.h>
 #include <openssl/opensslv.h>
 
-int main()
+int main(void)
 {
 	puts(OPENSSL_VERSION_TEXT);
 	return 0;

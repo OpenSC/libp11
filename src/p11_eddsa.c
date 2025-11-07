@@ -229,7 +229,7 @@ static int pkcs11_eddsa_pmeth_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2
 }
 
 /* Global initialize ED25519 EVP_PKEY_METHOD */
-static int pkcs11_ed25519_method_new()
+static int pkcs11_ed25519_method_new(void)
 {
 	int orig_id, orig_flags;
 
@@ -272,7 +272,7 @@ static int pkcs11_ed25519_method_new()
 }
 
 /* Global initialize ED448 EVP_PKEY_METHOD */
-static int pkcs11_ed448_method_new()
+static int pkcs11_ed448_method_new(void)
 {
 	int orig_id, orig_flags;
 

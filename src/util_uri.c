@@ -81,7 +81,7 @@ static int g_shutdown_mode = 0;
 /* Initialization                                                             */
 /******************************************************************************/
 
-UTIL_CTX *UTIL_CTX_new()
+UTIL_CTX *UTIL_CTX_new(void)
 {
 	UTIL_CTX *ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
 
