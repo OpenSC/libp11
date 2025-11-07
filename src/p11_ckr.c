@@ -197,6 +197,7 @@ void ERR_unload_CKR_strings(void)
 
 void ERR_CKR_error(int function, int reason, char *file, int line)
 {
+	(void)function;
 	if (CKR_lib_error_code == 0)
 		CKR_lib_error_code = ERR_get_next_error_library();
 	ERR_PUT_error(CKR_lib_error_code, function, reason, file, line);
