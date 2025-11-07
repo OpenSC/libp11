@@ -80,7 +80,7 @@ static unsigned int _P11_update_forkid(void)
 
 #endif /* !_WIN32 */
 
-unsigned int get_forkid()
+unsigned int get_forkid(void)
 {
 	(void)_P11_update_forkid();
 	return P11_forkid;

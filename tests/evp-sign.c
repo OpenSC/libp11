@@ -105,7 +105,7 @@ static int ui_write(UI *ui, UI_STRING *uis)
 	return UI_method_get_writer(UI_OpenSSL())(ui, uis);
 }
 
-static void setup_ui()
+static void setup_ui(void)
 {
 	UI_METHOD *default_method = UI_OpenSSL();
 

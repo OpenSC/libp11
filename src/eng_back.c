@@ -85,7 +85,7 @@ void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 /* Initialization and cleanup                                                 */
 /******************************************************************************/
 
-ENGINE_CTX *ENGINE_CTX_new()
+ENGINE_CTX *ENGINE_CTX_new(void)
 {
 	ENGINE_CTX *ctx;
 	char *mod;
