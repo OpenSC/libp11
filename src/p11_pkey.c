@@ -315,11 +315,11 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ctx = slot->ctx;
 	if (!ctx)
 		return -1;
-
+#ifdef DEBUG
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_sign() "
 		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
 		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-
+#endif
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		return -1;
 	if (tbslen != (size_t)EVP_MD_size(sig_md))
@@ -329,8 +329,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
 	switch (padding) {
 	case RSA_PKCS1_PSS_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_PSS_PADDING\n",
-			__FILE__, __LINE__);
+		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_PSS_PADDING\n");
 		if (pkcs11_params_pss(&pss_params, evp_pkey_ctx, ctx) < 0)
 			return -1;
 		mechanism.mechanism = CKM_RSA_PKCS_PSS;
@@ -418,17 +417,16 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	ctx = slot->ctx;
 	if (!ctx)
 		return -1;
-
+#ifdef DEBUG
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_decrypt() "
 		"out=%p *outlen=%lu in=%p inlen=%lu\n",
 		__FILE__, __LINE__, out, *outlen, in, inlen);
-
+#endif
 	memset(&mechanism, 0, sizeof mechanism);
 	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
 	switch (padding) {
 	case RSA_PKCS1_OAEP_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_OAEP_PADDING\n",
-			__FILE__, __LINE__);
+		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_OAEP_PADDING\n");
 		if (pkcs11_params_oaep(&oaep_params, evp_pkey_ctx, ctx) < 0)
 			return -1;
 		mechanism.mechanism = CKM_RSA_PKCS_OAEP;
@@ -436,8 +434,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		mechanism.ulParameterLen = sizeof oaep_params;
 		break;
 	case RSA_PKCS1_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d padding=RSA_PKCS1_PADDING\n",
-			__FILE__, __LINE__);
+		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_PADDING\n");
 		mechanism.mechanism = CKM_RSA_PKCS;
 		mechanism.pParameter = NULL;
 		mechanism.ulParameterLen = 0;
@@ -559,11 +556,11 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ctx = slot->ctx;
 	if (!ctx)
 		goto error;
-
+#ifdef DEBUG
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_ec_sign() "
 		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
 		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-
+#endif
 	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
 		goto error;
 
@@ -637,10 +634,11 @@ static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_EDDSA;
 
+#ifdef DEBUG
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_eddsa_sign() "
 		"sigret=%p *siglen=%u tbs=%p tbslen=%u\n",
 		__FILE__, __LINE__, sigret, *siglen, tbs, tbslen);
-
+#endif
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
