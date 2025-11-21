@@ -332,7 +332,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
 	};
 	CK_ULONG num_bits = bits;
-	CK_BYTE public_exponent[] = { 1, 0, 0, 0, 1 };
+	CK_BYTE public_exponent[] = { 1, 0, 1 };
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	int rv;
 
@@ -344,7 +344,8 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
 	pkcs11_addattr_bool(&pubtmpl, CKA_ENCRYPT, TRUE);
 	pkcs11_addattr_var(&pubtmpl, CKA_MODULUS_BITS, num_bits);
-	pkcs11_addattr(&pubtmpl, CKA_PUBLIC_EXPONENT, public_exponent, 5);
+	pkcs11_addattr(&pubtmpl, CKA_PUBLIC_EXPONENT,
+		public_exponent, sizeof public_exponent);
 
 	/* privkey attributes */
 	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
