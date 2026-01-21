@@ -21,6 +21,8 @@
 #include "libp11-int.h"
 #include <string.h>
 
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+
 static int (*orig_pkey_rsa_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
@@ -30,21 +32,22 @@ static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen);
 
-#ifndef OPENSSL_NO_EC
+# ifndef OPENSSL_NO_EC
 static int (*orig_pkey_ec_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#  if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static int (*orig_pkey_ed25519_digestsign)(EVP_MD_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 static int (*orig_pkey_ed448_digestsign)(EVP_MD_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#  endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+# endif /* OPENSSL_NO_EC */
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
 
@@ -151,6 +154,7 @@ static void EVP_PKEY_meth_get_decrypt(EVP_PKEY_METHOD *pmeth,
 }
 #endif
 
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 static CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md)
 {
 	switch (EVP_MD_type(md)) {
@@ -936,5 +940,7 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 	*pmeth = NULL;
 	return 0;
 }
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 /* vim: set noexpandtab: */

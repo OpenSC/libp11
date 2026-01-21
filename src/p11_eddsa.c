@@ -36,10 +36,13 @@
 #include <openssl/bn.h>
 
 static int pkey_ex_idx = 0;
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 static EVP_PKEY_METHOD *pkcs11_ed25519_method = NULL;
 static EVP_PKEY_METHOD *pkcs11_ed448_method = NULL;
 static const EVP_PKEY_METHOD *orig_ed25519_method = NULL;
 static const EVP_PKEY_METHOD *orig_ed448_method = NULL;
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 int (*orig_ed25519_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
@@ -57,6 +60,8 @@ static void alloc_pkey_ex_index(void)
 			pkey_ex_idx = 0; /* Fallback to app_data */
 	}
 }
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 
 static void free_pkey_ex_index(void)
 {
@@ -343,6 +348,8 @@ void pkcs11_ed_key_method_free(void)
 	}
 }
 
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key)
 {
 	EVP_PKEY_set_ex_data(pkey, pkey_ex_idx, key);
@@ -445,16 +452,20 @@ static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
 		return NULL;
 
 	if (key->object_class == CKO_PRIVATE_KEY) {
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 		/* global initialize ED25519 EVP_PKEY_METHOD */
 		if (!pkcs11_ed25519_method_new()) {
 			EVP_PKEY_free(pkey);
 			return NULL;
 		}
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 		/* creates a new EVP_PKEY object which requires its own key object reference */
 		alloc_pkey_ex_index();
 		key = pkcs11_object_ref(key);
 		pkcs11_set_ex_data_pkey(pkey, key);
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 		atexit(pkcs11_ed25519_method_free);
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
 	return pkey;
 }
@@ -476,16 +487,20 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 		return NULL;
 
 	if (key->object_class == CKO_PRIVATE_KEY) {
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 		/* global initialize ED448 EVP_PKEY_METHOD */
 		if (!pkcs11_ed448_method_new()) {
 			EVP_PKEY_free(pkey);
 			return NULL;
 		}
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 		/* create a new EVP_PKEY object which requires its own key object reference */
 		alloc_pkey_ex_index();
 		key = pkcs11_object_ref(key);
 		pkcs11_set_ex_data_pkey(pkey, key);
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
 		atexit(pkcs11_ed448_method_free);
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
 	return pkey;
 }
