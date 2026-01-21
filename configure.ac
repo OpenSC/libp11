@@ -36,6 +36,9 @@ opensslversion="$( \
     $PKG_CONFIG --modversion openssl ) | \
     sed 's/^\([0-9.]*\).*/\1/' )"
 case "$opensslversion" in
+	4.*) # Provider for OpenSSL 4.x
+	    LIBP11_LT_OLDEST="4"
+	    LIBP11_OSSL_PROVIDER="yes";;
 	3.*) # Engines directory prefix for OpenSSL 3.x
 	    LIBP11_LT_OLDEST="3"
 	    LIBP11_OSSL_PROVIDER="yes"
