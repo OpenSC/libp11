@@ -25,6 +25,8 @@
 #error did not get engine.h
 #endif
 
+#ifndef OPENSSL_NO_ENGINE
+
 #define PKCS11_ENGINE_ID "pkcs11"
 #define PKCS11_ENGINE_NAME "pkcs11 engine"
 
@@ -296,5 +298,7 @@ static int bind_fn(ENGINE *e, const char *id)
 
 IMPLEMENT_DYNAMIC_CHECK_FN()
 IMPLEMENT_DYNAMIC_BIND_FN(bind_fn)
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */

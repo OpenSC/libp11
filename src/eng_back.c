@@ -31,6 +31,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef OPENSSL_NO_ENGINE
+
 struct engine_ctx_st {
 	/* UI */
 	int ui_method_provided;
@@ -297,5 +299,7 @@ int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void))
 	}
 	return 0;
 }
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */
