@@ -25,6 +25,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef OPENSSL_NO_ENGINE
+
 #ifndef _ENGINE_PKCS11_H
 #define _ENGINE_PKCS11_H
 
@@ -97,5 +99,7 @@ void ENGINE_CTX_log(ENGINE_CTX *ctx, int level, const char *format, ...)
 	;
 
 #endif /* _ENGINE_PKCS11_H */
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */
