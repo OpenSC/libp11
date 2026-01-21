@@ -29,6 +29,13 @@ Include the complete command, exactly as executed.
 - Full command line used: <!-- e.g. `openssl pkeyutl` -->
 - Full stdout/stderr output: <!-- Paste the complete, unmodified output -->
 
+### PKCS#11 Spy log
+<!--
+PKCS#11 trace logs are very helpful for diagnosis.
+Please provide logs captured with PKCS#11 Spy:
+https://github.com/OpenSC/Wiki/blob/master/Using-OpenSC.md
+-->
+
 ### Environment
 - Operating system and version (e.g. Ubuntu 24.04):
 - Architecture (x86_64, arm64, etc.):
