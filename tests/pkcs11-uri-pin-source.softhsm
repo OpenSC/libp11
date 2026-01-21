@@ -22,6 +22,11 @@ URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0"
 # Load common test functions
 . ${srcdir}/common.sh
 
+if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
 # Generate test input files
 printf ${PIN} > $outdir/pin.txt
 printf "${PIN}\n" > $outdir/pin_with_trailing_newline.txt

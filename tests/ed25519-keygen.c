@@ -22,7 +22,7 @@
 #include <openssl/engine.h>
 #include "eddsa_common.h"
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ENGINE) && (OPENSSL_VERSION_NUMBER >= 0x30000000L)
 
 void display_openssl_errors(void)
 {
@@ -171,6 +171,6 @@ int main() {
 	return 0;
 }
 
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ENGINE) && (OPENSSL_VERSION_NUMBER >= 0x30000000L) */
 
 /* vim: set noexpandtab: */

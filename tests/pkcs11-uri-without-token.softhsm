@@ -30,6 +30,11 @@ PUBLIC_KEY="pkcs11:object=server-key-0;type=public;pin-value=1234"
 # Load common test functions
 . ${srcdir}/common.sh
 
+if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
 export OPENSSL_CONF="${outdir}/engines.cnf"
 echo "OPENSSL_CONF=${OPENSSL_CONF}"
 
