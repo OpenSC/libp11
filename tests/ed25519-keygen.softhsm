@@ -21,7 +21,7 @@ outdir="output.$$"
 # Load common test functions
 . ${srcdir}/common.sh
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
+if (( "${OPENSSL_VERSION%%.*}" != 3 )); then
 	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
 	exit 77
 fi

@@ -18,6 +18,11 @@ outdir="output.$$"
 # Load common test functions
 . ${srcdir}/common.sh
 
+if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
 # Initialize SoftHSM DB
 init_db
 

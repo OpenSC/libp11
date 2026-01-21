@@ -44,6 +44,8 @@
 #include <openssl/conf.h>
 #include <openssl/ui.h>
 
+#ifndef OPENSSL_NO_ENGINE
+
 /* UI method that's only used to fail if get_pin inside engine_pkcs11
  * has failed to pick up in a PIN sent in with ENGINE_ctrl_cmd_string */
 static UI_METHOD *ui_detect_failed_ctrl = NULL;
@@ -318,5 +320,13 @@ int main(int argc, char **argv)
 
 	return 0;
 }
+
+#else
+
+int main() {
+	return 0;
+}
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */

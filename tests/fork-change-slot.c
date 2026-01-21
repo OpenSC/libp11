@@ -66,6 +66,8 @@
 #define RANDOM_SIZE 20
 #define MAX_SIGSIZE 1024
 
+#ifndef OPENSSL_NO_ENGINE
+
 static int do_wait(pid_t pids[], int num)
 {
 	int i;
@@ -314,5 +316,13 @@ failed:
 
 	return rv;
 }
+
+#else
+
+int main() {
+	return 0;
+}
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */

@@ -35,6 +35,11 @@ MIXED_PUB_KEY="pKcS11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=pu
 # Load common test functions
 . ${srcdir}/common.sh
 
+if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
+	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	exit 77
+fi
+
 # Do the token initialization
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 

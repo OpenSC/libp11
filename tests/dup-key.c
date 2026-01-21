@@ -33,6 +33,8 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 
+#ifndef OPENSSL_NO_ENGINE
+
 static void usage(char *argv[])
 {
 	fprintf(stderr, "%s [private key URL] [module] [conf]\n", argv[0]);
@@ -184,5 +186,13 @@ end:
 
 	return ret;
 }
+
+#else
+
+int main() {
+	return 0;
+}
+
+#endif /* OPENSSL_NO_ENGINE */
 
 /* vim: set noexpandtab: */
