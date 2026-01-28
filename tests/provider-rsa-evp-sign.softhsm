@@ -23,11 +23,6 @@ outdir="output.$$"
 
 KEY_ID="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0"
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 printf ${PIN} > $outdir/pin.txt
 
 # Do the token initialization
@@ -41,8 +36,10 @@ echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
 echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 for PIN_ATTR in \
@@ -57,14 +54,19 @@ do
 	echo $PRIVATE_KEY
 
 	${WRAPPER} ./evp-sign-prov ctrl ${PRIVATE_KEY} ${PUBLIC_KEY}
-	if [[ $? -ne 0 ]]; then
-		echo "Basic PKCS #11 test with pin-value, using ctrl failed"
+	rc=$?
+	if [[ $rc -eq 77 ]]; then
+		echo "Basic PKCS #11 test skipped."
+		rm -rf "$outdir"
+		exit 77
+	elif [[ $rc -ne 0 ]]; then
+		echo "Basic PKCS #11 test with pin-value, using ctrl failed."
 		exit 1
 	fi
 
 	./evp-sign-prov default ${PRIVATE_KEY} ${PUBLIC_KEY}
 	if [[ $? -ne 0 ]]; then
-		echo "Basic PKCS #11 test with pin-value, using default failed"
+		echo "Basic PKCS #11 test with pin-value, using default failed."
 		exit 1
 	fi
 
@@ -75,18 +77,15 @@ echo $PRIVATE_KEY
 
 ./evp-sign-prov ctrl ${PRIVATE_KEY} ${PUBLIC_KEY}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test with PKCS11_PIN environment variable, using ctrl failed"
+	echo "Basic PKCS #11 test with PKCS11_PIN environment variable, using ctrl failed."
 	exit 1
 fi
 
 ./evp-sign-prov default ${PRIVATE_KEY} ${PUBLIC_KEY}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test with PKCS11_PIN environment variable, using default failed"
+	echo "Basic PKCS #11 test with PKCS11_PIN environment variable, using default failed."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

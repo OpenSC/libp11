@@ -29,11 +29,6 @@ ALL_UPER_PUB_KEY="PKCS11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type
 MIXED_PRIV_KEY="PkCs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
 MIXED_PUB_KEY="pKcS11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=public"
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Do the token initialization
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
@@ -45,30 +40,34 @@ echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
 echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ./evp-sign-prov default ${ALL_LOWER_PRIV_KEY} ${ALL_LOWER_PUB_KEY}
-if [[ $? -ne 0 ]]; then
-	echo "All lower case PKCS#11 URI scheme detection failed"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "PKCS#11 URI scheme detection test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "All lower case PKCS#11 URI scheme detection failed."
 	exit 1
 fi
 
 ./evp-sign-prov default ${ALL_UPPER_PRIV_KEY} ${ALL_UPER_PUB_KEY}
 if [[ $? -ne 0 ]]; then
-	echo "All upper case PKCS#11 URI scheme detection failed"
+	echo "All upper case PKCS#11 URI scheme detection failed."
 	exit 1
 fi
 
 ./evp-sign-prov default ${MIXED_PRIV_KEY} ${MIXED_PUB_KEY}
 if [[ $? -ne 0 ]]; then
-	echo "Mixed case PKCS#11 URI scheme detection failed"
+	echo "Mixed case PKCS#11 URI scheme detection failed."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

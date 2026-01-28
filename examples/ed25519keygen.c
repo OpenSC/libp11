@@ -27,7 +27,9 @@
  * SUCH DAMAGE.
  */
 
-#if !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_EC) && \
+    (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
+    (OPENSSL_VERSION_NUMBER < 0x40000000L)
 
 #include <libp11.h>
 #include <string.h>
@@ -176,13 +178,16 @@ end:
 	return rc;
 }
 
-#else /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#else /* !OPENSSL_NO_EC && OpenSSL 3.x */
+
+#include <stdio.h>
 
 int main(void)
 {
-	return 0;
+	fprintf(stderr, "Skipped: requires OpenSSL 3.x built with EC support\n");
+	return 77;
 }
 
-#endif /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !OPENSSL_NO_EC && OpenSSL 3.x */
 
 /* vim: set noexpandtab: */

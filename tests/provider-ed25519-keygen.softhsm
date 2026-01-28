@@ -21,11 +21,6 @@ outdir="output.$$"
 # Load common test functions
 . ${srcdir}/common.sh
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Initialize SoftHSM DB
 init_db
 
@@ -39,22 +34,26 @@ echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
 echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
 
+# Restore openssl settings
+trap cleanup EXIT
+
 ${WRAPPER} ./ed25519-keygen-prov ${MODULE} token1 libp11-keylabel ${PIN}
-if test $? != 0; then
-	echo "Key generation failed"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Ed25519 key generation test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Ed25519 key generation test failed."
 	exit 1
 fi
 
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
-
 echo "Checking pkcs11-tool result..."
 list_objects | grep -q libp11-keylabel
-if test $? != 0; then
-	echo "The key was not properly generated"
+if [[ $? != 0 ]]; then
+	echo "Ed25519 key was not properly generated."
 	exit 1
 fi
 

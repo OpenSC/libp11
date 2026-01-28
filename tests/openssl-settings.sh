@@ -17,6 +17,9 @@
 # along with GnuTLS; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
+# Save original library path for later restoration
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+
 # OpenSSL settings
 if test -n ${PKG_CONFIG_PATH}; then
     OPENSSL_PATH="${PKG_CONFIG_PATH}/../.."

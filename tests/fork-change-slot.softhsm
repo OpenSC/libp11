@@ -24,11 +24,6 @@ outdir="output.$$"
 # Load common test functions
 . ${srcdir}/common.sh
 
-if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Initialize SoftHSM DB
 init_db
 
@@ -40,17 +35,16 @@ init_card "token2"
 generate_rsa_key_pair "pkey" "token2"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test program which will stop and wait for a signal (SIGUSR1)
 # Valgrind cannot be used because the test program waits indefinitely at the sigwait call
 ./fork-change-slot "pkcs11:token=token2;object=pkey;type=private;pin-value=$PIN" \
 	"${outdir}/engines.cnf" ${MODULE} &
 pid=$!
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 # Wait the test program to reach the sigwait
 sleep 3
@@ -63,12 +57,16 @@ kill -USR1 `pgrep -P $pid`
 
 # Test the result
 wait $pid
-if [[ $? -ne 0 ]]; then
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Fork test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Fork test failed."
 	exit 1
 fi
 
-# Cleanup
 rm -rf "$outdir"
 
 exit 0
-

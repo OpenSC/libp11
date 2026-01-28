@@ -35,12 +35,19 @@ import_objects "rsa" "libp11-0" "01020344" "server-key-4" "privkey" "pubkey" "ce
 list_objects "libp11-0"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ../examples/listkeys_ext -m ${MODULE} -p ${PIN} | grep -q 'nkeys:5'
-if [[ $? -ne 0 ]]; then
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "List keys test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
 	echo "Failed when no search parameters were given. 5 Keys should have been found."
 	exit 1
 fi
@@ -74,9 +81,6 @@ if [[ $? -eq 0 ]]; then
 	echo "Did not fail when no keys should have been found."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

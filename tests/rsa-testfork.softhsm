@@ -28,19 +28,23 @@ outdir="output.$$"
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ./fork-test ${MODULE} ${PIN}
-if [[ $? -ne 0 ]]; then
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Fork test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Fork test failed."
 	exit 1
 fi
 
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
-
-# Cleanup
 rm -rf "$outdir"
 
 exit 0

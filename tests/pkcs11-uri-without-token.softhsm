@@ -30,11 +30,6 @@ PUBLIC_KEY="pkcs11:object=server-key-0;type=public;pin-value=1234"
 # Load common test functions
 . ${srcdir}/common.sh
 
-if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 export OPENSSL_CONF="${outdir}/engines.cnf"
 echo "OPENSSL_CONF=${OPENSSL_CONF}"
 
@@ -45,8 +40,16 @@ init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 echo "secret" >"${outdir}/in.txt"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+if ! "${OPENSSL}" engine >/dev/null 2>&1; then
+	echo "Skipping engine tests: ENGINE support not available"
+	rm -rf "$outdir"
+	exit 77
+fi
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 # Generate signature without specifying the token in the PKCS#11 URI
@@ -66,9 +69,6 @@ if [[ $? -ne 0 ]]; then
 	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

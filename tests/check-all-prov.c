@@ -85,10 +85,13 @@ cleanup:
 	return ret;
 }
 
-#else
+#else /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#include <stdio.h>
 
 int main() {
-	return 0;
+	fprintf(stderr, "Skipped: requires OpenSSL >= 3.0\n");
+	return 77;
 }
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */

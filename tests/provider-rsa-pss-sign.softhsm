@@ -24,11 +24,6 @@ outdir="output.$$"
 PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
 PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=public"
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Do the token initialization
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
@@ -40,18 +35,22 @@ echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
 echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ./rsa-pss-sign-prov ${PRIVATE_KEY} ${PUBLIC_KEY}
-if [[ $? -ne 0 ]]; then
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "RSA-PSS signature/verification test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
 	echo "RSA-PSS signature/verification test failed."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

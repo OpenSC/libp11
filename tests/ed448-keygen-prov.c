@@ -20,7 +20,9 @@
 #include "helpers_prov.h"
 #include "eddsa_common.h"
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_EC) && \
+    (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
+    (OPENSSL_VERSION_NUMBER < 0x40000000L)
 
 static void error_queue(const char *name)
 {
@@ -153,12 +155,15 @@ cleanup:
 	return ret;
 }
 
-#else
+#else /* !OPENSSL_NO_EC && OpenSSL 3.x */
+
+#include <stdio.h>
 
 int main() {
-	return 0;
+	fprintf(stderr, "Skipped: requires OpenSSL 3.x built with EC support\n");
+	return 77;
 }
 
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !OPENSSL_NO_EC && OpenSSL 3.x */
 
 /* vim: set noexpandtab: */

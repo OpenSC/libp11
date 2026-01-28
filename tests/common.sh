@@ -26,8 +26,6 @@ echo "Current directory: $(pwd)"
 echo "Source directory: ${srcdir}"
 echo "Output directory: ${outdir}"
 
-mkdir -p ${outdir}
-
 # List of directories to search
 SOFTHSM_SEARCH_PATHS=(
 	"/opt/homebrew"
@@ -77,6 +75,13 @@ TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 
 OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
 
+# Skip if SoftHSM requires ECDSA_SIG_get0 but current libcrypto doesn't provide it (no-ec build)
+if nm -D "${MODULE}" 2>/dev/null | grep -q ' U ECDSA_SIG_get0' && \
+	! "${OPENSSL}" list -public-key-algorithms 2>/dev/null | grep -qi '\bec\b'; then
+	echo "Skipping test: SoftHSM requires EC support, but OpenSSL was built without EC."
+	exit 77
+fi
+
 # Restore settings
 export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
@@ -107,6 +112,7 @@ else
 	SHARED_EXT=.so
 fi
 
+mkdir -p ${outdir}
 
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
 	"s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
@@ -152,6 +158,7 @@ init_db() {
 	# Exit if no tool was found
 	if [[ -z "${SOFTHSM_TOOL}" ]]; then
 		echo "Skipping test: No softhsm or softhsm2-util tool found in expected locations."
+		rm -rf "$outdir"
 		exit 77
 	fi
 
@@ -282,10 +289,17 @@ list_objects () {
 	echo "***************************************"
 	echo "* Listing objects on the token ${token_label}"
 	echo "***************************************"
-	pkcs11-tool --login --pin ${PIN} --module ${MODULE} \
-		--token-label "${token_label}" --list-objects
-	if [[ $? -ne 0 ]]; then
-		exit 1
-	fi
+
+	# Ensure pkcs11-tool runs with the original library path
+	export LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}"
+
+	pkcs11-tool --login --pin "${PIN}" --module "${MODULE}" \
+		--token-label "${token_label}" --list-objects || exit 1
+
 	echo "***************************************"
+}
+
+# Cleanup test environment
+cleanup() {
+	export LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}"
 }
