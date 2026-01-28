@@ -21,11 +21,12 @@
 #include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/engine.h>
+
+#ifndef OPENSSL_NO_ENGINE
+
 #ifndef ENGINE_CMD_BASE
 #error did not get engine.h
 #endif
-
-#ifndef OPENSSL_NO_ENGINE
 
 #define PKCS11_ENGINE_ID "pkcs11"
 #define PKCS11_ENGINE_NAME "pkcs11 engine"
