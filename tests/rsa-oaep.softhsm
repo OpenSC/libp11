@@ -26,28 +26,27 @@ PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=publi
 # Load common test functions
 . ${srcdir}/common.sh
 
-if (( "${OPENSSL_VERSION%%.*}" >= 4 )); then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Do the token initialization
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ./rsa-oaep ${PIN} "${outdir}/engines.cnf" \
 	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if [[ $? -ne 0 ]]; then
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "RSA-OAEP encryption/decryption test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
 	echo "RSA-OAEP encryption/decryption test failed."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

@@ -25,8 +25,10 @@ outdir="output.$$"
 init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # RSA certificate to store
 ${OPENSSL} x509 -in ${srcdir}/rsa-cert.der -inform DER -outform PEM \
@@ -36,17 +38,19 @@ CERTIFICATE_URL="pkcs11:token=libp11-0;id=04030201;object=stored-cert;pin-value=
 
 # Run the test
 ${WRAPPER} ../examples/storecert ${CERTIFICATE} ${CERTIFICATE_URL} ${MODULE}
-if [[ $? -ne 0 ]]; then
-	echo "RSA certificate storing couldn't be performed"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "RSA certificate storing test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "RSA certificate storing couldn't be performed."
 	exit 1
 fi
 
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
-
 list_objects && list_objects | grep -q stored-cert
 if [[ $? -ne 0 ]]; then
-	echo "The RSA certificate was not properly stored"
+	echo "The RSA certificate was not properly stored."
 	exit 1
 fi
 

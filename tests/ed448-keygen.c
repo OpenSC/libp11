@@ -22,7 +22,10 @@
 #include <openssl/engine.h>
 #include "eddsa_common.h"
 
-#if !defined(OPENSSL_NO_ENGINE) && (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+#if !defined(OPENSSL_NO_ENGINE) && \
+    !defined(OPENSSL_NO_EC) && \
+    (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
+    (OPENSSL_VERSION_NUMBER < 0x40000000L)
 
 void display_openssl_errors(void)
 {
@@ -76,15 +79,9 @@ int main(int argc, char *argv[])
 	}
 
 	ENGINE_add_conf_module();
-# if OPENSSL_VERSION_NUMBER>=0x10100000
 	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
 		| OPENSSL_INIT_ADD_ALL_DIGESTS \
 		| OPENSSL_INIT_LOAD_CONFIG, NULL);
-# else
-	OpenSSL_add_all_algorithms();
-	OpenSSL_add_all_digests();
-	ERR_load_crypto_strings();
-# endif
 	ERR_clear_error();
 
 	ENGINE_load_builtin_engines();
@@ -165,12 +162,13 @@ cleanup:
 	return ret;
 }
 
-#else
+#else /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_EC && OpenSSL 3.x */
 
 int main() {
-	return 0;
+	fprintf(stderr, "Skipped: requires OpenSSL 3.x built with ENGINE and EC support\n");
+	return 77;
 }
 
-#endif /* !defined(OPENSSL_NO_ENGINE) && (OPENSSL_VERSION_NUMBER >= 0x30000000L) */
+#endif /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_EC && OpenSSL 3.x */
 
 /* vim: set noexpandtab: */

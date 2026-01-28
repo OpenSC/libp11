@@ -24,11 +24,6 @@ outdir="output.$$"
 PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
 CERTIFICATE_URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=cert"
 
-if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
-	exit 77
-fi
-
 # Do the token initialization
 init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
 
@@ -40,8 +35,10 @@ echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
 echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 ${OPENSSL} x509 -in ${srcdir}/ec-cert.der -inform DER -outform PEM \
 	-out ${outdir}/ec-cert.pem
@@ -50,20 +47,22 @@ CERTIFICATE="${outdir}/ec-cert.pem"
 # Run the test
 ${WRAPPER} ./check-privkey-prov ${CERTIFICATE} ${PRIVATE_KEY} \
 	"${outdir}/engines.cnf"
-if [[ $? -ne 0 ]]; then
-	echo "The private key loading couldn't get the public key from the certificate"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "EC key test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "The private key loading couldn't get the public key from the certificate."
 	exit 1
 fi
 
 ./check-privkey-prov ${CERTIFICATE_URL} ${PRIVATE_KEY} \
 	"${outdir}/engines.cnf"
 if [[ $? -ne 0 ]]; then
-	echo "The private key loading couldn't get the public key from the certificate URL"
+	echo "The private key loading couldn't get the public key from the certificate URL."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

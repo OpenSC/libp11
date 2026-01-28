@@ -39,7 +39,8 @@ CERTIFICATE="pkcs11:object=label-3;type=cert"
 NUM_DEVICES=5
 
 if [[ "${OPENSSL_VERSION}" =~ ^[012].* ]]; then
-	echo "Skipping test with OpenSSL ${OPENSSL_VERSION}"
+	echo "Skipping provider tests with OpenSSL ${OPENSSL_VERSION}"
+	rm -rf "$outdir"
 	exit 77
 fi
 
@@ -57,8 +58,10 @@ echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 echo "secret" > "${outdir}/in.txt"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 # Verify that it doesn't try to login if more than one token matched the search
@@ -110,9 +113,6 @@ if [[ $? -ne 0 ]]; then
 	echo "Failed to verify the signature using the PKCS#11 URI ${PUBLIC_KEY_ANY}."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

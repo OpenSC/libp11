@@ -30,54 +30,58 @@ PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=publi
 init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
 
 # Load openssl settings
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 . ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
 
 # Run the test
 ${WRAPPER} ./evp-sign ctrl false "${outdir}/engines.cnf" \
 	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
-if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test, using ctrl failed"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Basic PKCS #11 test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Basic PKCS #11 test, using ctrl failed."
 	exit 1
 fi
 
 ./evp-sign default false "${outdir}/engines.cnf" \
 	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test, using default failed"
+	echo "Basic PKCS #11 test, using default failed."
 	exit 1
 fi
 
 ./evp-sign ctrl ${PIN} "${outdir}/engines.cnf" \
 	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test without pin-value, using ctrl failed"
+	echo "Basic PKCS #11 test without pin-value, using ctrl failed."
 	exit 1
 fi
 
 ./evp-sign default ${PIN} "${outdir}/engines.cnf" \
 	${PRIVATE_KEY} ${PUBLIC_KEY} ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test without pin-value, using default failed"
+	echo "Basic PKCS #11 test without pin-value, using default failed."
 	exit 1
 fi
 
 ./evp-sign ctrl ${PIN} "${outdir}/engines.cnf" \
 	"label_server-key-0" "label_server-key-0" ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test with legacy name #1 failed"
+	echo "Basic PKCS #11 test with legacy name #1 failed."
 	exit 1
 fi
 
 ./evp-sign default ${PIN} "${outdir}/engines.cnf" \
 	"id_01020304" "id_01020304" ${MODULE}
 if [[ $? -ne 0 ]]; then
-	echo "Basic PKCS #11 test with legacy name #2 failed"
+	echo "Basic PKCS #11 test with legacy name #2 failed."
 	exit 1
 fi
-
-# Restore settings
-export LD_LIBRARY_PATH=${TEMP_LD_LIBRARY_PATH}
 
 rm -rf "$outdir"
 

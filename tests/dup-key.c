@@ -187,10 +187,13 @@ end:
 	return ret;
 }
 
-#else
+#else /* OPENSSL_NO_ENGINE */
+
+#include <stdio.h>
 
 int main() {
-	return 0;
+	fprintf(stderr, "Skipped: ENGINE support not available\n");
+	return 77;
 }
 
 #endif /* OPENSSL_NO_ENGINE */
