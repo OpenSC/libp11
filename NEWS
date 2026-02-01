@@ -1,11 +1,12 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.17; unreleased
+New in 0.4.17; 2026-02-01; Michał Trojnara
 * Ed25519 and Ed448 support (PKCS#11 v3.2) (Małgorzata Olszówka)
 * Fixed OPENSSL_NO_EC builds (Małgorzata Olszówka)
-* Reverted RSA public exponent change from #474 (Michał Trojnara)
+* Reverted RSA public exponent change from PR #474 (Michał Trojnara)
 * Fixed crash on module initialization failures (Alex Shalimov)
 * Ignoring trailing newlines in pin-source files (Tobias Deiminger)
+* Initial build fixes for the upcoming OpenSSL 4.x (Małgorzata Olszówka)
 
 New in 0.4.16; 2025-06-23; Michał Trojnara
 * Fixed PKCS#11 module synchronization setup that was broken
