@@ -1,5 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
+New in 0.4.18; unreleased
+
 New in 0.4.17; 2026-02-01; Michał Trojnara
 * Ed25519 and Ed448 support (PKCS#11 v3.2) (Małgorzata Olszówka)
 * Fixed OPENSSL_NO_EC builds (Małgorzata Olszówka)
