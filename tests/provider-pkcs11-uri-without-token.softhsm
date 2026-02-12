@@ -82,6 +82,19 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
+# Compute the SHA-256 binary digest of the input file
+${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
+
+# Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
+${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+	-inkey ${PRIVATE_KEY} -sign -rawin -pkeyopt rsa_padding_mode:pss \
+	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+
+if [[ $? -ne 0 ]]; then
+	echo "Failed to sign a digest using RSA-PSS"
+	exit 1
+fi
+
 rm -rf "$outdir"
 
 exit 0
