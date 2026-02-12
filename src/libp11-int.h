@@ -389,27 +389,33 @@ extern int pkcs11_private_decrypt(
 	int flen, const unsigned char *from,
 	unsigned char *to, PKCS11_OBJECT_private *key, int padding);
 
-/* Retrieve PKCS11_KEY from an RSA key */
+/* Retrieve PKCS11_OBJECT_private from an RSA key */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
-/* Set PKCS11_KEY for an RSA key */
+/* Set PKCS11_OBJECT_private for an RSA key */
 void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key);
 
 #ifndef OPENSSL_NO_EC
-/* Retrieve PKCS11_KEY from an EC_KEY */
+/* Retrieve PKCS11_OBJECT_private from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 
-/* Set PKCS11_KEY for an EC_KEY */
+/* Set PKCS11_OBJECT_private for an EC_KEY */
 extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
-
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Retrieve PKCS11_KEY from an EVP_PKEY */
-extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
-/* Set PKCS11_KEY for an EVP_PKEY */
-extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);
 #endif /* OPENSSL_NO_EC */
+
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+/* Set PKCS11_OBJECT_private for an EVP_PKEY */
+extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);
+
+/* Retrieve PKCS11_OBJECT_private from an EVP_PKEY */
+extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
+
+/* Allocate a global EVP_PKEY ex_data index */
+void alloc_pkey_ex_index(void);
+
+/* Free the allocated EVP_PKEY ex_data index. */
+void free_pkey_ex_index(void);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 /* Free the global RSA_METHOD */
 extern void pkcs11_rsa_method_free(void);
@@ -428,6 +434,25 @@ extern void pkcs11_ecdh_method_free(void);
 extern void pkcs11_ed_key_method_free(void);
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
-#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+/* Free the global RSA EVP_PKEY_METHOD */
+extern void pkcs11_rsa_key_method_free(void);
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+#if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
+/* Get sign_init and sign callbacks from EVP_PKEY_METHOD */
+extern void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
+		int (**psign_init) (EVP_PKEY_CTX *ctx),
+		int (**psign) (EVP_PKEY_CTX *ctx,
+			unsigned char *sig, size_t *siglen,
+			const unsigned char *tbs, size_t tbslen));
+#endif /* OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER) */
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+/* Attempt to sign using the PKCS#11-backed RSA implementation */
+extern EVP_PKEY_METHOD *pkcs11_pkey_method_rsa(void);
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+#endif /* _LIBP11_INT_H */
 
 /* vim: set noexpandtab: */

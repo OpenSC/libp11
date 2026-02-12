@@ -29,6 +29,10 @@
 static int rsa_ex_index = 0;
 static RSA_METHOD *pkcs11_rsa_method = NULL;
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+static EVP_PKEY_METHOD *pkey_method_rsa  = NULL;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 static RSA *pkcs11_get1_rsa(PKCS11_OBJECT_private *key)
 {
 	EVP_PKEY *evp_key = pkcs11_get_key(key, key->object_class);
@@ -287,6 +291,39 @@ void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key)
 	RSA_set_ex_data(rsa, rsa_ex_index, key);
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+
+/* Global initialize RSA EVP_PKEY_METHOD */
+static int pkcs11_pkey_method_rsa_new(void)
+{
+	if (pkey_method_rsa)
+		return 1; /* EVP_PKEY_RSA method already initialized */
+
+	pkey_method_rsa = pkcs11_pkey_method_rsa();
+	if (!pkey_method_rsa)
+		return 0;
+
+	/* Register the method globally */
+	if (!EVP_PKEY_meth_add0(pkey_method_rsa)) {
+		EVP_PKEY_meth_free(pkey_method_rsa);
+		pkey_method_rsa = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+void pkcs11_rsa_key_method_free(void)
+{
+	if (pkcs11_global_data_refs == 0 && pkey_method_rsa) {
+		free_pkey_ex_index();
+		EVP_PKEY_meth_remove(pkey_method_rsa);
+		EVP_PKEY_meth_free(pkey_method_rsa);
+		pkey_method_rsa = NULL;
+	}
+}
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 /*
  * Build an EVP_PKEY object
  */
@@ -304,8 +341,23 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 		return NULL;
 	}
 	if (key->object_class == CKO_PRIVATE_KEY) {
-		/* This creates a new RSA_KEY object which requires its own key object reference */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+		/* global initialize RSA EVP_PKEY_METHOD */
+		if (!pkcs11_pkey_method_rsa_new()) {
+			EVP_PKEY_free(pk);
+			return NULL;
+		}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+		/* creates a new EVP_PKEY object which requires its own key object reference */
 		key = pkcs11_object_ref(key);
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+		alloc_pkey_ex_index();
+		pkcs11_set_ex_data_pkey(pk, key);
+		atexit(pkcs11_rsa_key_method_free);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);

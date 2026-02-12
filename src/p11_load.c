@@ -195,6 +195,9 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 #ifndef OPENSSL_NO_ECDH
 	pkcs11_ecdh_method_free();
 #endif /* OPENSSL_NO_ECDH */
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+	pkcs11_rsa_key_method_free();
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 #endif /* OPENSSL_VERSION_NUMBER */
 }
 
