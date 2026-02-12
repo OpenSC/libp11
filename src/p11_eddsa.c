@@ -35,8 +35,6 @@
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 
-static int pkey_ex_idx = 0;
-
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 static EVP_PKEY_METHOD *pkcs11_ed25519_method = NULL;
 static EVP_PKEY_METHOD *pkcs11_ed448_method = NULL;
@@ -50,26 +48,7 @@ int (*orig_ed25519_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *sigl
 int (*orig_ed448_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
-static void alloc_pkey_ex_index(void)
-{
-	if (pkey_ex_idx == 0) {
-		while (pkey_ex_idx == 0) /* Workaround for OpenSSL RT3710 */
-			pkey_ex_idx = EVP_PKEY_get_ex_new_index(0, "libp11 eddsa",
-				NULL, NULL, NULL);
-		if (pkey_ex_idx < 0)
-			pkey_ex_idx = 0; /* Fallback to app_data */
-	}
-}
-
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
-
-static void free_pkey_ex_index(void)
-{
-	if (pkey_ex_idx > 0) {
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EVP_PKEY, pkey_ex_idx);
-		pkey_ex_idx = 0;
-	}
-}
 
 /* PKCS#11 sign implementation for Ed25519 / Ed448 */
 static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
@@ -350,16 +329,6 @@ void pkcs11_ed_key_method_free(void)
 
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
-void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key)
-{
-	EVP_PKEY_set_ex_data(pkey, pkey_ex_idx, key);
-}
-
-PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey)
-{
-	return EVP_PKEY_get_ex_data(pkey, pkey_ex_idx);
-}
-
 /*
  * Retrieve the raw public key (EdDSA) from a PKCS#11 object.
  * The buffer `*raw` is allocated and must be freed by the caller
@@ -459,11 +428,13 @@ static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
 			return NULL;
 		}
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 		/* creates a new EVP_PKEY object which requires its own key object reference */
-		alloc_pkey_ex_index();
 		key = pkcs11_object_ref(key);
-		pkcs11_set_ex_data_pkey(pkey, key);
+
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
+		alloc_pkey_ex_index();
+		pkcs11_set_ex_data_pkey(pkey, key);
 		atexit(pkcs11_ed25519_method_free);
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
@@ -494,11 +465,13 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 			return NULL;
 		}
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
 		/* create a new EVP_PKEY object which requires its own key object reference */
-		alloc_pkey_ex_index();
 		key = pkcs11_object_ref(key);
-		pkcs11_set_ex_data_pkey(pkey, key);
+
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
+		alloc_pkey_ex_index();
+		pkcs11_set_ex_data_pkey(pkey, key);
 		atexit(pkcs11_ed448_method_free);
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
