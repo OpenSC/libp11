@@ -171,14 +171,14 @@ int main(int argc, char *argv[])
 	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(engine);
 
-	ret = X509_check_private_key(cert, pkey);
-	EVP_PKEY_free(pkey);
-	if (!ret) {
+	if (!X509_check_private_key(cert, pkey)) {
 		printf("Could not check private key\n");
 		display_openssl_errors(__LINE__);
+		EVP_PKEY_free(pkey);
 		ret = 1;
 		goto end;
 	}
+	EVP_PKEY_free(pkey);
 
 	printf("Key and certificate matched\n");
 	ret = 0;

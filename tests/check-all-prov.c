@@ -66,8 +66,7 @@ int main(int argc, char *argv[])
 		printf("Cannot load certificate: %s\n", argv[1]);
 		goto cleanup;
 	}
-	ret = X509_check_private_key(obj_set->cert, obj_set->private_key);
-	if (!ret) {
+	if (!X509_check_private_key(obj_set->cert, obj_set->private_key)) {
 		printf("Could not check private key.\n");
 		display_openssl_errors();
 		goto cleanup;
