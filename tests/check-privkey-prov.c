@@ -66,8 +66,7 @@ int main(int argc, char *argv[])
 	}
 	printf("Private key found.\n");
 
-	ret = X509_check_private_key(cert, private_key);
-	if (!ret) {
+	if (!X509_check_private_key(cert, private_key)) {
 		printf("Could not check private key.\n");
 		display_openssl_errors();
 		goto cleanup;
