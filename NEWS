@@ -1,6 +1,10 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.18; unreleased
+New in 0.4.18; 2026-02-16; Michał Trojnara
+* Support for RSA-PSS and RSA-OAEP using keys retrieved using the
+  PKCS11_get_private_key() libp11 API function and the PKCS#11 provider
+  (Małgorzata Olszówka, Michał Trojnara)
+* Improved test coverage (Małgorzata Olszówka)
 
 New in 0.4.17; 2026-02-01; Michał Trojnara
 * Ed25519 and Ed448 support (PKCS#11 v3.2) (Małgorzata Olszówka)
