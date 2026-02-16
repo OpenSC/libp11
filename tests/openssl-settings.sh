@@ -25,7 +25,7 @@ if test -n ${PKG_CONFIG_PATH}; then
     OPENSSL_PATH="${PKG_CONFIG_PATH}/../.."
     if command -v "${OPENSSL_PATH}/bin/openssl" &> /dev/null; then
         OPENSSL="${OPENSSL_PATH}/bin/openssl"
-        export LD_LIBRARY_PATH="${OPENSSL_PATH}/lib64:${OPENSSL_PATH}/lib"
+        export LD_LIBRARY_PATH="../src/.libs:${OPENSSL_PATH}/lib64:${OPENSSL_PATH}/lib"
     else
         OPENSSL=openssl
     fi
