@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright © 2024 Mobi - Com Polska Sp. z o.o.
+# Copyright © 2024-2026 Mobi - Com Polska Sp. z o.o.
 # Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 #
 # This is free software; you can redistribute it and/or modify it
@@ -20,16 +20,21 @@
 # Save original library path for later restoration
 TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 
-# OpenSSL settings
-if test -n ${PKG_CONFIG_PATH}; then
-    OPENSSL_PATH="${PKG_CONFIG_PATH}/../.."
-    if command -v "${OPENSSL_PATH}/bin/openssl" &> /dev/null; then
-        OPENSSL="${OPENSSL_PATH}/bin/openssl"
-        export LD_LIBRARY_PATH="../src/.libs:${OPENSSL_PATH}/lib64:${OPENSSL_PATH}/lib"
-    else
-        OPENSSL=openssl
-    fi
+# Use the configured OpenSSL library path if found
+OPENSSL_LIBDIR=$(pkg-config --variable=libdir --silence-errors openssl)
+if test -n "${OPENSSL_LIBDIR}"; then
+    export LD_LIBRARY_PATH="${OPENSSL_LIBDIR}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+# Use the configured OpenSSL executable path if found
+OPENSSL_PREFIX=$(pkg-config --variable=prefix --silence-errors openssl)
+if test -n "${OPENSSL_PREFIX}"; then
+    OPENSSL=$(PATH="${OPENSSL_PREFIX}/bin:${PATH}" command -v openssl 2>/dev/null || echo openssl)
 else
     OPENSSL=openssl
 fi
-echo "Compiled with: `${OPENSSL} version`"
+
+# Use the compiled and not the installed libp11.so
+export LD_LIBRARY_PATH="$(pwd)/../src/.libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+echo "Compiled with: $(${OPENSSL} version)"
