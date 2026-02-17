@@ -2,7 +2,7 @@
 
 VS_VERSION_INFO VERSIONINFO
 	FILEVERSION 10,7,4,0
-	PRODUCTVERSION 0,4,18,0
+	PRODUCTVERSION 0,4,19,0
 	FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
 	FILEFLAGS 0x21L
@@ -27,7 +27,7 @@ BEGIN
 			VALUE "OriginalFilename", "libp11-3.dll\0"
 			VALUE "PrivateBuild", "\0"
 			VALUE "ProductName", "libp11\0"
-			VALUE "ProductVersion", "0.4.18.0\0"
+			VALUE "ProductVersion", "0.4.19.0\0"
 			VALUE "SpecialBuild", "\0"
 		END
 	END

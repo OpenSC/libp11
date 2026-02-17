@@ -1,8 +1,8 @@
 #include <winresrc.h>
 
 VS_VERSION_INFO VERSIONINFO
-	FILEVERSION 0,4,18,0
-	PRODUCTVERSION 0,4,18,0
+	FILEVERSION 0,4,19,0
+	PRODUCTVERSION 0,4,19,0
 	FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
 	FILEFLAGS 0x21L
@@ -20,14 +20,14 @@ BEGIN
 			VALUE "Comments", "Provided under the terms of the GNU General Public License (LGPLv2.1+).\0"
 			VALUE "CompanyName", "OpenSC Project\0"
 			VALUE "FileDescription", "OpenSSL PKCS#11 provider\0"
-			VALUE "FileVersion", "0.4.18.0\0"
+			VALUE "FileVersion", "0.4.19.0\0"
 			VALUE "InternalName", "libp11\0"
 			VALUE "LegalCopyright", "OpenSC Project\0"
 			VALUE "LegalTrademarks", "\0"
 			VALUE "OriginalFilename", "pkcs11prov.dll\0"
 			VALUE "PrivateBuild", "\0"
 			VALUE "ProductName", "libp11\0"
-			VALUE "ProductVersion", "0.4.18.0\0"
+			VALUE "ProductVersion", "0.4.19.0\0"
 			VALUE "SpecialBuild", "\0"
 		END
 	END
