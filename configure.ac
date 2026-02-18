@@ -294,6 +294,7 @@ esac
 AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
+	src/p11_ver.h
 	src/libp11.pc
 	src/libp11.rc
 	src/pkcs11.rc

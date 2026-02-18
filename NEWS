@@ -1,6 +1,7 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.19; unreleased
+* Define LIBP11_VERSION_NUMBER (Michał Trojnara)
 
 New in 0.4.18; 2026-02-16; Michał Trojnara
 * Support for RSA-PSS and RSA-OAEP using keys retrieved using the
