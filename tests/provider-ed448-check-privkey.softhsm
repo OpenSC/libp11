@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+#
+# EdDSA public key resolution tests
+#
+# The provider resolves the public key for a private key as follows:
+#   1. CKO_PUBLIC_KEY (CKA_EC_POINT)
+#   2. CKO_CERTIFICATE (CKA_VALUE + X.509 parsing)
+#
+# Ed448:
+# Import privkey + pubkey + cert to exercise the direct CKO_PUBLIC_KEY lookup path.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
+CERTIFICATE_URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=cert"
+
+# Do the token initialization
+init_token "ed448" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
+if [[ $? -eq 77 ]]; then
+	echo "Ed448 key test skipped."
+	rm -rf "$outdir"
+	exit 77
+fi
+
+# Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Load openssl settings
+. ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
+
+${OPENSSL} x509 -in ${srcdir}/ed448-cert.der -inform DER -outform PEM \
+	-out ${outdir}/ed448-cert.pem
+CERTIFICATE="${outdir}/ed448-cert.pem"
+
+# Run the test
+${WRAPPER} ./check-privkey-prov ${CERTIFICATE} ${PRIVATE_KEY}
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Ed448 key test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "The private key loading couldn't get the public key from the certificate."
+	exit 1
+fi
+
+./check-privkey-prov ${CERTIFICATE_URL} ${PRIVATE_KEY}
+if [[ $? -ne 0 ]]; then
+	echo "The private key loading couldn't get the public key from the certificate URL."
+	exit 1
+fi
+
+rm -rf "$outdir"
+
+exit 0
