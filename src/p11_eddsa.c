@@ -330,78 +330,251 @@ void pkcs11_ed_key_method_free(void)
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 /*
- * Retrieve the raw public key (EdDSA) from a PKCS#11 object.
- * The buffer `*raw` is allocated and must be freed by the caller
- * using OPENSSL_free().
+ * Decode a DER OCTET STRING and return its contents.
+ * If decoding fails, duplicate the input buffer unchanged.
+ * Returns 1 on success, 0 on error.
  */
-static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
+static int strip_der_octet_string_alloc(const unsigned char *in, size_t inlen,
+	unsigned char **out, size_t *outlen)
+{
+	const unsigned char *p = in;
+	unsigned char *buf;
+	ASN1_OCTET_STRING *os = NULL;
+
+	if (out == NULL || outlen == NULL || in == NULL || inlen == 0)
+		return 0;
+
+	*out = NULL;
+	*outlen = 0;
+
+	/* For EdDSA (RFC8032) the CKA_EC_POINT attribute may be
+	 * encoded as a DER OCTET STRING */
+	os = d2i_ASN1_OCTET_STRING(NULL, &p, (long)inlen);
+	if (os != NULL && p == in + inlen) {
+		buf = OPENSSL_malloc((size_t)os->length);
+		if (buf == NULL) {
+			ASN1_OCTET_STRING_free(os);
+			return 0;
+		}
+		memcpy(buf, os->data, (size_t)os->length);
+		*out = buf;
+		*outlen = (size_t)os->length;
+		ASN1_OCTET_STRING_free(os);
+		return 1;
+	}
+	ASN1_OCTET_STRING_free(os);
+
+	/* Not DER OCTET STRING -> copy as-is */
+	buf = OPENSSL_malloc(inlen);
+	if (buf == NULL)
+		return 0;
+	memcpy(buf, in, inlen);
+	*out = buf;
+	*outlen = inlen;
+	return 1;
+}
+
+/*
+ * Parse a DER X.509 certificate and return raw Ed25519/Ed448 public key bytes.
+ * Returns 1 on success, 0 on error.
+ */
+static int extract_eddsa_raw_from_x509_der(const unsigned char *der, size_t derlen,
 	unsigned char **raw, size_t *rawlen)
 {
-	CK_ATTRIBUTE attr;
-	CK_RV rv;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	PKCS11_SLOT_private *slot = key->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	PKCS11_OBJECT_private *pubkey;
+	const unsigned char *p = der;
+	X509 *cert = NULL;
+	EVP_PKEY *pkey = NULL;
+	unsigned char *buf = NULL;
+	size_t len = 0;
+	int type, ok = 0;
+
+	if (raw == NULL || rawlen == NULL || der == NULL || derlen == 0)
+		return 0;
 
 	*raw = NULL;
 	*rawlen = 0;
 
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_EDDSA;
+	cert = d2i_X509(NULL, &p, (long)derlen);
+	if (cert == NULL)
+		goto end;
 
-	memset(&attr, 0, sizeof(attr));
+	pkey = X509_get_pubkey(cert);
+	if (pkey == NULL)
+		goto end;
 
-	/* CKA_EC_POINT: DER-encoding of the b-bit public key value
-	 * in little endian order as defined in RFC 8032 */
-	attr.type = CKA_EC_POINT;
+	/* Ensure it's EdDSA (Ed25519/Ed448) */
+	type = EVP_PKEY_id(pkey);
+	if (type != EVP_PKEY_ED25519 && type != EVP_PKEY_ED448)
+		goto end;
+
+
+	/* Query required size */
+	if (EVP_PKEY_get_raw_public_key(pkey, NULL, &len) != 1 || len == 0)
+		goto end;
+
+	buf = OPENSSL_malloc(len);
+	if (buf == NULL)
+		goto end;
+
+	/* Fetch raw public key bytes */
+	if (EVP_PKEY_get_raw_public_key(pkey, buf, &len) != 1) {
+		OPENSSL_free(buf);
+		buf = NULL;
+		goto end;
+	}
+
+	*raw = buf;
+	*rawlen = len;
+	buf = NULL;
+	ok = 1;
+
+end:
+	OPENSSL_free(buf);
+	EVP_PKEY_free(pkey);
+	X509_free(cert);
+	return ok;
+}
+
+
+/*
+ * Extract raw EdDSA public key bytes from a CKO_PUBLIC_KEY object using CKA_EC_POINT.
+ * Returns 1 on success, 0 on failure.
+ */
+static int extract_pub_from_public_key_obj(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
+	CK_OBJECT_HANDLE obj, unsigned char **raw, size_t *rawlen)
+{
+	unsigned char *ecpt = NULL;
+	size_t ecptlen = 0;
+	int ok = 0;
+
+	if (pkcs11_getattr_alloc(ctx, session, obj, CKA_EC_POINT, &ecpt, &ecptlen))
+		return 0;
+
+	ok = strip_der_octet_string_alloc(ecpt, ecptlen, raw, rawlen);
+	OPENSSL_free(ecpt);
+	return ok;
+}
+
+/*
+ * Extract raw EdDSA public key bytes from a CKO_CERTIFICATE object.
+ * The certificate is read from CKA_VALUE (DER-encoded X.509) and
+ * the public key is obtained via X.509 parsing.
+ * Returns 1 on success, 0 on failure.
+ */
+static int extract_pub_from_cert_obj(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE session,
+	CK_OBJECT_HANDLE obj, unsigned char **raw, size_t *rawlen)
+{
+	unsigned char *der = NULL;
+	size_t derlen = 0;
+	int ok = 0;
+
+	if (pkcs11_getattr_alloc(ctx, session, obj, CKA_VALUE, &der, &derlen))
+		return 0;
+
+	ok = extract_eddsa_raw_from_x509_der(der, derlen, raw, rawlen);
+	OPENSSL_free(der);
+	return ok;
+}
+
+/*
+ * Select an object that can provide public key material.
+ *
+ * For a private key object, try to locate a matching CKO_PUBLIC_KEY
+ * (same CKA_ID). If not found, fall back to CKO_CERTIFICATE.
+ *
+ * On success, returns a PKCS11_OBJECT_private pointer.
+ * If a new object is returned, *needs_free is set to 1 and the caller
+ * must free it with pkcs11_object_free().
+ *
+ * Returns NULL on failure.
+ */
+static PKCS11_OBJECT_private *pkcs11_choose_public_source(PKCS11_OBJECT_private *key,
+	CK_SESSION_HANDLE session, int *needs_free)
+{
+	PKCS11_OBJECT_private *obj;
+
+	*needs_free = 0;
+
+	if (key->object_class != CKO_PRIVATE_KEY)
+		return key;
+
+	obj = pkcs11_object_from_object(key, session, CKO_PUBLIC_KEY);
+	if (obj != NULL && obj->object != CK_INVALID_HANDLE) {
+		*needs_free = 1;
+		return obj;
+	}
+	if (obj != NULL)
+		pkcs11_object_free(obj);
+
+	obj = pkcs11_object_from_object(key, session, CKO_CERTIFICATE);
+	if (obj != NULL && obj->object != CK_INVALID_HANDLE) {
+		*needs_free = 1;
+		return obj;
+	}
+	if (obj != NULL)
+		pkcs11_object_free(obj);
+
+	return NULL;
+}
+
+/*
+ * Retrieve raw EdDSA public key bytes.
+ *
+ * Preference order:
+ *   1. CKO_PUBLIC_KEY  -> CKA_EC_POINT
+ *   2. CKO_CERTIFICATE -> CKA_VALUE (DER) + X.509 parsing
+ *
+ * The returned buffer is allocated with OPENSSL_malloc()
+ * and must be freed by the caller.
+ *
+ * Returns 0 on success, -1 on failure.
+ */
+static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
+	unsigned char **raw, size_t *rawlen)
+{
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	PKCS11_OBJECT_private *obj = NULL;
+	int obj_needs_free = 0, ok = 0;
+
+	if (key == NULL || key->slot == NULL || raw == NULL || rawlen == NULL)
+		return -1;
+
+	*raw = NULL;
+	*rawlen = 0;
+	slot = key->slot;
+	ctx = slot->ctx;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	if (key->object_class == CKO_PRIVATE_KEY)
-		pubkey = pkcs11_object_from_object(key, session, CKO_PUBLIC_KEY);
-	else
-		pubkey = key;
+	obj = pkcs11_choose_public_source(key, session, &obj_needs_free);
+	if (obj == NULL || obj->object == CK_INVALID_HANDLE)
+		goto end;
 
-	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, pubkey->object, &attr, 1));
-	if (rv != CKR_OK)
-		return -1;
+	switch (obj->object_class) {
+	case CKO_PUBLIC_KEY:
+		ok = extract_pub_from_public_key_obj(ctx, session, obj->object, raw, rawlen);
+		break;
+	case CKO_CERTIFICATE:
+		ok = extract_pub_from_cert_obj(ctx, session, obj->object, raw, rawlen);
+		break;
+	default:
+		ok = 0;
+		break;
+	}
 
-	if (attr.ulValueLen <= 0 || attr.ulValueLen == CK_UNAVAILABLE_INFORMATION)
-		return -1;
-
-	*raw = OPENSSL_malloc(attr.ulValueLen);
-	if (!*raw)
-		return -1;
-
-	attr.pValue = *raw;
-
-	rv = CRYPTOKI_call(ctx, C_GetAttributeValue(session, pubkey->object, &attr, 1));
-
-	if (key->object_class == CKO_PRIVATE_KEY)
-		pkcs11_object_free(pubkey);
-
-	if (rv != CKR_OK) {
+end:
+	if (!ok) {
 		OPENSSL_free(*raw);
 		*raw = NULL;
-		return -1;
+		*rawlen = 0;
 	}
-	*rawlen = attr.ulValueLen;
+	if (obj_needs_free && obj != NULL)
+		pkcs11_object_free(obj);
 
-	/* For EdDSA (RFC8032) the CKA_EC_POINT attribute may be encoded
-	 * as a DER OCTET STRING. In such a case, the ASN.1 header needs
-	 * to be stripped, leaving only the raw key bytes. */
-	if (*rawlen > 2 && (*raw)[0] == 0x04) {
-		/* simple OCTET STRING parser */
-		size_t len = (*raw)[1];
-		if (len + 2 == *rawlen) {
-			memmove(*raw, *raw + 2, len);
-			*rawlen = len;
-		}
-	}
-	return 0;
+	return ok ? 0 : -1;
 }
 
 static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
