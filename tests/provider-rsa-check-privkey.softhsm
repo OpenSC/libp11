@@ -45,8 +45,7 @@ ${OPENSSL} x509 -in ${srcdir}/rsa-cert.der -inform DER -outform PEM \
 CERTIFICATE="${outdir}/rsa-cert.pem"
 
 # Run the test
-${WRAPPER} ./check-privkey-prov ${CERTIFICATE} ${PRIVATE_KEY} \
-	"${outdir}/engines.cnf"
+${WRAPPER} ./check-privkey-prov ${CERTIFICATE} ${PRIVATE_KEY}
 rc=$?
 if [[ $rc -eq 77 ]]; then
 	echo "RSA key test skipped."
@@ -57,8 +56,7 @@ elif [[ $rc -ne 0 ]]; then
 	exit 1
 fi
 
-./check-privkey-prov ${CERTIFICATE_URL} ${PRIVATE_KEY} \
-	"${outdir}/engines.cnf"
+./check-privkey-prov ${CERTIFICATE_URL} ${PRIVATE_KEY}
 if [[ $? -ne 0 ]]; then
 	echo "The private key loading couldn't get the public key from the certificate URL."
 	exit 1
