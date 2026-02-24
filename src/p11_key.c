@@ -125,8 +125,8 @@ static CK_OBJECT_HANDLE pkcs11_handle_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_OBJECT_HANDLE object;
-	CK_ULONG count;
+	CK_OBJECT_HANDLE object = CK_INVALID_HANDLE;
+	CK_ULONG count = 0;
 	CK_RV rv;
 
 	rv = CRYPTOKI_call(ctx,

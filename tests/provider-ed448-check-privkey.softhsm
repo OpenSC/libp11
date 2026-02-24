@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
 # Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -15,6 +15,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
+#
+# EdDSA public key resolution tests
+#
+# The provider resolves the public key for a private key as follows:
+#   1. CKO_PUBLIC_KEY (CKA_EC_POINT)
+#   2. CKO_CERTIFICATE (CKA_VALUE + X.509 parsing)
+#
+# Ed448:
+# Import privkey + pubkey + cert to exercise the direct CKO_PUBLIC_KEY lookup path.
 
 outdir="output.$$"
 
@@ -25,7 +34,12 @@ PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=priv
 CERTIFICATE_URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=cert"
 
 # Do the token initialization
-init_token "rsa" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
+init_token "ed448" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" "cert"
+if [[ $? -eq 77 ]]; then
+	echo "Ed448 key test skipped."
+	rm -rf "$outdir"
+	exit 77
+fi
 
 # Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
 unset OPENSSL_ENGINES
@@ -40,15 +54,15 @@ echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 # Restore openssl settings
 trap cleanup EXIT
 
-${OPENSSL} x509 -in ${srcdir}/rsa-cert.der -inform DER -outform PEM \
-	-out ${outdir}/rsa-cert.pem
-CERTIFICATE="${outdir}/rsa-cert.pem"
+${OPENSSL} x509 -in ${srcdir}/ed448-cert.der -inform DER -outform PEM \
+	-out ${outdir}/ed448-cert.pem
+CERTIFICATE="${outdir}/ed448-cert.pem"
 
 # Run the test
 ${WRAPPER} ./check-privkey-prov ${CERTIFICATE} ${PRIVATE_KEY}
 rc=$?
 if [[ $rc -eq 77 ]]; then
-	echo "RSA key test skipped."
+	echo "Ed448 key test skipped."
 	rm -rf "$outdir"
 	exit 77
 elif [[ $rc -ne 0 ]]; then

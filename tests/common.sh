@@ -244,10 +244,15 @@ init_token () {
 		import_objects ${key_type} "${common_label}-$i" ${obj_id} "${obj_label}-$i" "$@"
 
 		# List the objects imported into the token
-		list_objects "${common_label}-$i"
+		if [[ $? -eq 0 ]]; then
+			list_objects "${common_label}-$i"
+		else
+			return 77
+		fi
 
 		i=$(($i + 1))
 	done
+	return 0
 }
 
 # Write an object (privkey, pubkey, cert) to the token
@@ -272,10 +277,10 @@ import_objects () {
 				--id ${obj_id} --label "${obj_label}" >/dev/null
 			if [[ $? -eq 0 ]]; then
 				echo ok
-			else
-				echo failed
-				exit 1
+				continue
 			fi
+			echo "pkcs11-tool cannot import ${key_type} ${param}"
+			return 77
 		else
 			echo "Skipping empty parameter"
 		fi
