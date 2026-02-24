@@ -65,6 +65,8 @@ dist_check_SCRIPTS = \
 	provider-ec-check-privkey.softhsm \
 	provider-ec-check-all.softhsm \
 	provider-ec-copy.softhsm \
+	provider-ed25519-check-privkey.softhsm \
+	provider-ed448-check-privkey.softhsm \
 	provider-ed25519-keygen.softhsm \
 	provider-ed448-keygen.softhsm \
 	provider-fork-change-slot.softhsm \
@@ -73,7 +75,9 @@ dist_check_SCRIPTS = \
 	provider-search-all-matching-tokens.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
-	ec-cert.der ec-privkey.der ec-pubkey.der
+	ec-cert.der ec-privkey.der ec-pubkey.der \
+	ed25519-cert.der ed25519-privkey.der ed25519-pubkey.der \
+	ed448-cert.der ed448-privkey.der ed448-pubkey.der
 
 ed25519_keygen_SOURCES = ed25519-keygen.c eddsa_common.c
 ed448_keygen_SOURCES = ed448-keygen.c eddsa_common.c
