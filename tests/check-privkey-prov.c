@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	/* Load private key */
 	private_key = load_pkey(argv[2], NULL);
 	if (!private_key) {
-		fprintf(stderr, "Cannot load private key: %s\n", argv[1]);
+		fprintf(stderr, "Cannot load private key: %s\n", argv[2]);
 		display_openssl_errors();
 		goto cleanup;
 	}
