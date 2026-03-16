@@ -197,13 +197,13 @@ typedef struct pkcs11_template_st {
 	CK_ATTRIBUTE attrs[32];
 } PKCS11_TEMPLATE;
 
-typedef int (*pkcs11_i2d_fn) (void *, unsigned char **);
+typedef int (*pkcs11_i2d_fn) (const void *, unsigned char **);
 extern unsigned int pkcs11_addattr(PKCS11_TEMPLATE *, int, void *, size_t);
 #define pkcs11_addattr_var(_tmpl, _type, _var) pkcs11_addattr(_tmpl, _type, &(_var), sizeof(_var))
 extern void pkcs11_addattr_bool(PKCS11_TEMPLATE *, int, int);
 extern void pkcs11_addattr_s(PKCS11_TEMPLATE *, int, const char *);
 extern void pkcs11_addattr_bn(PKCS11_TEMPLATE *, int, const BIGNUM *);
-extern void pkcs11_addattr_obj(PKCS11_TEMPLATE *, int, pkcs11_i2d_fn, void *);
+extern void pkcs11_addattr_obj(PKCS11_TEMPLATE *, int, pkcs11_i2d_fn, const void *);
 extern void pkcs11_zap_attrs(PKCS11_TEMPLATE *);
 
 /* Internal implementation of current features */

@@ -145,7 +145,7 @@ void pkcs11_addattr_bn(PKCS11_TEMPLATE *tmpl, int type, const BIGNUM *bn)
 	}
 }
 
-void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, void *obj)
+void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, const void *obj)
 {
 	unsigned char *buf, *p;
 	unsigned int i;
