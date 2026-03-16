@@ -279,8 +279,8 @@ static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_H
 	a = point;
 	os = d2i_ASN1_OCTET_STRING(NULL, &a, (long)point_len);
 	if (os) {
-		a = os->data;
-		rv = o2i_ECPublicKey(&ec, &a, os->length) == NULL;
+		a = ASN1_STRING_get0_data(os);
+		rv = o2i_ECPublicKey(&ec, &a, ASN1_STRING_length(os)) == NULL;
 		ASN1_STRING_free(os);
 	}
 	if (rv) { /* Workaround for broken PKCS#11 modules */
