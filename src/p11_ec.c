@@ -255,6 +255,11 @@ error:
 	return rv;
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#define ASN1_STRING_get0_data(os) ((os)->data)
+#define ASN1_STRING_length(x) ((os)->length)
+#endif
+
 /* Retrieve EC point from key into ec
  * return nonzero on error */
 static int pkcs11_get_point(EC_KEY *ec, PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session)
