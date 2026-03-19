@@ -8,8 +8,8 @@ CLEANFILES = libp11.pc
 EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 
 # Headers
-noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h util.h
-include_HEADERS= libp11.h p11_ver.h p11_err.h
+noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h provider_helpers.h util.h
+include_HEADERS= libp11.h p11_err.h
 
 # Libraries to build (static-engine optional)
 if ENABLE_STATIC_ENGINE
@@ -113,7 +113,7 @@ pkcs11_la_LDFLAGS = $(AM_LDFLAGS) -module -shared -shrext $(SHARED_EXT) \
 # ----------------------------------------------------------
 # PKCS#11 provider
 # ----------------------------------------------------------
-pkcs11prov_la_SOURCES = provider.c util_uri.c pkcs11prov.exports
+pkcs11prov_la_SOURCES = provider.c provider_helpers.c util_uri.c pkcs11prov.exports
 
 if WIN32
 pkcs11prov_la_SOURCES += pkcs11prov.rc

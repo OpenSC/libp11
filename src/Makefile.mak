@@ -12,7 +12,7 @@ LIBP11_TARGET = libp11.dll
 PKCS11_OBJECTS = eng_front.obj eng_back.obj eng_err.obj util_uri.obj
 PKCS11_TARGET = pkcs11.dll
 
-PKCS11PROV_OBJECTS = provider.obj util_uri.obj
+PKCS11PROV_OBJECTS = provider.obj provider_helpers.obj util_uri.obj
 PKCS11PROV_TARGET = pkcs11prov.dll
 
 OBJECTS = $(LIBP11_OBJECTS) $(PKCS11_OBJECTS) $(PKCS11PROV_OBJECTS)
