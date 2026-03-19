@@ -56,6 +56,7 @@ typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
  * PKCS11_CTX: context for a PKCS11 implementation
  */
 struct pkcs11_ctx_private {
+	int flags;
 	CK_FUNCTION_LIST_PTR method;
 	void *handle;
 	char *init_args;
@@ -211,7 +212,7 @@ extern void pkcs11_zap_attrs(PKCS11_TEMPLATE *);
 extern int pkcs11_atomic_add(int *, int, pthread_mutex_t *);
 
 /* Allocate the context */
-extern PKCS11_CTX *pkcs11_CTX_new(void);
+extern PKCS11_CTX *pkcs11_CTX_new(int flags);
 
 /* Specify any private PKCS#11 module initialization args, if necessary */
 extern void pkcs11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args);

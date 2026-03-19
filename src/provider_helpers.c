@@ -211,7 +211,7 @@ PROVIDER_CTX *PROVIDER_CTX_new(void)
 	if (!prov_ctx)
 		return NULL;
 
-	prov_ctx->util_ctx = UTIL_CTX_new();
+	prov_ctx->util_ctx = UTIL_CTX_new(PKCS11_FLAG_NO_METHODS);
 	if (!prov_ctx->util_ctx) {
 		OPENSSL_free(prov_ctx);
 		return NULL;

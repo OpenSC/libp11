@@ -96,7 +96,7 @@ ENGINE_CTX *ENGINE_CTX_new(void)
 	if (!ctx)
 		return NULL;
 	memset(ctx, 0, sizeof(ENGINE_CTX));
-	ctx->util_ctx = UTIL_CTX_new();
+	ctx->util_ctx = UTIL_CTX_new(0);
 	if (!ctx->util_ctx) {
 		OPENSSL_free(ctx);
 		return NULL;

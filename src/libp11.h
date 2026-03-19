@@ -38,6 +38,8 @@
 extern "C" {
 #endif
 
+#define PKCS11_FLAG_NO_METHODS 1
+
 int ERR_load_CKR_strings(void);
 void ERR_unload_CKR_strings(void);
 void ERR_CKR_error(int function, int reason, char *file, int line);
@@ -144,6 +146,14 @@ typedef struct PKCS11_kgen_attrs_st {
 
 /** PKCS11 ASCII logging callback */
 typedef void (*PKCS11_VLOG_A_CB)(int, const char *, va_list);
+
+/**
+ * Create a new libp11 context with specified flags
+ *
+ * This should be the first function called in the use of libp11
+ * @return an allocated context
+ */
+extern PKCS11_CTX *PKCS11_CTX_new_ex(int flags);
 
 /**
  * Create a new libp11 context

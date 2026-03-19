@@ -48,6 +48,7 @@
 
 struct util_ctx_st {
 	/* Configuration */
+	int flags;
 	char *module;
 	char *init_args;
 	UI_METHOD *ui_method;
@@ -81,7 +82,7 @@ static int g_shutdown_mode = 0;
 /* Initialization                                                             */
 /******************************************************************************/
 
-UTIL_CTX *UTIL_CTX_new(void)
+UTIL_CTX *UTIL_CTX_new(int flags)
 {
 	UTIL_CTX *ctx = OPENSSL_malloc(sizeof(UTIL_CTX));
 
@@ -90,6 +91,7 @@ UTIL_CTX *UTIL_CTX_new(void)
 
 	memset(ctx, 0, sizeof(UTIL_CTX));
 	pthread_mutex_init(&ctx->lock, 0);
+	ctx->flags = flags;
 	return ctx;
 }
 
@@ -165,7 +167,7 @@ static int util_ctx_init_libp11(UTIL_CTX *ctx)
 
 	UTIL_CTX_log(ctx, LOG_NOTICE, "PKCS#11: Initializing the module: %s\n", ctx->module);
 
-	ctx->pkcs11_ctx = PKCS11_CTX_new();
+	ctx->pkcs11_ctx = PKCS11_CTX_new_ex(ctx->flags);
 	if (!ctx->pkcs11_ctx)
 		return -1;
 	PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, ctx->vlog);

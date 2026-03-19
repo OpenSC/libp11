@@ -32,9 +32,14 @@
 
 /* External interface to the libp11 features */
 
+PKCS11_CTX *PKCS11_CTX_new_ex(int flags)
+{
+	return pkcs11_CTX_new(flags);
+}
+
 PKCS11_CTX *PKCS11_CTX_new(void)
 {
-	return pkcs11_CTX_new();
+	return pkcs11_CTX_new(0);
 }
 
 void PKCS11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args)
