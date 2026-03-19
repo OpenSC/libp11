@@ -37,6 +37,8 @@ PKCS11_store_private_key
 PKCS11_store_public_key
 PKCS11_store_certificate
 PKCS11_sign
+PKCS11_evp_pkey_sign
+PKCS11_evp_pkey_decrypt
 PKCS11_private_encrypt
 PKCS11_private_decrypt
 PKCS11_verify

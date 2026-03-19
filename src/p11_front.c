@@ -542,6 +542,70 @@ int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 	return pkcs11_sign(type, m, m_len, sigret, siglen, key);
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+int PKCS11_evp_pkey_sign(EVP_PKEY *pk, int type, const char *mdname,
+	const int pad_mode, const int pss_saltlen, const char *mgf1_mdname,
+	unsigned char *oaep_label, const int oaep_labellen,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	PKCS11_OBJECT_private *key;
+	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+
+	if (pkey == NULL)
+		return -1;
+
+	key = PRIVKEY(pkey);
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	switch (type) {
+	case EVP_PKEY_RSA:
+		return pkcs11_evp_pkey_rsa_sign(key, pk, mdname,
+			pad_mode, pss_saltlen, mgf1_mdname,
+			oaep_label, oaep_labellen,
+			sig, siglen, tbs, tbslen);
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		return pkcs11_evp_pkey_ec_sign(key, sig, siglen, tbs, tbslen);
+#endif /* OPENSSL_NO_EC */
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+		return pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen);
+	default:
+		return -2; /* type not supported */
+	}
+}
+
+int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
+	const int pad_mode, const char *mgf1_mdname,
+	unsigned char *oaep_label, const int oaep_labellen,
+	unsigned char *out, size_t *outlen,
+	size_t *outsize, const unsigned char *in, size_t inlen)
+{
+	PKCS11_OBJECT_private *key;
+	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+
+	if (pkey == NULL)
+		return -1;
+
+	key = PRIVKEY(pkey);
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	switch (type) {
+	case EVP_PKEY_RSA:
+	case EVP_PKEY_RSA_PSS:
+		return pkcs11_evp_pkey_rsa_decrypt(key, pk, mdname,
+			pad_mode, mgf1_mdname,
+			oaep_label, oaep_labellen,
+			out, outlen, outsize, in, inlen);
+	default:
+		return -2; /* type not supported */
+	}
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *pkey, int padding)
 {
