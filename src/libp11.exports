@@ -1,4 +1,5 @@
 PKCS11_CTX_init_args
+PKCS11_CTX_new_ex
 PKCS11_CTX_new
 PKCS11_CTX_load
 PKCS11_CTX_unload
