@@ -349,14 +349,17 @@ static int strip_der_octet_string_alloc(const unsigned char *in, size_t inlen,
 	 * encoded as a DER OCTET STRING */
 	os = d2i_ASN1_OCTET_STRING(NULL, &p, (long)inlen);
 	if (os != NULL && p == in + inlen) {
-		buf = OPENSSL_malloc((size_t)os->length);
+		const unsigned char *data = ASN1_STRING_get0_data(os);
+		int len = ASN1_STRING_length(os);
+		
+		buf = OPENSSL_malloc((size_t)len);
 		if (buf == NULL) {
 			ASN1_OCTET_STRING_free(os);
 			return 0;
 		}
-		memcpy(buf, os->data, (size_t)os->length);
+		memcpy(buf, data, (size_t)len);
 		*out = buf;
-		*outlen = (size_t)os->length;
+		*outlen = (size_t)len;
 		ASN1_OCTET_STRING_free(os);
 		return 1;
 	}
