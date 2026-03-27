@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Load private key */
-	private_key = load_pkey(argv[1], NULL);
+	private_key = load_pkey(argv[1], "provider=pkcs11prov", NULL);
 	if (!private_key) {
 		fprintf(stderr, "Cannot load private key: %s\n", argv[1]);
 		display_openssl_errors();
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	EVP_PKEY_free(private_key);
 
 	/* Do it one more time */
-	private_key = load_pkey(argv[1], NULL);
+	private_key = load_pkey(argv[1], "provider=pkcs11prov", NULL);
 	if (!private_key) {
 		fprintf(stderr, "Cannot load private key: %s\n", argv[1]);
 		display_openssl_errors();

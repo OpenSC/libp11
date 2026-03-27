@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_FAILURE;
 
 	if (argc < 2) {
-		fprintf(stderr, "usage: %s [certificate (PEM or URL)] [private key URL]\n", argv[0]);
+		fprintf(stderr, "usage: %s [certificate (PEM)] [private key URL]\n", argv[0]);
 		return ret;
 	}
 
@@ -48,8 +48,8 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	/* Load certificate */
-	cert = load_cert(argv[1]);
+	/* Load X.509 certificate from PEM file */
+	cert = load_cert(argv[1], NULL);
 	if (!cert) {
 		fprintf(stderr, "Cannot load certificate: %s\n", argv[1]);
 		display_openssl_errors();
@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 	printf("Certificate found: %s\n", argv[1]);
 
 	/* Load private key */
-	private_key = load_pkey(argv[2], NULL);
+	private_key = load_pkey(argv[2], "provider=pkcs11prov", NULL);
 	if (!private_key) {
 		fprintf(stderr, "Cannot load private key: %s\n", argv[2]);
 		display_openssl_errors();

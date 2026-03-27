@@ -50,11 +50,11 @@ void display_openssl_errors(void)
 }
 
  /* store_type == 0 means here multiple types of credentials are to be loaded */
-void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *obj_set) {
+void load_objects(const char *uri, const char *propq, const UI_METHOD *ui_method, OBJ_SET *obj_set) {
 	OSSL_STORE_CTX *store_ctx;
 	int type;
 
-	store_ctx = OSSL_STORE_open(uri, ui_method, NULL, NULL, NULL);
+	store_ctx = OSSL_STORE_open_ex(uri, NULL, propq, ui_method, NULL, NULL, NULL, NULL);
 	if (!store_ctx)
 		return; /* FAILED */
 
@@ -83,13 +83,13 @@ void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *obj_set)
 	OSSL_STORE_close(store_ctx);
 }
 
-EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method)
+EVP_PKEY *load_pkey(const char *uri, const char *propq, const UI_METHOD *ui_method)
 {
 	EVP_PKEY *pkey = NULL;
 	OSSL_STORE_INFO *info;
 	OSSL_STORE_CTX *store_ctx;
 
-	store_ctx = OSSL_STORE_open(uri, ui_method, NULL, NULL, NULL);
+	store_ctx = OSSL_STORE_open_ex(uri, NULL, propq, ui_method, NULL, NULL, NULL, NULL);
 	if (!store_ctx) {
 		return NULL;
 	}
@@ -110,13 +110,13 @@ EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method)
 	return pkey;
 }
 
-EVP_PKEY *load_pubkey(const char *uri)
+EVP_PKEY *load_pubkey(const char *uri, const char *propq)
 {
 	EVP_PKEY *pkey = NULL;
 	OSSL_STORE_INFO *info;
 	OSSL_STORE_CTX *store_ctx;
 
-	store_ctx = OSSL_STORE_open(uri, NULL, NULL, NULL, NULL);
+	store_ctx = OSSL_STORE_open_ex(uri, NULL, propq, NULL, NULL, NULL, NULL, NULL);
 	if (!store_ctx) {
 		return NULL;
 	}
@@ -137,13 +137,13 @@ EVP_PKEY *load_pubkey(const char *uri)
 	return pkey;
 }
 
-X509 *load_cert(const char *uri)
+X509 *load_cert(const char *uri, const char *propq)
 {
 	X509 *cert = NULL;
 	OSSL_STORE_INFO *info;
 	OSSL_STORE_CTX *store_ctx;
 
-	store_ctx = OSSL_STORE_open(uri, NULL, NULL, NULL, NULL);
+	store_ctx = OSSL_STORE_open_ex(uri, NULL, propq, NULL, NULL, NULL, NULL, NULL);
 	if (!store_ctx) {
 		return NULL;
 	}

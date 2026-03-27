@@ -45,10 +45,11 @@ typedef struct {
 } OBJ_SET;
 
 void display_openssl_errors(void);
-void load_objects(const char *uri, const UI_METHOD *ui_method, OBJ_SET *set);
-EVP_PKEY *load_pkey(const char *uri, const UI_METHOD *ui_method);
-EVP_PKEY *load_pubkey(const char *uri);
-X509 *load_cert(const char *uri);
+void load_objects(const char *uri, const char *propq, const UI_METHOD *ui_method,
+	OBJ_SET *set);
+EVP_PKEY *load_pkey(const char *uri, const char *propq, const UI_METHOD *ui_method);
+EVP_PKEY *load_pubkey(const char *uri, const char *propq);
+X509 *load_cert(const char *uri, const char *propq);
 void provider_free(OSSL_PROVIDER *prov);
 void providers_cleanup(void);
 int provider_load(const char *pname);
