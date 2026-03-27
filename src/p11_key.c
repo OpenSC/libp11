@@ -394,7 +394,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 		CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0
 	};
 	CK_ULONG num_bits = bits;
-	CK_BYTE public_exponent[] = { 1, 0, 1 };
+	CK_BYTE public_exponent[] = { 0x01, 0x00, 0x01 }; /* 65537 (0x10001) */
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	int rv;
 
