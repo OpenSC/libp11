@@ -56,7 +56,12 @@ trap cleanup EXIT
 
 # Run the test
 # Generate signature without specifying the token in the PKCS#11 URI
+#
+# Use "?provider=pkcs11prov" to prefer pkcs11prov but allow fallback to default.
+# Signing may require algorithms not provided by pkcs11prov (e.g. DRBG/RAND),
+# so a strict "provider=pkcs11prov" would fail to fetch them.
 ${WRAPPER} ${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+	-propquery "?provider=pkcs11prov" \
 	-inkey ${PRIVATE_KEY} -sign -out "${outdir}/signature.bin" \
 	-in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
@@ -66,6 +71,7 @@ fi
 
 # Verify the signature using the public without specifying the token
 ${OPENSSL} pkeyutl -provider pkcs11prov -provider default -pubin \
+	-propquery "provider=pkcs11prov" \
 	-inkey ${PUBLIC_KEY} -verify -sigfile "${outdir}/signature.bin" \
 	-in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
@@ -74,7 +80,12 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # Verify the signature using a certificate without specifying the token
+#
+# Use "?provider=pkcs11prov" to prefer pkcs11prov but allow fallback to default.
+# This enables default provider decoders (e.g. for SubjectPublicKeyInfo (SPKI))
+# to construct EVP_PKEY from X509 when pkcs11prov does not implement them.
 ${OPENSSL} pkeyutl -provider pkcs11prov -provider default -certin \
+	-propquery "?provider=pkcs11prov" \
 	-inkey ${PUBLIC_KEY} -verify -sigfile "${outdir}/signature.bin" \
 	-in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
@@ -87,6 +98,7 @@ ${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
 
 # Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
 ${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+	-propquery "provider=pkcs11prov" \
 	-inkey ${PRIVATE_KEY} -sign -rawin -pkeyopt rsa_padding_mode:pss \
 	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
 

@@ -55,14 +55,14 @@ int main(int argc, char **argv) {
 	}
 
 	/* Load keys */
-	private_key = load_pkey(argv[1], NULL);
+	private_key = load_pkey(argv[1], "provider=pkcs11prov", NULL);
 	if (!private_key) {
 		fprintf(stderr, "Cannot load private key: %s\n", argv[1]);
 		display_openssl_errors();
 		goto cleanup;
 	}
 	printf("Private key found.\n");
-	public_key = load_pubkey(argv[2]);
+	public_key = load_pubkey(argv[2], "provider=pkcs11prov");
 	if (!public_key) {
 		fprintf(stderr, "Cannot load public key: %s\n", argv[2]);
 		display_openssl_errors();

@@ -51,8 +51,13 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	/* Load private key, public key and certificate */
-	load_objects(argv[1], NULL, obj_set);
+	/*
+	 * Load private key, public key and certificate.
+	 * Use "?provider=pkcs11prov" to prefer pkcs11prov but allow fallback to default.
+	 * This enables default provider decoders (e.g. for SubjectPublicKeyInfo (SPKI))
+	 * to construct EVP_PKEY from X509 when pkcs11prov does not implement them.
+	 */
+	load_objects(argv[1], "?provider=pkcs11prov", NULL, obj_set);
 
 	if (!obj_set->private_key) {
 		printf("Cannot load private key: %s\n", argv[1]);
