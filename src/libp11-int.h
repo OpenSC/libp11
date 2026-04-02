@@ -130,8 +130,6 @@ extern PKCS11_OBJECT_ops pkcs11_ed448_ops;
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
-extern int pkcs11_global_data_refs;
-
 /*
  * Internal functions
  */

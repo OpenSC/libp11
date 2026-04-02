@@ -321,10 +321,8 @@ void pkcs11_ed448_method_free(void)
 
 void pkcs11_ed_key_method_free(void)
 {
-	if (pkcs11_global_data_refs == 0) {
-		pkcs11_ed25519_method_free();
-		pkcs11_ed448_method_free();
-	}
+	pkcs11_ed25519_method_free();
+	pkcs11_ed448_method_free();
 }
 
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
@@ -608,7 +606,6 @@ static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 		alloc_pkey_ex_index();
 		pkcs11_set_ex_data_pkey(pkey, key);
-		atexit(pkcs11_ed25519_method_free);
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
 	return pkey;
@@ -645,7 +642,6 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 		alloc_pkey_ex_index();
 		pkcs11_set_ex_data_pkey(pkey, key);
-		atexit(pkcs11_ed448_method_free);
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	}
 	return pkey;

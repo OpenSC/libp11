@@ -314,7 +314,7 @@ static int pkcs11_pkey_method_rsa_new(void)
 
 void pkcs11_rsa_key_method_free(void)
 {
-	if (pkcs11_global_data_refs == 0 && pkey_method_rsa) {
+	if (pkey_method_rsa) {
 		free_pkey_ex_index();
 		EVP_PKEY_meth_remove(pkey_method_rsa);
 		EVP_PKEY_meth_free(pkey_method_rsa);
@@ -355,7 +355,6 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
 		alloc_pkey_ex_index();
 		pkcs11_set_ex_data_pkey(pk, key);
-		atexit(pkcs11_rsa_key_method_free);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
@@ -604,14 +603,13 @@ RSA_METHOD *PKCS11_get_rsa_method(void)
 		RSA_meth_set_priv_enc(pkcs11_rsa_method, pkcs11_rsa_priv_enc_method);
 		RSA_meth_set_priv_dec(pkcs11_rsa_method, pkcs11_rsa_priv_dec_method);
 		RSA_meth_set_finish(pkcs11_rsa_method, pkcs11_rsa_free_method);
-		atexit(pkcs11_rsa_method_free);
 	}
 	return pkcs11_rsa_method;
 }
 
 void pkcs11_rsa_method_free(void)
 {
-	if (pkcs11_global_data_refs == 0 && pkcs11_rsa_method) {
+	if (pkcs11_rsa_method) {
 		free_rsa_ex_index();
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		RSA_meth_free(pkcs11_rsa_method);

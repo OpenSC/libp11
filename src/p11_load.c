@@ -21,7 +21,46 @@
 #include <string.h>
 
 /* Global number of active PKCS11_CTX objects */
-int pkcs11_global_data_refs = 0;
+static int pkcs11_global_data_refs = 0;
+
+/*
+ * Free global ex_data indexes and methods
+ */
+static void libp11_global_free()
+{
+#ifndef OPENSSL_NO_RSA
+	pkcs11_rsa_method_free();
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x10100002L
+#ifndef OPENSSL_NO_EC
+	pkcs11_ec_key_method_free();
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+	pkcs11_ed_key_method_free();
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+#endif /* OPENSSL_NO_EC */
+#else /* OPENSSL_VERSION_NUMBER */
+#ifndef OPENSSL_NO_ECDSA
+	pkcs11_ecdsa_method_free();
+#endif /* OPENSSL_NO_ECDSA */
+#ifndef OPENSSL_NO_ECDH
+	pkcs11_ecdh_method_free();
+#endif /* OPENSSL_NO_ECDH */
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+	pkcs11_rsa_key_method_free();
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+#endif /* OPENSSL_VERSION_NUMBER */
+}
+
+/*
+ * Free global data if some PKCS11_CTX objects were not freed by the user
+ */
+static void libp11_atexit()
+{
+	if (pkcs11_global_data_refs > 0) {
+		pkcs11_global_data_refs = 0;
+		libp11_global_free();
+	}
+}
 
 /*
  * Create a new context
@@ -46,7 +85,8 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	cpriv->forkid = get_forkid();
 	pthread_mutex_init(&cpriv->fork_lock, 0);
 
-	pkcs11_global_data_refs++;
+	if(pkcs11_global_data_refs++ == 0)
+		atexit(libp11_atexit);
 
 	return ctx;
 fail:
@@ -177,28 +217,8 @@ void pkcs11_CTX_free(PKCS11_CTX *ctx)
 	OPENSSL_free(ctx->_private);
 	OPENSSL_free(ctx);
 
-	pkcs11_global_data_refs--;
-#ifndef OPENSSL_NO_RSA
-	pkcs11_rsa_method_free();
-#endif
-#if OPENSSL_VERSION_NUMBER >= 0x10100002L
-#ifndef OPENSSL_NO_EC
-	pkcs11_ec_key_method_free();
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_ed_key_method_free();
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
-#endif /* OPENSSL_NO_EC */
-#else /* OPENSSL_VERSION_NUMBER */
-#ifndef OPENSSL_NO_ECDSA
-	pkcs11_ecdsa_method_free();
-#endif /* OPENSSL_NO_ECDSA */
-#ifndef OPENSSL_NO_ECDH
-	pkcs11_ecdh_method_free();
-#endif /* OPENSSL_NO_ECDH */
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_rsa_key_method_free();
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
-#endif /* OPENSSL_VERSION_NUMBER */
+	if (--pkcs11_global_data_refs == 0)
+		libp11_global_free();
 }
 
 /* vim: set noexpandtab: */
