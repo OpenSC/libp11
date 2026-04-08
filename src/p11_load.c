@@ -52,17 +52,6 @@ static void libp11_global_free()
 }
 
 /*
- * Free global data if some PKCS11_CTX objects were not freed by the user
- */
-static void libp11_atexit()
-{
-	if (pkcs11_global_data_refs > 0) {
-		pkcs11_global_data_refs = 0;
-		libp11_global_free();
-	}
-}
-
-/*
  * Create a new context
  */
 PKCS11_CTX *pkcs11_CTX_new(void)
@@ -85,9 +74,7 @@ PKCS11_CTX *pkcs11_CTX_new(void)
 	cpriv->forkid = get_forkid();
 	pthread_mutex_init(&cpriv->fork_lock, 0);
 
-	if(pkcs11_global_data_refs++ == 0)
-		atexit(libp11_atexit);
-
+	pkcs11_global_data_refs++;
 	return ctx;
 fail:
 	OPENSSL_free(cpriv);
