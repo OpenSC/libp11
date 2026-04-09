@@ -773,8 +773,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		ret = key->evp_key;
-		EVP_PKEY_up_ref(key->evp_key);
+		ret = EVP_PKEY_dup(key->evp_key);
 		break;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	default:
