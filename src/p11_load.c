@@ -24,13 +24,21 @@
 static int pkcs11_global_data_refs = 0;
 
 /*
- * Free global ex_data indexes and methods
+ * Free global ex_data indexes and custom key methods
  */
-static void libp11_global_free()
+static void libp11_global_free(void)
 {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	free_evp_pkey_ex_index();
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 #ifndef OPENSSL_NO_RSA
 	pkcs11_rsa_method_free();
-#endif
+# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+	pkcs11_rsa_key_method_free();
+# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+#endif /* OPENSSL_NO_RSA */
+
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 #ifndef OPENSSL_NO_EC
 	pkcs11_ec_key_method_free();
@@ -38,17 +46,17 @@ static void libp11_global_free()
 	pkcs11_ed_key_method_free();
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 #endif /* OPENSSL_NO_EC */
-#else /* OPENSSL_VERSION_NUMBER */
+
+#else /* OPENSSL_VERSION_NUMBER < 0x10100002L */
+
 #ifndef OPENSSL_NO_ECDSA
 	pkcs11_ecdsa_method_free();
 #endif /* OPENSSL_NO_ECDSA */
+
 #ifndef OPENSSL_NO_ECDH
 	pkcs11_ecdh_method_free();
 #endif /* OPENSSL_NO_ECDH */
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_rsa_key_method_free();
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
-#endif /* OPENSSL_VERSION_NUMBER */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
 }
 
 /*

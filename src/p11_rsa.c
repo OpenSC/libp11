@@ -341,20 +341,22 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 		return NULL;
 	}
 	if (key->object_class == CKO_PRIVATE_KEY) {
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+# if OPENSSL_VERSION_NUMBER < 0x40000000L
 		if ((key->slot->ctx->flags & PKCS11_FLAG_NO_METHODS) == 0) {
 			/* global initialize RSA EVP_PKEY_METHOD */
 			if (!pkcs11_pkey_method_rsa_new()) {
 				EVP_PKEY_free(pk);
 				return NULL;
 			}
-			/* creates a new EVP_PKEY object which requires its own key object reference */
-			key = pkcs11_object_ref(key);
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pk, key);
 			atexit(pkcs11_rsa_key_method_free);
 		}
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+# endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+		/* creates a new EVP_PKEY object which requires its own key object reference */
+		key = pkcs11_object_ref(key);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )

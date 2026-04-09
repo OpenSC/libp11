@@ -128,7 +128,6 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *, const char *,
 static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key);
 static PKCS11_KEY *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
 static void alloc_evp_pkey_ex_index(void);
-static void free_evp_pkey_ex_index(void);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Helper to acquire object handle from given template */
@@ -783,8 +782,10 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 	}
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	alloc_evp_pkey_ex_index();
-	pkcs11_set_ex_data_evp_pkey(ret, key->public);
+	if (key->object_class == CKO_PRIVATE_KEY) {
+		alloc_evp_pkey_ex_index();
+		pkcs11_set_ex_data_evp_pkey(ret, key->public);
+	}
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 err:
 	if (key != key0)
@@ -1152,7 +1153,7 @@ static void alloc_evp_pkey_ex_index(void)
 	}
 }
 
-static void free_evp_pkey_ex_index(void)
+void free_evp_pkey_ex_index(void)
 {
 	if (evp_pkey_ex_index > 0) {
 		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EVP_PKEY, evp_pkey_ex_index);
