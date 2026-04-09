@@ -442,11 +442,16 @@ extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
 
 /* Allocate a global EVP_PKEY ex_data index */
-void alloc_pkey_ex_index(void);
+extern void alloc_pkey_ex_index(void);
 
 /* Free the allocated EVP_PKEY ex_data index. */
-void free_pkey_ex_index(void);
+extern void free_pkey_ex_index(void);
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Free the allocated EVP_PKEY ex_data index. */
+extern void free_evp_pkey_ex_index(void);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Convert an OpenSSL digest (EVP_MD) to the corresponding PKCS#11 hash mechanism */
 extern CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md);
