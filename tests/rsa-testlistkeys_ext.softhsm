@@ -41,45 +41,73 @@ list_objects "libp11-0"
 trap cleanup EXIT
 
 # Run the test
-${WRAPPER} ../examples/listkeys_ext -m ${MODULE} -p ${PIN} | grep -q 'nkeys:5'
+output=$(${WRAPPER} ../examples/listkeys_ext -m ${MODULE} -p ${PIN} 2>&1)
 rc=$?
+echo "$output"
 if [[ $rc -eq 77 ]]; then
 	echo "List keys test skipped."
 	rm -rf "$outdir"
 	exit 77
 elif [[ $rc -ne 0 ]]; then
-	echo "Failed when no search parameters were given. 5 Keys should have been found."
+	echo "Failed when no search parameters were given. 5 keys should have been found."
+	exit 1
+elif ! grep -q 'nkeys:5' <<<"$output"; then
+	echo "Failed when no search parameters were given. Output did not contain nkeys:5."
 	exit 1
 fi
 
-../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020314" | grep -q 'nkeys:1'
-if [[ $? -ne 0 ]]; then
+output=$(../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020314" 2>&1)
+rc=$?
+echo "$output"
+if [[ $rc -ne 0 ]]; then
+	echo "Failed when searching with id. Only 1 key should have been found."
+	exit 1
+elif ! grep -q 'nkeys:1' <<<"$output"; then
 	echo "Failed when searching with id. Only 1 key should have been found."
 	exit 1
 fi
 
-../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "1020314" | grep -q 'nkeys:1'
-if [[ $? -ne 0 ]]; then
+output=$(../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "1020314" 2>&1)
+rc=$?
+echo "$output"
+if [[ $rc -ne 0 ]]; then
+	echo "Failed when searching with id. Only 1 key should have been found."
+	exit 1
+elif ! grep -q 'nkeys:1' <<<"$output"; then
 	echo "Failed when searching with id. Only 1 key should have been found."
 	exit 1
 fi
 
-../examples/listkeys_ext -m ${MODULE} -p ${PIN} -l server-key-3 | grep -q 'nkeys:1'
-if [[ $? -ne 0 ]]; then
+output=$(../examples/listkeys_ext -m ${MODULE} -p ${PIN} -l server-key-3 2>&1)
+rc=$?
+echo "$output"
+if [[ $rc -ne 0 ]]; then
+	echo "Failed when searching with label. Only 1 key should have been found."
+	exit 1
+elif ! grep -q 'nkeys:1' <<<"$output"; then
 	echo "Failed when searching with label. Only 1 key should have been found."
 	exit 1
 fi
 
-../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-3 | grep -q 'nkeys:1'
-if [[ $? -ne 0 ]]; then
+output=$(../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-3 2>&1)
+rc=$?
+echo "$output"
+if [[ $rc -ne 0 ]]; then
+	echo "Failed when searching with id and label. Only 1 key should have been found."
+	exit 1
+elif ! grep -q 'nkeys:1' <<<"$output"; then
 	echo "Failed when searching with id and label. Only 1 key should have been found."
 	exit 1
 fi
 
-../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-1
-if [[ $? -eq 0 ]]; then
+output=$(../examples/listkeys_ext -m ${MODULE} -p ${PIN} -i "01020334" -l server-key-1 2>&1)
+rc=$?
+echo "$output"
+if [[ $rc -eq 0 ]]; then
 	echo "Did not fail when no keys should have been found."
 	exit 1
+else
+	echo "Success: no matching key found (expected behavior)."
 fi
 
 rm -rf "$outdir"
