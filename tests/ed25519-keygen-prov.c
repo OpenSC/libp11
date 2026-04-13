@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		.id_len = 2,
 		.key_params = &params,
 	};
-	const char *private_uri = "pkcs11:token=token1;object=libp11-keylabel;type=private";
+	const char *private_uri = "pkcs11:token=token1;object=libp11-keylabel;type=private;pin-value=1234";
 	const char *public_uri = "pkcs11:token=token1;object=libp11-keylabel;type=public";
 
 	if (argc < 4) {
@@ -104,6 +104,13 @@ int main(int argc, char *argv[])
 	error_queue("PKCS11_keygen");
 	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 8);
 	printf("Ed25519 keys generated\n");
+
+	/* Free the list of slots allocated by PKCS11_enumerate_slots() */
+	PKCS11_release_all_slots(ctx, slots, nslots);
+	slots = NULL;
+	PKCS11_CTX_unload(ctx);
+	PKCS11_CTX_free(ctx);
+	ctx = NULL;
 
 	/* Load pkcs11prov and default providers */
 	if (!providers_load()) {
