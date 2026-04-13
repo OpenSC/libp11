@@ -172,8 +172,11 @@ void provider_free(OSSL_PROVIDER *prov)
 
 void providers_cleanup(void)
 {
+	/* clean up providers */
 	sk_OSSL_PROVIDER_pop_free(providers, provider_free);
 	providers = NULL;
+	/* free all global resources allocated by OpenSSL */
+	OPENSSL_cleanup();
 }
 
 int provider_load(const char *pname)
