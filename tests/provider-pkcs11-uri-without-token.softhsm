@@ -69,7 +69,7 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
-# Verify the signature using the public without specifying the token
+# Verify the signature using the public key without specifying the token
 ${OPENSSL} pkeyutl -provider pkcs11prov -provider default -pubin \
 	-propquery "provider=pkcs11prov" \
 	-inkey ${PUBLIC_KEY} -verify -sigfile "${outdir}/signature.bin" \
@@ -98,12 +98,22 @@ ${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
 
 # Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
 ${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
-	-propquery "provider=pkcs11prov" \
+	-propquery "?provider=pkcs11prov" \
 	-inkey ${PRIVATE_KEY} -sign -rawin -pkeyopt rsa_padding_mode:pss \
 	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
 
 if [[ $? -ne 0 ]]; then
 	echo "Failed to sign a digest using RSA-PSS"
+	exit 1
+fi
+
+# Verify the signature with an RSA public key using RSA-PSS (raw input)
+${OPENSSL} pkeyutl -provider pkcs11prov -provider default -pubin \
+	-propquery "provider=pkcs11prov" \
+	-inkey ${PUBLIC_KEY} -verify -rawin -pkeyopt rsa_padding_mode:pss \
+	-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"
 	exit 1
 fi
 
