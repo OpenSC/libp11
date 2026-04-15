@@ -70,6 +70,33 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
+if ! ${OPENSSL} pkeyutl -help 2>&1 | grep -q -- "-rawin"; then
+	echo "Skipping RSA-PSS raw test: -rawin not supported"
+	rm -rf "$outdir"
+	exit 0 # Success
+fi
+
+# Compute the SHA-256 binary digest of the input file
+${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
+
+# Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} -sign -rawin -pkeyopt rsa_padding_mode:pss \
+	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to sign a digest using RSA-PSS"
+	exit 1
+fi
+
+# Verify the signature with an RSA public key using RSA-PSS (raw input)
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
+	-inkey ${PUBLIC_KEY} -verify -rawin -pkeyopt rsa_padding_mode:pss \
+	-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_ANY}"
+	exit 1
+fi
+
 rm -rf "$outdir"
 
 exit 0
