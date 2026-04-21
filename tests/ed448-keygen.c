@@ -23,7 +23,7 @@
 #include "eddsa_common.h"
 
 #if !defined(OPENSSL_NO_ENGINE) && \
-    !defined(OPENSSL_NO_EC) && \
+    !defined(OPENSSL_NO_ECX) && \
     (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
     (OPENSSL_VERSION_NUMBER < 0x40000000L)
 
@@ -162,13 +162,13 @@ cleanup:
 	return ret;
 }
 
-#else /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_EC && OpenSSL 3.x */
+#else /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_ECX && OpenSSL 3.x */
 
 int main() {
-	fprintf(stderr, "Skipped: requires OpenSSL 3.x built with ENGINE and EC support\n");
+	fprintf(stderr, "Skipped: requires OpenSSL 3.x built with ENGINE and ECX support\n");
 	return 77;
 }
 
-#endif /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_EC && OpenSSL 3.x */
+#endif /* !OPENSSL_NO_ENGINE && !OPENSSL_NO_ECX && OpenSSL 3.x */
 
 /* vim: set noexpandtab: */
