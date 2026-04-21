@@ -40,16 +40,16 @@ static int (*orig_pkey_ec_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
+# endif /* OPENSSL_NO_EC */
 
-#  if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 static int (*orig_pkey_ed25519_digestsign)(EVP_MD_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 static int (*orig_pkey_ed448_digestsign)(EVP_MD_CTX *ctx,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
-#  endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-# endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -662,8 +662,9 @@ error:
 
 	return 1;
 }
+#endif /* OPENSSL_NO_EC */
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* PKCS#11 sign implementation for Ed25519 / Ed448 */
 static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
 	const unsigned char *tbs, unsigned int tbslen, PKCS11_OBJECT_private *key)
@@ -834,8 +835,9 @@ static int pkcs11_eddsa_pmeth_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2
 		return -2; /* command not supported */
 	}
 }
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
+#ifndef OPENSSL_NO_EC
 static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
 		const unsigned char *tbs, size_t tbslen)
@@ -869,8 +871,9 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ec(void)
 
 	return new_meth;
 }
+#endif /* OPENSSL_NO_EC */
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 static EVP_PKEY_METHOD *pkcs11_pkey_method_ed25519(void)
 {
 	EVP_PKEY_METHOD *new_meth;
@@ -922,9 +925,7 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ed448(void)
 
 	return new_meth;
 }
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid)
@@ -933,21 +934,21 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		EVP_PKEY_RSA,
 #ifndef OPENSSL_NO_EC
 		EVP_PKEY_EC,
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#endif /* OPENSSL_NO_EC */
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 		EVP_PKEY_ED25519,
 		EVP_PKEY_ED448,
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 		0
 	};
 	static EVP_PKEY_METHOD *pkey_method_rsa = NULL;
 #ifndef OPENSSL_NO_EC
 	static EVP_PKEY_METHOD *pkey_method_ec = NULL;
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#endif /* OPENSSL_NO_EC */
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 	static EVP_PKEY_METHOD *pkey_method_ed448 = NULL;
 	static EVP_PKEY_METHOD *pkey_method_ed25519 = NULL;
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 	(void)e; /* squash the unused parameter warning */
 	/* all PKCS#11 engines currently share the same pkey_meths */
@@ -974,7 +975,8 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 			return 0;
 		*pmeth = pkey_method_ec;
 		return 1; /* success */
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#endif /* OPENSSL_NO_EC */
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED448:
 		if (!pkey_method_ed448)
 			pkey_method_ed448 = pkcs11_pkey_method_ed448();
@@ -989,8 +991,7 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 			return 0;
 		*pmeth = pkey_method_ed25519;
 		return 1; /* success */
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	}
 	*pmeth = NULL;
 	return 0;

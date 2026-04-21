@@ -31,7 +31,7 @@
 #include "libp11-int.h"
 #include <string.h>
 
-#if !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 
@@ -659,11 +659,16 @@ PKCS11_OBJECT_ops pkcs11_ed448_ops = {
 	pkcs11_get_evp_key_ed448,
 };
 
-#else /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#else /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
-/* if not built with EC or OpenSSL does not support EdDSA
- * add these routines so engine_pkcs11 can be built now and not
- * require further changes */
+/*
+ * EdDSA (Ed25519/Ed448) support is not available:
+ * - either OpenSSL was built without ECX (no-ecx), or
+ * - OpenSSL version is older than 3.0.
+ *
+ * Provide stubs so engine_pkcs11 can still be built without
+ * requiring conditional changes elsewhere.
+ */
 #warning "EdDSA support not built with libp11"
 
-#endif /* !defined(OPENSSL_NO_EC) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */

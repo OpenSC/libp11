@@ -51,8 +51,7 @@ static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
 	const unsigned char *in, size_t inlen);
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-# ifndef OPENSSL_NO_EC
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* DER OIDs */
 static const unsigned char OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
 static const unsigned char OID_ED448[]   = { 0x06, 0x03, 0x2B, 0x65, 0x71 };
@@ -66,8 +65,7 @@ static const unsigned char STR_ED448[] = {
     0x13, 0x0A, /* tag + length */
     'e','d','w','a','r','d','s','4','4','8'
 };
-# endif /* OPENSSL_NO_EC */
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
 struct evp_pkey_method_st {
@@ -189,7 +187,8 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 		case CKK_EC:
 			ops = &pkcs11_ec_ops;
 			break;
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#endif /* OPENSSL_NO_EC */
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 		case CKK_EC_EDWARDS:
 			/* Read the CKA_EC_PARAMS to distinguish Ed25519 vs Ed448 */
 			if (pkcs11_getattr_alloc(ctx, session, object,
@@ -214,8 +213,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 			}
 			OPENSSL_free(data);
 			break;
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 		default:
 			/* Ignore any keys we don't understand */
 			pkcs11_log(ctx, LOG_DEBUG,
@@ -519,8 +517,9 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
 }
+#endif /* OPENSSL_NO_EC */
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /**
  * Generate EdDSA (Ed25519 / Ed448) key pair directly on token
  */
@@ -576,8 +575,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
 }
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
  * Store a private key on the token

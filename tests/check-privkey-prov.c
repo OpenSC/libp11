@@ -60,6 +60,11 @@ int main(int argc, char *argv[])
 	/* Load private key */
 	private_key = load_pkey(argv[2], "provider=pkcs11prov", NULL);
 	if (!private_key) {
+#ifdef OPENSSL_NO_ECX
+		fprintf(stderr, "Skipped: requires OpenSSL >= 3.0 built with ECX support\n");
+		ret = 77;
+		goto cleanup;
+#endif /* OPENSSL_NO_ECX */
 		fprintf(stderr, "Cannot load private key: %s\n", argv[2]);
 		display_openssl_errors();
 		goto cleanup;

@@ -36,7 +36,7 @@ CERTIFICATE_URL="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=
 # Do the token initialization
 init_token "ed25519" "1" "libp11" ${ID} "server-key" "privkey" "" "cert"
 if [[ $? -eq 77 ]]; then
-	echo "Ed448 key test skipped."
+	echo "Ed25519 key test skipped."
 	rm -rf "$outdir"
 	exit 77
 fi

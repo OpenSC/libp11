@@ -359,11 +359,13 @@ extern int pkcs11_rsa_keygen(PKCS11_SLOT_private *tpriv,
 extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
 	const char *curve , const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_NO_EC */
 
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 extern int pkcs11_eddsa_keygen(PKCS11_SLOT_private *tpriv,
 	int nid, const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
-#endif /* OPENSSL_NO_EC */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);
@@ -471,10 +473,10 @@ extern void pkcs11_ecdsa_method_free(void);
 /* Free the global ECDH_METHOD */
 extern void pkcs11_ecdh_method_free(void);
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
 /* Free the global ED25519/ED448 EVP_PKEY_METHOD */
 extern void pkcs11_ed_key_method_free(void);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
 /* Free the global RSA EVP_PKEY_METHOD */
