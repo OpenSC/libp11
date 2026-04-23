@@ -10,6 +10,7 @@ on:
 
 env:
   version: @PACKAGE_VERSION@
+  OPENSSL_VERSION: 4.0.0
 
 jobs:
   build:
@@ -17,6 +18,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: ubuntu-latest
+            triplet: x64-linux
+            compiler: gcc
+            os: ubuntu-latest
+            generator: Unix Makefiles
           - id: ubuntu-24.04
             triplet: x64-linux
             compiler: gcc
@@ -26,6 +32,12 @@ jobs:
             triplet: x64-linux
             compiler: gcc
             os: ubuntu-22.04
+            generator: Unix Makefiles
+          - id: macOS-4
+            openssl: 'openssl@4'
+            triplet: x64-osx
+            compiler: clang
+            os: macOS-latest
             generator: Unix Makefiles
           - id: macOS-3
             openssl: 'openssl@3'
@@ -51,10 +63,47 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libssl-dev opensc softhsm2
 
+    - name: Restore cached OpenSSL 4 (ubuntu-latest only)
+      if: matrix.id == 'ubuntu-latest'
+      id: cache-openssl4
+      uses: actions/cache@v5
+      with:
+        path: ~/openssl-4
+        key: ${{ runner.os }}-${{ matrix.id }}-openssl-${{ env.OPENSSL_VERSION }}
+
+    - name: Build OpenSSL 4 (ubuntu-latest only)
+      if: matrix.id == 'ubuntu-latest' && steps.cache-openssl4.outputs.cache-hit != 'true'
+      run: |
+        curl -LO https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+        tar xf openssl-4.0.0.tar.gz
+        cd openssl-4.0.0
+
+        ./Configure linux-x86_64 --prefix="$HOME/openssl-4" --openssldir="$HOME/openssl-4"
+        make -j"$(nproc)"
+        make install
+
+    - name: Set environment variables (ubuntu-latest only)
+      if: matrix.id == 'ubuntu-latest'
+      run: |
+        echo "$HOME/openssl-4/bin" >> $GITHUB_PATH
+        echo "PKG_CONFIG_PATH=$HOME/openssl-4/lib64/pkgconfig:$HOME/openssl-4/lib/pkgconfig" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=$HOME/openssl-4/lib64:$HOME/openssl-4/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
     - name: Install brew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
         brew install libtool automake opensc softhsm
+
+    - name: Install OpenSSL 4 (macOS-4 only)
+      if: runner.os == 'macOS' && matrix.id == 'macOS-4'
+      run: |
+        brew update
+        brew install openssl@4
+
+    - name: Install OpenSSL 3 (macOS-3 only)
+      if: runner.os == 'macOS' && matrix.id == 'macOS-3'
+      run: |
+        brew install openssl@3
 
     - name: Set environment variables (macOS)
       if: runner.os == 'macOS'
