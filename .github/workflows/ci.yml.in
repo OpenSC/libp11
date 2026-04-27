@@ -37,7 +37,7 @@ jobs:
             openssl: 'openssl@4'
             triplet: x64-osx
             compiler: clang
-            os: macOS-latest
+            os: macos-26
             generator: Unix Makefiles
           - id: macOS-3
             openssl: 'openssl@3'
