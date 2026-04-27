@@ -11,14 +11,18 @@ EXTRA_DIST = Makefile.mak libp11.rc.in pkcs11.rc.in
 noinst_HEADERS= libp11-int.h pkcs11.h p11_pthread.h provider_helpers.h util.h
 include_HEADERS= libp11.h p11_err.h
 
+lib_LTLIBRARIES = libp11.la
+enginesexec_LTLIBRARIES =
+
+if LIBP11_BUILD_ENGINE
+enginesexec_LTLIBRARIES += pkcs11.la
+
 # Libraries to build (static-engine optional)
 if ENABLE_STATIC_ENGINE
-lib_LTLIBRARIES = libp11.la libpkcs11.la
-else
-lib_LTLIBRARIES = libp11.la
+lib_LTLIBRARIES += libpkcs11.la
+endif
 endif
 
-enginesexec_LTLIBRARIES = pkcs11.la
 pkgconfig_DATA = libp11.pc
 
 if LIBP11_OSSL_PROVIDER
@@ -36,7 +40,11 @@ SHARED_EXT=@SHARED_EXT@
 # specific source files without affecting the rest of the project.
 # ----------------------------------------------------------
 # Define all non-installed helper libraries in one assignment
-noinst_LTLIBRARIES = libeng_err.la libp11_err.la
+noinst_LTLIBRARIES = libp11_err.la
+
+if LIBP11_BUILD_ENGINE
+noinst_LTLIBRARIES += libeng_err.la
+endif
 
 # Helper library for p11_err.c
 libp11_err_la_SOURCES = p11_err.c
@@ -145,10 +153,15 @@ endif
 
 # OpenSSL older than 1.1.0 expected libpkcs11.so instead of pkcs11.so
 check-local: $(LTLIBRARIES)
+if LIBP11_BUILD_ENGINE
 	cd .libs && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
+endif
 
 install-exec-hook:
+if LIBP11_BUILD_ENGINE
 	cd '$(DESTDIR)$(enginesexecdir)' && $(LN_S) -f pkcs11$(SHARED_EXT) libpkcs11$(SHARED_EXT)
+endif
+
 if LIBP11_OSSL_PROVIDER
 	cd '$(DESTDIR)$(providersexecdir)' && $(LN_S) -f pkcs11prov$(SHARED_EXT) libpkcs11$(SHARED_EXT)
 endif
