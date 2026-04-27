@@ -35,10 +35,14 @@ opensslversion="$( \
 	( $PKG_CONFIG --modversion --silence-errors libcrypto || \
     $PKG_CONFIG --modversion openssl ) | \
     sed 's/^\([0-9.]*\).*/\1/' )"
+
+LIBP11_BUILD_ENGINE="yes"
+
 case "$opensslversion" in
 	4.*) # Provider for OpenSSL 4.x
 	    LIBP11_LT_OLDEST="4"
-	    LIBP11_OSSL_PROVIDER="yes";;
+	    LIBP11_OSSL_PROVIDER="yes"
+	    LIBP11_BUILD_ENGINE="no";;
 	3.*) # Engines directory prefix for OpenSSL 3.x
 	    LIBP11_LT_OLDEST="3"
 	    LIBP11_OSSL_PROVIDER="yes"
@@ -55,12 +59,17 @@ case "$opensslversion" in
 esac
 
 case "$OSSL_PKG_VERSION" in
+	4.*)
+		AC_MSG_NOTICE([OpenSSL 4.x detected])
+		LIBP11_BUILD_ENGINE="no"
+		LIBP11_OSSL_PROVIDER="yes";;
 	3.*)
-		AC_MSG_NOTICE([3.*])
+		AC_MSG_NOTICE([OpenSSL 3.x detected])
 		LIBP11_OSSL_PROVIDER="yes";;
 esac
 
 AM_CONDITIONAL([LIBP11_OSSL_PROVIDER], [test x$LIBP11_OSSL_PROVIDER = xyes])
+AM_CONDITIONAL([LIBP11_BUILD_ENGINE], [test x$LIBP11_BUILD_ENGINE = xyes])
 
 # LT Version numbers, remember to change them just *before* a release.
 #   (Code changed:                      REVISION++)
