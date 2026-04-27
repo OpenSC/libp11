@@ -38,11 +38,12 @@ SOFTHSM_SEARCH_PATHS=(
 	"/usr/lib"
 )
 
+# # Prefer bin dirs over Cellar; Cellar may contain multiple/old versions and slow down search
 PKCS11_TOOL_SEARCH_PATHS=(
-	"/opt/homebrew/Cellar"
 	"/opt/homebrew/bin"
 	"/usr/local/bin"
 	"/usr/bin"
+	"/opt/homebrew/Cellar"
 )
 
 # Locate the SoftHSM library
@@ -58,8 +59,12 @@ else
 fi
 
 # Locate the pkcs11-tool
-PKCS11_TOOL=$(find "${PKCS11_TOOL_SEARCH_PATHS[@]}" -type f -name "pkcs11-tool" \
-	-print -quit 2>/dev/null)
+PKCS11_TOOL=$(command -v pkcs11-tool 2>/dev/null || true)
+
+if [[ -z "${PKCS11_TOOL}" ]]; then
+	PKCS11_TOOL=$(find -L "${PKCS11_TOOL_SEARCH_PATHS[@]}" -type f \
+	-name "pkcs11-tool" 2>/dev/null | head -n 1)
+fi
 
 # Output the result
 if [[ -n "${PKCS11_TOOL}" ]]; then
