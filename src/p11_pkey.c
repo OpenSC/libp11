@@ -997,6 +997,18 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 	return 0;
 }
 
+#else /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+int PKCS11_pkey_meths(void *e, void **pmeth, const int **nids, int nid)
+{
+	(void)e;
+	(void)pmeth;
+	(void)nids;
+	(void)nid;
+	fprintf(stderr, "PKCS11_pkey_meths is not available: ENGINE support was disabled for OpenSSL 4.x\n");
+	return 0;
+}
+
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 /* vim: set noexpandtab: */
