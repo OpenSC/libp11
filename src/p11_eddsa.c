@@ -50,56 +50,20 @@ int (*orig_ed448_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen
 
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 
-/* PKCS#11 sign implementation for Ed25519 / Ed448 */
-static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
-	const unsigned char *tbs, unsigned int tbslen, PKCS11_OBJECT_private *key)
-{
-	int rv;
-	PKCS11_SLOT_private *slot = key->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	CK_ULONG ck_siglen = (CK_ULONG)(*siglen);
-	CK_ULONG ck_tbslen = (CK_ULONG)tbslen;
-
-	/* PureEdDSA, no prehash */
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_EDDSA;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (!rv)
-		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, ck_tbslen, sigret, &ck_siglen));
-	pkcs11_put_session(slot, session);
-
-	if (rv) {
-		CKRerr(CKR_F_PKCS11_EDDSA_SIGN, rv);
-		return -1;
-	}
-	*siglen = (unsigned int)ck_siglen;
-	return (int)ck_siglen;
-}
-
 /*
  * EVP_PKEY method sign wrapper for EdDSA.
  * This function is invoked internally by EVP_PKEY_sign().
- * If the key belongs to PKCS#11, perform signing via pkcs11_eddsa_sign().
+ * If the key belongs to PKCS#11, perform signing via pkcs11_evp_pkey_eddsa_sign().
  */
 static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *ctx, unsigned char *sig,
 	size_t *siglen, const unsigned char *tbs, size_t tbslen)
 {
 	EVP_PKEY *pkey;
 	PKCS11_OBJECT_private *key;
-	int rv;
-	unsigned int tmp_len;
+	PKCS11_SLOT_private *slot;
+	CK_SESSION_HANDLE session;
 
-	if (*siglen > UINT_MAX)
+	if (siglen == NULL || *siglen > UINT_MAX)
 		return 0;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(ctx);
@@ -110,12 +74,16 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *ctx, unsigned char *sig,
 	if (!key)
 		return 0;
 
-	tmp_len = (unsigned int)*siglen;
-	rv = pkcs11_eddsa_sign(sig, &tmp_len, tbs, (unsigned int)tbslen, key);
-	if (rv < 0)
+	slot = key->slot;
+	if (!slot)
 		return 0;
 
-	*siglen = tmp_len;
+	if (pkcs11_get_session(slot, 0, &session))
+		return 0;
+
+	if (!pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen))
+		return 0;
+
 	return 1;
 }
 
@@ -126,7 +94,7 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *ctx, unsigned char *sig,
  *   1. Query the required signature length (sig == NULL).
  *   2. Perform the actual signing when a buffer is provided (sig != NULL).
  *
- * If the key is managed by PKCS#11, the signing is performed via pkcs11_eddsa_sign().
+ * If the key is managed by PKCS#11, the signing is performed via pkcs11_evp_pkey_eddsa_sign().
  * Otherwise, the call is delegated to the original OpenSSL Ed25519/Ed448 implementation.
  */
 static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
@@ -134,8 +102,11 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 {
 	EVP_PKEY *pkey;
 	PKCS11_OBJECT_private *key;
-	unsigned int tmp_len;
-	int rv;
+	PKCS11_SLOT_private *slot;
+	CK_SESSION_HANDLE session;
+
+	if (siglen == NULL)
+		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(EVP_MD_CTX_pkey_ctx(ctx));
 	if (!pkey)
@@ -143,6 +114,13 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 
 	key = pkcs11_get_ex_data_pkey(pkey);
 	if (!key)
+		return -1;
+
+	slot = key->slot;
+	if (!slot)
+		return -1;
+
+	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
 	/* Step 1: caller asks for signature length only */
@@ -159,12 +137,9 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 	}
 
 	/* Step 2: actual signing */
-	tmp_len = (unsigned int)*siglen;
-	rv = pkcs11_eddsa_sign(sig, &tmp_len, tbs, (unsigned int)tbslen, key);
-	if (rv < 0)
+	if (!pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen))
 		return -1;
 
-	*siglen = tmp_len;
 	return 1;
 }
 

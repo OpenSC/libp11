@@ -233,7 +233,7 @@ static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 }
 
 /* Setup PKCS#11 mechanisms for signing */
-static int pkcs11_mechanism(CK_MECHANISM *mechanism,
+static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
 	CK_RSA_PKCS_PSS_PARAMS *pss_params,
 	CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	PKCS11_CTX_private *pctx, EVP_PKEY *pkey,
@@ -251,15 +251,12 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism,
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
 		mechanism->mechanism = CKM_RSA_PKCS;
-		pkcs11_log(pctx, LOG_DEBUG, "padding=RSA_PKCS1_PADDING\n");
 		break;
 	case RSA_NO_PADDING:
 		mechanism->mechanism = CKM_RSA_X_509;
-		pkcs11_log(pctx, LOG_DEBUG, "padding=RSA_NO_PADDING\n");
 		break;
 	case RSA_X931_PADDING:
 		mechanism->mechanism = CKM_RSA_X9_31;
-		pkcs11_log(pctx, LOG_DEBUG, "padding=RSA_X931_PADDING\n");
 		break;
 	case RSA_PKCS1_PSS_PADDING:
 		if (pkcs11_params_pss(pss_params, pkey, salt_len, mdname,
@@ -268,7 +265,6 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism,
 		mechanism->mechanism = CKM_RSA_PKCS_PSS;
 		mechanism->pParameter = pss_params;
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_PSS_PARAMS);
-		pkcs11_log(pctx, LOG_DEBUG, "padding=RSA_PKCS1_PSS_PADDING\n");
 		break;
 	case RSA_PKCS1_OAEP_PADDING:
 		if (pkcs11_oaep_param(oaep_params, mdname, mgf1_mdname,
@@ -277,7 +273,6 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism,
 		mechanism->mechanism = CKM_RSA_PKCS_OAEP;
 		mechanism->pParameter = oaep_params;
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_OAEP_PARAMS);
-		pkcs11_log(pctx, LOG_DEBUG, "padding=RSA_PKCS1_OAEP_PADDING\n");
 		break;
 	default:
 		pkcs11_log(pctx, LOG_DEBUG, "%s:%d unsupported padding: %d\n",
@@ -285,6 +280,30 @@ static int pkcs11_mechanism(CK_MECHANISM *mechanism,
 		return -1;
 	}
 	return 0;
+}
+
+const char *pkcs11_mechanism_name(CK_MECHANISM *mechanism)
+{
+	switch (mechanism->mechanism) {
+	case CKM_RSA_PKCS:
+		return "CKM_RSA_PKCS";
+	case CKM_RSA_PKCS_PSS:
+		return "CKM_RSA_PKCS_PSS";
+	case CKM_RSA_PKCS_OAEP:
+		return "CKM_RSA_PKCS_OAEP";
+	case CKM_RSA_X_509:
+		return "CKM_RSA_X_509";
+	case CKM_RSA_X9_31:
+		return "CKM_RSA_X9_31";
+	case CKM_ECDSA:
+		return "CKM_ECDSA";
+#ifdef CKM_EDDSA
+	case CKM_EDDSA:
+		return "CKM_EDDSA";
+#endif
+	default:
+		return "UNKNOWN_MECHANISM";
+	}
 }
 
 /*
@@ -321,8 +340,9 @@ static int pkcs11_sign_with_mechanism(PKCS11_OBJECT_private *key,
 
 #ifdef DEBUG
 	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_sign_with_mechanism() "
-		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
-		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
+		"%s sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism), sig, *siglen, tbs, tbslen);
 #endif
 
 	ck_siglen = (CK_ULONG)*siglen;
@@ -385,7 +405,7 @@ end:
  *
  * For RSA_NO_PADDING, the input is passed to the token unchanged.
  *
- * Returns the signature length on success or -1 on failure.
+ * Returns 1 on success or -1 on failure.
  */
 int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	const char *mdname, const int pad_mode, const int salt_len,
@@ -397,7 +417,9 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
-	int rv;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
 
 	slot = key->slot;
 	if (slot == NULL)
@@ -407,87 +429,126 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (ctx == NULL)
 		return -1;
 
-	if (pkcs11_mechanism(&mechanism, &pss_params, NULL,
+	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL,
 		ctx, pkey, pad_mode, salt_len, mdname, mgf1_mdname,
 		oaep_label, oaep_labellen) < 0)
 		return -1;
 
-	rv = pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
-		tbs, tbslen);
-
-	if (rv != CKR_OK)
-		return -1;
-
-	return (int)*siglen;
-}
-
-#ifndef OPENSSL_NO_EC
-/* Sign digest input with EC private key via PKCS#11 and encode signature as DER */
-int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
-	unsigned char *sig, size_t *siglen,
-	const unsigned char *tbs, size_t tbslen)
-{
-	ECDSA_SIG *ossl_sig = NULL;
-	CK_MECHANISM mechanism;
-	size_t raw_siglen;
-	int rv = -1;
-
-	ossl_sig = ECDSA_SIG_new();
-	if (ossl_sig == NULL)
-		return -1;
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_ECDSA;
-
-	raw_siglen = *siglen;
-	rv = pkcs11_sign_with_mechanism(key, &mechanism, sig, &raw_siglen, tbs, tbslen);
-	if (rv == CKR_OK) {
-		BIGNUM *r = BN_bin2bn(sig, raw_siglen / 2, NULL);
-		BIGNUM *s = BN_bin2bn(sig + raw_siglen / 2, raw_siglen / 2, NULL);
-
-		if (r == NULL || s == NULL)
-			goto error;
-
-		if (ECDSA_SIG_set0(ossl_sig, r, s) != 1) {
-			BN_free(r);
-			BN_free(s);
-			goto error;
-		}
-		*siglen = i2d_ECDSA_SIG(ossl_sig, &sig);
-		rv = (*siglen > 0) ? CKR_OK : CKR_GENERAL_ERROR;
-	}
-
-error:
-	ECDSA_SIG_free(ossl_sig);
-
-	if (rv != CKR_OK)
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
 		return -1;
 
 	return 1;
 }
+
+#ifndef OPENSSL_NO_EC
+/*
+ * Sign data via PKCS#11 (CKM_ECDSA) and convert raw r||s output
+ * into an OpenSSL ECDSA_SIG structure. Returns NULL on failure.
+ */
+ECDSA_SIG *pkcs11_ec_sign_raw(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	CK_MECHANISM mechanism;
+	ECDSA_SIG *ecdsa = NULL;
+	BIGNUM *r = NULL, *s = NULL;
+	size_t tmp_len;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return NULL;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ECDSA;
+
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
+		return NULL;
+
+	tmp_len = *siglen;
+	if (tmp_len == 0 || tmp_len % 2 != 0)
+		return NULL;
+
+	r = BN_bin2bn(sig, tmp_len / 2, NULL);
+	s = BN_bin2bn(sig + tmp_len / 2, tmp_len / 2, NULL);
+	if (r == NULL || s == NULL)
+		goto error;
+
+	ecdsa = ECDSA_SIG_new();
+	if (ecdsa == NULL)
+		goto error;
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL)
+	if (ECDSA_SIG_set0(ecdsa, r, s) != 1)
+		goto error;
+#else
+	BN_free(ecdsa->r);
+	ecdsa->r = r;
+	BN_free(ecdsa->s);
+	ecdsa->s = s;
+#endif
+	/* Ownership of r and s has been transferred to ecdsa */
+	r = NULL;
+	s = NULL;
+	return ecdsa;
+error:
+	BN_free(r);
+	BN_free(s);
+	ECDSA_SIG_free(ecdsa);
+	return NULL;
+}
+
+/*
+ * Sign digest input with EC private key via PKCS#11 and encode signature as DER.
+ * Returns 1 on success or -1 on failure.
+ */
+int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	ECDSA_SIG *ecdsa;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
+
+	ecdsa = pkcs11_ec_sign_raw(key, sig, siglen, tbs, tbslen);
+	if (!ecdsa)
+		return -1;
+
+	*siglen = i2d_ECDSA_SIG(ecdsa, &sig);
+	ECDSA_SIG_free(ecdsa);
+	return (*siglen > 0) ? 1 : -1;
+}
 #endif /* OPENSSL_NO_EC */
 
-/* Sign message input with EdDSA private key via PKCS#11 mechanism */
+/*
+ * Sign message input with EdDSA private key via PKCS#11 mechanism.
+ * Returns 1 on success or -1 on failure.
+ */
 int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
 	CK_MECHANISM mechanism;
-	int rv;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
 
 	memset(&mechanism, 0, sizeof(mechanism));
 	mechanism.mechanism = CKM_EDDSA;
 
-	rv = pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen, tbs, tbslen);
-	if (rv != CKR_OK)
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
 		return -1;
 
-	return (int)*siglen;
+	return 1;
 }
 
 /*
  * Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters.
- * EME-OAEP as defined in PKCS #1 v2.0 with SHA-1, MGF1 and an empty encoding parameter (OAEP label)
+ * EME-OAEP as defined in PKCS #1 v2.0 with SHA-1, MGF1 and an encoding parameter
+ * (OAEP label).
  */
 int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	const char *mdname, const int pad_mode,
@@ -518,7 +579,7 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (oaep_labellen > 0)
 		pkcs11_log(ctx, LOG_WARNING, "OAEP label may not be supported by PKCS#11 token\n");
 
-	if (pkcs11_mechanism(&mechanism, NULL, &oaep_params,
+	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params,
 		ctx, pkey, pad_mode, 0, mdname, mgf1_mdname,
 		oaep_label, oaep_labellen) < 0)
 		return -1;
@@ -535,7 +596,10 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 		return -1;
 
 	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, key->object));
-	if (rv == CKR_OK && key->always_authenticate == CK_TRUE)
+	if (rv != CKR_OK)
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+	else if (rv == CKR_OK && key->always_authenticate == CK_TRUE)
 		rv = pkcs11_authenticate(key, session);
 
 	if (rv == CKR_OK)
@@ -564,149 +628,67 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	EC_KEY *eckey;
-	int rv = CKR_GENERAL_ERROR;
-	CK_ULONG size = (CK_ULONG)*siglen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
-	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
 	const EVP_MD *sig_md;
-	ECDSA_SIG *ossl_sig;
-	CK_MECHANISM mechanism;
 
-	ossl_sig = ECDSA_SIG_new();
-	if (!ossl_sig)
-		goto error;
 	if (!evp_pkey_ctx)
-		goto error;
+		return -1;
+
+	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
+		return -1;
+
+	if (tbslen < (size_t)EVP_MD_size(sig_md))
+		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
-		goto error;
+		return -1;
 
 	eckey = (EC_KEY *)EVP_PKEY_get0_EC_KEY(pkey);
 	if (!eckey)
-		goto error;
+		return -1;
 
 	if (!sig) {
 		*siglen = (size_t)ECDSA_size(eckey);
-		rv = CKR_OK;
-		goto error;
+		return 1; /* length query */
 	}
 
 	if (*siglen < (size_t)ECDSA_size(eckey))
-		goto error;
+		return -1; /* buffer too small */
 
 	key = pkcs11_get_ex_data_ec(eckey);
 	if (check_object_fork(key) < 0)
-		goto error;
+		return -1;
 
 	slot = key->slot;
-	ctx = slot->ctx;
-	if (!ctx)
-		goto error;
-#ifdef DEBUG
-	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_ec_sign() "
-		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
-		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-#endif
-	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
-		goto error;
-
-	if (tbslen < (size_t)EVP_MD_size(sig_md))
-		goto error;
-
-	rv = 0;
-	memset(&mechanism, 0, sizeof mechanism);
-	mechanism.mechanism = CKM_ECDSA;
+	if (!slot)
+		return -1;
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, key->object));
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_SignInit rv=%d\n",
-			__FILE__, __LINE__, rv);
-	} else if (key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (rv == CKR_OK) {
-		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, (CK_ULONG)tbslen, sig, &size));
-		if (rv != CKR_OK) {
-			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
-				__FILE__, __LINE__, rv);
-		}
-	}
-	pkcs11_put_session(slot, session);
 
-	if (rv == CKR_OK) {
-		BIGNUM *r = BN_bin2bn(sig, size/2, NULL);
-		BIGNUM *s = BN_bin2bn(sig + size/2, size/2, NULL);
-
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
-		ECDSA_SIG_set0(ossl_sig, r, s);
-#else
-		BN_free(ossl_sig->r);
-		ossl_sig->r = r;
-		BN_free(ossl_sig->s);
-		ossl_sig->s = s;
-#endif
-		*siglen = i2d_ECDSA_SIG(ossl_sig, &sig);
-	}
-
-error:
-	ECDSA_SIG_free(ossl_sig);
-
-	if (rv != CKR_OK)
-		return -1;
-
-	return 1;
+	return pkcs11_evp_pkey_ec_sign(key, sig, siglen, tbs, tbslen);
 }
 #endif /* OPENSSL_NO_EC */
 
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* PKCS#11 sign implementation for Ed25519 / Ed448 */
-static int pkcs11_eddsa_sign(unsigned char *sigret, unsigned int *siglen,
-	const unsigned char *tbs, unsigned int tbslen, PKCS11_OBJECT_private *key)
+static int pkcs11_eddsa_sign(unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen, PKCS11_OBJECT_private *key)
 {
-	int rv;
-	PKCS11_SLOT_private *slot = key->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
+	PKCS11_SLOT_private *slot;
 	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	CK_ULONG ck_siglen = (CK_ULONG)(*siglen);
-	CK_ULONG ck_tbslen = (CK_ULONG)tbslen;
 
-	if (!ctx)
+	slot = key->slot;
+	if (!slot)
 		return -1;
 
-	/* PureEdDSA, no prehash */
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_EDDSA;
-
-#ifdef DEBUG
-	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_eddsa_sign() "
-		"sigret=%p *siglen=%u tbs=%p tbslen=%u\n",
-		__FILE__, __LINE__, sigret, *siglen, tbs, tbslen);
-#endif
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (!rv)
-		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, ck_tbslen, sigret, &ck_siglen));
-	pkcs11_put_session(slot, session);
-
-	if (rv) {
-		CKRerr(CKR_F_PKCS11_EDDSA_SIGN, rv);
-		return -1;
-	}
-	*siglen = (unsigned int)ck_siglen;
-	return (int)ck_siglen;
+	return pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen);
 }
 
 /*
@@ -720,7 +702,6 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	PKCS11_OBJECT_private *key;
-	unsigned int tmp_len;
 	int rv;
 
 	if (!evp_pkey_ctx)
@@ -740,12 +721,10 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (check_object_fork(key) < 0)
 		return -1;
 
-	tmp_len = (unsigned int)*siglen;
-	rv = pkcs11_eddsa_sign(sig, &tmp_len, tbs, (unsigned int)tbslen, key);
+	rv = pkcs11_eddsa_sign(sig, siglen, tbs, tbslen, key);
 	if (rv < 0)
 		return -1;
 
-	*siglen = tmp_len;
 	return 1;
 }
 
@@ -764,7 +743,6 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 {
 	EVP_PKEY *pkey;
 	PKCS11_OBJECT_private *key;
-	unsigned int tmp_len;
 	int rv;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(EVP_MD_CTX_pkey_ctx(ctx));
@@ -789,12 +767,10 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 	}
 
 	/* Step 2: actual signing */
-	tmp_len = (unsigned int)*siglen;
-	rv = pkcs11_eddsa_sign(sig, &tmp_len, tbs, (unsigned int)tbslen, key);
+	rv = pkcs11_eddsa_sign(sig, siglen, tbs, tbslen, key);
 	if (rv < 0)
 		return 1;
 
-	*siglen = tmp_len;
 	return 1;
 }
 
