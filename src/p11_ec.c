@@ -415,44 +415,6 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 
 /********** ECDSA signing */
 
-/* Signature size is the issue, will assume the caller has a big buffer! */
-/* No padding or other stuff needed.  We can call PKCS11 from here */
-static int pkcs11_ecdsa_sign(const unsigned char *msg, unsigned int msg_len,
-		unsigned char *sigret, unsigned int *siglen, PKCS11_OBJECT_private *key)
-{
-	int rv;
-	PKCS11_SLOT_private *slot = key->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	CK_ULONG ck_sigsize;
-
-	ck_sigsize = *siglen;
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = CKM_ECDSA;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, key->object));
-	if (!rv && key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (!rv)
-		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE *)msg, msg_len, sigret, &ck_sigsize));
-	pkcs11_put_session(slot, session);
-
-	if (rv) {
-		CKRerr(CKR_F_PKCS11_ECDSA_SIGN, rv);
-		return -1;
-	}
-	*siglen = ck_sigsize;
-
-	return ck_sigsize;
-}
-
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 
 static void pkcs11_ec_finish(EC_KEY *ec)
@@ -483,14 +445,10 @@ static void pkcs11_ec_finish(EC_KEY *ec)
 static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 		const BIGNUM *kinv, const BIGNUM *rp, EC_KEY *ec)
 {
-	unsigned char sigret[512]; /* HACK for now */
-	ECDSA_SIG *sig;
+	unsigned char sigret[512]; /* existing temporary buffer size */
+	size_t siglen = sizeof sigret;
 	PKCS11_OBJECT_private *key;
-	unsigned int siglen;
-	BIGNUM *r, *s, *order;
-
-	(void)kinv; /* Precomputed values are not used for PKCS#11 */
-	(void)rp; /* Precomputed values are not used for PKCS#11 */
+	BIGNUM *order;
 
 	key = pkcs11_get_ex_data_ec(ec);
 	if (check_object_fork(key) < 0) {
@@ -517,25 +475,7 @@ static ECDSA_SIG *pkcs11_ecdsa_sign_sig(const unsigned char *dgst, int dlen,
 		}
 		BN_free(order);
 	}
-
-	siglen = sizeof sigret;
-	if (pkcs11_ecdsa_sign(dgst, dlen, sigret, &siglen, key) <= 0)
-		return NULL;
-
-	r = BN_bin2bn(sigret, siglen/2, NULL);
-	s = BN_bin2bn(sigret + siglen/2, siglen/2, NULL);
-	sig = ECDSA_SIG_new();
-	if (!sig)
-		return NULL;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
-	ECDSA_SIG_set0(sig, r, s);
-#else
-	BN_free(sig->r);
-	sig->r = r;
-	BN_free(sig->s);
-	sig->s = s;
-#endif
-	return sig;
+	return pkcs11_ec_sign_raw(key, sigret, &siglen, dgst, dlen);
 }
 
 /********** ECDH key derivation */

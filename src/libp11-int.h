@@ -389,6 +389,10 @@ extern int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	const unsigned char *tbs, size_t tbslen);
 
 #ifndef OPENSSL_NO_EC
+extern ECDSA_SIG *pkcs11_ec_sign_raw(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+
 /* Sign digest input with EC private key via PKCS#11 and encode signature as DER */
 extern int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
 	unsigned char *sig, size_t *siglen,

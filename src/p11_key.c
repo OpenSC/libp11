@@ -1192,76 +1192,6 @@ void free_pkey_ex_index(void)
 }
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
-static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss,
-		EVP_PKEY_CTX *ctx, PKCS11_CTX_private *pctx)
-{
-	const EVP_MD *sig_md, *mgf1_md;
-	EVP_PKEY *evp_pkey;
-	int salt_len;
-
-	/* retrieve PSS parameters */
-	if (EVP_PKEY_CTX_get_signature_md(ctx, &sig_md) <= 0)
-		return -1;
-	if (EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, &mgf1_md) <= 0)
-		return -1;
-	if (!EVP_PKEY_CTX_get_rsa_pss_saltlen(ctx, &salt_len))
-		return -1;
-	switch (salt_len) {
-	case -1:
-		salt_len = EVP_MD_size(sig_md);
-		break;
-	case -2:
-		if (!ctx)
-			return -1;
-		evp_pkey = EVP_PKEY_CTX_get0_pkey(ctx);
-		if (!evp_pkey)
-			return -1;
-		salt_len = EVP_PKEY_size(evp_pkey) - EVP_MD_size(sig_md) - 2;
-		if (((EVP_PKEY_bits(evp_pkey) - 1) & 0x7) == 0)
-			salt_len--;
-		if (salt_len < 0) /* integer underflow detected */
-			return -1;
-	}
-	pkcs11_log(pctx, LOG_DEBUG, "salt_len=%d sig_md=%s mdf1_md=%s\n",
-		salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md));
-
-	/* fill the CK_RSA_PKCS_PSS_PARAMS structure */
-	memset(pss, 0, sizeof(CK_RSA_PKCS_PSS_PARAMS));
-	pss->hashAlg = pkcs11_md2ckm(sig_md);
-	pss->mgf = pkcs11_md2ckg(mgf1_md);
-	if (!pss->hashAlg || !pss->mgf)
-		return -1;
-	pss->sLen = salt_len;
-	return 0;
-}
-
-static int pkcs11_params_oaep(CK_RSA_PKCS_OAEP_PARAMS *oaep,
-		EVP_PKEY_CTX *ctx, PKCS11_CTX_private *pctx)
-{
-	const EVP_MD *oaep_md, *mgf1_md;
-
-	/* retrieve OAEP parameters */
-	if (EVP_PKEY_CTX_get_rsa_oaep_md(ctx, &oaep_md) <= 0)
-		return -1;
-	if (EVP_PKEY_CTX_get_rsa_mgf1_md(ctx, &mgf1_md) <= 0)
-		return -1;
-
-	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s\n",
-		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md));
-
-	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
-	memset(oaep, 0, sizeof(CK_RSA_PKCS_OAEP_PARAMS));
-	oaep->hashAlg = pkcs11_md2ckm(oaep_md);
-	oaep->mgf = pkcs11_md2ckg(mgf1_md);
-	if (!oaep->hashAlg || !oaep->mgf)
-		return -1;
-	/* we do not support the OAEP "label" parameter yet... */
-	oaep->source = CKZ_DATA_SPECIFIED;
-	oaep->pSourceData = NULL; /* empty parameter (label) */
-	oaep->ulSourceDataLen = 0;
-	return 0;
-}
-
 /* Attempt to sign using the PKCS#11-backed RSA implementation */
 static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		unsigned char *sig, size_t *siglen,
@@ -1269,26 +1199,26 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	RSA *rsa;
-	int rv = 0, padding;
-	CK_ULONG size = (CK_ULONG)*siglen;
+	int padding;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
-	PKCS11_CTX_private *ctx;
-	const EVP_MD *sig_md;
+	const EVP_MD *md, *mgf1_md;
 	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	CK_RSA_PKCS_PSS_PARAMS pss_params;
+	const char *mdname, *mgf1_mdname;
+	int salt_len;
 
 	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
 	 * the size inquiry internally. */
 	if (!sig)
 		return -1;
+
 	if (!evp_pkey_ctx)
 		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
 		return -1;
+
 	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
@@ -1298,58 +1228,37 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 
 	slot = key->slot;
-	ctx = slot->ctx;
-	if (!ctx)
+	if (!slot)
 		return -1;
-#ifdef DEBUG
-	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_sign() "
-		"sig=%p *siglen=%lu tbs=%p tbslen=%lu\n",
-		__FILE__, __LINE__, sig, *siglen, tbs, tbslen);
-#endif
-	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &sig_md) <= 0)
-		return -1;
-	if (tbslen != (size_t)EVP_MD_size(sig_md))
-		return -1;
-
-	memset(&mechanism, 0, sizeof mechanism);
-	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-	switch (padding) {
-	case RSA_PKCS1_PSS_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_PSS_PADDING\n");
-		if (pkcs11_params_pss(&pss_params, evp_pkey_ctx, ctx) < 0)
-			return -1;
-		mechanism.mechanism = CKM_RSA_PKCS_PSS;
-		mechanism.pParameter = &pss_params;
-		mechanism.ulParameterLen = sizeof pss_params;
-		break;
-	default:
-		return -1;
-	} /* end switch(padding) */
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = CRYPTOKI_call(ctx,
-		C_SignInit(session, &mechanism, key->object));
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_SignInit rv=%d\n",
-			__FILE__, __LINE__, rv);
-	} else if (key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (rv == CKR_OK) {
-		rv = CRYPTOKI_call(ctx,
-			C_Sign(session, (CK_BYTE_PTR)tbs, (CK_ULONG)tbslen, sig, &size));
-		if (rv != CKR_OK) {
-			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Sign rv=%d\n",
-				__FILE__, __LINE__, rv);
-		}
-	}
-	pkcs11_put_session(slot, session);
-
-	if (rv != CKR_OK)
+	/* retrieve PSS parameters */
+	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
 		return -1;
-	*siglen = size;
-	return 1;
+
+	if (padding != RSA_PKCS1_PSS_PADDING)
+		return -1; /* unsupported */
+
+	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &md) <= 0)
+		return -1;
+
+	if (tbslen != (size_t)EVP_MD_size(md))
+		return -1;
+
+	if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
+		return -1;
+
+	if (EVP_PKEY_CTX_get_rsa_pss_saltlen(evp_pkey_ctx, &salt_len) == 0)
+		return -1;
+
+	mdname = EVP_MD_name(md);
+	mgf1_mdname = EVP_MD_name(mgf1_md);
+
+	return pkcs11_evp_pkey_rsa_sign(key, pkey, mdname, padding,
+		salt_len, mgf1_mdname, NULL, 0,
+		sig, siglen, tbs, tbslen);
 }
 
 /* Attempt to decrypt using the PKCS#11-backed RSA implementation */
@@ -1359,25 +1268,28 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 {
 	EVP_PKEY *pkey;
 	RSA *rsa;
-	int rv = 0, padding;
-	CK_ULONG size = (CK_ULONG)*outlen;
+	int padding;
+	CK_ULONG outsize = (CK_ULONG)*outlen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
-	PKCS11_CTX_private *ctx;
 	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
+	const EVP_MD *md, *mgf1_md;
+	const char *mdname, *mgf1_mdname;
+	unsigned char *oaep_label = NULL;
+	int oaep_labellen;
 
 	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
 	 * the size inquiry internally. */
 	if (!out)
 		return -1;
+
 	if (!evp_pkey_ctx)
 		return -1;
 
 	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
 	if (!pkey)
 		return -1;
+
 	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
 	if (!rsa)
 		return -1;
@@ -1386,62 +1298,38 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (check_object_fork(key) < 0)
 		return -1;
 
+	/* check RSA padding */
+	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
+		return -1;
+
+	if (padding != RSA_PKCS1_OAEP_PADDING)
+		return -1; /* unsupported */
+
+	/* retrieve OAEP parameters */
+	if (EVP_PKEY_CTX_get_rsa_oaep_md(evp_pkey_ctx, &md) <= 0)
+		return -1;
+
+	if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
+		return -1;
+
+	oaep_labellen = EVP_PKEY_CTX_get0_rsa_oaep_label(evp_pkey_ctx, &oaep_label);
+	if (oaep_labellen < 0) {
+		oaep_labellen = 0;
+		oaep_label = NULL;
+	}
+
 	slot = key->slot;
-	ctx = slot->ctx;
-	if (!ctx)
+	if (!slot)
 		return -1;
-#ifdef DEBUG
-	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_try_pkey_rsa_decrypt() "
-		"out=%p *outlen=%lu in=%p inlen=%lu\n",
-		__FILE__, __LINE__, out, *outlen, in, inlen);
-#endif
-	memset(&mechanism, 0, sizeof mechanism);
-	EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding);
-	switch (padding) {
-	case RSA_PKCS1_OAEP_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_OAEP_PADDING\n");
-		if (pkcs11_params_oaep(&oaep_params, evp_pkey_ctx, ctx) < 0)
-			return -1;
-		mechanism.mechanism = CKM_RSA_PKCS_OAEP;
-		mechanism.pParameter = &oaep_params;
-		mechanism.ulParameterLen = sizeof oaep_params;
-		break;
-	case RSA_PKCS1_PADDING:
-		pkcs11_log(ctx, LOG_DEBUG, "padding=RSA_PKCS1_PADDING\n");
-		mechanism.mechanism = CKM_RSA_PKCS;
-		mechanism.pParameter = NULL;
-		mechanism.ulParameterLen = 0;
-		break;
-	default:
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d unsupported padding: %d\n",
-			__FILE__, __LINE__, padding);
-		return -1;
-	} /* end switch(padding) */
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	rv = CRYPTOKI_call(ctx,
-		C_DecryptInit(session, &mechanism, key->object));
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
-			__FILE__, __LINE__, rv);
-	} else if (key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-	if (rv == CKR_OK) {
-		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(session, (CK_BYTE_PTR)in, (CK_ULONG)inlen, out, &size));
-		if (rv != CKR_OK) {
-			pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
-				__FILE__, __LINE__, rv);
-		}
-	}
-	pkcs11_put_session(slot, session);
+	mdname = EVP_MD_name(md);
+	mgf1_mdname = EVP_MD_name(mgf1_md);
 
-	if (rv != CKR_OK)
-		return -1;
-	*outlen = size;
-	return 1;
+	return pkcs11_evp_pkey_rsa_decrypt(key, pkey, mdname, padding, mgf1_mdname,
+		oaep_label, oaep_labellen, out, outlen, &outsize, in, inlen);
 }
 
 static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
