@@ -388,20 +388,81 @@ end:
 	return rv;
 }
 
+/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing. */
+static int pkcs11_build_digestinfo(const char *mdname,
+	const unsigned char *dgst, size_t dgstlen,
+	unsigned char **out, size_t *outlen)
+{
+	const EVP_MD *md;
+	X509_SIG *x509_sig = NULL;
+	X509_ALGOR *alg = NULL;
+	ASN1_OCTET_STRING *digest = NULL;
+	unsigned char *p;
+	int len;
+
+	if (mdname == NULL || dgst == NULL || out == NULL || outlen == NULL)
+		return 0;
+
+	*out = NULL;
+	*outlen = 0;
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	if (EVP_MD_size(md) <= 0 || dgstlen != (size_t)EVP_MD_size(md))
+		return 0;
+
+	x509_sig = X509_SIG_new();
+	if (x509_sig == NULL)
+		return 0;
+
+	X509_SIG_getm(x509_sig, &alg, &digest);
+
+	if (!X509_ALGOR_set0(alg, OBJ_nid2obj(EVP_MD_type(md)), V_ASN1_NULL, NULL))
+		goto err;
+
+	if (!ASN1_OCTET_STRING_set(digest, dgst, (int)dgstlen))
+		goto err;
+
+	len = i2d_X509_SIG(x509_sig, NULL);
+	if (len <= 0)
+		goto err;
+
+	*out = OPENSSL_malloc((size_t)len);
+	if (*out == NULL)
+		goto err;
+
+	p = *out;
+	len = i2d_X509_SIG(x509_sig, &p);
+	if (len <= 0)
+		goto err;
+
+	*outlen = (size_t)len;
+	X509_SIG_free(x509_sig);
+	return 1;
+
+err:
+	OPENSSL_free(*out);
+	*out = NULL;
+	*outlen = 0;
+	X509_SIG_free(x509_sig);
+	return 0;
+}
+
 /*
  * Sign input data with an RSA private key using a PKCS#11 token.
  *
- * For RSA_PKCS1_PADDING, RSA_PKCS1_PSS_PADDING and RSA_X931_PADDING,
- * the input must be the message digest.
+ * For RSA_PKCS1_PADDING, if mdname is set, the input must be the message
+ * digest and is wrapped in an ASN.1 DigestInfo structure before signing with
+ * CKM_RSA_PKCS. If mdname is not set, the input is signed directly.
  *
- * For RSA_PKCS1_PADDING, the token performs PKCS#1 v1.5 DigestInfo
- * encoding internally based on the selected digest algorithm.
+ * For RSA_PKCS1_PSS_PADDING, the input must be the message digest. The digest
+ * algorithm, MGF1 digest and salt length are passed separately in
+ * CK_RSA_PKCS_PSS_PARAMS.
  *
- * For RSA_PKCS1_PSS_PADDING, the digest algorithm, MGF1 digest and
- * salt length are passed separately in CK_RSA_PKCS_PSS_PARAMS.
- *
- * For RSA_X931_PADDING, the token applies X9.31 signature formatting
- * based on the provided digest.
+ * For RSA_X931_PADDING, if the digest type is set it is used to format the
+ * block data otherwise the first byte is used to specify the X9.31 digest ID.
  *
  * For RSA_NO_PADDING, the input is passed to the token unchanged.
  *
@@ -417,6 +478,11 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
+	const unsigned char *sign_tbs = tbs;
+	size_t sign_tbslen = tbslen;
+	unsigned char *digestinfo = NULL;
+	size_t digestinfo_len = 0;
+	int ret = -1;
 
 	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
 		return -1;
@@ -433,11 +499,25 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 		pad_mode, salt_len, mdname, mgf1_mdname, NULL, 0) < 0)
 		return -1;
 
-	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
-		tbs, tbslen) != CKR_OK)
-		return -1;
+	if (pad_mode == RSA_PKCS1_PADDING && mdname != NULL) {
+		/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing. */
+		if (!pkcs11_build_digestinfo(mdname, tbs, tbslen,
+			&digestinfo, &digestinfo_len))
+			goto end;
 
-	return 1;
+		sign_tbs = digestinfo;
+		sign_tbslen = digestinfo_len;
+	}
+
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		sign_tbs, sign_tbslen) != CKR_OK)
+		goto end;
+
+	ret = 1;
+
+end:
+	OPENSSL_free(digestinfo);
+	return ret;
 }
 
 #ifndef OPENSSL_NO_EC
