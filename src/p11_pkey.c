@@ -256,6 +256,9 @@ static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
 	case RSA_X931_PADDING:
+		/* RSA_X931_PADDING uses the legacy ANSI X9.31 signature format.
+		 * This deprecated mode is not supported by SoftHSM or YubiKey
+		 * PKCS#11 modules (no CKM_RSA_X9_31 support). */
 		mechanism->mechanism = CKM_RSA_X9_31;
 		break;
 	case RSA_PKCS1_PSS_PADDING:
@@ -450,6 +453,44 @@ err:
 	return 0;
 }
 
+/* Build digest || X9.31 hash ID for RSA_X931_PADDING signing. */
+static int pkcs11_build_x931_digest(const char *mdname,
+	const unsigned char *dgst, size_t dgstlen,
+	unsigned char **out, size_t *outlen)
+{
+	const EVP_MD *md;
+	int md_size;
+	int hash_id;
+
+	if (mdname == NULL || dgst == NULL || out == NULL || outlen == NULL)
+		return 0;
+
+	*out = NULL;
+	*outlen = 0;
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	md_size = EVP_MD_size(md);
+	if (md_size <= 0 || dgstlen != (size_t)md_size)
+		return 0;
+
+	hash_id = RSA_X931_hash_id(EVP_MD_type(md));
+	if (hash_id == -1)
+		return 0;
+
+	*out = OPENSSL_malloc(dgstlen + 1);
+	if (*out == NULL)
+		return 0;
+
+	memcpy(*out, dgst, dgstlen);
+	(*out)[dgstlen] = (unsigned char)hash_id;
+	*outlen = dgstlen + 1;
+
+	return 1;
+}
+
 /*
  * Sign input data with an RSA private key using a PKCS#11 token.
  *
@@ -461,8 +502,9 @@ err:
  * algorithm, MGF1 digest and salt length are passed separately in
  * CK_RSA_PKCS_PSS_PARAMS.
  *
- * For RSA_X931_PADDING, if the digest type is set it is used to format the
- * block data otherwise the first byte is used to specify the X9.31 digest ID.
+ * For RSA_X931_PADDING, if mdname is set, append the X9.31 hash
+ * identifier to the digest before passing it to CKM_RSA_X9_31.
+ * If mdname is not set, the input is expected to contain the hash ID.
  *
  * For RSA_NO_PADDING, the input is passed to the token unchanged.
  *
@@ -480,8 +522,8 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
 	const unsigned char *sign_tbs = tbs;
 	size_t sign_tbslen = tbslen;
-	unsigned char *digestinfo = NULL;
-	size_t digestinfo_len = 0;
+	unsigned char *encoded = NULL;
+	size_t encoded_len = 0;
 	int ret = -1;
 
 	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
@@ -499,14 +541,31 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 		pad_mode, salt_len, mdname, mgf1_mdname, NULL, 0) < 0)
 		return -1;
 
-	if (pad_mode == RSA_PKCS1_PADDING && mdname != NULL) {
-		/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing. */
-		if (!pkcs11_build_digestinfo(mdname, tbs, tbslen,
-			&digestinfo, &digestinfo_len))
-			goto end;
+	switch (pad_mode) {
+	case RSA_PKCS1_PADDING:
+		if (mdname != NULL) {
+			/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing */
+			if (!pkcs11_build_digestinfo(mdname,
+				tbs, tbslen, &encoded, &encoded_len))
+				goto end;
 
-		sign_tbs = digestinfo;
-		sign_tbslen = digestinfo_len;
+			sign_tbs = encoded;
+			sign_tbslen = encoded_len;
+		}
+		break;
+	case RSA_X931_PADDING:
+		if (mdname != NULL) {
+			/* Append X9.31 hash identifier to the digest */
+			if (!pkcs11_build_x931_digest(mdname,
+				tbs, tbslen, &encoded, &encoded_len))
+				goto end;
+
+			sign_tbs = encoded;
+			sign_tbslen = encoded_len;
+		}
+		break;
+	default:
+		break;
 	}
 
 	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
@@ -516,7 +575,7 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	ret = 1;
 
 end:
-	OPENSSL_free(digestinfo);
+	OPENSSL_free(encoded);
 	return ret;
 }
 

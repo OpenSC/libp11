@@ -2344,8 +2344,9 @@ static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
 
 	switch (sig_ctx->pad_mode) {
 	case RSA_PKCS1_PADDING:
+	case RSA_X931_PADDING:
 		/*
-		 * For PKCS#1 v1.5 signatures the digest is optional.
+		 * For PKCS#1 v1.5 and X9.31 signatures the digest is optional.
 		 * If not set, the input is treated as raw data.
 		 */
 		if (sig_ctx->mdname != NULL) {
@@ -2388,7 +2389,6 @@ static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
 		break;
 	}
 	case RSA_NO_PADDING:
-	case RSA_X931_PADDING:
 		break;
 	default:
 		return 0;
