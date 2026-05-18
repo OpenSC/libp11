@@ -174,6 +174,8 @@ static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b);
 static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata);
 static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len);
 static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len);
+static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
+	EVP_PKEY_CTX *pctx);
 
 
 /******************************************************************************/
@@ -963,7 +965,6 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 	EVP_PKEY *pub = NULL;
 	EVP_PKEY_CTX *pctx = NULL;
 	EVP_MD_CTX *mdctx = NULL;
-	const EVP_MD *sig_md = NULL;
 	int ok = 0;
 
 	if (sig_ctx == NULL || sig_ctx->keydata == NULL || sig == NULL || tbs == NULL)
@@ -984,10 +985,13 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 		if (EVP_DigestVerifyInit(mdctx, NULL, NULL, NULL, pub) <= 0)
 			goto end;
 
-		ok = EVP_DigestVerify(mdctx, sig, siglen, tbs, tbslen);
-		ok = (ok == 1);
+		if (EVP_DigestVerify(mdctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
+
+		ok = 1;
 		break;
 #endif /* OPENSSL_NO_ECX */
+
 	case EVP_PKEY_RSA:
 	case EVP_PKEY_RSA_PSS:
 		pctx = EVP_PKEY_CTX_new(pub, NULL);
@@ -997,62 +1001,15 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 		if (EVP_PKEY_verify_init(pctx) <= 0)
 			goto end;
 
-		if (EVP_PKEY_CTX_set_rsa_padding(pctx, sig_ctx->pad_mode) <= 0)
+		if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
 			goto end;
 
-		switch (sig_ctx->pad_mode) {
-		case RSA_PKCS1_PADDING:
-			/* For PKCS#1 v1.5 signatures the digest is optional.
-			 * If not set, the input is treated as raw data. */
-			if (sig_ctx->mdname != NULL) {
-				sig_md = EVP_get_digestbyname(sig_ctx->mdname);
-				if (sig_md == NULL)
-					goto end;
+		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
 
-				if (EVP_PKEY_CTX_set_signature_md(pctx, sig_md) <= 0)
-					goto end;
-			}
-			break;
-		case RSA_PKCS1_PSS_PADDING: {
-			const EVP_MD *mgf1_md;
-			const char *mgf1_name;
-
-			/* RSASSA-PSS requires an explicit digest algorithm.
-			 * The digest is used for both the message hash and,
-			 * unless overridden, the MGF1 hash function. */
-			if (sig_ctx->mdname == NULL)
-				goto end;
-
-			sig_md = EVP_get_digestbyname(sig_ctx->mdname);
-			if (sig_md == NULL)
-				goto end;
-
-			if (EVP_PKEY_CTX_set_signature_md(pctx, sig_md) <= 0)
-				goto end;
-
-			mgf1_name = (sig_ctx->mgf1_mdname != NULL)
-				? sig_ctx->mgf1_mdname : sig_ctx->mdname;
-			
-			mgf1_md = EVP_get_digestbyname(mgf1_name);
-			if (mgf1_md == NULL)
-				goto end;
-
-			if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
-				goto end;
-
-			if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx,
-				(int)sig_ctx->pss_saltlen) <= 0)
-				goto end;
-
-			break;
-		}
-		case RSA_NO_PADDING: /* not covered by tests */
-		case RSA_X931_PADDING: /* not covered by tests */
-			break;
-		}
-		ok = EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen);
-		ok = (ok == 1);
+		ok = 1;
 		break;
+
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 		pctx = EVP_PKEY_CTX_new(pub, NULL);
@@ -1062,8 +1019,10 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 		if (EVP_PKEY_verify_init(pctx) <= 0)
 			goto end;
 
-		ok = EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen);
-		ok = (ok == 1);
+		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
+
+		ok = 1;
 		break;
 #endif /* OPENSSL_NO_EC */
 	default:
@@ -1072,6 +1031,62 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 
 end:
 	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+	return ok;
+}
+
+/*
+ * Recover signed data using a temporary public key copy in the default provider.
+ * Applicable only to signature schemes that support signature recovery (such as RSA).
+ */
+int p11_signature_ctx_verifyrecover(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *rout, size_t *routlen, size_t routsize,
+	const unsigned char *sig, size_t siglen)
+{
+	EVP_PKEY *pub;
+	EVP_PKEY_CTX *pctx;
+	int ok = 0;
+
+	if (sig_ctx == NULL || sig_ctx->keydata == NULL || routlen == NULL || sig == NULL)
+		return 0;
+
+	if (sig_ctx->keydata->type != EVP_PKEY_RSA)
+		return 0;
+
+	/* RSASSA-PSS does not support signature recovery */
+	if (sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING)
+		return 0;
+
+	pub = pubkey_from_params_default(sig_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
+	if (pctx == NULL)
+		goto end;
+
+	if (EVP_PKEY_verify_recover_init(pctx) <= 0)
+		goto end;
+
+	if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
+		goto end;
+
+	if (rout == NULL) {
+		if (EVP_PKEY_verify_recover(pctx, NULL, routlen, sig, siglen) <= 0)
+			goto end;
+
+		ok = 1;
+		goto end;
+	}
+
+	*routlen = routsize;
+	if (EVP_PKEY_verify_recover(pctx, rout, routlen, sig, siglen) <= 0)
+		goto end;
+
+	ok = 1;
+
+end:
 	EVP_PKEY_CTX_free(pctx);
 	EVP_PKEY_free(pub);
 	return ok;
@@ -2309,6 +2324,76 @@ static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, 
 
 	*buf = pubkey->pub;
 	*len = pubkey->pub_len;
+	return 1;
+}
+
+/*
+ * Configure RSA verification parameters on an EVP_PKEY_CTX.
+ * Supports PKCS#1 v1.5, RSA-PSS, X9.31 and raw RSA modes.
+ */
+static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
+	EVP_PKEY_CTX *pctx)
+{
+	const EVP_MD *sig_md = NULL;
+
+	if (sig_ctx == NULL || pctx == NULL)
+		return 0;
+
+	if (EVP_PKEY_CTX_set_rsa_padding(pctx, sig_ctx->pad_mode) <= 0)
+		return 0;
+
+	switch (sig_ctx->pad_mode) {
+	case RSA_PKCS1_PADDING:
+		/*
+		 * For PKCS#1 v1.5 signatures the digest is optional.
+		 * If not set, the input is treated as raw data.
+		 */
+		if (sig_ctx->mdname != NULL) {
+			sig_md = EVP_get_digestbyname(sig_ctx->mdname);
+			if (sig_md == NULL)
+				return 0;
+
+			if (EVP_PKEY_CTX_set_signature_md(pctx, sig_md) <= 0)
+				return 0;
+		}
+		break;
+	case RSA_PKCS1_PSS_PADDING: {
+		const EVP_MD *mgf1_md;
+		const char *mgf1_name;
+
+		if (sig_ctx->mdname == NULL)
+			return 0;
+
+		sig_md = EVP_get_digestbyname(sig_ctx->mdname);
+		if (sig_md == NULL)
+			return 0;
+
+		if (EVP_PKEY_CTX_set_signature_md(pctx, sig_md) <= 0)
+			return 0;
+
+		mgf1_name = sig_ctx->mgf1_mdname != NULL
+			? sig_ctx->mgf1_mdname : sig_ctx->mdname;
+
+		mgf1_md = EVP_get_digestbyname(mgf1_name);
+		if (mgf1_md == NULL)
+			return 0;
+
+		if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
+			return 0;
+
+		if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx,
+				(int)sig_ctx->pss_saltlen) <= 0)
+			return 0;
+
+		break;
+	}
+	case RSA_NO_PADDING:
+	case RSA_X931_PADDING:
+		break;
+	default:
+		return 0;
+	}
+
 	return 1;
 }
 

@@ -81,6 +81,8 @@ PROVIDER_FN(signature_sign_init);
 PROVIDER_FN(signature_sign);
 PROVIDER_FN(signature_verify_init);
 PROVIDER_FN(signature_verify);
+PROVIDER_FN(signature_verify_recover_init);
+PROVIDER_FN(signature_verify_recover);
 PROVIDER_FN(signature_digest_sign_init);
 PROVIDER_FN(signature_digest_sign_update);
 PROVIDER_FN(signature_digest_sign_final);
@@ -152,6 +154,8 @@ static const OSSL_DISPATCH signature_functions[] = {
 	{OSSL_FUNC_SIGNATURE_SIGN, (void (*)(void))signature_sign},
 	{OSSL_FUNC_SIGNATURE_VERIFY_INIT, (void (*)(void))signature_verify_init},
 	{OSSL_FUNC_SIGNATURE_VERIFY, (void (*)(void))signature_verify},
+	{OSSL_FUNC_SIGNATURE_VERIFY_RECOVER_INIT, (void (*)(void))signature_verify_recover_init},
+	{OSSL_FUNC_SIGNATURE_VERIFY_RECOVER, (void (*)(void))signature_verify_recover},
 	{OSSL_FUNC_SIGNATURE_DIGEST_SIGN_INIT, (void (*)(void))signature_digest_sign_init},
 	{OSSL_FUNC_SIGNATURE_DIGEST_SIGN_UPDATE, (void (*)(void))signature_digest_sign_update},
 	{OSSL_FUNC_SIGNATURE_DIGEST_SIGN_FINAL, (void (*)(void))signature_digest_sign_final},
@@ -767,6 +771,25 @@ static int signature_verify(void *ctx,
 	const unsigned char *tbs, size_t tbslen)
 {
 	return p11_signature_ctx_verify(ctx, sig, siglen, tbs, tbslen);
+}
+
+/*
+ * Initialize signature recovery verification operation with key.
+ * Used via EVP_PKEY_verify_recover_init().
+ */
+int signature_verify_recover_init(void *ctx, void *keydata, const OSSL_PARAM params[])
+{
+	return p11_signature_ctx_init(ctx, keydata, params);
+}
+
+/*
+ * Recover signed data from signature.
+ * Used after signature_verify_recover_init() and via EVP_PKEY_verify_recover().
+ */
+int signature_verify_recover(void *ctx, unsigned char *rout, size_t *routlen,
+	size_t routsize, const unsigned char *sig, size_t siglen)
+{
+	return p11_signature_ctx_verifyrecover(ctx, rout, routlen, routsize, sig, siglen);
 }
 
 /*

@@ -111,6 +111,10 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 	const unsigned char *sig, size_t siglen,
 	const unsigned char *tbs, size_t tbslen);
 
+int p11_signature_ctx_verifyrecover(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *rout, size_t *routlen, size_t routsize,
+	const unsigned char *sig, size_t siglen);
+
 EVP_PKEY *p11_signature_ctx_get_evp_pkey(const P11_SIGNATURE_CTX *sig_ctx);
 size_t p11_signature_ctx_get_sigsize(const P11_SIGNATURE_CTX *sig_ctx);
 int p11_signature_ctx_get_type(const P11_SIGNATURE_CTX *sig_ctx);
