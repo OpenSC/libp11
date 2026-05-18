@@ -1257,8 +1257,7 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	mgf1_mdname = EVP_MD_name(mgf1_md);
 
 	return pkcs11_evp_pkey_rsa_sign(key, pkey, mdname, padding,
-		salt_len, mgf1_mdname, NULL, 0,
-		sig, siglen, tbs, tbslen);
+		salt_len, mgf1_mdname, sig, siglen, tbs, tbslen);
 }
 
 /* Attempt to decrypt using the PKCS#11-backed RSA implementation */
@@ -1269,7 +1268,6 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	EVP_PKEY *pkey;
 	RSA *rsa;
 	int padding;
-	CK_ULONG outsize = (CK_ULONG)*outlen;
 	PKCS11_OBJECT_private *key;
 	PKCS11_SLOT_private *slot;
 	CK_SESSION_HANDLE session;
@@ -1329,7 +1327,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	mgf1_mdname = EVP_MD_name(mgf1_md);
 
 	return pkcs11_evp_pkey_rsa_decrypt(key, pkey, mdname, padding, mgf1_mdname,
-		oaep_label, oaep_labellen, out, outlen, &outsize, in, inlen);
+		oaep_label, oaep_labellen, out, outlen, in, inlen);
 }
 
 static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,

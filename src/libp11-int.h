@@ -383,8 +383,8 @@ extern int pkcs11_sign(int type,
 
 /* Sign input data using RSA private key via PKCS#11 mechanism */
 extern int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
-	const char *mdname, const int pad_mode, const int salt_len,
-	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
+	const char *mdname, const int pad_mode,
+	const int salt_len, const char *mgf1_mdname,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
@@ -409,7 +409,7 @@ extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pke
 	const char *mdname, const int pad_mode,
 	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *out, size_t *outlen,
-	size_t *outsize, const unsigned char *in, size_t inlen);
+	const unsigned char *in, size_t inlen);
 
 /* This function has never been implemented */
 extern int pkcs11_verify(int type,

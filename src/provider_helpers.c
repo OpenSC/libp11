@@ -140,7 +140,7 @@ struct p11_signature_ctx {
 struct p11_asym_cipher_ctx {
 	PROVIDER_CTX *prov_ctx;
 	P11_KEYDATA *keydata;
-	int pad_mode;      /* RSA_NO_PADDING, RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING */
+	int pad_mode;      /* RSA_PKCS1_OAEP_PADDING */
 	char *oaep_mdname; /* optional, default = SHA1 in many PKCS#11/OpenSSL flows */
 	char *mgf1_mdname; /* optional, default = oaep_mdname */
 	unsigned char *oaep_label;
@@ -173,6 +173,7 @@ static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b);
 #endif /* OPENSSL_NO_ECX */
 static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata);
 static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len);
+static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len);
 
 
 /******************************************************************************/
@@ -548,23 +549,6 @@ const char *p11_keydata_get_name(P11_KEYDATA *keydata)
 		return NULL;
 
 	return keydata->name;
-}
-
-/* Get stored raw public key data. */
-int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len)
-{
-	const P11_PUB_KEY *pubkey;
-
-	if (keydata == NULL || buf == NULL || len == NULL)
-		return 0;
-
-	pubkey = keydata->pubkey;
-	if (pubkey == NULL || pubkey->pub == NULL || pubkey->pub_len == 0)
-		return 0;
-
-	*buf = pubkey->pub;
-	*len = pubkey->pub_len;
-	return 1;
 }
 
 /* Return whether keydata represents a private key. */
@@ -980,7 +964,6 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 	EVP_PKEY_CTX *pctx = NULL;
 	EVP_MD_CTX *mdctx = NULL;
 	const EVP_MD *sig_md = NULL;
-	const char *mgf1_name = NULL;
 	int ok = 0;
 
 	if (sig_ctx == NULL || sig_ctx->keydata == NULL || sig == NULL || tbs == NULL)
@@ -1018,7 +1001,25 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 			goto end;
 
 		switch (sig_ctx->pad_mode) {
-		case RSA_PKCS1_PSS_PADDING:
+		case RSA_PKCS1_PADDING:
+			/* For PKCS#1 v1.5 signatures the digest is optional.
+			 * If not set, the input is treated as raw data. */
+			if (sig_ctx->mdname != NULL) {
+				sig_md = EVP_get_digestbyname(sig_ctx->mdname);
+				if (sig_md == NULL)
+					goto end;
+
+				if (EVP_PKEY_CTX_set_signature_md(pctx, sig_md) <= 0)
+					goto end;
+			}
+			break;
+		case RSA_PKCS1_PSS_PADDING: {
+			const EVP_MD *mgf1_md;
+			const char *mgf1_name;
+
+			/* RSASSA-PSS requires an explicit digest algorithm.
+			 * The digest is used for both the message hash and,
+			 * unless overridden, the MGF1 hash function. */
 			if (sig_ctx->mdname == NULL)
 				goto end;
 
@@ -1031,23 +1032,20 @@ int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
 
 			mgf1_name = (sig_ctx->mgf1_mdname != NULL)
 				? sig_ctx->mgf1_mdname : sig_ctx->mdname;
+			
+			mgf1_md = EVP_get_digestbyname(mgf1_name);
+			if (mgf1_md == NULL)
+				goto end;
 
-			if (mgf1_name != NULL) {
-				const EVP_MD *mgf1_md = EVP_get_digestbyname(mgf1_name);
-
-				if (mgf1_md == NULL)
-					goto end;
-
-				if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
-					goto end;
-			}
+			if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
+				goto end;
 
 			if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx,
 				(int)sig_ctx->pss_saltlen) <= 0)
 				goto end;
-			break;
 
-		case RSA_PKCS1_PADDING:
+			break;
+		}
 		case RSA_NO_PADDING: /* not covered by tests */
 		case RSA_X931_PADDING: /* not covered by tests */
 			break;
@@ -1212,21 +1210,6 @@ EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx)
 	return sig_ctx->mdctx;
 }
 
-/* Convert RSA padding mode to its string representation. */
-const char *p11_signature_pad_mode_to_string(int pad_mode)
-{
-	switch (pad_mode) {
-	case RSA_PKCS1_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_PKCSV15;
-	case RSA_PKCS1_PSS_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_PSS;
-	case RSA_NO_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_NONE;
-	default:
-		return NULL;
-	}
-}
-
 /* Convert RSA-PSS salt length value to its string representation. */
 const char *p11_signature_pss_saltlen_to_string(int saltlen)
 {
@@ -1241,6 +1224,23 @@ const char *p11_signature_pss_saltlen_to_string(int saltlen)
 	case RSA_PSS_SALTLEN_AUTO_DIGEST_MAX:
 		return OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO_DIGEST_MAX; /* "auto-digestmax" */
 #endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
+	default:
+		return NULL;
+	}
+}
+
+/* Convert RSA padding mode to its string representation. */
+const char *p11_pad_mode_to_string(int pad_mode)
+{
+	switch (pad_mode) {
+	case RSA_PKCS1_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_PKCSV15;
+	case RSA_PKCS1_PSS_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_PSS;
+	case RSA_NO_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_NONE;
+	case RSA_PKCS1_OAEP_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_OAEP;
 	default:
 		return NULL;
 	}
@@ -1386,7 +1386,7 @@ int p11_asym_cipher_ctx_encrypt(P11_ASYM_CIPHER_CTX *asym_ctx,
 	if (pub == NULL)
 		return 0;
 
-	pctx = EVP_PKEY_CTX_new_from_pkey(NULL, pub, "provider=default");
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
 	if (pctx == NULL)
 		goto end;
 
@@ -2295,5 +2295,21 @@ static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *
 	return 1;
 }
 
+/* Get stored raw public key data. */
+static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len)
+{
+	const P11_PUB_KEY *pubkey;
+
+	if (keydata == NULL || buf == NULL || len == NULL)
+		return 0;
+
+	pubkey = keydata->pubkey;
+	if (pubkey == NULL || pubkey->pub == NULL || pubkey->pub_len == 0)
+		return 0;
+
+	*buf = pubkey->pub;
+	*len = pubkey->pub_len;
+	return 1;
+}
 
 /* vim: set noexpandtab: */

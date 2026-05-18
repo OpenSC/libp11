@@ -81,7 +81,6 @@ int p11_keydata_up_ref(P11_KEYDATA *keydata);
 void p11_keydata_free(P11_KEYDATA *keydata);
 P11_KEYDATA *p11_keydata_from_evp_pkey(PROVIDER_CTX *ctx, EVP_PKEY *pkey, int is_private);
 const char *p11_keydata_get_name(P11_KEYDATA *keydata);
-int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len);
 int p11_keydata_is_private(const P11_KEYDATA *keydata);
 #if OPENSSL_VERSION_NUMBER >= 0x30600000L
 int p11_keydata_get_security_category(const P11_KEYDATA *keydata);
@@ -129,8 +128,8 @@ int p11_signature_ctx_set_mgf1_mdname(P11_SIGNATURE_CTX *sig_ctx, const char *md
 const char *p11_signature_ctx_get_mgf1_mdname(const P11_SIGNATURE_CTX *sig_ctx);
 
 EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx);
-const char *p11_signature_pad_mode_to_string(int pad_mode);
 const char *p11_signature_pss_saltlen_to_string(int saltlen);
+const char *p11_pad_mode_to_string(int pad_mode);
 
 
 /******************************************************************************/

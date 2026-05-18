@@ -408,8 +408,8 @@ end:
  * Returns 1 on success or -1 on failure.
  */
 int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
-	const char *mdname, const int pad_mode, const int salt_len,
-	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
+	const char *mdname, const int pad_mode,
+	const int salt_len, const char *mgf1_mdname,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
@@ -429,9 +429,8 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (ctx == NULL)
 		return -1;
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL,
-		ctx, pkey, pad_mode, salt_len, mdname, mgf1_mdname,
-		oaep_label, oaep_labellen) < 0)
+	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL, ctx, pkey,
+		pad_mode, salt_len, mdname, mgf1_mdname, NULL, 0) < 0)
 		return -1;
 
 	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
@@ -554,7 +553,7 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	const char *mdname, const int pad_mode,
 	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *out, size_t *outlen,
-	size_t *outsize, const unsigned char *in, size_t inlen)
+	const unsigned char *in, size_t inlen)
 {
 	CK_MECHANISM mechanism;
 	PKCS11_SLOT_private *slot;
@@ -579,17 +578,12 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (oaep_labellen > 0)
 		pkcs11_log(ctx, LOG_WARNING, "OAEP label may not be supported by PKCS#11 token\n");
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params,
-		ctx, pkey, pad_mode, 0, mdname, mgf1_mdname,
-		oaep_label, oaep_labellen) < 0)
+	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params, ctx, pkey,
+		pad_mode, 0, mdname, mgf1_mdname, oaep_label, oaep_labellen) < 0)
 		return -1;
 
 	/* caller-provided output buffer size */
-	if (outsize != NULL)
-		ck_outlen = (CK_ULONG)*outsize;
-	else
-		ck_outlen = (CK_ULONG)*outlen;
-
+	ck_outlen = (CK_ULONG)*outlen;
 	ck_inlen = (CK_ULONG)inlen;
 
 	if (pkcs11_get_session(slot, 0, &session))
