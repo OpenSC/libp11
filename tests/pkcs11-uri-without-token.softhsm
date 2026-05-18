@@ -52,23 +52,145 @@ fi
 trap cleanup EXIT
 
 # Run the test
-# Generate signature without specifying the token in the PKCS#11 URI
+
+#### Encrypt/decrypt RSA_PKCS1_OAEP_PADDING (CKM_RSA_PKCS_OAEP) ####
+
+# Encrypt file with RSA public key using OAEP
+# OpenSSL defaults RSA-OAEP to SHA1 for oaep_md
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-encrypt -pubin \
+	-pkeyopt rsa_padding_mode:oaep \
+	-out "${outdir}/encrypted.bin" -in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to encrypt file with RSA public key using OAEP"
+	exit 1
+fi
+echo
+
+# Decrypt file with RSA private key using OAEP
+# SoftHSM currently supports RSA-OAEP only with SHA-1/MGF1-SHA1
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} \
+	-decrypt \
+	-pkeyopt rsa_padding_mode:oaep \
+	-pkeyopt rsa_oaep_md:sha1 \
+	-pkeyopt rsa_mgf1_md:sha1 \
+	-out "${outdir}/decrypted.bin" -in "${outdir}/encrypted.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to decrypt file with RSA private key using OAEP"
+	exit 1
+fi
+
+cmp "${outdir}/in.txt" "${outdir}/decrypted.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Decrypted OAEP data does not match input"
+	exit 1
+fi
+echo
+
+
+#### Encrypt/decrypt RSA_PKCS1_PADDING (CKM_RSA_PKCS) ####
+
+# Encrypt file with RSA public key using PKCS#1 v1.5 padding
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-encrypt -pubin \
+	-pkeyopt rsa_padding_mode:pkcs1 \
+	-out "${outdir}/encrypted.bin" -in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to encrypt file with RSA public key using PKCS#1 padding"
+	exit 1
+fi
+echo
+
+# Decrypt file with RSA private key using PKCS#1 v1.5 padding
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} \
+	-decrypt \
+	-pkeyopt rsa_padding_mode:pkcs1 \
+	-out "${outdir}/decrypted.bin" -in "${outdir}/encrypted.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to decrypt file with RSA private key using PKCS#1 padding"
+	exit 1
+fi
+
+cmp "${outdir}/in.txt" "${outdir}/decrypted.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Decrypted PKCS#1 data does not match input"
+	exit 1
+fi
+echo
+
+
+#### Sign/verifyrecover RSA_NO_PADDING (CKM_RSA_X_509) ####
+
+# Prepare raw input accepted by pkeyutl without -rawin
+printf "secret" > "${outdir}/raw.bin"
+truncate -s 64 "${outdir}/raw.bin"
+
+# Sign raw input data without padding
 ${WRAPPER} ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
-	-inkey ${PRIVATE_KEY} -sign -out "${outdir}/signature.bin" \
-	-in "${outdir}/in.txt"
+	-inkey ${PRIVATE_KEY} \
+	-sign -pkeyopt rsa_padding_mode:none \
+	-out "${outdir}/signature.bin" -in "${outdir}/raw.bin"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY}"
 	exit 1
 fi
+echo
 
-# Verify the signature without specifying the token in the PKCS#11 URI
-${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
-	-inkey ${PUBLIC_KEY} -verify -sigfile "${outdir}/signature.bin" \
-	-in "${outdir}/in.txt"
+# Verify raw RSA signature using the public key
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-verifyrecover -pubin -pkeyopt rsa_padding_mode:none \
+	-in "${outdir}/signature.bin" -out "${outdir}/recovered.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verifyrecover RSA_NO_PADDING signature using PKCS#11 URI ${PUBLIC_KEY}"
+	exit 1
+fi
+
+# RSA_NO_PADDING operates on the input as a big-endian integer.
+# During verifyrecover(), OpenSSL returns the full RSA modulus-sized block,
+# left-padded with zeros. The original input therefore appears right-aligned
+# at the end of the recovered buffer, so compare only the trailing bytes.
+cmp "${outdir}/raw.bin" <(tail -c 64 "${outdir}/recovered.bin")
+if [[ $? -ne 0 ]]; then
+	echo "Recovered RSA_NO_PADDING block does not match input"
+	exit 1
+fi
+echo
+
+
+#### Sign/verify RSA_PKCS1_PADDING (CKM_RSA_PKCS) without digest ####
+
+# Compute the SHA-256 binary digest of the input file
+${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
+
+# Sign the input data without specifying the token in the PKCS#11 URI
+${WRAPPER} ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} \
+	-sign \
+	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY}"
+	exit 1
+fi
+echo
+
+# Verify RSA signature using the public key without specifying the token
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-verify -pubin \
+	-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"
 	exit 1
 fi
+echo
+
+
+#### Sign/verify RSA_PKCS1_PADDING (CKM_RSA_PKCS) with implicit SHA256 digest ####
 
 if ! ${OPENSSL} pkeyutl -help 2>&1 | grep -q -- "-rawin"; then
 	echo "Skipping RSA-PSS raw test: -rawin not supported"
@@ -76,22 +198,47 @@ if ! ${OPENSSL} pkeyutl -help 2>&1 | grep -q -- "-rawin"; then
 	exit 0 # Success
 fi
 
-# Compute the SHA-256 binary digest of the input file
-${OPENSSL} dgst -sha256 -binary -out "${outdir}/hash.bin" "${outdir}/in.txt"
+# Sign the input data without specifying the token in the PKCS#11 URI (raw input)
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PRIVATE_KEY} \
+	-sign -rawin \
+	-out "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to generate signature using PKCS#11 URI ${PRIVATE_KEY}"
+	exit 1
+fi
+echo
+
+# Verify RSA signature using the public key
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-verify -pubin -rawin \
+	-sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
+if [[ $? -ne 0 ]]; then
+	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY}"
+	exit 1
+fi
+echo
+
+
+#### Sign/verify RSA_PKCS1_PSS_PADDING (CKM_RSA_PKCS_PSS) with implicit SHA256 digest ####
 
 # Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
 ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
-	-inkey ${PRIVATE_KEY} -sign -rawin -pkeyopt rsa_padding_mode:pss \
-	-out "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+	-inkey ${PRIVATE_KEY} \
+	-sign -rawin -pkeyopt rsa_padding_mode:pss \
+	-out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to sign a digest using RSA-PSS"
 	exit 1
 fi
+echo
 
 # Verify the signature with an RSA public key using RSA-PSS (raw input)
-${OPENSSL} pkeyutl -engine pkcs11 -keyform engine -pubin \
-	-inkey ${PUBLIC_KEY} -verify -rawin -pkeyopt rsa_padding_mode:pss \
-	-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
+	-inkey ${PUBLIC_KEY} \
+	-verify -pubin -rawin -pkeyopt rsa_padding_mode:pss \
+	-sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_ANY}"
 	exit 1
