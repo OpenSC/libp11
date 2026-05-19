@@ -216,8 +216,8 @@ static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	if (mgf1_md == NULL)
 		return -1;
 
-	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s\n",
-		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md));
+	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s oaep_labellen=%d\n",
+		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md), oaep_labellen);
 
 	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
 	memset(oaep_params, 0, sizeof(CK_RSA_PKCS_OAEP_PARAMS));
@@ -385,6 +385,74 @@ static int pkcs11_sign_with_mechanism(PKCS11_OBJECT_private *key,
 	}
 
 	*siglen = (size_t)ck_siglen;
+
+end:
+	pkcs11_put_session(slot, session);
+	return rv;
+}
+
+/*
+ * Execute a PKCS#11 decryption operation using the specified mechanism.
+ * Returns: CKR_OK on success or PKCS#11 error code on failure.
+ */
+static int pkcs11_decrypt_with_mechanism(PKCS11_OBJECT_private *key,
+	CK_MECHANISM *mechanism,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	int rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_ULONG ck_outlen;
+	CK_ULONG ck_inlen;
+
+	if (key == NULL || mechanism == NULL || outlen == NULL || in == NULL)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_decrypt_with_mechanism() "
+		"%s out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism), out, *outlen, in, inlen);
+#endif
+
+	ck_outlen = (CK_ULONG)*outlen;
+	ck_inlen = (CK_ULONG)inlen;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, mechanism, key->object));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+	if (key->always_authenticate == CK_TRUE) {
+		rv = pkcs11_authenticate(key, session);
+		if (rv != CKR_OK)
+			goto end;
+	}
+
+	rv = CRYPTOKI_call(ctx,
+		C_Decrypt(session, (CK_BYTE_PTR)in, ck_inlen, out, &ck_outlen));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+	*outlen = (size_t)ck_outlen;
 
 end:
 	pkcs11_put_session(slot, session);
@@ -697,10 +765,7 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	CK_MECHANISM mechanism;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
-	CK_SESSION_HANDLE session;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
-	CK_ULONG ck_outlen;
-	CK_ULONG ck_inlen;
 	int rv;
 
 	if (key == NULL || outlen == NULL || in == NULL)
@@ -721,33 +786,11 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 		pad_mode, 0, mdname, mgf1_mdname, oaep_label, oaep_labellen) < 0)
 		return -1;
 
-	/* caller-provided output buffer size */
-	ck_outlen = (CK_ULONG)*outlen;
-	ck_inlen = (CK_ULONG)inlen;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, key->object));
+	rv = pkcs11_decrypt_with_mechanism(key, &mechanism, out, outlen,
+		in, inlen);
 	if (rv != CKR_OK)
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
-			__FILE__, __LINE__, rv);
-	else if (rv == CKR_OK && key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-
-	if (rv == CKR_OK)
-		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(session, (CK_BYTE_PTR)in, ck_inlen, out, &ck_outlen));
-
-	pkcs11_put_session(slot, session);
-
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
-			__FILE__, __LINE__, rv);
 		return -1;
-	}
 
-	*outlen = (size_t)ck_outlen;
 	return (int)*outlen;
 }
 
