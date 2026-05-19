@@ -1272,9 +1272,9 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	PKCS11_SLOT_private *slot;
 	CK_SESSION_HANDLE session;
 	const EVP_MD *md, *mgf1_md;
-	const char *mdname, *mgf1_mdname;
+	const char *mdname = NULL, *mgf1_mdname = NULL;
 	unsigned char *oaep_label = NULL;
-	int oaep_labellen;
+	int oaep_labellen = 0;
 
 	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
 	 * the size inquiry internally. */
@@ -1300,22 +1300,6 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
 		return -1;
 
-	if (padding != RSA_PKCS1_OAEP_PADDING)
-		return -1; /* unsupported */
-
-	/* retrieve OAEP parameters */
-	if (EVP_PKEY_CTX_get_rsa_oaep_md(evp_pkey_ctx, &md) <= 0)
-		return -1;
-
-	if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
-		return -1;
-
-	oaep_labellen = EVP_PKEY_CTX_get0_rsa_oaep_label(evp_pkey_ctx, &oaep_label);
-	if (oaep_labellen < 0) {
-		oaep_labellen = 0;
-		oaep_label = NULL;
-	}
-
 	slot = key->slot;
 	if (!slot)
 		return -1;
@@ -1323,8 +1307,34 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
-	mdname = EVP_MD_name(md);
-	mgf1_mdname = EVP_MD_name(mgf1_md);
+	switch (padding) {
+	case RSA_PKCS1_PADDING:
+		break;
+
+	case RSA_PKCS1_OAEP_PADDING:
+		/* retrieve OAEP parameters */
+		if (EVP_PKEY_CTX_get_rsa_oaep_md(evp_pkey_ctx, &md) <= 0 ||
+				md == NULL)
+			return -1;
+
+		if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0 ||
+				mgf1_md == NULL)
+			return -1;
+
+		mdname = EVP_MD_name(md);
+		mgf1_mdname = EVP_MD_name(mgf1_md);
+
+		oaep_labellen = EVP_PKEY_CTX_get0_rsa_oaep_label(evp_pkey_ctx,
+			&oaep_label);
+		if (oaep_labellen < 0) {
+			oaep_labellen = 0;
+			oaep_label = NULL;
+		}
+		break;
+
+	default:
+		return -1;
+	}
 
 	return pkcs11_evp_pkey_rsa_decrypt(key, pkey, mdname, padding, mgf1_mdname,
 		oaep_label, oaep_labellen, out, outlen, in, inlen);
