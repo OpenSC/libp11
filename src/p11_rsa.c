@@ -86,10 +86,9 @@ int pkcs11_private_encrypt(int flen,
 		return -1;
 
 	siglen = pkcs11_get_key_size(key);
-	if (!pkcs11_evp_pkey_rsa_sign(key, NULL, NULL, padding,
+	if (pkcs11_evp_pkey_rsa_sign(key, NULL, NULL, padding,
 		0, NULL, /* unsupported PSS parameters */
-		NULL, 0, /* unsupported oaep_label */
-		to, &siglen, from, flen))
+		to, &siglen, from, flen) <= 0)
 		return -1;
 
 	return (int)siglen;
@@ -123,9 +122,9 @@ int pkcs11_private_decrypt(int flen,
 	 * PKCS#11 "source data" respectively.
 	 * https://www.openssl.org/docs/man3.0/man3/RSA_private_decrypt.html */
 	outlen = flen;
-	if (!pkcs11_evp_pkey_rsa_decrypt(key, NULL, "SHA1", padding, "SHA1",
+	if (pkcs11_evp_pkey_rsa_decrypt(key, NULL, "SHA1", padding, "SHA1",
 		NULL, 0, /* unsupported oaep_label */
-		to, &outlen, 0, from, flen))
+		to, &outlen, from, flen) <= 0)
 		return -1;
 
 	return (int)outlen;

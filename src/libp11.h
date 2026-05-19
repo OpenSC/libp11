@@ -537,7 +537,6 @@ extern int PKCS11_verify(int type,
 /* Perform a private-key operation using a PKCS#11-backed EVP_PKEY */
 extern int PKCS11_evp_pkey_sign(EVP_PKEY *pkey, int type, const char *mdname,
 	const int pad_mode, const int salt_len, const char *mgf1_mdname,
-	unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
@@ -546,7 +545,7 @@ extern int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 	const int pad_mode, const char *mgf1_mdname,
 	unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *sig, size_t *siglen,
-	size_t *outsize, const unsigned char *in, size_t inlen);
+	const unsigned char *in, size_t inlen);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Encrypts data using the private key */

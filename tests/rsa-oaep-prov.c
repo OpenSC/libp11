@@ -86,9 +86,12 @@ int main(int argc, char **argv)
 		display_openssl_errors();
 		goto cleanup;
 	}
-	/* EME-OAEP as defined in PKCS #1 v2.0 with SHA-1, MGF1 and an empty encoding parameter (OAEP label) */
-	if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-		fprintf(stderr, "Could not set padding\n");
+	/* EME-OAEP with SHA-1, MGF1-SHA1 and no OAEP label */
+	if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_OAEP_PADDING) <= 0 ||
+		EVP_PKEY_CTX_set_rsa_oaep_md(pkey_ctx, EVP_sha1()) <= 0 ||
+		EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha1()) <= 0 ||
+		EVP_PKEY_CTX_set0_rsa_oaep_label(pkey_ctx, NULL, 0) <= 0) {
+		fprintf(stderr, "Could not configure OAEP parameters\n");
 		display_openssl_errors();
 		goto cleanup;
 	}
@@ -112,6 +115,9 @@ int main(int argc, char **argv)
 		display_openssl_errors();
 		goto cleanup;
 	}
+
+	/* SoftHSM currently supports RSA-OAEP only with SHA-1/MGF1-SHA1
+	 * and does not support non-empty OAEP labels (pSourceData). */
 	if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
 		fprintf(stderr, "Could not set padding\n");
 		display_openssl_errors();

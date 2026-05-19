@@ -216,8 +216,8 @@ static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	if (mgf1_md == NULL)
 		return -1;
 
-	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s\n",
-		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md));
+	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s oaep_labellen=%d\n",
+		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md), oaep_labellen);
 
 	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
 	memset(oaep_params, 0, sizeof(CK_RSA_PKCS_OAEP_PARAMS));
@@ -256,6 +256,9 @@ static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
 		mechanism->mechanism = CKM_RSA_X_509;
 		break;
 	case RSA_X931_PADDING:
+		/* RSA_X931_PADDING uses the legacy ANSI X9.31 signature format.
+		 * This deprecated mode is not supported by SoftHSM or YubiKey
+		 * PKCS#11 modules (no CKM_RSA_X9_31 support). */
 		mechanism->mechanism = CKM_RSA_X9_31;
 		break;
 	case RSA_PKCS1_PSS_PADDING:
@@ -389,27 +392,195 @@ end:
 }
 
 /*
+ * Execute a PKCS#11 decryption operation using the specified mechanism.
+ * Returns: CKR_OK on success or PKCS#11 error code on failure.
+ */
+static int pkcs11_decrypt_with_mechanism(PKCS11_OBJECT_private *key,
+	CK_MECHANISM *mechanism,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	int rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_ULONG ck_outlen;
+	CK_ULONG ck_inlen;
+
+	if (key == NULL || mechanism == NULL || outlen == NULL || in == NULL)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_decrypt_with_mechanism() "
+		"%s out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism), out, *outlen, in, inlen);
+#endif
+
+	ck_outlen = (CK_ULONG)*outlen;
+	ck_inlen = (CK_ULONG)inlen;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, mechanism, key->object));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+	if (key->always_authenticate == CK_TRUE) {
+		rv = pkcs11_authenticate(key, session);
+		if (rv != CKR_OK)
+			goto end;
+	}
+
+	rv = CRYPTOKI_call(ctx,
+		C_Decrypt(session, (CK_BYTE_PTR)in, ck_inlen, out, &ck_outlen));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+	*outlen = (size_t)ck_outlen;
+
+end:
+	pkcs11_put_session(slot, session);
+	return rv;
+}
+
+/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing. */
+static int pkcs11_build_digestinfo(const char *mdname,
+	const unsigned char *dgst, size_t dgstlen,
+	unsigned char **out, size_t *outlen)
+{
+	const EVP_MD *md;
+	X509_SIG *x509_sig = NULL;
+	X509_ALGOR *alg = NULL;
+	ASN1_OCTET_STRING *digest = NULL;
+	unsigned char *p;
+	int len;
+
+	if (mdname == NULL || dgst == NULL || out == NULL || outlen == NULL)
+		return 0;
+
+	*out = NULL;
+	*outlen = 0;
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	if (EVP_MD_size(md) <= 0 || dgstlen != (size_t)EVP_MD_size(md))
+		return 0;
+
+	x509_sig = X509_SIG_new();
+	if (x509_sig == NULL)
+		return 0;
+
+	X509_SIG_getm(x509_sig, &alg, &digest);
+
+	if (!X509_ALGOR_set0(alg, OBJ_nid2obj(EVP_MD_type(md)), V_ASN1_NULL, NULL))
+		goto err;
+
+	if (!ASN1_OCTET_STRING_set(digest, dgst, (int)dgstlen))
+		goto err;
+
+	len = i2d_X509_SIG(x509_sig, NULL);
+	if (len <= 0)
+		goto err;
+
+	*out = OPENSSL_malloc((size_t)len);
+	if (*out == NULL)
+		goto err;
+
+	p = *out;
+	len = i2d_X509_SIG(x509_sig, &p);
+	if (len <= 0)
+		goto err;
+
+	*outlen = (size_t)len;
+	X509_SIG_free(x509_sig);
+	return 1;
+
+err:
+	OPENSSL_free(*out);
+	*out = NULL;
+	*outlen = 0;
+	X509_SIG_free(x509_sig);
+	return 0;
+}
+
+/* Build digest || X9.31 hash ID for RSA_X931_PADDING signing. */
+static int pkcs11_build_x931_digest(const char *mdname,
+	const unsigned char *dgst, size_t dgstlen,
+	unsigned char **out, size_t *outlen)
+{
+	const EVP_MD *md;
+	int md_size;
+	int hash_id;
+
+	if (mdname == NULL || dgst == NULL || out == NULL || outlen == NULL)
+		return 0;
+
+	*out = NULL;
+	*outlen = 0;
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	md_size = EVP_MD_size(md);
+	if (md_size <= 0 || dgstlen != (size_t)md_size)
+		return 0;
+
+	hash_id = RSA_X931_hash_id(EVP_MD_type(md));
+	if (hash_id == -1)
+		return 0;
+
+	*out = OPENSSL_malloc(dgstlen + 1);
+	if (*out == NULL)
+		return 0;
+
+	memcpy(*out, dgst, dgstlen);
+	(*out)[dgstlen] = (unsigned char)hash_id;
+	*outlen = dgstlen + 1;
+
+	return 1;
+}
+
+/*
  * Sign input data with an RSA private key using a PKCS#11 token.
  *
- * For RSA_PKCS1_PADDING, RSA_PKCS1_PSS_PADDING and RSA_X931_PADDING,
- * the input must be the message digest.
+ * For RSA_PKCS1_PADDING, if mdname is set, the input must be the message
+ * digest and is wrapped in an ASN.1 DigestInfo structure before signing with
+ * CKM_RSA_PKCS. If mdname is not set, the input is signed directly.
  *
- * For RSA_PKCS1_PADDING, the token performs PKCS#1 v1.5 DigestInfo
- * encoding internally based on the selected digest algorithm.
+ * For RSA_PKCS1_PSS_PADDING, the input must be the message digest. The digest
+ * algorithm, MGF1 digest and salt length are passed separately in
+ * CK_RSA_PKCS_PSS_PARAMS.
  *
- * For RSA_PKCS1_PSS_PADDING, the digest algorithm, MGF1 digest and
- * salt length are passed separately in CK_RSA_PKCS_PSS_PARAMS.
- *
- * For RSA_X931_PADDING, the token applies X9.31 signature formatting
- * based on the provided digest.
+ * For RSA_X931_PADDING, if mdname is set, append the X9.31 hash
+ * identifier to the digest before passing it to CKM_RSA_X9_31.
+ * If mdname is not set, the input is expected to contain the hash ID.
  *
  * For RSA_NO_PADDING, the input is passed to the token unchanged.
  *
  * Returns 1 on success or -1 on failure.
  */
 int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
-	const char *mdname, const int pad_mode, const int salt_len,
-	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
+	const char *mdname, const int pad_mode,
+	const int salt_len, const char *mgf1_mdname,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
@@ -417,6 +588,11 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
 	CK_RSA_PKCS_PSS_PARAMS pss_params;
+	const unsigned char *sign_tbs = tbs;
+	size_t sign_tbslen = tbslen;
+	unsigned char *encoded = NULL;
+	size_t encoded_len = 0;
+	int ret = -1;
 
 	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
 		return -1;
@@ -429,16 +605,46 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (ctx == NULL)
 		return -1;
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL,
-		ctx, pkey, pad_mode, salt_len, mdname, mgf1_mdname,
-		oaep_label, oaep_labellen) < 0)
+	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL, ctx, pkey,
+		pad_mode, salt_len, mdname, mgf1_mdname, NULL, 0) < 0)
 		return -1;
+
+	switch (pad_mode) {
+	case RSA_PKCS1_PADDING:
+		if (mdname != NULL) {
+			/* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing */
+			if (!pkcs11_build_digestinfo(mdname,
+				tbs, tbslen, &encoded, &encoded_len))
+				goto end;
+
+			sign_tbs = encoded;
+			sign_tbslen = encoded_len;
+		}
+		break;
+	case RSA_X931_PADDING:
+		if (mdname != NULL) {
+			/* Append X9.31 hash identifier to the digest */
+			if (!pkcs11_build_x931_digest(mdname,
+				tbs, tbslen, &encoded, &encoded_len))
+				goto end;
+
+			sign_tbs = encoded;
+			sign_tbslen = encoded_len;
+		}
+		break;
+	default:
+		break;
+	}
 
 	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
-		tbs, tbslen) != CKR_OK)
-		return -1;
+		sign_tbs, sign_tbslen) != CKR_OK)
+		goto end;
 
-	return 1;
+	ret = 1;
+
+end:
+	OPENSSL_free(encoded);
+	return ret;
 }
 
 #ifndef OPENSSL_NO_EC
@@ -554,15 +760,12 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	const char *mdname, const int pad_mode,
 	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *out, size_t *outlen,
-	size_t *outsize, const unsigned char *in, size_t inlen)
+	const unsigned char *in, size_t inlen)
 {
 	CK_MECHANISM mechanism;
 	PKCS11_SLOT_private *slot;
 	PKCS11_CTX_private *ctx;
-	CK_SESSION_HANDLE session;
 	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
-	CK_ULONG ck_outlen;
-	CK_ULONG ck_inlen;
 	int rv;
 
 	if (key == NULL || outlen == NULL || in == NULL)
@@ -579,42 +782,15 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (oaep_labellen > 0)
 		pkcs11_log(ctx, LOG_WARNING, "OAEP label may not be supported by PKCS#11 token\n");
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params,
-		ctx, pkey, pad_mode, 0, mdname, mgf1_mdname,
-		oaep_label, oaep_labellen) < 0)
+	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params, ctx, pkey,
+		pad_mode, 0, mdname, mgf1_mdname, oaep_label, oaep_labellen) < 0)
 		return -1;
 
-	/* caller-provided output buffer size */
-	if (outsize != NULL)
-		ck_outlen = (CK_ULONG)*outsize;
-	else
-		ck_outlen = (CK_ULONG)*outlen;
-
-	ck_inlen = (CK_ULONG)inlen;
-
-	if (pkcs11_get_session(slot, 0, &session))
-		return -1;
-
-	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, &mechanism, key->object));
+	rv = pkcs11_decrypt_with_mechanism(key, &mechanism, out, outlen,
+		in, inlen);
 	if (rv != CKR_OK)
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DecryptInit rv=%d\n",
-			__FILE__, __LINE__, rv);
-	else if (rv == CKR_OK && key->always_authenticate == CK_TRUE)
-		rv = pkcs11_authenticate(key, session);
-
-	if (rv == CKR_OK)
-		rv = CRYPTOKI_call(ctx,
-			C_Decrypt(session, (CK_BYTE_PTR)in, ck_inlen, out, &ck_outlen));
-
-	pkcs11_put_session(slot, session);
-
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Decrypt rv=%d\n",
-			__FILE__, __LINE__, rv);
 		return -1;
-	}
 
-	*outlen = (size_t)ck_outlen;
 	return (int)*outlen;
 }
 
