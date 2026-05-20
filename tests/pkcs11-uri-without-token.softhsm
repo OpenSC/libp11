@@ -226,7 +226,9 @@ echo
 # Sign the SHA-256 digest with an RSA key using RSA-PSS (raw input)
 ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
 	-inkey ${PRIVATE_KEY} \
-	-sign -rawin -pkeyopt rsa_padding_mode:pss \
+	-sign -rawin \
+	-pkeyopt rsa_padding_mode:pss \
+	-pkeyopt rsa_mgf1_md:sha256 \
 	-out "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to sign a digest using RSA-PSS"
@@ -237,7 +239,9 @@ echo
 # Verify the signature with an RSA public key using RSA-PSS (raw input)
 ${OPENSSL} pkeyutl -engine pkcs11 -keyform engine \
 	-inkey ${PUBLIC_KEY} \
-	-verify -pubin -rawin -pkeyopt rsa_padding_mode:pss \
+	-verify -pubin -rawin \
+	-pkeyopt rsa_padding_mode:pss \
+	-pkeyopt rsa_mgf1_md:sha256 \
 	-sigfile "${outdir}/signature.bin" -in "${outdir}/in.txt"
 if [[ $? -ne 0 ]]; then
 	echo "Failed to verify signature using PKCS#11 URI ${PUBLIC_KEY_ANY}"
