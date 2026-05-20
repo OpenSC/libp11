@@ -1294,49 +1294,49 @@ static int signature_set_ctx_params(void *ctx, const OSSL_PARAM params[])
 			return 0;
 	}
 
-	/* PSS-only params (RSA) */
-	if (p11_signature_ctx_get_pad_mode(sig_ctx) == RSA_PKCS1_PSS_PADDING) {
-		/* mgf1-digest, EVP_PKEY_CTX_set_rsa_mgf1_md() */
-		p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_MGF1_DIGEST);
-		if (p != NULL) {
-			const char *mgf1 = NULL;
+	/* PSS parameters may arrive before pad-mode, so store them if present. */
 
-			if (!OSSL_PARAM_get_utf8_string_ptr(p, &mgf1) || mgf1 == NULL)
-				return 0;
+	/* mgf1-digest, EVP_PKEY_CTX_set_rsa_mgf1_md() */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_MGF1_DIGEST);
+	if (p != NULL) {
+		const char *mgf1 = NULL;
 
-			if (!p11_signature_ctx_set_mgf1_mdname(sig_ctx, mgf1))
-				return 0;
-		}
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &mgf1) || mgf1 == NULL)
+			return 0;
 
-		/* pss-saltlen, EVP_PKEY_CTX_set_rsa_pss_saltlen(), -pkeyopt rsa_pss_saltlen */
-		p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PSS_SALTLEN);
-		if (p != NULL) {
-			int saltlen = 0;
-			const char *s = NULL;
-
-			if (OSSL_PARAM_get_int(p, &saltlen)) {
-				/* got int directly */
-			} else if (OSSL_PARAM_get_utf8_string_ptr(p, &s) && s != NULL) {
-				if (OPENSSL_strcasecmp(s, "digest") == 0)
-					saltlen = RSA_PSS_SALTLEN_DIGEST; /* -1 */
-				else if (OPENSSL_strcasecmp(s, "auto") == 0)
-					saltlen = RSA_PSS_SALTLEN_AUTO; /* -2 */
-				else if (OPENSSL_strcasecmp(s, "max") == 0)
-					saltlen = RSA_PSS_SALTLEN_MAX; /* -3 */
-#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
-				else if (OPENSSL_strcasecmp(s, "auto-digestmax") == 0)
-					saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX; /* -4 */
-#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
-				else
-					saltlen = atoi(s); /* minimalistic */
-			} else {
-				return 0;
-			}
-
-			if (!p11_signature_ctx_set_pss_saltlen(sig_ctx, saltlen))
-				return 0;
-		}
+		if (!p11_signature_ctx_set_mgf1_mdname(sig_ctx, mgf1))
+			return 0;
 	}
+
+	/* pss-saltlen, EVP_PKEY_CTX_set_rsa_pss_saltlen(), -pkeyopt rsa_pss_saltlen */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PSS_SALTLEN);
+	if (p != NULL) {
+		int saltlen = 0;
+		const char *s = NULL;
+
+		if (OSSL_PARAM_get_int(p, &saltlen)) {
+			/* got int directly */
+		} else if (OSSL_PARAM_get_utf8_string_ptr(p, &s) && s != NULL) {
+			if (OPENSSL_strcasecmp(s, "digest") == 0)
+				saltlen = RSA_PSS_SALTLEN_DIGEST; /* -1 */
+			else if (OPENSSL_strcasecmp(s, "auto") == 0)
+				saltlen = RSA_PSS_SALTLEN_AUTO; /* -2 */
+			else if (OPENSSL_strcasecmp(s, "max") == 0)
+				saltlen = RSA_PSS_SALTLEN_MAX; /* -3 */
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+			else if (OPENSSL_strcasecmp(s, "auto-digestmax") == 0)
+				saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX; /* -4 */
+#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
+			else
+				saltlen = atoi(s); /* minimalistic */
+		} else {
+			return 0;
+		}
+
+		if (!p11_signature_ctx_set_pss_saltlen(sig_ctx, saltlen))
+			return 0;
+	}
+
 	return 1;
 }
 
@@ -1545,6 +1545,8 @@ static int asym_cipher_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 		if (!p11_asym_cipher_ctx_set_pad_mode(asym_ctx, pad_mode))
 			return 0;
 	}
+
+	/* OAEP parameters may arrive before pad-mode, so store them if present. */
 
 	/* OAEP digest
 	 * EVP_PKEY_CTX_set_rsa_oaep_md(), not covered by tests
