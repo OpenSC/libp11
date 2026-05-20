@@ -868,9 +868,22 @@ P11_SIGNATURE_CTX *p11_signature_dupctx(P11_SIGNATURE_CTX *sig_ctx)
 	if (dst == NULL)
 		return NULL;
 
+	/* deep-copy dynamically allocated string parameters */
+	if (sig_ctx->propq != NULL) {
+		dst->propq = OPENSSL_strdup(sig_ctx->propq);
+		if (dst->propq == NULL)
+			goto err;
+	}
+
 	if (sig_ctx->mdname != NULL) {
 		dst->mdname = OPENSSL_strdup(sig_ctx->mdname);
 		if (dst->mdname == NULL)
+			goto err;
+	}
+
+	if (sig_ctx->mgf1_mdname != NULL) {
+		dst->mgf1_mdname = OPENSSL_strdup(sig_ctx->mgf1_mdname);
+		if (dst->mgf1_mdname == NULL)
 			goto err;
 	}
 
