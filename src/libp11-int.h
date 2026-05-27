@@ -44,11 +44,10 @@
 
 #include "p11_pthread.h"
 
-/* forward and type declarations */
-typedef struct pkcs11_ctx_private PKCS11_CTX_private;
-typedef struct pkcs11_slot_private PKCS11_SLOT_private;
-typedef struct pkcs11_object_private PKCS11_OBJECT_private;
+/* forward type declarations */
+typedef struct pkcs11_keys PKCS11_keys;
 typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
+typedef struct pkcs11_template_st PKCS11_TEMPLATE;
 
 /* get private implementations of PKCS11 structures */
 
@@ -68,12 +67,12 @@ struct pkcs11_ctx_private {
 	int initialized;
 	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
 };
-#define PRIVCTX(_ctx)		((PKCS11_CTX_private *) ((_ctx)->_private))
+#define PRIVCTX(c) ((c)->_private)
 
-typedef struct pkcs11_keys {
+struct pkcs11_keys {
 	int num;
 	PKCS11_KEY *keys;
-} PKCS11_keys;
+};
 
 struct pkcs11_slot_private {
 	int refcnt;
@@ -96,7 +95,7 @@ struct pkcs11_slot_private {
 	int ncerts;
 	PKCS11_CERT *certs;
 };
-#define PRIVSLOT(_slot)		((PKCS11_SLOT_private *) ((_slot)->_private))
+#define PRIVSLOT(s) ((s)->_private)
 
 struct pkcs11_object_private {
 	PKCS11_SLOT_private *slot;
@@ -114,8 +113,8 @@ struct pkcs11_object_private {
 	pthread_mutex_t lock;
 	PKCS11_KEY *public; /* our current public object */
 };
-#define PRIVKEY(_key)		((PKCS11_OBJECT_private *) (_key)->_private)
-#define PRIVCERT(_cert)		((PKCS11_OBJECT_private *) (_cert)->_private)
+#define PRIVKEY(k) ((k)->_private)
+#define PRIVCERT(c) ((c)->_private)
 
 struct pkcs11_object_ops {
 	int pkey_type; /* EVP_PKEY_xxx */
@@ -191,11 +190,11 @@ extern int pkcs11_getattr_alloc(PKCS11_CTX_private *, CK_SESSION_HANDLE, CK_OBJE
 extern int pkcs11_getattr_bn(PKCS11_CTX_private *, CK_SESSION_HANDLE, CK_OBJECT_HANDLE,
 	CK_ATTRIBUTE_TYPE, BIGNUM **);
 
-typedef struct pkcs11_template_st {
+struct pkcs11_template_st {
 	unsigned long allocated;
 	unsigned int nattr;
 	CK_ATTRIBUTE attrs[32];
-} PKCS11_TEMPLATE;
+};
 
 typedef int (*pkcs11_i2d_fn) (const void *, unsigned char **);
 extern unsigned int pkcs11_addattr(PKCS11_TEMPLATE *, int, void *, size_t);

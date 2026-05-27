@@ -52,27 +52,44 @@ int ERR_get_CKR_code(void);
  * of this project to expose the entire PKCS#11 functionality.
  */
 
+/* opaque type declarations */
+typedef struct pkcs11_object_private PKCS11_OBJECT_private;
+typedef struct pkcs11_slot_private PKCS11_SLOT_private;
+typedef struct pkcs11_ctx_private PKCS11_CTX_private;
+
+/* forward type declarations */
+typedef struct PKCS11_key_st PKCS11_KEY;
+typedef struct PKCS11_cert_st PKCS11_CERT;
+typedef struct PKCS11_token_st PKCS11_TOKEN;
+typedef struct PKCS11_slot_st PKCS11_SLOT;
+typedef struct PKCS11_ctx_st PKCS11_CTX;
+typedef struct PKCS11_ec_kgen_st PKCS11_EC_KGEN;
+typedef struct PKCS11_eddsa_kgen_st PKCS11_EDDSA_KGEN;
+typedef struct PKCS11_rsa_kgen_st PKCS11_RSA_KGEN;
+typedef struct PKCS11_params PKCS11_params;
+typedef struct PKCS11_kgen_attrs_st PKCS11_KGEN_ATTRS;
+
 /** PKCS11 key object (public or private) */
-typedef struct PKCS11_key_st {
+struct PKCS11_key_st {
 	char *label;
 	unsigned char *id;
 	size_t id_len;
 	unsigned char isPrivate;	/**< private key present? */
 	unsigned char needLogin;	/**< login to read private key? */
-	void *_private;
-} PKCS11_KEY;
+	PKCS11_OBJECT_private *_private;
+};
 
 /** PKCS11 certificate object */
-typedef struct PKCS11_cert_st {
+struct PKCS11_cert_st {
 	char *label;
 	unsigned char *id;
 	size_t id_len;
 	X509 *x509;
-	void *_private;
-} PKCS11_CERT;
+	PKCS11_OBJECT_private *_private;
+};
 
 /** PKCS11 token: smart card or USB key */
-typedef struct PKCS11_token_st {
+struct PKCS11_token_st {
 	char *label;
 	char *manufacturer;
 	char *model;
@@ -91,43 +108,43 @@ typedef struct PKCS11_token_st {
 	unsigned char soPinFinalTry;
 	unsigned char soPinLocked;
 	unsigned char soPinToBeChanged;
-	struct PKCS11_slot_st *slot;
-} PKCS11_TOKEN;
+	PKCS11_SLOT *slot;
+};
 
 /** PKCS11 slot: card reader */
-typedef struct PKCS11_slot_st {
+struct PKCS11_slot_st {
 	char *manufacturer;
 	char *description;
 	unsigned char removable;
 	PKCS11_TOKEN *token;	/**< NULL if no token present */
-	void *_private;
-} PKCS11_SLOT;
+	PKCS11_SLOT_private *_private;
+};
 
 /** PKCS11 context */
-typedef struct PKCS11_ctx_st {
+struct PKCS11_ctx_st {
 	char *manufacturer;
 	char *description;
-	void *_private;
-} PKCS11_CTX;
+	PKCS11_CTX_private *_private;
+};
 
-typedef struct PKCS11_ec_kgen_st {
+struct PKCS11_ec_kgen_st {
 	const char *curve;
-} PKCS11_EC_KGEN;
+};
 
-typedef struct PKCS11_eddsa_kgen_st {
+struct PKCS11_eddsa_kgen_st {
 	int nid;                 /* NID_ED25519 or NID_ED448 */
-} PKCS11_EDDSA_KGEN;
+};
 
-typedef struct PKCS11_rsa_kgen_st {
+struct PKCS11_rsa_kgen_st {
 	unsigned int bits;
-} PKCS11_RSA_KGEN;
+};
 
-typedef struct PKCS11_params {
+struct PKCS11_params {
 	unsigned char extractable;
 	unsigned char sensitive;
-} PKCS11_params;
+};
 
-typedef struct PKCS11_kgen_attrs_st {
+struct PKCS11_kgen_attrs_st {
 	/* Key generation type from OpenSSL. Given the union below this should
 	 * be either EVP_PKEY_EC or EVP_PKEY_RSA or EVP_PKEY_ED25519 or EVP_PKEY_ED448
 	 */
@@ -142,7 +159,7 @@ typedef struct PKCS11_kgen_attrs_st {
 	const unsigned char *key_id;
 	size_t id_len;
 	const PKCS11_params *key_params;
-} PKCS11_KGEN_ATTRS;
+};
 
 /** PKCS11 ASCII logging callback */
 typedef void (*PKCS11_VLOG_A_CB)(int, const char *, va_list);
