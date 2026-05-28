@@ -313,3 +313,10 @@ list_objects () {
 cleanup() {
 	export LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}"
 }
+
+# Return success if the PKCS#11 token supports the given mechanism.
+has_mechanism()
+{
+	${PKCS11_TOOL} --module "${MODULE}" \
+		--list-mechanisms 2>/dev/null | grep -qw "$1"
+}
