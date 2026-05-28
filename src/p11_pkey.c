@@ -232,21 +232,17 @@ static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	return 0;
 }
 
-/* Setup PKCS#11 mechanisms for signing */
-static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
+/* Setup PKCS#11 RSA mechanism for signing. */
+static int pkcs11_set_rsa_sign_mechanism(CK_MECHANISM *mechanism,
 	CK_RSA_PKCS_PSS_PARAMS *pss_params,
-	CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	PKCS11_CTX_private *pctx, EVP_PKEY *pkey,
 	const int padding, const int salt_len,
-	const char *mdname, const char *mgf1_mdname,
-	unsigned char *oaep_label, const int oaep_labellen)
+	const char *mdname, const char *mgf1_mdname)
 {
 	if (mechanism == NULL)
 		return -1;
 
 	memset(mechanism, 0, sizeof(CK_MECHANISM));
-	mechanism->pParameter = NULL;
-	mechanism->ulParameterLen = 0;
 
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
@@ -269,6 +265,34 @@ static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
 		mechanism->pParameter = pss_params;
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_PSS_PARAMS);
 		break;
+	default:
+		pkcs11_log(pctx, LOG_DEBUG, "%s:%d unsupported RSA signing padding: %d\n",
+			__FILE__, __LINE__, padding);
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Setup PKCS#11 RSA mechanism for decryption. */
+static int pkcs11_set_rsa_decrypt_mechanism(CK_MECHANISM *mechanism,
+	CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
+	PKCS11_CTX_private *pctx, const int padding,
+	const char *mdname, const char *mgf1_mdname,
+	unsigned char *oaep_label, const int oaep_labellen)
+{
+	if (mechanism == NULL)
+		return -1;
+
+	memset(mechanism, 0, sizeof(CK_MECHANISM));
+
+	switch (padding) {
+	case RSA_PKCS1_PADDING:
+		mechanism->mechanism = CKM_RSA_PKCS;
+		break;
+	case RSA_NO_PADDING:
+		mechanism->mechanism = CKM_RSA_X_509;
+		break;
 	case RSA_PKCS1_OAEP_PADDING:
 		if (pkcs11_oaep_param(oaep_params, mdname, mgf1_mdname,
 			oaep_label, oaep_labellen, pctx) != 0)
@@ -278,10 +302,11 @@ static int pkcs11_set_rsa_mechanism(CK_MECHANISM *mechanism,
 		mechanism->ulParameterLen = sizeof(CK_RSA_PKCS_OAEP_PARAMS);
 		break;
 	default:
-		pkcs11_log(pctx, LOG_DEBUG, "%s:%d unsupported padding: %d\n",
+		pkcs11_log(pctx, LOG_DEBUG, "%s:%d unsupported RSA decryption padding: %d\n",
 			__FILE__, __LINE__, padding);
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -605,8 +630,8 @@ int pkcs11_evp_pkey_rsa_sign(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (ctx == NULL)
 		return -1;
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, &pss_params, NULL, ctx, pkey,
-		pad_mode, salt_len, mdname, mgf1_mdname, NULL, 0) < 0)
+	if (pkcs11_set_rsa_sign_mechanism(&mechanism, &pss_params, ctx, pkey,
+		pad_mode, salt_len, mdname, mgf1_mdname) < 0)
 		return -1;
 
 	switch (pad_mode) {
@@ -756,7 +781,7 @@ int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
  * EME-OAEP as defined in PKCS #1 v2.0 with SHA-1, MGF1 and an encoding parameter
  * (OAEP label).
  */
-int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
+int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
 	const char *mdname, const int pad_mode,
 	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *out, size_t *outlen,
@@ -782,8 +807,8 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
 	if (oaep_labellen > 0)
 		pkcs11_log(ctx, LOG_WARNING, "OAEP label may not be supported by PKCS#11 token\n");
 
-	if (pkcs11_set_rsa_mechanism(&mechanism, NULL, &oaep_params, ctx, pkey,
-		pad_mode, 0, mdname, mgf1_mdname, oaep_label, oaep_labellen) < 0)
+	if (pkcs11_set_rsa_decrypt_mechanism(&mechanism, &oaep_params, ctx,
+		pad_mode, mdname, mgf1_mdname, oaep_label, oaep_labellen) < 0)
 		return -1;
 
 	rv = pkcs11_decrypt_with_mechanism(key, &mechanism, out, outlen,

@@ -1336,7 +1336,7 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1;
 	}
 
-	return pkcs11_evp_pkey_rsa_decrypt(key, pkey, mdname, padding, mgf1_mdname,
+	return pkcs11_evp_pkey_rsa_decrypt(key, mdname, padding, mgf1_mdname,
 		oaep_label, oaep_labellen, out, outlen, in, inlen);
 }
 

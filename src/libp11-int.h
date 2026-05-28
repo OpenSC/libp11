@@ -404,7 +404,7 @@ extern int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	const unsigned char *tbs, size_t tbslen);
 
 /* Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters */
-extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key, EVP_PKEY *pkey,
+extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
 	const char *mdname, const int pad_mode,
 	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
 	unsigned char *out, size_t *outlen,
