@@ -97,7 +97,7 @@ fail:
  */
 void pkcs11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = ctx->_private;
 	/* Free previously duplicated string */
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);
@@ -132,7 +132,7 @@ static int pkcs11_initialize(PKCS11_CTX_private *cpriv)
  */
 int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = ctx->_private;
 	CK_INFO ck_info;
 	int rv;
 
@@ -179,7 +179,7 @@ int pkcs11_CTX_reload(PKCS11_CTX_private *cpriv)
  */
 void pkcs11_CTX_unload(PKCS11_CTX *ctx)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = ctx->_private;
 
 	/* Tell the PKCS11 library to shut down */
 	if (cpriv->method) {
@@ -200,7 +200,7 @@ void pkcs11_CTX_unload(PKCS11_CTX *ctx)
  */
 void pkcs11_CTX_free(PKCS11_CTX *ctx)
 {
-	PKCS11_CTX_private *cpriv = PRIVCTX(ctx);
+	PKCS11_CTX_private *cpriv = ctx->_private;
 
 	if (cpriv->init_args) {
 		OPENSSL_free(cpriv->init_args);

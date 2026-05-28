@@ -78,7 +78,7 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 		PKCS11_SLOT_private *slot = NULL;
 		for (i = 0; i < *countp; i++) {
 			PKCS11_SLOT_private *slot_old_private =
-				PRIVSLOT(&((*slotp)[i]));
+				(*slotp)[i]._private;
 			if (slot_old_private->id != slotid[n])
 				continue;
 			/* Increase ref count so it doesn't get freed when ref
@@ -322,7 +322,7 @@ int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *la
 #if 0
 	PKCS11_CTX_private *cpriv;
 	int n;
-	cpriv = PRIVCTX(ctx);
+	cpriv = ctx->_private;
 
 	for (n = 0; n < cpriv->nslots; n++) {
 		if (pkcs11_check_token(ctx, cpriv->slots + n) < 0)
@@ -508,7 +508,7 @@ void pkcs11_release_all_slots(PKCS11_SLOT *slots, unsigned int nslots)
 
 static void pkcs11_release_slot(PKCS11_SLOT *slot)
 {
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_SLOT_private *spriv = slot->_private;
 
 	if (slot->token) {
 		pkcs11_destroy_token(slot->token);
@@ -527,7 +527,7 @@ static void pkcs11_release_slot(PKCS11_SLOT *slot)
 
 int pkcs11_refresh_token(PKCS11_SLOT *slot)
 {
-	PKCS11_SLOT_private *spriv = PRIVSLOT(slot);
+	PKCS11_SLOT_private *spriv = slot->_private;
 	PKCS11_CTX_private *ctx = spriv->ctx;
 	CK_TOKEN_INFO info;
 	int rv;
@@ -578,7 +578,7 @@ int pkcs11_refresh_token(PKCS11_SLOT *slot)
 
 static void pkcs11_destroy_token(PKCS11_TOKEN *token)
 {
-	pkcs11_wipe_cache(PRIVSLOT(token->slot));
+	pkcs11_wipe_cache(token->slot->_private);
 	OPENSSL_free(token->label);
 	OPENSSL_free(token->manufacturer);
 	OPENSSL_free(token->model);

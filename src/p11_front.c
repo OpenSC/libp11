@@ -44,35 +44,35 @@ PKCS11_CTX *PKCS11_CTX_new(void)
 
 void PKCS11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args)
 {
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return;
 	pkcs11_CTX_init_args(ctx, init_args);
 }
 
 int PKCS11_CTX_load(PKCS11_CTX *ctx, const char *ident)
 {
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return -1;
 	return pkcs11_CTX_load(ctx, ident);
 }
 
 void PKCS11_CTX_unload(PKCS11_CTX *ctx)
 {
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return;
 	pkcs11_CTX_unload(ctx);
 }
 
 void PKCS11_CTX_free(PKCS11_CTX *ctx)
 {
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return;
 	pkcs11_CTX_free(ctx);
 }
 
 int PKCS11_open_session(PKCS11_SLOT *pslot, int rw)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_open_session(slot, rw);
@@ -81,7 +81,7 @@ int PKCS11_open_session(PKCS11_SLOT *pslot, int rw)
 int PKCS11_enumerate_slots(PKCS11_CTX *pctx,
 		PKCS11_SLOT **slotsp, unsigned int *nslotsp)
 {
-	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+	PKCS11_CTX_private *ctx = pctx->_private;
 	if (check_fork(ctx) < 0)
 		return -1;
 	if (!nslotsp)
@@ -96,7 +96,7 @@ int PKCS11_enumerate_slots(PKCS11_CTX *pctx,
 int PKCS11_update_slots(PKCS11_CTX *pctx,
 		PKCS11_SLOT **slotsp, unsigned int *nslotsp)
 {
-	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+	PKCS11_CTX_private *ctx = pctx->_private;
 	if (check_fork(ctx) < 0)
 		return -1;
 	if (!nslotsp)
@@ -106,7 +106,7 @@ int PKCS11_update_slots(PKCS11_CTX *pctx,
 
 unsigned long PKCS11_get_slotid_from_slot(PKCS11_SLOT *pslot)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return 0L;
 	return pkcs11_get_slotid_from_slot(slot);
@@ -115,7 +115,7 @@ unsigned long PKCS11_get_slotid_from_slot(PKCS11_SLOT *pslot)
 void PKCS11_release_all_slots(PKCS11_CTX *pctx,
 		PKCS11_SLOT *slots, unsigned int nslots)
 {
-	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+	PKCS11_CTX_private *ctx = pctx->_private;
 	if (check_fork(ctx) < 0)
 		return;
 	pkcs11_release_all_slots(slots, nslots);
@@ -128,7 +128,7 @@ PKCS11_SLOT *PKCS11_find_token(PKCS11_CTX *ctx,
 	PKCS11_TOKEN *tok;
 	unsigned int n;
 
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return NULL;
 	if (!slots)
 		return NULL;
@@ -152,7 +152,7 @@ PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
 {
 	int offset;
 
-	if (check_fork(PRIVCTX(ctx)) < 0)
+	if (check_fork(ctx->_private) < 0)
 		return NULL;
 	if (!slots)
 		return NULL;
@@ -170,7 +170,7 @@ PKCS11_SLOT *PKCS11_find_next_token(PKCS11_CTX *ctx,
 
 int PKCS11_is_logged_in(PKCS11_SLOT *pslot, int so, int *res)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_is_logged_in(slot, so, res);
@@ -178,7 +178,7 @@ int PKCS11_is_logged_in(PKCS11_SLOT *pslot, int so, int *res)
 
 int PKCS11_login(PKCS11_SLOT *pslot, int so, const char *pin)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_login(slot, so, pin);
@@ -186,7 +186,7 @@ int PKCS11_login(PKCS11_SLOT *pslot, int so, const char *pin)
 
 int PKCS11_logout(PKCS11_SLOT *pslot)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_logout(slot);
@@ -195,7 +195,7 @@ int PKCS11_logout(PKCS11_SLOT *pslot)
 int PKCS11_enumerate_keys_ext(PKCS11_TOKEN *token, const PKCS11_KEY *key_template,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	PKCS11_KEY tmpl_local = {0};
 
 	if (!key_template) {
@@ -216,7 +216,7 @@ int PKCS11_enumerate_keys(PKCS11_TOKEN *token,
 
 int PKCS11_remove_key(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_remove_object(key);
@@ -225,7 +225,7 @@ int PKCS11_remove_key(PKCS11_KEY *pkey)
 int PKCS11_enumerate_public_keys_ext(PKCS11_TOKEN *token, const PKCS11_KEY *key_template,
 		PKCS11_KEY **keys, unsigned int *nkeys)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	PKCS11_KEY tmpl_local = {0};
 
 	if (!key_template) {
@@ -246,7 +246,7 @@ int PKCS11_enumerate_public_keys(PKCS11_TOKEN *token,
 
 int PKCS11_get_key_type(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_type(key);
@@ -254,7 +254,7 @@ int PKCS11_get_key_type(PKCS11_KEY *pkey)
 
 EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return NULL;
 	return pkcs11_get_key(key, CKO_PRIVATE_KEY);
@@ -262,7 +262,7 @@ EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *pkey)
 
 EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return NULL;
 	return pkcs11_get_key(key, CKO_PUBLIC_KEY);
@@ -270,7 +270,7 @@ EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *pkey)
 
 PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return NULL;
 	return pkcs11_find_certificate(key);
@@ -278,7 +278,7 @@ PKCS11_CERT *PKCS11_find_certificate(PKCS11_KEY *pkey)
 
 PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *pcert)
 {
-	PKCS11_OBJECT_private *cert = PRIVCERT(pcert);
+	PKCS11_OBJECT_private *cert = pcert->_private;
 	if (check_object_fork(cert) < 0)
 		return NULL;
 	return pkcs11_find_key(cert);
@@ -287,7 +287,7 @@ PKCS11_KEY *PKCS11_find_key(PKCS11_CERT *pcert)
 int PKCS11_enumerate_certs_ext(PKCS11_TOKEN *token, const PKCS11_CERT *cert_template,
 		PKCS11_CERT **certs, unsigned int *ncerts)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_enumerate_certs(slot, cert_template, certs, ncerts);
@@ -301,7 +301,7 @@ int PKCS11_enumerate_certs(PKCS11_TOKEN *token,
 
 int PKCS11_remove_certificate(PKCS11_CERT *pcert)
 {
-	PKCS11_OBJECT_private *cert = PRIVCERT(pcert);
+	PKCS11_OBJECT_private *cert = pcert->_private;
 	if (check_object_fork(cert) < 0)
 		return -1;
 	return pkcs11_remove_object(cert);
@@ -310,7 +310,7 @@ int PKCS11_remove_certificate(PKCS11_CERT *pcert)
 int PKCS11_init_token(PKCS11_TOKEN *token, const char *pin,
 		const char *label)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_init_token(slot, pin, label);
@@ -318,7 +318,7 @@ int PKCS11_init_token(PKCS11_TOKEN *token, const char *pin,
 
 int PKCS11_init_pin(PKCS11_TOKEN *token, const char *pin)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	int r;
 
 	if (check_slot_fork(slot) < 0)
@@ -332,7 +332,7 @@ int PKCS11_init_pin(PKCS11_TOKEN *token, const char *pin)
 int PKCS11_change_pin(PKCS11_SLOT *pslot,
 		const char *old_pin, const char *new_pin)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	int r;
 
 	if (check_slot_fork(slot) < 0)
@@ -346,7 +346,7 @@ int PKCS11_change_pin(PKCS11_SLOT *pslot,
 int PKCS11_store_private_key(PKCS11_TOKEN *token,
 		EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_store_private_key(slot, pk, label, id, id_len);
@@ -355,7 +355,7 @@ int PKCS11_store_private_key(PKCS11_TOKEN *token,
 int PKCS11_store_public_key(PKCS11_TOKEN *token,
 		EVP_PKEY *pk, char *label, unsigned char *id, size_t id_len)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_store_public_key(slot, pk, label, id, id_len);
@@ -365,7 +365,7 @@ int PKCS11_store_certificate(PKCS11_TOKEN *token, X509 *x509,
 		char *label, unsigned char *id, size_t id_len,
 		PKCS11_CERT **ret_cert)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(token->slot);
+	PKCS11_SLOT_private *slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_store_certificate(slot, x509, label, id, id_len, ret_cert);
@@ -373,7 +373,7 @@ int PKCS11_store_certificate(PKCS11_TOKEN *token, X509 *x509,
 
 int PKCS11_seed_random(PKCS11_SLOT *pslot, const unsigned char *s, unsigned int s_len)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	int r;
 
 	if (check_slot_fork(slot) < 0)
@@ -386,7 +386,7 @@ int PKCS11_seed_random(PKCS11_SLOT *pslot, const unsigned char *s, unsigned int 
 
 int PKCS11_generate_random(PKCS11_SLOT *pslot, unsigned char *r, unsigned int r_len)
 {
-	PKCS11_SLOT_private *slot = PRIVSLOT(pslot);
+	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 	return pkcs11_generate_random(slot, r, r_len);
@@ -403,7 +403,7 @@ void ERR_load_PKCS11_strings(void)
 
 int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_data)
 {
-	PKCS11_CTX_private *ctx = PRIVCTX(pctx);
+	PKCS11_CTX_private *ctx = pctx->_private;
 	if (check_fork(ctx) < 0)
 		return -1;
 	return pkcs11_set_ui_method(ctx, ui_method, ui_user_data);
@@ -418,7 +418,7 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 	if (token == NULL || kg == NULL || kg->id_len > MAX_PIN_LENGTH)
 		return -1;
 
-	slot = PRIVSLOT(token->slot);
+	slot = token->slot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
 
@@ -517,7 +517,7 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 
 int PKCS11_get_key_size(PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_size(key);
@@ -525,7 +525,7 @@ int PKCS11_get_key_size(PKCS11_KEY *pkey)
 
 int PKCS11_get_key_modulus(PKCS11_KEY *pkey, BIGNUM **bn)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_modulus(key, bn);
@@ -533,7 +533,7 @@ int PKCS11_get_key_modulus(PKCS11_KEY *pkey, BIGNUM **bn)
 
 int PKCS11_get_key_exponent(PKCS11_KEY *pkey, BIGNUM **bn)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_get_key_exponent(key, bn);
@@ -542,7 +542,7 @@ int PKCS11_get_key_exponent(PKCS11_KEY *pkey, BIGNUM **bn)
 int PKCS11_sign(int type, const unsigned char *m, unsigned int m_len,
 		unsigned char *sigret, unsigned int *siglen, PKCS11_KEY *pkey)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_sign(type, m, m_len, sigret, siglen, key);
@@ -560,7 +560,7 @@ int PKCS11_evp_pkey_sign(EVP_PKEY *pk, int type, const char *mdname,
 	if (pkey == NULL)
 		return -1;
 
-	key = PRIVKEY(pkey);
+	key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 
@@ -595,7 +595,7 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 	if (pkey == NULL)
 		return -1;
 
-	key = PRIVKEY(pkey);
+	key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 
@@ -614,7 +614,7 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *pkey, int padding)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_private_encrypt(flen, from, to, key, padding);
@@ -623,7 +623,7 @@ int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *t
 int PKCS11_private_decrypt(int flen, const unsigned char *from, unsigned char *to,
 		PKCS11_KEY *pkey, int padding)
 {
-	PKCS11_OBJECT_private *key = PRIVKEY(pkey);
+	PKCS11_OBJECT_private *key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 	return pkcs11_private_decrypt(flen, from, to, key, padding);
@@ -646,7 +646,7 @@ int PKCS11_verify(int type, const unsigned char *m, unsigned int m_len,
 
 void PKCS11_set_vlog_a_method(PKCS11_CTX *pctx, PKCS11_VLOG_A_CB cb)
 {
-	PRIVCTX(pctx)->vlog_a = cb;
+	pctx->_private->vlog_a = cb;
 }
 
 /* vim: set noexpandtab: */

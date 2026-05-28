@@ -353,7 +353,7 @@ PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert)
 	if (pkcs11_enumerate_keys(cert->slot, CKO_PRIVATE_KEY, &key_template, &keys, &count))
 		return NULL;
 	for (n = 0; n < count; n++) {
-		PKCS11_OBJECT_private *kpriv = PRIVKEY(&keys[n]);
+		PKCS11_OBJECT_private *kpriv = keys[n]._private;
 		if (kpriv && cert->id_len == kpriv->id_len
 				&& !memcmp(cert->id, kpriv->id, cert->id_len))
 			return &keys[n];
@@ -968,7 +968,7 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 	/* TODO: Rewrite the O(n) algorithm as O(log n),
 	 * or it may be too slow with a large number of keys */
 	for (i = 0; i < keys->num; ++i) {
-		if (PRIVKEY(&keys->keys[i])->object == object) {
+		if (keys->keys[i]._private->object == object) {
 			if (ret)
 				*ret = &keys->keys[i];
 			return 0;
@@ -1115,7 +1115,7 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 
 	while (keys->num > 0) {
 		PKCS11_KEY *key = &keys->keys[--keys->num];
-		PKCS11_OBJECT_private *obj = PRIVKEY(key);
+		PKCS11_OBJECT_private *obj = key->_private;
 
 		if (obj) {
 			EVP_PKEY_free(obj->evp_key);

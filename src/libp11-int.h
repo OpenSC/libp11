@@ -67,7 +67,6 @@ struct pkcs11_ctx_private {
 	int initialized;
 	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
 };
-#define PRIVCTX(c) ((c)->_private)
 
 struct pkcs11_keys {
 	int num;
@@ -95,7 +94,6 @@ struct pkcs11_slot_private {
 	int ncerts;
 	PKCS11_CERT *certs;
 };
-#define PRIVSLOT(s) ((s)->_private)
 
 struct pkcs11_object_private {
 	PKCS11_SLOT_private *slot;
@@ -113,8 +111,6 @@ struct pkcs11_object_private {
 	pthread_mutex_t lock;
 	PKCS11_KEY *public; /* our current public object */
 };
-#define PRIVKEY(k) ((k)->_private)
-#define PRIVCERT(c) ((c)->_private)
 
 struct pkcs11_object_ops {
 	int pkey_type; /* EVP_PKEY_xxx */

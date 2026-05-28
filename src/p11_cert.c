@@ -81,7 +81,7 @@ PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key)
 	if (pkcs11_enumerate_certs(key->slot, &cert_template, &cert, &count))
 		return NULL;
 	for (n = 0; n < count; n++, cert++) {
-		cpriv = PRIVCERT(cert);
+		cpriv = cert->_private;
 		if (cpriv->id_len == key->id_len
 				&& !memcmp(cpriv->id, key->id, key->id_len))
 			return cert;
@@ -141,7 +141,7 @@ static int pkcs11_init_cert(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session
 	/* TODO: Rewrite the O(n) algorithm as O(log n),
 	 * or it may be too slow with a large number of certificates */
 	for (i = 0; i < slot->ncerts; ++i) {
-		if (PRIVCERT(&slot->certs[i])->object == object) {
+		if (slot->certs[i]._private->object == object) {
 			if (ret)
 				*ret = &slot->certs[i];
 			return 0;
@@ -182,7 +182,7 @@ void pkcs11_destroy_certs(PKCS11_SLOT_private *slot)
 	while (slot->ncerts > 0) {
 		PKCS11_CERT *cert = &slot->certs[--slot->ncerts];
 		if (cert->_private)
-			pkcs11_object_free(PRIVCERT(cert));
+			pkcs11_object_free(cert->_private);
 	}
 	if (slot->certs)
 		OPENSSL_free(slot->certs);
