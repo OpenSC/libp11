@@ -601,8 +601,7 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 
 	switch (type) {
 	case EVP_PKEY_RSA:
-	case EVP_PKEY_RSA_PSS:
-		return pkcs11_evp_pkey_rsa_decrypt(key, pk, mdname,
+		return pkcs11_evp_pkey_rsa_decrypt(key, mdname,
 			pad_mode, mgf1_mdname,
 			oaep_label, oaep_labellen,
 			out, outlen, in, inlen);
