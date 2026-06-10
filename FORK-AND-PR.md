@@ -119,6 +119,7 @@ in **as `README.md`**.
 $src = "C:\Users\dante.melo\My Drive\_PS\Projects\MathWorks\libp11-no-deinit-fix"
 $files = @(
   "src\libp11-int.h",
+  "src\p11_key.c",
   "src\p11_slot.c",
   "src\p11_rsa.c",
   "src\p11_ec.c",
@@ -127,7 +128,9 @@ $files = @(
   "src\libp11.exports",
   "src\util.h",
   "src\util_uri.c",
+  "src\provider.c",
   "src\provider_helpers.c",
+  "src\provider_helpers.h",
   "NEWS"
 )
 foreach ($f in $files) { Copy-Item -Path (Join-Path $src $f) -Destination $f -Force }
@@ -137,9 +140,9 @@ Copy-Item -Path (Join-Path $src "README.pr.md") -Destination "README.md" -Force
 *macOS / Linux / WSL / Git Bash:*
 ```bash
 SRC="/path/to/libp11-no-deinit-fix"
-for f in src/libp11-int.h src/p11_slot.c src/p11_rsa.c src/p11_ec.c \
+for f in src/libp11-int.h src/p11_key.c src/p11_slot.c src/p11_rsa.c src/p11_ec.c \
          src/p11_front.c src/libp11.h src/libp11.exports src/util.h \
-         src/util_uri.c src/provider_helpers.c NEWS; do
+         src/util_uri.c src/provider.c src/provider_helpers.c src/provider_helpers.h NEWS; do
   cp "$SRC/$f" "$f"
 done
 cp "$SRC/README.pr.md" README.md   # PR README = upstream README + no_login_cache docs

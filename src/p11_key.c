@@ -357,9 +357,6 @@ void pkcs11_release_login_for_pkey(EVP_PKEY *pkey)
 	default:
 		break;
 	}
-	fprintf(stderr, "LIBP11-DBG: release_login_for_pkey obj=%p slot_no_login_cache=%d\n",
-		(void *)obj, (obj && obj->slot) ? obj->slot->no_login_cache : -1);
-	fflush(stderr); /* TEMP DEBUG */
 	if (obj != NULL && obj->slot != NULL && obj->slot->no_login_cache)
 		pkcs11_slot_logout_session_only(obj->slot);
 }

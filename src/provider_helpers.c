@@ -540,10 +540,6 @@ void p11_keydata_free(P11_KEYDATA *keydata)
  */
 void p11_keydata_release_login(P11_KEYDATA *keydata)
 {
-	fprintf(stderr, "LIBP11-DBG: keydata_release_login is_private=%d no_login_cache=%d\n",
-		keydata ? keydata->is_private : -1,
-		(keydata && keydata->prov_ctx) ? keydata->prov_ctx->no_login_cache : -1);
-	fflush(stderr); /* TEMP DEBUG */
 	if (keydata == NULL || !keydata->is_private || keydata->pkey == NULL)
 		return;
 	if (keydata->prov_ctx == NULL || !keydata->prov_ctx->no_login_cache)

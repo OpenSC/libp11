@@ -423,7 +423,6 @@ static void *keymgmt_load(const void *reference, size_t reference_sz)
 /* Free key management object and release associated resources. */
 static void keymgmt_free(void *provkey)
 {
-	fprintf(stderr, "LIBP11-DBG: keymgmt_free called provkey=%p\n", provkey); fflush(stderr); /* TEMP DEBUG */
 	/* opt-in: release the login session during healthy runtime, since the legacy
 	 * RSA/EC finish callbacks never run on the provider path */
 	p11_keydata_release_login(provkey);

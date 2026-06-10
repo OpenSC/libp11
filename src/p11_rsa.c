@@ -433,9 +433,6 @@ static int pkcs11_rsa_free_method(RSA *rsa)
 		PKCS11_SLOT_private *slot = key->slot;
 
 		pkcs11_set_ex_data_rsa(rsa, NULL);
-		fprintf(stderr, "LIBP11-DBG: rsa_free no_login_cache=%d class=%ld logged_in=%d\n",
-			slot ? slot->no_login_cache : -1, (long)key->object_class,
-			slot ? slot->logged_in : -99); fflush(stderr); /* TEMP DEBUG */
 		/* opt-in: release the login session now, during healthy runtime,
 		 * instead of leaking it because cleanup is skipped at exit */
 		if (slot && slot->no_login_cache

@@ -176,7 +176,6 @@ static int util_ctx_init_libp11(UTIL_CTX *ctx)
 	PKCS11_set_ui_method(ctx->pkcs11_ctx, ctx->ui_method, ctx->ui_data);
 	if (ctx->no_login_cache)
 		PKCS11_set_no_login_cache(ctx->pkcs11_ctx, 1);
-	fprintf(stderr, "LIBP11-DBG: util_ctx_init no_login_cache=%d\n", ctx->no_login_cache); fflush(stderr); /* TEMP DEBUG */
 	if (PKCS11_CTX_load(ctx->pkcs11_ctx, ctx->module) < 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
 		UTIL_CTX_free_libp11(ctx);
