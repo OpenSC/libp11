@@ -66,6 +66,7 @@ struct pkcs11_ctx_private {
 	unsigned int forkid;
 	int initialized;
 	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
+	int no_login_cache; /* opt-in: drop the login session on key free */
 };
 
 struct pkcs11_keys {
@@ -79,6 +80,7 @@ struct pkcs11_slot_private {
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	int8_t rw_mode, logged_in;
+	int8_t no_login_cache; /* copied from ctx at slot creation */
 	CK_SLOT_ID id;
 	CK_SESSION_HANDLE *session_pool;
 	unsigned int session_head, session_tail, session_poolsize;
@@ -262,6 +264,9 @@ extern int pkcs11_login(PKCS11_SLOT_private *, int so, const char *pin);
 /* De-authenticate from the card */
 extern int pkcs11_logout(PKCS11_SLOT_private *);
 
+/* Release the login session without wiping the key cache (opt-in no_login_cache) */
+extern int pkcs11_slot_logout_session_only(PKCS11_SLOT_private *);
+
 /* Authenticate a private the key operation if needed */
 int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 
@@ -314,6 +319,9 @@ extern int pkcs11_remove_object(PKCS11_OBJECT_private *object);
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 extern int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
+
+/* Enable/disable dropping the login session when a key is freed */
+extern int pkcs11_set_no_login_cache(PKCS11_CTX_private *ctx, int enable);
 
 /* Initialize a token */
 extern int pkcs11_init_token(PKCS11_SLOT_private *, const char *pin,

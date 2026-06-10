@@ -1,6 +1,10 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.19; unreleased
+* Added the opt-in "no_login_cache" provider parameter, which releases the
+  token login session when a key is freed instead of caching it until exit.
+  Avoids session-slot exhaustion on tokens with a hard session limit (e.g.
+  YubiHSM 2) driven by repeated short-lived signing processes. (Dante Melo)
 * Define LIBP11_VERSION_NUMBER (Michał Trojnara)
 * Added PKCS#11 provider support for OpenSSL 4.x. (Małgorzata Olszówka)
 
