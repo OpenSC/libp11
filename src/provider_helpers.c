@@ -24,6 +24,7 @@
  */
 
 #include "provider_helpers.h"
+#include "libp11-int.h" /* pkcs11_release_login_for_pkey() */
 #include <ctype.h> /* isdigit() */
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -529,6 +530,25 @@ void p11_keydata_free(P11_KEYDATA *keydata)
 
 	CRYPTO_THREAD_lock_free(keydata->lock);
 	OPENSSL_free(keydata);
+}
+
+/*
+ * Opt-in (no_login_cache): release the token login session for a private key as
+ * soon as the provider frees it (keymgmt_free), during healthy runtime, instead
+ * of leaking it because exit-time cleanup is skipped. Best effort; no-op when the
+ * option is off or the key is public.
+ */
+void p11_keydata_release_login(P11_KEYDATA *keydata)
+{
+	fprintf(stderr, "LIBP11-DBG: keydata_release_login is_private=%d no_login_cache=%d\n",
+		keydata ? keydata->is_private : -1,
+		(keydata && keydata->prov_ctx) ? keydata->prov_ctx->no_login_cache : -1);
+	fflush(stderr); /* TEMP DEBUG */
+	if (keydata == NULL || !keydata->is_private || keydata->pkey == NULL)
+		return;
+	if (keydata->prov_ctx == NULL || !keydata->prov_ctx->no_login_cache)
+		return;
+	pkcs11_release_login_for_pkey(keydata->pkey);
 }
 
 /* Create keydata object from EVP_PKEY and initialize key metadata. */

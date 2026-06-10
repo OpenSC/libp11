@@ -267,6 +267,9 @@ extern int pkcs11_logout(PKCS11_SLOT_private *);
 /* Release the login session without wiping the key cache (opt-in no_login_cache) */
 extern int pkcs11_slot_logout_session_only(PKCS11_SLOT_private *);
 
+/* Release the login session for the slot backing an EVP_PKEY (provider key-free path) */
+extern void pkcs11_release_login_for_pkey(EVP_PKEY *pkey);
+
 /* Authenticate a private the key operation if needed */
 int pkcs11_authenticate(PKCS11_OBJECT_private *key, CK_SESSION_HANDLE session);
 

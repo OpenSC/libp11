@@ -79,6 +79,7 @@ int PROVIDER_CTX_set_ui_method(PROVIDER_CTX *prov_ctx, UI_METHOD *ui_method, voi
 P11_KEYDATA *p11_keydata_new(PROVIDER_CTX *ctx);
 int p11_keydata_up_ref(P11_KEYDATA *keydata);
 void p11_keydata_free(P11_KEYDATA *keydata);
+void p11_keydata_release_login(P11_KEYDATA *keydata);
 P11_KEYDATA *p11_keydata_from_evp_pkey(PROVIDER_CTX *ctx, EVP_PKEY *pkey, int is_private);
 const char *p11_keydata_get_name(P11_KEYDATA *keydata);
 int p11_keydata_is_private(const P11_KEYDATA *keydata);
