@@ -314,6 +314,7 @@ int pkcs11_slot_logout_session_only(PKCS11_SLOT_private *slot)
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
 
+	fprintf(stderr, "LIBP11-DBG: logout_session_only entry logged_in=%d\n", slot->logged_in); fflush(stderr); /* TEMP DEBUG */
 	if (slot->logged_in < 0) /* not logged in: nothing to do, no lock taken */
 		return 0;
 
@@ -331,8 +332,12 @@ int pkcs11_slot_logout_session_only(PKCS11_SLOT_private *slot)
 	pthread_mutex_unlock(&slot->lock);
 
 	/* C_Logout releases the authenticated session on the token. Best effort. */
-	if (session != CK_INVALID_HANDLE)
+	if (session != CK_INVALID_HANDLE) {
+		fprintf(stderr, "LIBP11-DBG: calling C_Logout on session %lu\n", (unsigned long)session); fflush(stderr); /* TEMP DEBUG */
 		CRYPTOKI_call(ctx, C_Logout(session));
+	} else {
+		fprintf(stderr, "LIBP11-DBG: no pooled session, C_Logout SKIPPED\n"); fflush(stderr); /* TEMP DEBUG */
+	}
 
 	pthread_mutex_lock(&slot->lock);
 	CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
