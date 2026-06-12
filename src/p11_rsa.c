@@ -430,7 +430,14 @@ static int pkcs11_rsa_free_method(RSA *rsa)
 		RSA_meth_get_finish(RSA_get_default_method());
 
 	if (key) {
+		PKCS11_SLOT_private *slot = key->slot;
+
 		pkcs11_set_ex_data_rsa(rsa, NULL);
+		/* opt-in: release the login session now, during healthy runtime,
+		 * instead of leaking it because cleanup is skipped at exit */
+		if (slot && slot->no_login_cache
+				&& key->object_class == CKO_PRIVATE_KEY)
+			pkcs11_slot_logout_session_only(slot);
 		pkcs11_object_free(key);
 	}
 	if (orig_rsa_free_method) {

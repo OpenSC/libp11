@@ -409,6 +409,14 @@ int PKCS11_set_ui_method(PKCS11_CTX *pctx, UI_METHOD *ui_method, void *ui_user_d
 	return pkcs11_set_ui_method(ctx, ui_method, ui_user_data);
 }
 
+int PKCS11_set_no_login_cache(PKCS11_CTX *pctx, int enable)
+{
+	PKCS11_CTX_private *ctx = pctx->_private;
+	if (check_fork(ctx) < 0)
+		return -1;
+	return pkcs11_set_no_login_cache(ctx, enable);
+}
+
 /* External interface to the deprecated features */
 
 int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)

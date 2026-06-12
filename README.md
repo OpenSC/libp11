@@ -130,7 +130,7 @@ activate = 1
 
 Some parameters can be overridden using environment variables:
 `OPENSSL_MODULES`, `PKCS11_MODULE_PATH`, `PKCS11_DEBUG_LEVEL`,
-`PKCS11_FORCE_LOGIN`, `PKCS11_PIN`
+`PKCS11_FORCE_LOGIN`, `PKCS11_NO_LOGIN_CACHE`, `PKCS11_PIN`
 
 ## Testing the provider operation
 
@@ -207,6 +207,12 @@ The provider supports the following controls:
 * **debug_level**: Sets the debug level: 0=emerg, 1=alert, 2=crit, 3=err,
   4=warning, 5=notice (default), 6=info, 7=debug
 * **force_login**: Forces login to the PKCS#11 module
+* **no_login_cache**: Log out and close the token session as soon as a key is
+  freed, instead of keeping the login session cached until exit. Opt-in
+  workaround for tokens with a hard limit on concurrent sessions (e.g. YubiHSM 2,
+  16 sessions) driven by many short-lived processes, where exit-time cleanup is
+  skipped. Re-login happens automatically on the next key load. Leave it off for
+  long-lived processes that sign repeatedly (they benefit from the cached login).
 * **init_args**: Specifies additional initialization arguments to the PKCS#11
   module
 

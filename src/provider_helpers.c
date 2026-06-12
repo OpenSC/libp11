@@ -24,6 +24,7 @@
  */
 
 #include "provider_helpers.h"
+#include "libp11-int.h" /* pkcs11_release_login_for_pkey() */
 #include <ctype.h> /* isdigit() */
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -45,6 +46,7 @@ typedef struct {
 	char *pin;
 	char *debug_level;
 	char *force_login;
+	char *no_login_cache;
 	char *init_args;
 } PROVIDER_PARAMS;
 
@@ -65,8 +67,10 @@ struct provider_ctx {
 	char *pin;
 	int debug_level;
 	int force_login;
+	int no_login_cache;
 	char *p_debug_level;
 	char *p_force_login;
+	char *p_no_login_cache;
 
 	/* function offered by libcrypto to the provider */
 	OSSL_FUNC_core_get_params_fn *core_get_params;
@@ -240,6 +244,7 @@ void PROVIDER_CTX_destroy(PROVIDER_CTX *prov_ctx)
 	OPENSSL_free(prov_ctx->pin);
 	OPENSSL_free(prov_ctx->p_debug_level);
 	OPENSSL_free(prov_ctx->p_force_login);
+	OPENSSL_free(prov_ctx->p_no_login_cache);
 	OPENSSL_free(prov_ctx->init_args);
 	OPENSSL_free(prov_ctx);
 }
@@ -283,6 +288,7 @@ int PROVIDER_CTX_get_core_parameters(PROVIDER_CTX *prov_ctx)
 		{"pin", OSSL_PARAM_UTF8_PTR, &prov_ctx->params.pin, 0, 0},
 		{"debug_level", OSSL_PARAM_UTF8_PTR, &prov_ctx->params.debug_level, 0, 0},
 		{"force_login", OSSL_PARAM_UTF8_PTR, &prov_ctx->params.force_login, 0, 0},
+		{"no_login_cache", OSSL_PARAM_UTF8_PTR, &prov_ctx->params.no_login_cache, 0, 0},
 		{"init_args", OSSL_PARAM_UTF8_PTR, &prov_ctx->params.init_args, 0, 0},
 		OSSL_PARAM_END
 	};
@@ -323,6 +329,9 @@ int PROVIDER_CTX_get_core_parameters(PROVIDER_CTX *prov_ctx)
 	}
 	if (prov_ctx->params.force_login) {
 		prov_ctx->p_force_login = OPENSSL_strdup(prov_ctx->params.force_login);
+	}
+	if (prov_ctx->params.no_login_cache) {
+		prov_ctx->p_no_login_cache = OPENSSL_strdup(prov_ctx->params.no_login_cache);
 	}
 	if (prov_ctx->params.init_args) {
 		prov_ctx->init_args = OPENSSL_strdup(prov_ctx->params.init_args);
@@ -382,6 +391,17 @@ int PROVIDER_CTX_set_parameters(PROVIDER_CTX *prov_ctx)
 	}
 	if (prov_ctx->force_login) {
 		UTIL_CTX_set_force_login(prov_ctx->util_ctx, 1);
+	}
+	if (prov_ctx->p_no_login_cache && *prov_ctx->p_no_login_cache != '\0') {
+		if (isdigit(*prov_ctx->p_no_login_cache)) {
+			prov_ctx->no_login_cache = (atoi(prov_ctx->p_no_login_cache) != 0);
+		} else {
+			prov_ctx->no_login_cache = (strcasecmp("true", prov_ctx->p_no_login_cache) == 0
+				|| strcasecmp("yes", prov_ctx->p_no_login_cache) == 0);
+		}
+	}
+	if (prov_ctx->no_login_cache) {
+		UTIL_CTX_set_no_login_cache(prov_ctx->util_ctx, 1);
 	}
 	return 1;
 }
@@ -510,6 +530,21 @@ void p11_keydata_free(P11_KEYDATA *keydata)
 
 	CRYPTO_THREAD_lock_free(keydata->lock);
 	OPENSSL_free(keydata);
+}
+
+/*
+ * Opt-in (no_login_cache): release the token login session for a private key as
+ * soon as the provider frees it (keymgmt_free), during healthy runtime, instead
+ * of leaking it because exit-time cleanup is skipped. Best effort; no-op when the
+ * option is off or the key is public.
+ */
+void p11_keydata_release_login(P11_KEYDATA *keydata)
+{
+	if (keydata == NULL || !keydata->is_private || keydata->pkey == NULL)
+		return;
+	if (keydata->prov_ctx == NULL || !keydata->prov_ctx->no_login_cache)
+		return;
+	pkcs11_release_login_for_pkey(keydata->pkey);
 }
 
 /* Create keydata object from EVP_PKEY and initialize key metadata. */
@@ -1662,6 +1697,11 @@ static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx)
 		OPENSSL_free(prov_ctx->p_force_login);
 		prov_ctx->p_force_login = OPENSSL_strdup(str);
 	}
+	str = getenv("PKCS11_NO_LOGIN_CACHE");
+	if (str != NULL && str[0] != '\0') {
+		OPENSSL_free(prov_ctx->p_no_login_cache);
+		prov_ctx->p_no_login_cache = OPENSSL_strdup(str);
+	}
 }
 
 /*
@@ -1678,6 +1718,7 @@ static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx)
 		{"pin", OSSL_PARAM_UTF8_PTR, &params.pin, 0, 0},
 		{"debug_level", OSSL_PARAM_UTF8_PTR, &params.debug_level, 0, 0},
 		{"force_login", OSSL_PARAM_UTF8_PTR, &params.force_login, 0, 0},
+		{"no_login_cache", OSSL_PARAM_UTF8_PTR, &params.no_login_cache, 0, 0},
 		{"init_args", OSSL_PARAM_UTF8_PTR, &params.init_args, 0, 0},
 		OSSL_PARAM_END
 	};
@@ -1711,6 +1752,11 @@ static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx)
 		|| strcmp(params.force_login, prov_ctx->params.force_login))) {
 		OPENSSL_free(prov_ctx->p_force_login);
 		prov_ctx->p_force_login = OPENSSL_strdup(params.force_login);
+	}
+	if (params.no_login_cache && (!prov_ctx->params.no_login_cache
+		|| strcmp(params.no_login_cache, prov_ctx->params.no_login_cache))) {
+		OPENSSL_free(prov_ctx->p_no_login_cache);
+		prov_ctx->p_no_login_cache = OPENSSL_strdup(params.no_login_cache);
 	}
 	if (params.init_args && (!prov_ctx->params.init_args
 		|| strcmp(params.init_args, prov_ctx->params.init_args))) {

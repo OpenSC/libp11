@@ -53,6 +53,7 @@ PKCS11_get_ecdh_method
 PKCS11_pkey_meths
 ERR_load_PKCS11_strings
 PKCS11_set_ui_method
+PKCS11_set_no_login_cache
 ERR_get_CKR_code
 PKCS11_set_vlog_a_method
 PKCS11_keygen
