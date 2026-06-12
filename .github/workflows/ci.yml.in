@@ -11,6 +11,7 @@ on:
 env:
   version: @PACKAGE_VERSION@
   OPENSSL_VERSION: 4.0.0
+  HOMEBREW_NO_AUTO_UPDATE: 1
 
 jobs:
   build:
@@ -89,21 +90,44 @@ jobs:
         echo "PKG_CONFIG_PATH=$HOME/openssl-4/lib64/pkgconfig:$HOME/openssl-4/lib/pkgconfig" >> $GITHUB_ENV
         echo "LD_LIBRARY_PATH=$HOME/openssl-4/lib64:$HOME/openssl-4/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
-    - name: Install brew dependencies (macOS)
+    - name: Remove unused Homebrew taps (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install libtool automake opensc softhsm
+        # GitHub-hosted macOS images may include unrelated third-party taps
+        # that trigger trust warnings on every brew command.
+        brew untap --force aws/tap azure/bicep hashicorp/tap >/dev/null 2>&1 || true
+
+    - name: Install brew build dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        for package in libtool automake; do
+          if ! brew list --versions "$package" >/dev/null; then
+            brew install "$package"
+          fi
+        done
+
+    - name: Install brew test dependencies (macOS)
+      if: runner.os == 'macOS' && matrix.id != 'macOS-4'
+      run: |
+        for package in opensc softhsm; do
+          if ! brew list --versions "$package" >/dev/null; then
+            brew install "$package"
+          fi
+        done
 
     - name: Install OpenSSL 4 (macOS-4 only)
       if: runner.os == 'macOS' && matrix.id == 'macOS-4'
       run: |
-        brew update
-        brew install openssl@4
+        if ! brew list --versions openssl@4 >/dev/null; then
+          brew install --quiet openssl@4
+        fi
 
     - name: Install OpenSSL 3 (macOS-3 only)
       if: runner.os == 'macOS' && matrix.id == 'macOS-3'
       run: |
-        brew install openssl@3
+        if ! brew list --versions openssl@3 >/dev/null; then
+          brew install openssl@3
+        fi
 
     - name: Set environment variables (macOS)
       if: runner.os == 'macOS'
@@ -114,8 +138,8 @@ jobs:
 
     - name: System information
       run: |
-        which pkcs11-tool
-        which softhsm2-util
+        which pkcs11-tool || true
+        which softhsm2-util || true
         which openssl
         openssl version -a
         echo "PATH=$PATH"
@@ -146,7 +170,7 @@ jobs:
             build_for: 'WIN32'
             compiler: vs
             arch: x86
-            os: windows-latest
+            os: windows-2022
             generator: Ninja
             vcpkg_root: C:/vcpkg
           - id: windows-x64-vs
@@ -154,17 +178,17 @@ jobs:
             build_for: 'WIN64'
             compiler: vs
             arch: x64
-            os: windows-latest
+            os: windows-2022
             generator: Ninja
             vcpkg_root: C:/vcpkg
 
-    runs-on: windows-latest
+    runs-on: ${{matrix.os}}
 
     steps:
     - uses: actions/checkout@v5
 
     - name: Cache the vcpkg archives
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
         key: ${{matrix.id}}-${{hashFiles('vcpkg.json')}}
@@ -173,7 +197,7 @@ jobs:
           ${{matrix.id}}-
 
     - name: Configure Visual Studio
-      uses: ilammy/msvc-dev-cmd@v1
+      uses: TheMrMilchmann/setup-msvc-dev@v4
       with:
         arch: ${{matrix.arch}}
 
@@ -191,7 +215,7 @@ jobs:
         OPENSSL_DIR="C:\vcpkg\packages\openssl_${{matrix.triplet}}"
 
     - name: Upload the DLLs
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: libp11-${{env.version}}-${{matrix.arch}}
         path: ${{github.workspace}}/src/*.dll
