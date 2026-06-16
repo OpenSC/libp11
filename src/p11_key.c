@@ -122,6 +122,10 @@ static void pkcs11_common_pubkey_attr(PKCS11_TEMPLATE *, const char *,
 static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *, const char *,
 	const unsigned char *, size_t, const PKCS11_params *);
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+static int EVP_PKEY_is_a(const EVP_PKEY *pkey, const char *name);
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
+
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key);
 static PKCS11_KEY *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
@@ -648,7 +652,7 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		pkcs11_addattr_bool(&tmpl, CKA_WRAP, TRUE);
 	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100003L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
-	if (EVP_PKEY_base_id(pk) == EVP_PKEY_RSA) {
+	if (EVP_PKEY_is_a(pk, "RSA") || EVP_PKEY_is_a(pk, "RSA-PSS")) {
 		RSA *rsa = EVP_PKEY_get1_RSA(pk);
 		RSA_get0_key(rsa, &rsa_n, &rsa_e, &rsa_d);
 		RSA_get0_factors(rsa, &rsa_p, &rsa_q);
@@ -744,8 +748,8 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 	 * Using a reference would mean changes to the duplicated EVP_PKEY could
 	 * affect the original one.
 	 */
-	switch (EVP_PKEY_base_id(key->evp_key)) {
-	case EVP_PKEY_RSA:
+	if (EVP_PKEY_is_a(key->evp_key, "RSA") ||
+		EVP_PKEY_is_a(key->evp_key, "RSA-PSS")) {
 		/* Do not try to duplicate foreign RSA keys */
 		rsa = EVP_PKEY_get1_RSA(key->evp_key);
 		if (!rsa)
@@ -762,8 +766,8 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 		}
 		if (key->object_class != CKO_PRIVATE_KEY)
 			pkcs11_set_ex_data_rsa(rsa, NULL);
-		break;
-	case EVP_PKEY_EC:
+
+	} else if (EVP_PKEY_is_a(key->evp_key, "EC")) {
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
 		ec_key = EVP_PKEY_get1_EC_KEY(key->evp_key);
 		if (!ec_key)
@@ -785,15 +789,15 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 		 * so public keys do not have a PKCS11_OBJECT reference */
 		ret = EVP_PKEY_dup(key->evp_key);
 #endif
-		break;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	case EVP_PKEY_ED25519:
-	case EVP_PKEY_ED448:
+	} else {
 		ret = EVP_PKEY_dup(key->evp_key);
-		break;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-	default:
+	}
+
+	if (!ret) {
 		pkcs11_log(key0->slot->ctx, LOG_DEBUG, "Unsupported key type\n");
+		goto err;
 	}
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -1127,6 +1131,38 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 	pkcs11_addattr_bool(privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(privtmpl, CKA_UNWRAP, TRUE);
 }
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+static int EVP_PKEY_is_a(const EVP_PKEY *pkey, const char *name)
+
+{
+	if (pkey == NULL || name == NULL)
+		return 0;
+
+	switch (EVP_PKEY_base_id(pkey)) {
+	case EVP_PKEY_RSA:
+		return strcmp(name, "RSA") == 0;
+#ifdef EVP_PKEY_RSA_PSS
+	case EVP_PKEY_RSA_PSS:
+		return strcmp(name, "RSA-PSS") == 0;
+#endif /* EVP_PKEY_RSA_PSS */
+	case EVP_PKEY_EC:
+		return strcmp(name, "EC") == 0;
+#ifndef OPENSSL_NO_ECX
+#ifdef EVP_PKEY_ED25519
+	case EVP_PKEY_ED25519:
+		return strcmp(name, "ED25519") == 0;
+#endif /* EVP_PKEY_ED25519 */
+#ifdef EVP_PKEY_ED448
+	case EVP_PKEY_ED448:
+		return strcmp(name, "ED448") == 0;
+#endif /* EVP_PKEY_ED448 */
+#endif /* OPENSSL_NO_ECX */
+	default:
+		return 0;
+    }
+}
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
 /*
  * Destroy all keys of a given type (public or private)
