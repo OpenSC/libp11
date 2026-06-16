@@ -27,6 +27,7 @@
 #define _PROVIDER_HELPERS_H
 
 #include "util.h"
+#include "libp11-int.h"
 #include <openssl/core.h>
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>
@@ -93,9 +94,7 @@ OSSL_PARAM *p11_keydata_get_params(const P11_KEYDATA *key);
 int p11_keydata_set_params(P11_KEYDATA *keydata, const OSSL_PARAM *params);
 int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2);
 int pad_mode_from_param(const OSSL_PARAM *p, int *pad_mode);
-int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-int export_eddsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
+int keydata_export_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
 
 /******************************************************************************/
 /* SIGNATURE helper functions                                                 */
@@ -134,6 +133,7 @@ const char *p11_signature_ctx_get_mgf1_mdname(const P11_SIGNATURE_CTX *sig_ctx);
 EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx);
 const char *p11_signature_pss_saltlen_to_string(int saltlen);
 const char *p11_pad_mode_to_string(int pad_mode);
+int is_oneshot_sig_type(int type);
 
 
 /******************************************************************************/

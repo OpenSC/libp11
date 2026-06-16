@@ -44,6 +44,14 @@
 
 #include "p11_pthread.h"
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#define EVP_PKEY_FALCON512 0x10001
+#define EVP_PKEY_FALCON1024 0x10002
+
+extern int NID_FALCON_512;
+extern int NID_FALCON_1024;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 /* forward type declarations */
 typedef struct pkcs11_keys PKCS11_keys;
 typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
@@ -126,6 +134,34 @@ extern PKCS11_OBJECT_ops pkcs11_ed25519_ops;
 extern PKCS11_OBJECT_ops pkcs11_ed448_ops;
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+extern PKCS11_OBJECT_ops pkcs11_mldsa44_ops;
+extern PKCS11_OBJECT_ops pkcs11_mldsa65_ops;
+extern PKCS11_OBJECT_ops pkcs11_mldsa87_ops;
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_128s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_128f_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_192s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_192f_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_256s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_256f_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_128s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_128f_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_192s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_192f_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_256s_ops;
+extern PKCS11_OBJECT_ops pkcs11_slhdsa_shake_256f_ops;
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+extern PKCS11_OBJECT_ops pkcs11_falcon512_ops;
+extern PKCS11_OBJECT_ops pkcs11_falcon1024_ops;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 
 /*
  * Internal functions
@@ -277,6 +313,11 @@ extern PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slo
 extern PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl);
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Get the public key object matching the given PKCS11_KEY */
+extern PKCS11_OBJECT_private *pkcs11_public_object_from_key(PKCS11_KEY *pkey);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 /* Get the corresponding object (same ID, given different object type) */
 extern PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class);
@@ -362,6 +403,26 @@ extern int pkcs11_eddsa_keygen(PKCS11_SLOT_private *tpriv,
 	size_t id_len, const PKCS11_params *params);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+extern int pkcs11_mldsa_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+extern int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+extern int pkcs11_falcon_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 /* Get the RSA key modulus size (in bytes) */
 extern int pkcs11_get_key_size(PKCS11_OBJECT_private *);
 
@@ -400,6 +461,34 @@ extern int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 #endif /* OPENSSL_NO_ECX */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+/* Sign message input with ML-DSA private key via PKCS#11 mechanism */
+extern int pkcs11_evp_pkey_mldsa_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+/* Sign message input with SLH-DSA private key via PKCS#11 mechanism */
+extern int pkcs11_evp_pkey_slhdsa_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/* Sign message input with PQC FALCON private key via PKCS#11 mechanism */
+extern int pkcs11_evp_pkey_falcon_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+
+/* Verify message input with PQC FALCON public key via PKCS#11 mechanism */
+extern int pkcs11_evp_pkey_falcon_verify(PKCS11_OBJECT_private *key,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters */
 extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,

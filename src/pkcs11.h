@@ -362,6 +362,12 @@ typedef unsigned long ck_key_type_t;
 #define CKK_EC_EDWARDS		(0x40UL)
 #define CKK_ML_DSA		(0x4AUL)
 #define CKK_SLH_DSA		(0x4BUL)
+/*
+ * Thales Luna customer-defined Falcon identifiers.
+ * Falcon does not currently have standard PKCS#11 CKK_ values.
+ * Luna defines the key type and mechanisms in its customer-defined range.
+ */
+#define CKK_FALCON		(0xC0000006UL)
 #define CKK_VENDOR_DEFINED	(1UL << 31)
 
 /*
@@ -534,8 +540,8 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_DH_PKCS_KEY_PAIR_GEN	(0x20UL)
 #define CKM_DH_PKCS_DERIVE		(0x21UL)
 /* PKCS#11 v3.2: SLH-DSA */
-#define CKM_SLH_DSA_KEY_PAIR_GEN	(0x2EUL)
-#define CKM_SLH_DSA			(0x2FUL)
+#define CKM_SLH_DSA_KEY_PAIR_GEN	(0x2DUL)
+#define CKM_SLH_DSA			(0x2EUL)
 #define	CKM_X9_42_DH_KEY_PAIR_GEN	(0x30UL)
 #define CKM_X9_42_DH_DERIVE		(0x31UL)
 #define CKM_X9_42_DH_HYBRID_DERIVE	(0x32UL)
@@ -780,6 +786,13 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_DH_PKCS_PARAMETER_GEN	(0x2001UL)
 #define CKM_X9_42_DH_PARAMETER_GEN	(0x2002UL)
 #define CKM_AES_KEY_WRAP		(0x2109UL)
+/*
+ * Thales Luna customer-defined Falcon identifiers.
+ * Falcon does not currently have standard PKCS#11 CKM_ values.
+ * Luna defines the key type and mechanisms in its customer-defined range.
+ */
+#define CKM_FALCON_KEY_PAIR_GEN		(0xC0000070UL)
+#define CKM_FALCON			(0xC0000071UL)
 #define CKM_PQC_FALCON		        (CKM_VENDOR_DEFINED + 0x10025UL)
 #define CKM_VENDOR_DEFINED		(1UL << 31)
 
