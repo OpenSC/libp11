@@ -3,6 +3,9 @@ NEWS for Libp11 -- History of user visible changes
 New in 0.4.19; unreleased
 * Define LIBP11_VERSION_NUMBER (Michał Trojnara)
 * Added PKCS#11 provider support for OpenSSL 4.x. (Małgorzata Olszówka)
+* Added support for ML-DSA, SLH-DSA and FALCON key generation, signing and
+  verification (Małgorzata Olszówka)
+* Added PQC key generation examples and provider tests (Małgorzata Olszówka)
 
 New in 0.4.18; 2026-02-16; Michał Trojnara
 * Support for RSA-PSS and RSA-OAEP using keys retrieved using the
