@@ -753,6 +753,7 @@ int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
 }
 #endif /* OPENSSL_NO_EC */
 
+#ifndef OPENSSL_NO_ECX
 /*
  * Sign message input with EdDSA private key via PKCS#11 mechanism.
  * Returns 1 on success or -1 on failure.
@@ -775,6 +776,7 @@ int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 
 	return 1;
 }
+#endif /* OPENSSL_NO_ECX */
 
 /*
  * Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters.
