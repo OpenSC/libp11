@@ -772,11 +772,11 @@ ECDSA_SIG *pkcs11_ec_sign_raw(PKCS11_OBJECT_private *key,
 		return NULL;
 
 	tmp_len = *siglen;
-	if (tmp_len == 0 || tmp_len % 2 != 0)
+	if (tmp_len == 0 || tmp_len % 2 != 0 || tmp_len / 2 > INT_MAX)
 		return NULL;
 
-	r = BN_bin2bn(sig, tmp_len / 2, NULL);
-	s = BN_bin2bn(sig + tmp_len / 2, tmp_len / 2, NULL);
+	r = BN_bin2bn(sig, (int)(tmp_len / 2), NULL);
+	s = BN_bin2bn(sig + tmp_len / 2, (int)(tmp_len / 2), NULL);
 	if (r == NULL || s == NULL)
 		goto error;
 
