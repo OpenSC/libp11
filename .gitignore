@@ -66,6 +66,9 @@ examples/eckeygen
 examples/rsakeygen
 examples/ed25519keygen
 examples/ed448keygen
+examples/falcon512keygen
+examples/mldsa87keygen
+examples/slhdsa256skeygen
 examples/storecert
 
 test-driver
