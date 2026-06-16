@@ -898,7 +898,7 @@ int PKCS11_evp_pkey_verify(EVP_PKEY *pk, int type,
 
 int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 	const int pad_mode, const char *mgf1_mdname,
-	unsigned char *oaep_label, const int oaep_labellen,
+	unsigned char *oaep_label, size_t oaep_labellen,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen)
 {

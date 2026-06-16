@@ -195,7 +195,7 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss_params, EVP_PKEY *pkey,
 
 static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	const char *oaep_mdname, const char *mgf1_mdname,
-	unsigned char *oaep_label, const int oaep_labellen,
+	unsigned char *oaep_label, size_t oaep_labellen,
 	PKCS11_CTX_private *pctx)
 {
 	const EVP_MD *oaep_md = NULL;
@@ -282,7 +282,7 @@ static int pkcs11_set_rsa_decrypt_mechanism(CK_MECHANISM *mechanism,
 	CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	PKCS11_CTX_private *pctx, const int padding,
 	const char *mdname, const char *mgf1_mdname,
-	unsigned char *oaep_label, const int oaep_labellen)
+	unsigned char *oaep_label, size_t oaep_labellen)
 {
 	if (mechanism == NULL)
 		return -1;
@@ -965,7 +965,7 @@ int pkcs11_evp_pkey_falcon_verify(PKCS11_OBJECT_private *key,
  */
 int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
 	const char *mdname, const int pad_mode,
-	const char *mgf1_mdname, unsigned char *oaep_label, const int oaep_labellen,
+	const char *mgf1_mdname, unsigned char *oaep_label, size_t oaep_labellen,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen)
 {
