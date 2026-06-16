@@ -63,6 +63,7 @@ libeng_err_la_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS) $(OPENSSL_CFLAGS) \
 # ----------------------------------------------------------
 libp11_la_SOURCES = libpkcs11.c p11_attr.c p11_cert.c p11_ckr.c \
 	p11_key.c p11_load.c p11_misc.c p11_rsa.c p11_ec.c p11_eddsa.c \
+	p11_mldsa.c p11_slhdsa.c p11_falcon.c \
 	p11_pkey.c p11_slot.c p11_front.c p11_atfork.c libp11.exports
 
 # Compiler flags for libp11

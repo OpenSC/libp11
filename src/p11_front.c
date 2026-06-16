@@ -434,9 +434,44 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		return pkcs11_eddsa_keygen(slot, kg->kgen.eddsa->nid,
+		return pkcs11_eddsa_keygen(slot, kg->kgen.nid->nid,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+		return pkcs11_mldsa_keygen(slot, kg->kgen.nid->nid,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+		return pkcs11_slhdsa_keygen(slot, kg->kgen.nid->nid,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		return pkcs11_falcon_keygen(slot, kg->kgen.nid->nid,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 	default:
 		return -1;
 	}
@@ -450,10 +485,9 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 #ifndef OPENSSL_NO_EC
 	PKCS11_EC_KGEN ec_kgen;
 #endif /* OPENSSL_NO_EC */
-#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-	PKCS11_EDDSA_KGEN eddsa_kgen;
-#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	PKCS11_NID_KGEN nid_kgen;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	PKCS11_RSA_KGEN rsa_kgen;
 	PKCS11_KGEN_ATTRS kgen_attrs = { 0 };
 
@@ -474,10 +508,10 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 #endif /* OPENSSL_NO_EC */
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
-		eddsa_kgen.nid = NID_ED25519;
+		nid_kgen.nid = NID_ED25519;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_ED25519,
-			.kgen.eddsa = &eddsa_kgen,
+			.kgen.nid = &nid_kgen,
 			.token_label = (const char *)token->label,
 			.key_label = label,
 			.key_id = (const unsigned char *)id,
@@ -487,10 +521,10 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 		break;
 
 	case EVP_PKEY_ED448:
-		eddsa_kgen.nid = NID_ED448;
+		nid_kgen.nid = NID_ED448;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_ED448,
-			.kgen.eddsa = &eddsa_kgen,
+			.kgen.nid = &nid_kgen,
 			.token_label = (const char *)token->label,
 			.key_label = label,
 			.key_id = (const unsigned char *)id,
@@ -499,6 +533,224 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 		};
 		break;
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+		nid_kgen.nid = NID_ML_DSA_44;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_ML_DSA_44,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+
+	case EVP_PKEY_ML_DSA_65:
+		nid_kgen.nid = NID_ML_DSA_65;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_ML_DSA_65,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+
+	case EVP_PKEY_ML_DSA_87:
+		nid_kgen.nid = NID_ML_DSA_87;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_ML_DSA_87,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_128s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_128S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_128f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_128F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_192s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_192S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_192f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_192F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_256s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_256S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+		nid_kgen.nid = NID_SLH_DSA_SHA2_256f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHA2_256F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_128s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_128S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_128f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_128F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_192s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_192S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_192f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_192F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_256s;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_256S,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+		nid_kgen.nid = NID_SLH_DSA_SHAKE_256f;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_SLH_DSA_SHAKE_256F,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	case EVP_PKEY_FALCON512:
+		nid_kgen.nid = NID_FALCON_512;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_FALCON512,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+	case EVP_PKEY_FALCON1024:
+		nid_kgen.nid = NID_FALCON_1024;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_FALCON1024,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 	default:
 		rsa_kgen.bits = param;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
@@ -569,18 +821,79 @@ int PKCS11_evp_pkey_sign(EVP_PKEY *pk, int type, const char *mdname,
 		return pkcs11_evp_pkey_rsa_sign(key, pk, mdname,
 			pad_mode, pss_saltlen, mgf1_mdname,
 			sig, siglen, tbs, tbslen);
+
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 		return pkcs11_evp_pkey_ec_sign(key, sig, siglen, tbs, tbslen);
 #endif /* OPENSSL_NO_EC */
+
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
 		return pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+		return pkcs11_evp_pkey_mldsa_sign(key, sig, siglen, tbs, tbslen);
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+		return pkcs11_evp_pkey_slhdsa_sign(key, sig, siglen, tbs, tbslen);
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		return pkcs11_evp_pkey_falcon_sign(key, sig, siglen, tbs, tbslen);
+
 	default:
 		return -2; /* type not supported */
 	}
+}
+
+int PKCS11_evp_pkey_verify(EVP_PKEY *pk, int type,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	PKCS11_OBJECT_private *key;
+	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+	int ret = -1;
+
+	if (pkey == NULL)
+		return -1;
+
+	key = pkcs11_public_object_from_key(pkey);
+	if (key == NULL)
+		return -1;
+
+	switch (type) {
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		ret = pkcs11_evp_pkey_falcon_verify(key, sig, siglen, tbs, tbslen);
+		break;
+	default:
+		ret = -2; /* type not supported */
+		break;
+	}
+
+	pkcs11_object_free(key);
+	return ret;
 }
 
 int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
@@ -609,6 +922,7 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 		return -2; /* type not supported */
 	}
 }
+
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 int PKCS11_private_encrypt(int flen, const unsigned char *from, unsigned char *to,

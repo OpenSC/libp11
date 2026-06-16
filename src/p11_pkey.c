@@ -216,7 +216,10 @@ static int pkcs11_oaep_param(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
 	if (mgf1_md == NULL)
 		return -1;
 
-	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mdf1_md=%s oaep_labellen=%d\n",
+	if (oaep_labellen > (size_t)((CK_ULONG)-1))
+		return -1;
+
+	pkcs11_log(pctx, LOG_DEBUG, "oaep_md=%s mgf1_md=%s oaep_labellen=%lu\n",
 		EVP_MD_name(oaep_md), EVP_MD_name(mgf1_md), oaep_labellen);
 
 	/* fill the CK_RSA_PKCS_OAEP_PARAMS structure */
@@ -325,10 +328,16 @@ const char *pkcs11_mechanism_name(CK_MECHANISM *mechanism)
 		return "CKM_RSA_X9_31";
 	case CKM_ECDSA:
 		return "CKM_ECDSA";
-#ifdef CKM_EDDSA
 	case CKM_EDDSA:
 		return "CKM_EDDSA";
-#endif
+	case CKM_ML_DSA:
+		return "CKM_ML_DSA";
+	case CKM_SLH_DSA:
+		return "CKM_SLH_DSA";
+	case CKM_FALCON:
+		return "CKM_FALCON";
+	case CKM_PQC_FALCON:
+		return "CKM_PQC_FALCON";
 	default:
 		return "UNKNOWN_MECHANISM";
 	}
@@ -415,6 +424,72 @@ end:
 	pkcs11_put_session(slot, session);
 	return rv;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Execute a PKCS#11 verify operation using the specified mechanism.
+ *
+ * Returns: CKR_OK on success or PKCS#11 error code on failure
+ */
+static int pkcs11_verify_with_mechanism(PKCS11_OBJECT_private *key,
+	CK_MECHANISM *mechanism,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	int rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_ULONG ck_siglen;
+	CK_ULONG ck_tbslen;
+
+	if (key == NULL || mechanism == NULL || sig == NULL || tbs == NULL)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_verify_with_mechanism() "
+		"%s sig=%p siglen=%lu tbs=%p tbslen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism), sig, siglen, tbs, tbslen);
+#endif
+
+	ck_siglen = (CK_ULONG)siglen;
+	ck_tbslen = (CK_ULONG)tbslen;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	rv = CRYPTOKI_call(ctx,
+		C_VerifyInit(session, mechanism, key->object));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_VerifyInit rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+	rv = CRYPTOKI_call(ctx,
+		C_Verify(session,
+			(CK_BYTE_PTR)tbs, ck_tbslen,
+			(CK_BYTE_PTR)sig, ck_siglen));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_Verify rv=%d\n",
+			__FILE__, __LINE__, rv);
+		goto end;
+	}
+
+end:
+	pkcs11_put_session(slot, session);
+	return rv;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
  * Execute a PKCS#11 decryption operation using the specified mechanism.
@@ -777,6 +852,111 @@ int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	return 1;
 }
 #endif /* OPENSSL_NO_ECX */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+/*
+ * Sign message input with ML-DSA private key via PKCS#11 mechanism.
+ * Returns 1 on success or -1 on failure.
+ */
+int pkcs11_evp_pkey_mldsa_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ML_DSA;
+
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_SLH_DSA
+/*
+ * Sign message input with SLH-DSA private key via PKCS#11 mechanism.
+ * Returns 1 on success or -1 on failure.
+ */
+int pkcs11_evp_pkey_slhdsa_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_SLH_DSA;
+
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Sign message input with PQC FALCON private key via PKCS#11 mechanism.
+ * Returns 1 on success or -1 on failure.
+ */
+int pkcs11_evp_pkey_falcon_sign(PKCS11_OBJECT_private *key,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || sig == NULL || siglen == NULL || tbs == NULL)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	/* Luna Token documents Falcon signing with CKM_PQC_FALCON.
+	 * TODO: Verify CKM_FALCON compatibility. */
+	mechanism.mechanism = CKM_PQC_FALCON;
+
+	if (pkcs11_sign_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+
+/*
+ * Verify message input with PQC FALCON public key via PKCS#11 mechanism.
+ * Returns 1 on success or -1 on failure.
+ */
+int pkcs11_evp_pkey_falcon_verify(PKCS11_OBJECT_private *key,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || sig == NULL || tbs == NULL)
+		return -1;
+
+	if (siglen == 0 || tbslen == 0)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_PQC_FALCON;
+
+	if (pkcs11_verify_with_mechanism(key, &mechanism, sig, siglen,
+		tbs, tbslen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
  * Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters.

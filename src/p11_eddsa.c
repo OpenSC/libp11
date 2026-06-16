@@ -569,9 +569,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
 	if (pkcs11_get_raw_public_key(key, &raw, &rawlen) < 0)
 		return NULL;
 
-	/* Build a software EVP_PKEY from the raw public key using the default provider.
-	 * Without the property query OpenSSL may fetch our pkcs11prov keymgmt. */
-	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "ED25519", "provider=default", raw, rawlen);
+	/* Build a EVP_PKEY from the raw public key, used only as software public key */
+	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "ED25519", NULL, raw, rawlen);
 	OPENSSL_free(raw);
 
 	if (!pkey)
@@ -606,7 +605,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 	if (pkcs11_get_raw_public_key(key, &raw, &rawlen) < 0)
 		return NULL;
 
-	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "ED448", "provider=default", raw, rawlen);
+	/* Build a EVP_PKEY from the raw public key, used only as software public key */
+	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "ED448", NULL, raw, rawlen);
 	OPENSSL_free(raw);
 
 	if (!pkey)

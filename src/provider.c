@@ -202,6 +202,43 @@ static const OSSL_ALGORITHM p11_keymgmts[] = {
 	{"EC:id-ecPublicKey", FIPS_PROPQ, keymgmt_functions, "PKCS#11 EC keymgm functions"},
 	{"ED25519", FIPS_PROPQ, keymgmt_functions, "PKCS#11 Ed25519 keymgm functions"},
 	{"ED448", FIPS_PROPQ, keymgmt_functions, "PKCS#11 Ed448 keymgm functions"},
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	{"ML-DSA-44", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-44 keymgmt functions"},
+	{"ML-DSA-65", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-65 keymgmt functions"},
+	{"ML-DSA-87", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-87 keymgmt functions"},
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	{"SLH-DSA-SHA2-128s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-128s keymgmt functions"},
+	{"SLH-DSA-SHA2-128f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-128f keymgmt functions"},
+	{"SLH-DSA-SHA2-192s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-192s keymgmt functions"},
+	{"SLH-DSA-SHA2-192f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-192f keymgmt functions"},
+	{"SLH-DSA-SHA2-256s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-256s keymgmt functions"},
+	{"SLH-DSA-SHA2-256f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHA2-256f keymgmt functions"},
+	{"SLH-DSA-SHAKE-128s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-128s keymgmt functions"},
+	{"SLH-DSA-SHAKE-128f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-128f keymgmt functions"},
+	{"SLH-DSA-SHAKE-192s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-192s keymgmt functions"},
+	{"SLH-DSA-SHAKE-192f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-192f keymgmt functions"},
+	{"SLH-DSA-SHAKE-256s", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-256s keymgmt functions"},
+	{"SLH-DSA-SHAKE-256f", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 SLH-DSA-SHAKE-256f keymgmt functions"},
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	{"FALCON-512:FN-DSA-512:falcon512", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 Falcon-512 keymgmt"},
+	{"FALCON-1024:FN-DSA-1024:falcon1024", FIPS_PROPQ, keymgmt_functions,
+		"PKCS#11 Falcon-1024 keymgmt"},
 	{NULL, NULL, NULL, NULL}
 };
 
@@ -540,17 +577,7 @@ static int keymgmt_export(void *provkey, int selection, OSSL_CALLBACK *param_cb,
 	if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) == 0)
 		return 1;
 
-	switch (p11_keydata_get_type(keydata)) {
-	case EVP_PKEY_RSA:
-		return export_rsa_pub(keydata, param_cb, cbarg);
-	case EVP_PKEY_EC:
-		return export_ec_pub(keydata, param_cb, cbarg);
-	case EVP_PKEY_ED25519:
-	case EVP_PKEY_ED448:
-		return export_eddsa_pub(keydata, param_cb, cbarg);
-	default:
-		return 0;
-    }
+	return keydata_export_pub(keydata, param_cb, cbarg);
 }
 
 /* Return supported export parameter types for public key data. */
@@ -581,7 +608,7 @@ static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 	P11_KEYDATA *keydata = (P11_KEYDATA *)provkey;
 	const OSSL_PARAM *pub;
 	OSSL_PARAM *p;
-	int bits, secbits;
+	int type, bits, secbits;
 #if OPENSSL_VERSION_NUMBER >= 0x30600000L
 	int category;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
@@ -589,6 +616,7 @@ static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 	if (keydata == NULL || params == NULL)
 		return 0;
 
+	type = p11_keydata_get_type(keydata);
 	bits = p11_keydata_get_bits(keydata);
 	secbits = p11_keydata_get_security_bits(keydata);
 #if OPENSSL_VERSION_NUMBER >= 0x30600000L
@@ -619,24 +647,49 @@ static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 
 	/* EVP_PKEY_get1_encoded_public_key(), not covered by tests */
 	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY);
-	if (p != NULL && p11_keydata_get_type(keydata) == EVP_PKEY_EC) {
+	if (p != NULL && type == EVP_PKEY_EC) {
 		const OSSL_PARAM *key_params = p11_keydata_get_params(keydata);
 
 		if (key_params == NULL)
 		    return 0;
 
 		pub = OSSL_PARAM_locate_const(key_params, OSSL_PKEY_PARAM_PUB_KEY);
-		if (pub != NULL && pub->data != NULL &&
-		    !OSSL_PARAM_set_octet_string(p, pub->data, pub->data_size))
+		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
+			pub->data == NULL || pub->data_size == 0)
+			return 0;
+		if (!OSSL_PARAM_set_octet_string(p, pub->data, pub->data_size))
 			return 0;
 	}
 
-	/* EVP_PKEY_get_default_digest_nid(), "pkeyutl -sign -rawin"
-	 * For signature algorithms like RSA, DSA and ECDSA, the default
-	 * digest algorithm is SHA256. */
-	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_DEFAULT_DIGEST);
-	if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "SHA256"))
-		return 0;
+	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
+	if (p != NULL && is_oneshot_sig_type(type)) {
+		const OSSL_PARAM *key_params = p11_keydata_get_params(keydata);
+
+		if (key_params == NULL)
+		    return 0;
+
+		pub = OSSL_PARAM_locate_const(key_params, OSSL_PKEY_PARAM_PUB_KEY);
+		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
+			pub->data == NULL || pub->data_size == 0)
+			return 0;
+		if (!OSSL_PARAM_set_octet_string(p, pub->data, pub->data_size))
+			return 0;
+	}
+
+	/* EVP_PKEY_get_default_digest_name(), "pkeyutl -sign -rawin"
+	 * Hash-and-sign algorithms such as RSA and ECDSA use SHA256 as the
+	 * default digest. One-shot signature algorithms (EdDSA, ML-DSA,
+	 * SLH-DSA) do not accept an external digest and therefore report
+	 * OSSL_PKEY_PARAM_MANDATORY_DIGEST = "UNDEF". */
+	if (is_oneshot_sig_type(type)) {
+		p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_MANDATORY_DIGEST);
+		if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "UNDEF"))
+			return 0;
+	} else {
+		p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_DEFAULT_DIGEST);
+		if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "SHA256"))
+			return 0;
+	}
 
 	return 1;
 }
@@ -652,7 +705,9 @@ static const OSSL_PARAM *keymgmt_gettable_params(void *provctx)
 		OSSL_PARAM_int(OSSL_PKEY_PARAM_SECURITY_CATEGORY, NULL),
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
 		OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, NULL, 0),
+		OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_PUB_KEY, NULL, 0),
 		OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_DEFAULT_DIGEST, NULL, 0),
+		OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_MANDATORY_DIGEST, NULL, 0),
 		OSSL_PARAM_END
 	};
 	(void)provctx;
@@ -770,7 +825,23 @@ static int signature_verify(void *ctx,
 	const unsigned char *sig, size_t siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
-	return p11_signature_ctx_verify(ctx, sig, siglen, tbs, tbslen);
+	P11_SIGNATURE_CTX *sig_ctx = (P11_SIGNATURE_CTX *)ctx;
+
+	if (sig_ctx == NULL || sig == NULL || tbs == NULL)
+		return 0;
+
+	switch (p11_signature_ctx_get_type(sig_ctx)) {
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* FALCON is not supported by OpenSSL verify path */
+		return PKCS11_evp_pkey_verify(
+			p11_signature_ctx_get_evp_pkey(sig_ctx),
+			p11_signature_ctx_get_type(sig_ctx),
+			sig, siglen, tbs, tbslen);
+
+	default:
+		return p11_signature_ctx_verify(sig_ctx, sig, siglen, tbs, tbslen);
+	}
 }
 
 /*
@@ -812,9 +883,37 @@ static int signature_digest_sign_init(void *ctx, const char *mdname, void *provk
 	if (!p11_signature_ctx_init(sig_ctx, keydata, params))
 		return 0;
 
-	if (p11_keydata_get_type(keydata) == EVP_PKEY_ED25519 ||
-		p11_keydata_get_type(keydata) == EVP_PKEY_ED448)
-		return 1; /* Ed25519 / Ed448 do not use an external digest */
+	switch (p11_keydata_get_type(keydata)) {
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
+		return 1;
+	default:
+		break;
+	}
 
 	/* For signature algorithms the default digest algorithm is SHA256 */
 	if (mdname == NULL)
@@ -855,7 +954,30 @@ static int signature_digest_sign_update(void *ctx, const unsigned char *data,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA does not support streaming DigestSignUpdate/Final */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
 		return 0;
 
 	case EVP_PKEY_RSA:
@@ -891,7 +1013,30 @@ static int signature_digest_sign_final(void *ctx, unsigned char *sig,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA should use one-shot signature_digest_sign() */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
 		return 0;
 
 	case EVP_PKEY_RSA:
@@ -968,7 +1113,30 @@ static int signature_digest_sign(void *ctx, unsigned char *sig, size_t *siglen,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA signs the message directly */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
 		return PKCS11_evp_pkey_sign(
 			p11_signature_ctx_get_evp_pkey(sig_ctx),
 			p11_signature_ctx_get_type(sig_ctx),
@@ -1024,9 +1192,37 @@ static int signature_digest_verify_init(void *ctx, const char *mdname,
 	if (!p11_signature_ctx_init(sig_ctx, keydata, params))
 		return 0;
 
-	if (p11_keydata_get_type(keydata) == EVP_PKEY_ED25519 ||
-		p11_keydata_get_type(keydata) == EVP_PKEY_ED448)
-		return 1; /* Ed25519 / Ed448 do not use an external digest */
+	switch (p11_keydata_get_type(keydata)) {
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
+		return 1;
+	default:
+		break;
+	}
 
 	/* For signature algorithms the default digest algorithm is SHA256 */
 	if (mdname == NULL)
@@ -1068,7 +1264,30 @@ static int signature_digest_verify_update(void *ctx, const unsigned char *data,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA does not support streaming DigestVerifyUpdate/Final */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
 		return 0;
 
 	case EVP_PKEY_RSA:
@@ -1103,7 +1322,30 @@ static int signature_digest_verify_final(void *ctx, const unsigned char *sig,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA should use one-shot EVP_DigestVerify() */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* EdDSA, ML-DSA, SLH-DSA, FALCON are one-shot signature algorithms */
 		return 0;
 
 	case EVP_PKEY_RSA:
@@ -1145,8 +1387,37 @@ static int signature_digest_verify(void *ctx,
 	switch (p11_signature_ctx_get_type(sig_ctx)) {
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		/* EdDSA verifies the message directly */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+		/* EdDSA, ML-DSA, SLH-DSA are one-shot signature algorithms */
 		return p11_signature_ctx_verify(sig_ctx, sig, siglen, tbs, tbslen);
+
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		/* FALCON is not supported by OpenSSL verify path */
+		return PKCS11_evp_pkey_verify(
+			p11_signature_ctx_get_evp_pkey(sig_ctx),
+			p11_signature_ctx_get_type(sig_ctx),
+			sig, siglen, tbs, tbslen);
 
 	case EVP_PKEY_RSA:
 	case EVP_PKEY_RSA_PSS:

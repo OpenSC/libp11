@@ -23,6 +23,11 @@
 /* Global number of active PKCS11_CTX objects */
 static int pkcs11_global_data_refs = 0;
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+int NID_FALCON_512 = NID_undef;
+int NID_FALCON_1024 = NID_undef;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 /*
  * Free global ex_data indexes and custom key methods
  */
@@ -127,6 +132,41 @@ static int pkcs11_initialize(PKCS11_CTX_private *cpriv)
 	return 0;
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static int register_falcon_oid(const char *oid, const char *sn, const char *ln)
+{
+	int nid;
+
+	nid = OBJ_txt2nid(oid);
+	if (nid != NID_undef)
+		return nid;
+
+	return OBJ_create(oid, sn, ln);
+}
+
+static int register_falcon_oids(void)
+{
+	static int initialized = 0;
+
+	if (initialized)
+		return 1;
+
+	/* OQS/oqs-provider compatibility OIDs for Falcon.
+	 * These are provisional/non-standard identifiers under 1.3.9999 and should
+	 * be revisited once FN-DSA/Falcon receives stable standardized OIDs. */
+	NID_FALCON_512 = register_falcon_oid(
+		"1.3.9999.3.11", "FALCON-512", "Falcon-512");
+	NID_FALCON_1024 = register_falcon_oid(
+		"1.3.9999.3.14", "FALCON-1024", "Falcon-1024");
+
+	if (NID_FALCON_512 == NID_undef || NID_FALCON_1024 == NID_undef)
+		return 0;
+
+	initialized = 1;
+	return 1;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 /*
  * Load the shared library, and initialize it.
  */
@@ -159,7 +199,9 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
 	cpriv->cryptoki_version.major = ck_info.cryptokiVersion.major;
 	cpriv->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
-
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	register_falcon_oids();
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	return 0;
 }
 

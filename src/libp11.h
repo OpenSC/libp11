@@ -64,10 +64,14 @@ typedef struct PKCS11_token_st PKCS11_TOKEN;
 typedef struct PKCS11_slot_st PKCS11_SLOT;
 typedef struct PKCS11_ctx_st PKCS11_CTX;
 typedef struct PKCS11_ec_kgen_st PKCS11_EC_KGEN;
-typedef struct PKCS11_eddsa_kgen_st PKCS11_EDDSA_KGEN;
+typedef struct PKCS11_nid_kgen_st PKCS11_NID_KGEN;
 typedef struct PKCS11_rsa_kgen_st PKCS11_RSA_KGEN;
 typedef struct PKCS11_params PKCS11_params;
 typedef struct PKCS11_kgen_attrs_st PKCS11_KGEN_ATTRS;
+
+/* Legacy EC-specific name retained for compatibility.
+ * Use PKCS11_NID_KGEN for new code. */
+#define PKCS11_EDDSA_KGEN PKCS11_NID_KGEN
 
 /** PKCS11 key object (public or private) */
 struct PKCS11_key_st {
@@ -131,8 +135,8 @@ struct PKCS11_ec_kgen_st {
 	const char *curve;
 };
 
-struct PKCS11_eddsa_kgen_st {
-	int nid;                 /* NID_ED25519 or NID_ED448 */
+struct PKCS11_nid_kgen_st {
+	int nid;
 };
 
 struct PKCS11_rsa_kgen_st {
@@ -147,11 +151,14 @@ struct PKCS11_params {
 struct PKCS11_kgen_attrs_st {
 	/* Key generation type from OpenSSL. Given the union below this should
 	 * be either EVP_PKEY_EC or EVP_PKEY_RSA or EVP_PKEY_ED25519 or EVP_PKEY_ED448
+	 * EVP_PKEY_ML_DSA_* or EVP_PKEY_SLH_DSA_*. or
+	 * EVP_PKEY_FALCON512 or EVP_PKEY_FALCON1024
 	 */
 	int type;
 	union {
 		PKCS11_EC_KGEN *ec;
 		PKCS11_EDDSA_KGEN *eddsa;
+		PKCS11_NID_KGEN *nid;
 		PKCS11_RSA_KGEN *rsa;
 	} kgen;
 	const char *token_label;
@@ -555,6 +562,11 @@ extern int PKCS11_verify(int type,
 extern int PKCS11_evp_pkey_sign(EVP_PKEY *pkey, int type, const char *mdname,
 	const int pad_mode, const int salt_len, const char *mgf1_mdname,
 	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+
+/* Perform a public-key operation using a PKCS#11-backed EVP_PKEY */
+int PKCS11_evp_pkey_verify(EVP_PKEY *pkey, int type,
+	const unsigned char *sig, size_t siglen,
 	const unsigned char *tbs, size_t tbslen);
 
 /* Perform a private-key decryption operation using a PKCS#11-backed EVP_PKEY */
