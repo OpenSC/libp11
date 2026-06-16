@@ -85,6 +85,8 @@ int pkcs11_private_encrypt(int flen,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
+	pkcs11_put_session(slot, session);
+
 	siglen = pkcs11_get_key_size(key);
 	if (pkcs11_evp_pkey_rsa_sign(key,
 		NULL, /* EVP_PKEY unused: RSA-PSS unsupported in ENGINE path */
@@ -118,6 +120,8 @@ int pkcs11_private_decrypt(int flen,
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
+
+	pkcs11_put_session(slot, session);
 
 	/* Openssl API for RSA_private_decrypt() allows to use
 	 * RSA_PKCS1_OAEP_PADDING only with SHA_1 hash and and MGF1_SHA1 mask
@@ -198,17 +202,19 @@ static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 
 failure:
 	pkcs11_put_session(slot, session);
-	if (rsa_n)
-		BN_clear_free(rsa_n);
-	if (rsa_e)
-		BN_clear_free(rsa_e);
+	/* BN_clear_free() is NULL-safe */
+	BN_clear_free(rsa_n);
+	BN_clear_free(rsa_e);
 	return NULL;
 
 success:
 	pkcs11_put_session(slot, session);
 	rsa = RSA_new();
-	if (!rsa)
-		goto failure;
+	if (!rsa) {
+		BN_clear_free(rsa_n);
+		BN_clear_free(rsa_e);
+		return NULL;
+	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 	RSA_set0_key(rsa, rsa_n, rsa_e, NULL);
 #else

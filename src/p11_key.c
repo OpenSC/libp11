@@ -144,8 +144,6 @@ static CK_OBJECT_HANDLE pkcs11_handle_from_template(PKCS11_SLOT_private *slot,
 			C_FindObjects(session, &object, 1, &count));
 		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
 	}
-	pkcs11_zap_attrs(tmpl);
-
 	if (rv == CKR_OK && count == 1)
 		return object;
 
@@ -214,6 +212,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 			OPENSSL_free(data);
 			break;
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 		default:
 			/* Ignore any keys we don't understand */
 			pkcs11_log(ctx, LOG_DEBUG,
@@ -308,9 +307,13 @@ PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class)
 {
 	PKCS11_TEMPLATE tmpl = {0};
+	PKCS11_OBJECT_private *ret;
+
 	pkcs11_addattr_var(&tmpl, CKA_CLASS, object_class);
 	pkcs11_addattr(&tmpl, CKA_ID, obj->id, obj->id_len);
-	return pkcs11_object_from_template(obj->slot, session, &tmpl);
+	ret = pkcs11_object_from_template(obj->slot, session, &tmpl);
+	pkcs11_zap_attrs(&tmpl);
+	return ret;
 }
 
 void pkcs11_object_free(PKCS11_OBJECT_private *obj)
@@ -380,6 +383,8 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 		pkcs11_addattr_s(&tmpl, CKA_LABEL, obj->label);
 
 	obj->object = pkcs11_handle_from_template(slot, session, &tmpl);
+
+	pkcs11_zap_attrs(&tmpl);
 	pkcs11_put_session(slot, session);
 
 	if (obj->object == CK_INVALID_HANDLE)
@@ -427,6 +432,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 		pubtmpl.attrs, pubtmpl.nattr,
 		privtmpl.attrs, privtmpl.nattr,
 		&pub_key_obj, &priv_key_obj));
+
 	pkcs11_put_session(slot, session);
 
 	/* zap all memory allocated when building the template */
@@ -469,18 +475,26 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 		curve_nid = OBJ_sn2nid(curve);
 	if (curve_nid == NID_undef)
 		curve_nid = OBJ_ln2nid(curve);
-	if (curve_nid == NID_undef)
+	if (curve_nid == NID_undef) {
+		pkcs11_put_session(slot, session);
 		return -1;
+	}
 	curve_obj = OBJ_nid2obj(curve_nid);
-	if (!curve_obj)
+	if (!curve_obj) {
+		pkcs11_put_session(slot, session);
 		return -1;
+	}
 	/* convert to DER format and take just the length */
 	ec_params_len = i2d_ASN1_OBJECT(curve_obj, NULL);
-	if (ec_params_len < 0)
+	if (ec_params_len < 0) {
+		pkcs11_put_session(slot, session);
 		return -1;
+	}
 	ec_params = OPENSSL_malloc(ec_params_len);
-	if (!ec_params)
+	if (!ec_params) {
+		pkcs11_put_session(slot, session);
 		return -1;
+	}
 	/**
 	 * ec_params points to beginning of DER encoded object. Since we need this
 	 * location later and OpenSSL changes it in i2d_ASN1_OBJECT to point to 1 byte
@@ -488,8 +502,10 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	 * pointer tmp
 	 */
 	tmp = ec_params;
-	if (i2d_ASN1_OBJECT(curve_obj, &tmp) < 0)
+	if (i2d_ASN1_OBJECT(curve_obj, &tmp) < 0) {
+		pkcs11_put_session(slot, session);
 		return -1;
+	}
 
 	/* The following attributes are necessary for ECDSA and ECDH mechanisms */
 	/* pubkey attributes */
@@ -506,6 +522,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 			pubtmpl.attrs, pubtmpl.nattr,
 			privtmpl.attrs, privtmpl.nattr,
 			&pub_key_obj, &priv_key_obj));
+
 	pkcs11_put_session(slot, session);
 
 	/* zap all memory allocated when building the template */
@@ -548,6 +565,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 		eddsa_params = (unsigned char *)OID_ED448;
 		eddsa_params_len = sizeof(OID_ED448);
 	} else {
+		pkcs11_put_session(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -566,9 +584,9 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 		pubtmpl.attrs, pubtmpl.nattr,
 		privtmpl.attrs, privtmpl.nattr,
 		&pub_key_obj, &priv_key_obj));
-	pkcs11_put_session(slot, session);
 
 	/* cleanup */
+	pkcs11_put_session(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -872,10 +890,14 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PK
 		if (key_template->label)
 			pkcs11_addattr_s(&tmpl, CKA_LABEL, key_template->label);
 	}
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_get_session(slot, 0, &session)) {
+		pkcs11_zap_attrs(&tmpl);
 		return -1;
+	}
 
 	rv = pkcs11_find_keys(slot, session, type, &tmpl);
+
+	pkcs11_zap_attrs(&tmpl);
 	pkcs11_put_session(slot, session);
 	if (rv < 0) {
 		pkcs11_destroy_keys(slot, type);
@@ -1234,6 +1256,8 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
+	pkcs11_put_session(slot, session);
+
 	/* retrieve PSS parameters */
 	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
 		return -1;
@@ -1306,6 +1330,8 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
+
+	pkcs11_put_session(slot, session);
 
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
