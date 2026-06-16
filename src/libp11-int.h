@@ -394,10 +394,12 @@ extern int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
 	const unsigned char *tbs, size_t tbslen);
 #endif /* OPENSSL_NO_EC */
 
+#ifndef OPENSSL_NO_ECX
 /* Sign message input with EdDSA private key via PKCS#11 mechanism */
 extern int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
+#endif /* OPENSSL_NO_ECX */
 
 /* Decrypt RSA input via PKCS#11 using configured padding and OAEP parameters */
 extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
