@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
 # Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
-#
+
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -14,22 +14,19 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 outdir="output.$$"
 
 # Load common test functions
 . ${srcdir}/common.sh
 
-PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
+# Initialize SoftHSM DB
+init_db
 
-# EC tests only require the private key object, as the public key can be
-# reconstructed from the EC point and curve parameters.
+# Create token
+init_card "token1"
 
-# Do the token initialization
-init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "" ""
-
-# Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
 unset OPENSSL_ENGINES
 export OPENSSL_MODULES="../src/.libs/"
 export PKCS11_MODULE_PATH=${MODULE}
@@ -42,15 +39,27 @@ echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 # Restore openssl settings
 trap cleanup EXIT
 
-# Run the test
-${WRAPPER} ./dup-key-prov ${PRIVATE_KEY}
+if ! has_mechanism ML-DSA; then
+	echo "ML-DSA key generation test skipped."
+	rm -rf "$outdir"
+	exit 77
+fi
+
+${WRAPPER} ./mldsa87-keygen-prov ${MODULE} token1 libp11-keylabel ${PIN}
 rc=$?
 if [[ $rc -eq 77 ]]; then
-	echo "Duplicate private key test skipped."
+	echo "ML-DSA key generation test skipped."
 	rm -rf "$outdir"
 	exit 77
 elif [[ $rc -ne 0 ]]; then
-	echo "Duplicate private key test failed."
+	echo "ML-DSA key generation test failed."
+	exit 1
+fi
+
+echo "Checking pkcs11-tool result..."
+list_objects | grep -q libp11-keylabel
+if [[ $? != 0 ]]; then
+	echo "ML-DSA key was not properly generated."
 	exit 1
 fi
 

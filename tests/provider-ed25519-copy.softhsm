@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
 # Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -23,11 +23,11 @@ outdir="output.$$"
 
 PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=${PIN}"
 
-# EC tests only require the private key object, as the public key can be
-# reconstructed from the EC point and curve parameters.
+# EdDSA tests require both private and public key objects, as the public
+# key cannot be reliably reconstructed from a PKCS#11 private key object.
 
 # Do the token initialization
-init_token "ec" "1" "libp11" ${ID} "server-key" "privkey" "" ""
+init_token "ed25519" "1" "libp11" ${ID} "server-key" "privkey" "pubkey" ""
 
 # Ensure the use of the locally built provider; applies after running 'pkcs11-tool'
 unset OPENSSL_ENGINES

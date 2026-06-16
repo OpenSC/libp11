@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  */
 
-/* Ed25519/ED448 common functions */
+/* One-shot signature algorithms common functions */
 
 #include <openssl/opensslv.h>
 
