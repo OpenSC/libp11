@@ -27,12 +27,12 @@
  * SUCH DAMAGE.
  */
 
+#include <libp11.h>
+#include <string.h>
+
 #if !defined(OPENSSL_NO_EC) && \
     (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
     (OPENSSL_VERSION_NUMBER < 0x40000000L)
-
-#include <libp11.h>
-#include <string.h>
 
 #define CHECK_ERR(cond, txt, code) \
 	do { \
