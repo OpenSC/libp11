@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
 	if (!private_key) {
 		fprintf(stderr, "Cannot load private key: %s\n", argv[1]);
 		display_openssl_errors();
+		ret = 77; /* skipped */
 		goto cleanup;
 	}
 	printf("Private key found.\n");

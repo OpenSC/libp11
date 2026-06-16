@@ -93,6 +93,7 @@ tests/ed25519-keygen
 tests/ed448-keygen
 tests/ed25519-keygen-prov
 tests/ed448-keygen-prov
+tests/mldsa87-keygen-prov
 tests/check-all-prov
 
 tests/*.log

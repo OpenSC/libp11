@@ -234,21 +234,21 @@ if has_mechanism RSA-PKCS; then
 		echo "Failed to verify signature using PKCS#11 URI ${CERTIFICATE}"
 		exit 1
 	fi
+	echo
+
+	# Verify the signature using a certificate via rsa_verify_directly()
+	${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
+		-propquery "?provider=pkcs11prov" \
+		-inkey ${CERTIFICATE} \
+		-verify -certin \
+		-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
+	if [[ $? -ne 0 ]]; then
+		echo "Failed to verify signature using PKCS#11 URI ${CERTIFICATE}"
+		exit 1
+	fi
 
 else
 	echo "Skipping CKM_RSA_PKCS tests"
-fi
-echo
-
-# Verify the signature using a certificate via rsa_verify_directly()
-${OPENSSL} pkeyutl -provider pkcs11prov -provider default \
-	-propquery "?provider=pkcs11prov" \
-	-inkey ${CERTIFICATE} \
-	-verify -certin \
-	-sigfile "${outdir}/signature.bin" -in "${outdir}/hash.bin"
-if [[ $? -ne 0 ]]; then
-	echo "Failed to verify signature using PKCS#11 URI ${CERTIFICATE}"
-	exit 1
 fi
 echo
 

@@ -1,4 +1,4 @@
-EXTRA_DIST = engines.cnf.in common.sh openssl-settings.sh helpers_prov.h eddsa_common.h
+EXTRA_DIST = engines.cnf.in common.sh openssl-settings.sh helpers_prov.h oneshot_common.h
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)
 AM_CPPFLAGS = \
@@ -31,7 +31,8 @@ check_PROGRAMS = \
 	ed25519-keygen \
 	ed448-keygen \
 	ed25519-keygen-prov \
-	ed448-keygen-prov
+	ed448-keygen-prov \
+	mldsa87-keygen-prov
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -69,6 +70,10 @@ dist_check_SCRIPTS = \
 	provider-ed448-check-privkey.softhsm \
 	provider-ed25519-keygen.softhsm \
 	provider-ed448-keygen.softhsm \
+	provider-ed25519-copy.softhsm \
+	provider-mldsa87-check-privkey.softhsm \
+	provider-mldsa87-keygen.softhsm \
+	provider-mldsa87-copy.softhsm \
 	provider-fork-change-slot.softhsm \
 	provider-case-insensitive.softhsm \
 	provider-pkcs11-uri-without-token.softhsm \
@@ -77,12 +82,14 @@ dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
 	ec-cert.der ec-privkey.der ec-pubkey.der \
 	ed25519-cert.der ed25519-privkey.der ed25519-pubkey.der \
-	ed448-cert.der ed448-privkey.der ed448-pubkey.der
+	ed448-cert.der ed448-privkey.der ed448-pubkey.der \
+	mldsa87-cert.der mldsa87-privkey.der mldsa87-pubkey.der
 
-ed25519_keygen_SOURCES = ed25519-keygen.c eddsa_common.c
-ed448_keygen_SOURCES = ed448-keygen.c eddsa_common.c
-ed25519_keygen_prov_SOURCES = ed25519-keygen-prov.c helpers_prov.c eddsa_common.c
-ed448_keygen_prov_SOURCES = ed448-keygen-prov.c helpers_prov.c eddsa_common.c
+ed25519_keygen_SOURCES = ed25519-keygen.c oneshot_common.c
+ed448_keygen_SOURCES = ed448-keygen.c oneshot_common.c
+ed25519_keygen_prov_SOURCES = ed25519-keygen-prov.c helpers_prov.c oneshot_common.c
+ed448_keygen_prov_SOURCES = ed448-keygen-prov.c helpers_prov.c oneshot_common.c
+mldsa87_keygen_prov_SOURCES = mldsa87-keygen-prov.c helpers_prov.c oneshot_common.c
 evp_sign_prov_SOURCES = evp-sign-prov.c helpers_prov.c
 fork_change_slot_prov_SOURCES = fork-change-slot-prov.c helpers_prov.c
 dup_key_prov_SOURCES = dup-key-prov.c helpers_prov.c

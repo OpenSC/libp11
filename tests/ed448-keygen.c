@@ -20,7 +20,7 @@
 #define OPENSSL_SUPPRESS_DEPRECATED
 
 #include <openssl/engine.h>
-#include "eddsa_common.h"
+#include "oneshot_common.h"
 
 #if !defined(OPENSSL_NO_ENGINE) && \
     !defined(OPENSSL_NO_ECX) && \

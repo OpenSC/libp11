@@ -27,9 +27,24 @@
  * SUCH DAMAGE.
  */
 
-/* Ed25519/ED448 common functions */
+/*
+ * One-shot signature algorithms common functions
+ *
+ * Ed25519, Ed448, ML-DSA, SLH-DSA and FALCON operate on the input message
+ * directly, without an external digest. EVP_DigestSignInit() and
+ * EVP_DigestVerifyInit() must therefore be called with the digest name set to NULL.
+ *
+ * The streaming EVP_DigestSignUpdate() / EVP_DigestSignFinal() and
+ * EVP_DigestVerifyUpdate() / EVP_DigestVerifyFinal() APIs are not used
+ * here. These tests use the one-shot EVP_DigestSign() and
+ * EVP_DigestVerify() interfaces instead.
+ *
+ * See also:
+ * EVP_SIGNATURE-ED25519, EVP_SIGNATURE-ED448,
+ * EVP_SIGNATURE-ML-DSA, EVP_SIGNATURE-SLH-DSA
+ */
 
-#include "eddsa_common.h"
+#include "oneshot_common.h"
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 
@@ -52,7 +67,7 @@ int EVP_Digest_sign_verify_test(EVP_PKEY *priv, EVP_PKEY *pub)
 		retval = -2;
 		goto err;
 	}
-	/* initialize the sign context using an Ed25519/Ed448 private key,
+	/* initialize the sign context using a one-shot signature private key,
 	 * notice that the digest name must NOT be used */
 	if (EVP_DigestSignInit(mdctx, NULL, NULL, NULL, priv) != 1) {
 		retval = -3;
@@ -81,13 +96,15 @@ int EVP_Digest_sign_verify_test(EVP_PKEY *priv, EVP_PKEY *pub)
 		retval = -7;
 		goto err;
 	}
-	/* initialize the verify context with a Ed25519/Ed448 public key */
+	/* initialize the verify context using a one-shot signature public key,
+	 * notice that the digest name must NOT be used */
 	if (EVP_DigestVerifyInit(mdctx, NULL, NULL, NULL, pub) != 1) {
 		retval = -8;
 		goto err;
 	}
-	/* Ed25519/Ed448 only supports the one shot interface using EVP_DigestVerify(),
-	 * the streaming EVP_DigestVerifyUpdate() API is not supported */
+	/* one-shot signature algorithms only support the one-shot
+	 * EVP_DigestVerify() interface; the streaming EVP_DigestVerifyUpdate()
+	 * API is not supported */
 	if (EVP_DigestVerify(mdctx, sig, siglen, msg, msglen) == 1) {
 		retval = 0;
 		goto err;
@@ -138,23 +155,21 @@ int EVP_PKEY_sign_verify_test(EVP_PKEY *priv, EVP_PKEY *pub)
 		goto err;
 	}
 
-	/* --- Verify ---
-	 * Ed25519 and Ed448 do not implement verify_init/verify in EVP_PKEY_METHOD.
-	 * These algorithms support only one-shot signing and verification operations.
-	 * See also: EVP_SIGNATURE-ED25519 and EVP_SIGNATURE-ED448.
-	 */
+	/* --- Verify --- */
 	mdctx = EVP_MD_CTX_new();
 	if (!mdctx) {
 		retval = -6;
 		goto err;
 	}
-	/* initialize the verify context with a Ed25519/Ed448 public key */
+	/* initialize the verify context using a one-shot signature public key,
+	 * notice that the digest name must NOT be used */
 	if (EVP_DigestVerifyInit(mdctx, NULL, NULL, NULL, pub) != 1) {
 		retval = -7;
 		goto err;
 	}
-	/* Ed25519/Ed448 only supports the one shot interface using EVP_DigestVerify(),
-	 * the streaming EVP_DigestVerifyUpdate() API is not supported */
+	/* one-shot signature algorithms only support the one-shot
+	 * EVP_DigestVerify() interface; the streaming EVP_DigestVerifyUpdate()
+	 * API is not supported */
 	if (EVP_DigestVerify(mdctx, sig, siglen, msg, msglen) == 1) {
 		retval = 0;
 		goto err;

@@ -18,7 +18,7 @@
  */
 
 #include "helpers_prov.h"
-#include "eddsa_common.h"
+#include "oneshot_common.h"
 
 #if !defined(OPENSSL_NO_ECX) && (OPENSSL_VERSION_NUMBER >= 0x30000000L)
 

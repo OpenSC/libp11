@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+ * Copyright © 2026 Mobi - Com Polska Sp. z o.o.
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  * All rights reserved.
  *
@@ -20,7 +20,7 @@
 #include "helpers_prov.h"
 #include "oneshot_common.h"
 
-#if !defined(OPENSSL_NO_ECX) && (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+#if !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L
 
 static void error_queue(const char *name)
 {
@@ -38,16 +38,16 @@ int main(int argc, char *argv[])
 	PKCS11_SLOT *slots = NULL, *slot;
 	unsigned int nslots;
 	EVP_PKEY *private_key = NULL, *public_key = NULL;
-	PKCS11_EDDSA_KGEN eddsa = {
-		.nid = NID_ED25519
+	PKCS11_NID_KGEN mldsa = {
+		.nid = NID_ML_DSA_87
 	};
 	PKCS11_params params = {
 		.sensitive = 1,
 		.extractable = 0,
 	};
-	PKCS11_KGEN_ATTRS eckg = {
-		.type = EVP_PKEY_ED25519,
-		.kgen.eddsa = &eddsa,
+	PKCS11_KGEN_ATTRS mldsa_kg = {
+		.type = EVP_PKEY_ML_DSA_87,
+		.kgen.nid = &mldsa,
 		.token_label = NULL,
 		.key_label = NULL,
 		.key_id = (const unsigned char *)"\x22\x33",
@@ -62,8 +62,8 @@ int main(int argc, char *argv[])
 		printf("%s /usr/lib/opensc-pkcs11.so [MODULE] [TOKEN1] [KEY-LABEL] [PIN]\n", argv[0]);
 		goto cleanup;
 	}
-	eckg.token_label = argv[2];
-	eckg.key_label = argv[3];
+	mldsa_kg.token_label = argv[2];
+	mldsa_kg.key_label = argv[3];
 
 	ctx = PKCS11_CTX_new();
 	error_queue("PKCS11_CTX_new");
@@ -98,12 +98,12 @@ int main(int argc, char *argv[])
 	error_queue("PKCS11_login");
 	CHECK_ERR(rc < 0, "PKCS11_login failed", 7);
 	/*
-	 * Ed25519 key generation test
+	 * ML-DSA key generation test
 	 */
-	rc = PKCS11_keygen(slot->token, &eckg);
+	rc = PKCS11_keygen(slot->token, &mldsa_kg);
 	error_queue("PKCS11_keygen");
 	CHECK_ERR(rc < 0, "Failed to generate a key pair on the token", 8);
-	printf("Ed25519 keys generated\n");
+	printf("ML-DSA keys generated\n");
 
 	/* Free the list of slots allocated by PKCS11_enumerate_slots() */
 	PKCS11_release_all_slots(ctx, slots, nslots);
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 		display_openssl_errors();
 		goto cleanup;
 	}
-	printf("Ed25519 Sign-verify success\n");
+	printf("ML-DSA Sign-verify success\n");
 
 	ret = 0;
 cleanup:
@@ -162,15 +162,15 @@ cleanup:
 	return ret;
 }
 
-#else /* !OPENSSL_NO_ECX && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#else /* !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 #include <stdio.h>
 
 int main() {
-	fprintf(stderr, "Skipped: requires OpenSSL >= 3.0 built with ECX support\n");
+	fprintf(stderr, "Skipped: requires OpenSSL >= 3.5 built with ML-DSA support\n");
 	return 77;
 }
 
-#endif /* !OPENSSL_NO_ECX && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#endif /* !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 /* vim: set noexpandtab: */
