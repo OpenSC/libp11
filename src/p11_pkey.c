@@ -870,6 +870,8 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
 
+	pkcs11_put_session(slot, session);
+
 	return pkcs11_evp_pkey_ec_sign(key, sig, siglen, tbs, tbslen);
 }
 #endif /* OPENSSL_NO_EC */
@@ -888,6 +890,8 @@ static int pkcs11_eddsa_sign(unsigned char *sig, size_t *siglen,
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
+
+	pkcs11_put_session(slot, session);
 
 	return pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen);
 }

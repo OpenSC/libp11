@@ -81,6 +81,8 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *ctx, unsigned char *sig,
 	if (pkcs11_get_session(slot, 0, &session))
 		return 0;
 
+	pkcs11_put_session(slot, session);
+
 	if (!pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen))
 		return 0;
 
@@ -122,6 +124,8 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 
 	if (pkcs11_get_session(slot, 0, &session))
 		return -1;
+
+	pkcs11_put_session(slot, session);
 
 	/* Step 1: caller asks for signature length only */
 	if (sig == NULL) {
@@ -542,6 +546,8 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	}
 
 end:
+	pkcs11_put_session(slot, session);
+
 	if (!ok) {
 		OPENSSL_free(*raw);
 		*raw = NULL;
