@@ -360,6 +360,8 @@ typedef unsigned long ck_key_type_t;
 #define CKK_GOSTR3411		(0x31UL)
 #define CKK_GOST28147		(0x32UL)
 #define CKK_EC_EDWARDS		(0x40UL)
+#define CKK_ML_DSA		(0x4AUL)
+#define CKK_SLH_DSA		(0x4BUL)
 #define CKK_VENDOR_DEFINED	(1UL << 31)
 
 /*
@@ -482,6 +484,7 @@ typedef unsigned long ck_attribute_type_t;
 #define CKA_OTP_SERVICE_LOGO_TYPE	(0x22DUL)
 #define CKA_OTP_COUNTER			(0x22EUL)
 #define CKA_OTP_TIME			(0x22FUL)
+#define CKA_PARAMETER_SET		(0x61DUL)
 #define CKA_ALLOWED_MECHANISMS		(CKF_ARRAY_ATTRIBUTE | 0x600UL)
 #define CKA_VENDOR_DEFINED		(1UL << 31)
 
@@ -526,8 +529,13 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_DSA_SHA256			(0x14UL)
 #define CKM_DSA_SHA384			(0x15UL)
 #define CKM_DSA_SHA512			(0x16UL)
+#define CKM_ML_DSA_KEY_PAIR_GEN 	(0x1CUL)
+#define CKM_ML_DSA			(0x1DUL)
 #define CKM_DH_PKCS_KEY_PAIR_GEN	(0x20UL)
 #define CKM_DH_PKCS_DERIVE		(0x21UL)
+/* PKCS#11 v3.2: SLH-DSA */
+#define CKM_SLH_DSA_KEY_PAIR_GEN	(0x2EUL)
+#define CKM_SLH_DSA			(0x2FUL)
 #define	CKM_X9_42_DH_KEY_PAIR_GEN	(0x30UL)
 #define CKM_X9_42_DH_DERIVE		(0x31UL)
 #define CKM_X9_42_DH_HYBRID_DERIVE	(0x32UL)
@@ -772,8 +780,31 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_DH_PKCS_PARAMETER_GEN	(0x2001UL)
 #define CKM_X9_42_DH_PARAMETER_GEN	(0x2002UL)
 #define CKM_AES_KEY_WRAP		(0x2109UL)
+#define CKM_PQC_FALCON		        (CKM_VENDOR_DEFINED + 0x10025UL)
 #define CKM_VENDOR_DEFINED		(1UL << 31)
 
+/* CKP (ML-DSA) */
+#define CKP_ML_DSA_44			(0x0001UL)
+#define CKP_ML_DSA_65			(0x0002UL)
+#define CKP_ML_DSA_87			(0x0003UL)
+
+/* CKP (SLH-DSA) */
+#define CKP_SLH_DSA_SHA2_128S		(0x0001UL)
+#define CKP_SLH_DSA_SHAKE_128S		(0x0002UL)
+#define CKP_SLH_DSA_SHA2_128F		(0x0003UL)
+#define CKP_SLH_DSA_SHAKE_128F		(0x0004UL)
+#define CKP_SLH_DSA_SHA2_192S		(0x0005UL)
+#define CKP_SLH_DSA_SHAKE_192S		(0x0006UL)
+#define CKP_SLH_DSA_SHA2_192F		(0x0007UL)
+#define CKP_SLH_DSA_SHAKE_192F		(0x0008UL)
+#define CKP_SLH_DSA_SHA2_256S		(0x0009UL)
+#define CKP_SLH_DSA_SHAKE_256S		(0x000AUL)
+#define CKP_SLH_DSA_SHA2_256F		(0x000BUL)
+#define CKP_SLH_DSA_SHAKE_256F		(0x000CUL)
+
+/* CKP (FALCON) */
+#define CKP_FALCON_512			(0x0001UL)
+#define CKP_FALCON_1024 		(0x0002UL)
 
 struct ck_mechanism
 {
@@ -1441,6 +1472,8 @@ typedef struct ck_function_list **CK_FUNCTION_LIST_PTR_PTR;
 
 typedef struct ck_c_initialize_args CK_C_INITIALIZE_ARGS;
 typedef struct ck_c_initialize_args *CK_C_INITIALIZE_ARGS_PTR;
+
+typedef CK_ULONG CK_SIGN_PARAMETER_SET_TYPE;
 
 #define NULL_PTR NULL
 
