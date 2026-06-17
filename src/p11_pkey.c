@@ -179,7 +179,7 @@ static int pkcs11_params_pss(CK_RSA_PKCS_PSS_PARAMS *pss_params, EVP_PKEY *pkey,
 		break;
 	}
 
-	pkcs11_log(pctx, LOG_DEBUG, "salt_len=%d sig_md=%s mdf1_md=%s\n",
+	pkcs11_log(pctx, LOG_DEBUG, "salt_len=%d sig_md=%s mgf1_md=%s\n",
 		salt_len, EVP_MD_name(sig_md), EVP_MD_name(mgf1_md));
 
 	/* fill the CK_RSA_PKCS_PSS_PARAMS structure */
