@@ -392,6 +392,22 @@ extern int PKCS11_set_ui_method(PKCS11_CTX *ctx,
 	UI_METHOD *ui_method, void *ui_user_data);
 
 /**
+ * Enable or disable dropping the token login session when a key is freed.
+ *
+ * When enabled, the login session is logged out and closed as soon as a private
+ * key object is freed, instead of being cached until the context is destroyed.
+ * This is an opt-in workaround for tokens with a hard limit on concurrent
+ * sessions (e.g. YubiHSM 2) driven by many short-lived processes, where
+ * exit-time cleanup is skipped. Re-login happens automatically on the next key
+ * load. Leave it disabled for long-lived processes that sign repeatedly.
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param enable non-zero to drop the login session on key free, 0 to cache it
+ * @return 0 on success, -1 on error
+ */
+extern int PKCS11_set_no_login_cache(PKCS11_CTX *ctx, int enable);
+
+/**
  * Initialize a token
  *
  * @param token token descriptor (in general slot->token)

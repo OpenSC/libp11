@@ -71,6 +71,7 @@ void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 
 int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login);
+void UTIL_CTX_set_no_login_cache(UTIL_CTX *ctx, int no_login_cache);
 
 X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *uri,
 	UI_METHOD *ui_method, void *ui_data);

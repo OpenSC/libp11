@@ -460,6 +460,9 @@ static void *keymgmt_load(const void *reference, size_t reference_sz)
 /* Free key management object and release associated resources. */
 static void keymgmt_free(void *provkey)
 {
+	/* opt-in: release the login session during healthy runtime, since the legacy
+	 * RSA/EC finish callbacks never run on the provider path */
+	p11_keydata_release_login(provkey);
 	p11_keydata_free(provkey);
 }
 

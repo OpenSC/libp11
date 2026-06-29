@@ -295,6 +295,66 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 }
 
 /*
+ * Release the authenticated login session WITHOUT touching the key cache.
+ *
+ * Used by the opt-in no_login_cache behavior: it is called from the RSA/EC
+ * key "finish" callbacks (i.e. from inside EVP_PKEY_free), so it must NOT call
+ * pkcs11_logout()/pkcs11_wipe_cache() (those free cached keys via EVP_PKEY_free
+ * and would re-enter the finish callback -> double free) and must NOT call
+ * pkcs11_get_session() (which can itself wipe the cache while holding the slot
+ * lock). It borrows a pooled session handle directly, issues C_Logout (which on
+ * tokens such as the YubiHSM is what actually releases the authenticated
+ * session -- C_CloseSession alone does not), then closes and resets the pool.
+ *
+ * Idempotent: a lockless logged_in check makes repeated/re-entrant calls a
+ * no-op, so it never recurses and never nests slot->lock.
+ */
+int pkcs11_slot_logout_session_only(PKCS11_SLOT_private *slot)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+
+	if (slot->logged_in < 0) /* not logged in: nothing to do, no lock taken */
+		return 0;
+
+	pthread_mutex_lock(&slot->lock);
+	if (slot->logged_in < 0) { /* lost a race with another logout */
+		pthread_mutex_unlock(&slot->lock);
+		return 0;
+	}
+	slot->logged_in = -1;
+	if (slot->session_head != slot->session_tail) {
+		/* borrow a pooled session handle to log out on */
+		session = slot->session_pool[slot->session_head];
+		slot->session_head = (slot->session_head + 1) % slot->session_poolsize;
+	}
+	pthread_mutex_unlock(&slot->lock);
+
+	/* C_Logout releases the authenticated session on the token. Best effort. */
+	if (session != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_Logout(session));
+
+	pthread_mutex_lock(&slot->lock);
+	CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
+	slot->num_sessions = 0;
+	slot->session_head = slot->session_tail = 0;
+	pthread_mutex_unlock(&slot->lock);
+
+	return 0;
+}
+
+/*
+ * Enable/disable dropping the login session when a key is freed
+ */
+int pkcs11_set_no_login_cache(PKCS11_CTX_private *ctx, int enable)
+{
+	if (!ctx)
+		return -1;
+	ctx->no_login_cache = enable ? 1 : 0;
+	return 0;
+}
+
+/*
  * Initialize the token
  */
 int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *label)
@@ -444,6 +504,7 @@ static PKCS11_SLOT_private *pkcs11_slot_new(PKCS11_CTX_private *ctx, CK_SLOT_ID 
 	slot->id = id;
 	slot->forkid = ctx->forkid;
 	slot->logged_in = -1;
+	slot->no_login_cache = (int8_t)ctx->no_login_cache;
 	slot->rw_mode = -1;
 	slot->max_sessions = 16;
 	slot->session_poolsize = slot->max_sessions + 1;
