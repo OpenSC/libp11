@@ -28,6 +28,8 @@ check_PROGRAMS = \
 	check-all-prov \
 	rsa-keygen \
 	ec-keygen \
+	ec-derive \
+	ec-derive-prov \
 	ed25519-keygen \
 	ed448-keygen \
 	ed25519-keygen-prov \
@@ -50,6 +52,7 @@ dist_check_SCRIPTS = \
 	ec-cert-store.softhsm \
 	ec-copy.softhsm \
 	ec-keygen.softhsm \
+	ec-derive.softhsm \
 	ed25519-keygen.softhsm \
 	ed448-keygen.softhsm \
 	fork-change-slot.softhsm \
@@ -66,6 +69,7 @@ dist_check_SCRIPTS = \
 	provider-ec-check-privkey.softhsm \
 	provider-ec-check-all.softhsm \
 	provider-ec-copy.softhsm \
+	provider-ec-derive.softhsm \
 	provider-ed25519-check-privkey.softhsm \
 	provider-ed448-check-privkey.softhsm \
 	provider-ed25519-keygen.softhsm \
@@ -97,6 +101,7 @@ check_privkey_prov_SOURCES = check-privkey-prov.c helpers_prov.c
 rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
 rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
 check_all_prov_SOURCES = check-all-prov.c helpers_prov.c
+ec_derive_prov_SOURCES = ec-derive-prov.c helpers_prov.c
 
 TESTS = $(dist_check_SCRIPTS)
 

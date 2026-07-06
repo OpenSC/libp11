@@ -226,6 +226,21 @@ generate_rsa_key_pair () {
 	fi
 }
 
+# Generate an EC key pair with derive usage on the prime256v1 curve
+generate_ec_derive_key_pair () {
+	local obj_label="$1"
+	local token_label="$2"
+	local obj_id="${3:-${ID}}"
+
+	echo "* Generating an EC derive key pair on the token ${token_label}"
+	pkcs11-tool --login --pin ${PIN} --module ${MODULE} --id ${obj_id} \
+		--keypairgen --key-type "EC:prime256v1" --usage-derive \
+		--label ${obj_label} --token-label ${token_label}
+	if [[ $? -ne 0 ]]; then
+		exit 1
+	fi
+}
+
 # Do the token initialization
 init_token () {
 	local key_type="$1"
