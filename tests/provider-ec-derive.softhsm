@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=ecdh-key;type=private;pin-value=1234"
+PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=ecdh-key;type=public"
+PEER_PRIVATE_KEY="pkcs11:token=libp11-0;id=%05%06%07%08;object=ecdh-peer;type=private;pin-value=1234"
+PEER_PUBLIC_KEY="pkcs11:token=libp11-0;id=%05%06%07%08;object=ecdh-peer;type=public"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+# Initialize SoftHSM DB
+init_db
+
+if ! has_mechanism ECDH1-DERIVE; then
+	echo "Skipping test: ECDH1-DERIVE not supported."
+	rm -rf "$outdir"
+	exit 77
+fi
+
+# Create token
+init_card "libp11-0"
+
+# Generate EC derive key pairs on the token
+if ! generate_ec_derive_key_pair "ecdh-key" "libp11-0" "01020304" ||
+	! generate_ec_derive_key_pair "ecdh-peer" "libp11-0" "05060708"; then
+	echo "Skipping test: cannot generate EC derive key pairs."
+	exit 77
+fi
+
+# Ensure the use of the locally built provider
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Load openssl settings
+. ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
+
+${WRAPPER} ./ec-derive-prov "${PRIVATE_KEY}" "${PUBLIC_KEY}" \
+	"${PEER_PRIVATE_KEY}" "${PEER_PUBLIC_KEY}"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "ECDH provider derive test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "ECDH provider derive test failed."
+	exit 1
+fi
+
+rm -rf "$outdir"
+
+exit 0

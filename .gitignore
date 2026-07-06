@@ -66,6 +66,8 @@ examples/eckeygen
 examples/rsakeygen
 examples/ed25519keygen
 examples/ed448keygen
+examples/x25519keygen
+examples/x448keygen
 examples/falcon512keygen
 examples/mldsa87keygen
 examples/slhdsa256skeygen
@@ -89,6 +91,8 @@ tests/rsa-oaep-prov
 tests/rsa-pss-sign-prov
 tests/rsa-keygen
 tests/ec-keygen
+tests/ec-derive
+tests/ec-derive-prov
 tests/ed25519-keygen
 tests/ed448-keygen
 tests/ed25519-keygen-prov
