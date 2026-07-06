@@ -55,16 +55,29 @@ static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
 /* DER OIDs */
 static const unsigned char OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
 static const unsigned char OID_ED448[]   = { 0x06, 0x03, 0x2B, 0x65, 0x71 };
+static const unsigned char OID_X25519[]  = { 0x06, 0x03, 0x2b, 0x65, 0x6e };
+static const unsigned char OID_X448[]    = { 0x06, 0x03, 0x2b, 0x65, 0x6f };
 
 /* PrintableString forms used by some tokens (e.g. SoftHSM) */
 static const unsigned char STR_ED25519[] = {
-    0x13, 0x0C, /* tag + length */
-    'e','d','w','a','r','d','s','2','5','5','1','9'
+	0x13, 0x0C, /* tag + length */
+	'e','d','w','a','r','d','s','2','5','5','1','9'
 };
 static const unsigned char STR_ED448[] = {
-    0x13, 0x0A, /* tag + length */
-    'e','d','w','a','r','d','s','4','4','8'
+	0x13, 0x0A, /* tag + length */
+	'e','d','w','a','r','d','s','4','4','8'
 };
+
+static const unsigned char STR_X25519[] = {
+	0x13, 0x0B, /* tag + length */
+	'c','u','r','v','e','2','5','5','1','9'
+};
+
+static const unsigned char STR_X448[] = {
+	0x13, 0x09, /* tag + length */
+	'c','u','r','v','e','4','4','8'
+};
+
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
@@ -227,6 +240,30 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 				ops = &pkcs11_ed448_ops;
 			} else {
 				pkcs11_log(ctx, LOG_DEBUG, "Unsupported EdDSA OID\n");
+				OPENSSL_free(data);
+				return NULL;
+			}
+			OPENSSL_free(data);
+			break;
+		case CKK_EC_MONTGOMERY:
+			/* Read the CKA_EC_PARAMS to distinguish X25519 vs X448 */
+			if (pkcs11_getattr_alloc(ctx, session, object,
+				CKA_EC_PARAMS, &data, &size)) {
+				pkcs11_log(ctx, LOG_DEBUG, "Missing CKA_EC_PARAMS attribute\n");
+				return NULL;
+			}
+			if ((size == sizeof(OID_X25519) &&
+				!memcmp(data, OID_X25519, sizeof(OID_X25519))) ||
+				(size == sizeof(STR_X25519) &&
+				!memcmp(data, STR_X25519, sizeof(STR_X25519)))) {
+				ops = &pkcs11_x25519_ops;
+			} else if ((size == sizeof(OID_X448) &&
+				!memcmp(data, OID_X448, sizeof(OID_X448))) ||
+				(size == sizeof(STR_X448) &&
+				!memcmp(data, STR_X448, sizeof(STR_X448)))) {
+				ops = &pkcs11_x448_ops;
+			} else {
+				pkcs11_log(ctx, LOG_DEBUG, "Unsupported XDH OID\n");
 				OPENSSL_free(data);
 				return NULL;
 			}
@@ -710,6 +747,63 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 	/* private key attributes */
 	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
 	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
+
+	/* generate key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+		session, &mechanism,
+		pubtmpl.attrs, pubtmpl.nattr,
+		privtmpl.attrs, privtmpl.nattr,
+		&pub_key_obj, &priv_key_obj));
+
+	/* cleanup */
+	pkcs11_put_session(slot, session);
+	pkcs11_zap_attrs(&privtmpl);
+	pkcs11_zap_attrs(&pubtmpl);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
+	return 0;
+}
+
+/**
+ * Generate XDH (X25519 / X448) key pair directly on token
+ */
+int pkcs11_xdh_keygen(PKCS11_SLOT_private *slot,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session;
+	PKCS11_TEMPLATE pubtmpl = {0}, privtmpl = {0};
+	CK_MECHANISM mechanism = {
+		CKM_EC_MONTGOMERY_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	int rv;
+	unsigned char *xdh_params = NULL;
+	size_t xdh_params_len = 0;
+
+	if (pkcs11_init_keygen(slot, &session))
+		return -1;
+
+	if (nid == NID_X25519) {
+		xdh_params = (unsigned char *)OID_X25519;
+		xdh_params_len = sizeof(OID_X25519);
+	} else if (nid == NID_X448) {
+		xdh_params = (unsigned char *)OID_X448;
+		xdh_params_len = sizeof(OID_X448);
+	} else {
+		pkcs11_put_session(slot, session);
+		return -1; /* unsupported */
+	}
+
+	/* public key attributes */
+	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
+	pkcs11_addattr(&pubtmpl, CKA_EC_PARAMS, xdh_params, xdh_params_len);
+	pkcs11_addattr_bool(&pubtmpl, CKA_DERIVE, TRUE);
+
+	/* private key attributes */
+	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
+	pkcs11_addattr_bool(&privtmpl, CKA_DERIVE, TRUE);
 
 	/* generate key pair */
 	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(

@@ -132,6 +132,8 @@ extern PKCS11_OBJECT_ops pkcs11_ec_ops;
 # if OPENSSL_VERSION_NUMBER >= 0x30000000L
 extern PKCS11_OBJECT_ops pkcs11_ed25519_ops;
 extern PKCS11_OBJECT_ops pkcs11_ed448_ops;
+extern PKCS11_OBJECT_ops pkcs11_x25519_ops;
+extern PKCS11_OBJECT_ops pkcs11_x448_ops;
 # endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* OPENSSL_NO_EC */
 
@@ -401,6 +403,10 @@ extern int pkcs11_ec_keygen(PKCS11_SLOT_private *tpriv,
 extern int pkcs11_eddsa_keygen(PKCS11_SLOT_private *tpriv,
 	int nid, const char *label, const unsigned char *id,
 	size_t id_len, const PKCS11_params *params);
+
+extern int pkcs11_xdh_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
@@ -455,12 +461,12 @@ extern int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
 	const unsigned char *tbs, size_t tbslen);
 #endif /* OPENSSL_NO_EC */
 
-#ifndef OPENSSL_NO_ECX
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* Sign message input with EdDSA private key via PKCS#11 mechanism */
 extern int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
-#endif /* OPENSSL_NO_ECX */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
 #ifndef OPENSSL_NO_ML_DSA
@@ -496,6 +502,18 @@ extern int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
 	const char *mgf1_mdname, unsigned char *oaep_label, size_t oaep_labellen,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen);
+
+#ifndef OPENSSL_NO_EC
+extern int pkcs11_evp_pkey_ecdh_derive(PKCS11_OBJECT_private *key,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	int cofactor_mode, unsigned char *secret, size_t *secretlen);
+#endif /* EVP_PKEY_EC */
+
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+extern int pkcs11_evp_pkey_xdh_derive(PKCS11_OBJECT_private *key,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	unsigned char *secret, size_t *secretlen);
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* This function has never been implemented */
 extern int pkcs11_verify(int type,
@@ -566,6 +584,9 @@ extern void pkcs11_ecdh_method_free(void);
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
 /* Free the global ED25519/ED448 EVP_PKEY_METHOD */
 extern void pkcs11_ed_key_method_free(void);
+
+/* Free the global X25519/X448 EVP_PKEY_METHOD */
+extern void pkcs11_xdh_key_method_free(void);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L

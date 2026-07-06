@@ -436,6 +436,10 @@ int PKCS11_keygen(PKCS11_TOKEN *token, PKCS11_KGEN_ATTRS *kg)
 	case EVP_PKEY_ED448:
 		return pkcs11_eddsa_keygen(slot, kg->kgen.nid->nid,
 				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+		return pkcs11_xdh_keygen(slot, kg->kgen.eddsa->nid,
+				kg->key_label, kg->key_id, kg->id_len, kg->key_params);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
@@ -524,6 +528,32 @@ int PKCS11_generate_key(PKCS11_TOKEN *token, int algorithm,
 		nid_kgen.nid = NID_ED448;
 		kgen_attrs = (PKCS11_KGEN_ATTRS){
 			.type = EVP_PKEY_ED448,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+
+	case EVP_PKEY_X25519:
+		nid_kgen.nid = NID_X25519;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_X25519,
+			.kgen.nid = &nid_kgen,
+			.token_label = (const char *)token->label,
+			.key_label = label,
+			.key_id = (const unsigned char *)id,
+			.id_len = id_len,
+			.key_params = &key_params
+		};
+		break;
+
+	case EVP_PKEY_X448:
+		nid_kgen.nid = NID_X448;
+		kgen_attrs = (PKCS11_KGEN_ATTRS){
+			.type = EVP_PKEY_X448,
 			.kgen.nid = &nid_kgen,
 			.token_label = (const char *)token->label,
 			.key_label = label,
@@ -922,6 +952,39 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 		return -2; /* type not supported */
 	}
 }
+
+#if !defined(OPENSSL_NO_EC) || !defined(OPENSSL_NO_ECX)
+int PKCS11_evp_pkey_derive(EVP_PKEY *pk, int type,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	int cofactor_mode, unsigned char *secret, size_t *secretlen)
+{
+	PKCS11_OBJECT_private *key;
+	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+
+	if (pkey == NULL)
+		return -1;
+
+	key = pkey->_private;
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	switch (type) {
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		return pkcs11_evp_pkey_ecdh_derive(key, peer_pub, peer_pub_len,
+			cofactor_mode, secret, secretlen);
+#endif /* EVP_PKEY_EC */
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+		return pkcs11_evp_pkey_xdh_derive(key, peer_pub, peer_pub_len,
+			secret, secretlen);
+#endif /* EVP_PKEY_ECX */
+	default:
+		return -2; /* type not supported */
+	}
+}
+#endif /* !defined(OPENSSL_NO_EC) || !defined(OPENSSL_NO_ECX) */
 
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 

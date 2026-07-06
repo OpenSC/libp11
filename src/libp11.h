@@ -575,6 +575,12 @@ extern int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 	unsigned char *oaep_label, size_t oaep_labellen,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *in, size_t inlen);
+
+/* Perform a private-key derive operation using a PKCS#11-backed EVP_PKEY */
+extern int PKCS11_evp_pkey_derive(EVP_PKEY *pk, int type,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	int cofactor_mode, unsigned char *secret, size_t *secretlen);
+
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Encrypts data using the private key */

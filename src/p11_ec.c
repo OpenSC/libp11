@@ -531,81 +531,66 @@ static void pkcs11_ecdh_params_free(CK_ECDH1_DERIVE_PARAMS *parms)
  * could also be supported, and the secret key object could be returned.
  */
 static int pkcs11_ecdh_derive(unsigned char **out, size_t *outlen,
-		const int key_len,
-		const unsigned long ecdh_mechanism,
-		const void *ec_params,
-		void *outnewkey,
-		PKCS11_OBJECT_private *key)
+	const int key_len, const unsigned long ecdh_mechanism,
+	const void *ec_params, void *outnewkey, PKCS11_OBJECT_private *key)
 {
-	PKCS11_SLOT_private *slot = key->slot;
-	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_SESSION_HANDLE session;
-	CK_MECHANISM mechanism;
-	int rv;
+	const CK_ECDH1_DERIVE_PARAMS *params;
+	unsigned char *secret = NULL;
+	size_t secretlen;
+	int cofactor_mode;
 
-	CK_BBOOL _true = TRUE;
-	CK_BBOOL _false = FALSE;
-	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
-	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
-	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
-	CK_ULONG newkey_len = key_len;
-	CK_OBJECT_HANDLE *tmpnewkey = (CK_OBJECT_HANDLE *)outnewkey;
-	CK_ATTRIBUTE newkey_template[] = {
-		{CKA_TOKEN, &_false, sizeof(_false)}, /* session only object */
-		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
-		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
-		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
-		{CKA_SENSITIVE, &_false, sizeof(_false)},
-		{CKA_EXTRACTABLE, &_true, sizeof(_true)},
-		{CKA_DERIVE, &_true, sizeof(_true)},
-	};
-
-	memset(&mechanism, 0, sizeof(mechanism));
-	mechanism.mechanism = ecdh_mechanism;
-	mechanism.pParameter = (void *)ec_params;
-	switch (ecdh_mechanism) {
-		case CKM_ECDH1_DERIVE:
-		case CKM_ECDH1_COFACTOR_DERIVE:
-			mechanism.ulParameterLen = sizeof(CK_ECDH1_DERIVE_PARAMS);
-			break;
-#if 0
-		/* TODO */
-		case CK_ECMQV_DERIVE_PARAMS:
-			mechanism.ulParameterLen = sizeof(CK_ECMQV_DERIVE_PARAMS);
-			break;
-#endif
-		default:
-			P11err(P11_F_PKCS11_ECDH_DERIVE, P11_R_NOT_SUPPORTED);
-			return -1;
-	}
-
-	if (pkcs11_get_session(slot, 0, &session))
+	if (key == NULL || out == NULL || outlen == NULL ||
+			ec_params == NULL || key_len <= 0)
 		return -1;
 
-	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, &mechanism, key->object,
-		newkey_template, sizeof(newkey_template)/sizeof(*newkey_template), &newkey));
-	if (rv != CKR_OK)
-		goto error;
-
-	/* Return the value of the secret key and/or the object handle of the secret key */
-	if (out && outlen) { /* pkcs11_ec_ckey only asks for the value */
-		if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE, out, outlen)) {
-			CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
-			goto error;
-		}
+	/* Returning the temporary derived key object is not supported by the
+	 * shared EVP helper. pkcs11_ec_ckey() only asks for the value. */
+	if (outnewkey != NULL) {
+		P11err(P11_F_PKCS11_ECDH_DERIVE, P11_R_NOT_SUPPORTED);
+		return -1;
 	}
-	if (tmpnewkey) /* For future use (not used by pkcs11_ec_ckey) */
-		*tmpnewkey = newkey;
-	else /* Destroy the temporary key */
-		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 
-	pkcs11_put_session(slot, session);
+	switch (ecdh_mechanism) {
+	case CKM_ECDH1_DERIVE:
+		cofactor_mode = 0;
+		break;
+	case CKM_ECDH1_COFACTOR_DERIVE:
+		cofactor_mode = 1;
+		break;
+#if 0
+	/* TODO
+	 * Elliptic Curve Menezes–Qu–Vanstone key agreement
+	 * ECMQV needs CK_ECMQV_DERIVE_PARAMS and two key pairs per party.
+	 * Keep disabled until we have a token exposing CKM_ECMQV_DERIVE
+	 * for interoperability testing. */
+	case CKM_ECMQV_DERIVE:
+		break;
+#endif
+	default:
+		P11err(P11_F_PKCS11_ECDH_DERIVE, P11_R_NOT_SUPPORTED);
+		return -1;
+	}
 
+	params = (const CK_ECDH1_DERIVE_PARAMS *)ec_params;
+	if (params->pPublicData == NULL || params->ulPublicDataLen == 0)
+		return -1;
+
+	secretlen = (size_t)key_len;
+	secret = OPENSSL_malloc(secretlen);
+	if (secret == NULL)
+		return -1;
+
+	/* Return the value of the secret key. */
+	if (pkcs11_evp_pkey_ecdh_derive(key,
+			params->pPublicData, params->ulPublicDataLen,
+			cofactor_mode, secret, &secretlen) <= 0) {
+		OPENSSL_clear_free(secret, (size_t)key_len);
+		return -1;
+	}
+
+	*out = secret;
+	*outlen = secretlen;
 	return 0;
-error:
-	pkcs11_put_session(slot, session);
-	CKRerr(CKR_F_PKCS11_ECDH_DERIVE, rv);
-	return -1;
 }
 
 static int pkcs11_ecdh_compute_key(unsigned char **buf, size_t *buflen,
