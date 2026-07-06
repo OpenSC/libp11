@@ -338,6 +338,10 @@ const char *pkcs11_mechanism_name(CK_MECHANISM *mechanism)
 		return "CKM_FALCON";
 	case CKM_PQC_FALCON:
 		return "CKM_PQC_FALCON";
+	case CKM_ECDH1_DERIVE:
+		return "CKM_ECDH1_DERIVE";
+	case CKM_ECDH1_COFACTOR_DERIVE:
+		return "CKM_ECDH1_COFACTOR_DERIVE";
 	default:
 		return "UNKNOWN_MECHANISM";
 	}
@@ -558,6 +562,148 @@ end:
 	pkcs11_put_session(slot, session);
 	return rv;
 }
+
+#ifndef OPENSSL_NO_EC
+/*
+ * Execute a PKCS#11 derive operation using the specified mechanism.
+ * Returns: CKR_OK on success or PKCS#11/vendor defined error code on failure.
+ */
+static CK_RV pkcs11_derive_with_mechanism(PKCS11_OBJECT_private *key,
+	CK_MECHANISM *mechanism, unsigned char *secret, size_t *secretlen)
+{
+	CK_RV rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
+	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_BBOOL ck_false = CK_FALSE;
+	CK_BBOOL ck_true = CK_TRUE;
+	CK_ULONG newkey_len = 0;
+	unsigned char *value = NULL;
+	size_t len, value_len_alloc = 0;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &ck_false, sizeof(ck_false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
+		{CKA_SENSITIVE, &ck_false, sizeof(ck_false)},
+		{CKA_EXTRACTABLE, &ck_true, sizeof(ck_true)},
+		{CKA_DERIVE, &ck_true, sizeof(ck_true)},
+	};
+
+	if (key == NULL || mechanism == NULL || secret == NULL ||
+			secretlen == NULL || *secretlen == 0)
+		return CKR_ARGUMENTS_BAD;
+
+	if (*secretlen > (size_t)(CK_ULONG)-1)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG, "%s:%d pkcs11_derive_with_mechanism() "
+		"%s secret=%p *secretlen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism), secret, (unsigned long)*secretlen);
+#endif
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	if (key->always_authenticate == CK_TRUE) {
+		rv = pkcs11_authenticate(key, session);
+		if (rv != CKR_OK)
+			goto end;
+	}
+
+	len = *secretlen;
+	newkey_len = (CK_ULONG)len;
+
+	rv = CRYPTOKI_call(ctx, C_DeriveKey(session, mechanism, key->object,
+		newkey_template, sizeof(newkey_template)/sizeof(*newkey_template),
+		&newkey));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG, "%s:%d C_DeriveKey rv=0x%08lX (%lu)\n",
+			__FILE__, __LINE__, (unsigned long)rv, (unsigned long)rv);
+		goto end;
+	}
+
+	if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE,
+			&value, &value_len_alloc)) {
+		rv = CKR_GENERAL_ERROR;
+		goto end;
+	}
+
+	if (value_len_alloc > len) {
+		*secretlen = value_len_alloc;
+		rv = CKR_BUFFER_TOO_SMALL;
+		goto end;
+	}
+
+	memcpy(secret, value, value_len_alloc);
+	*secretlen = value_len_alloc;
+	rv = CKR_OK;
+
+end:
+	if (newkey != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
+
+	OPENSSL_clear_free(value, value_len_alloc);
+	pkcs11_put_session(slot, session);
+	return rv;
+}
+
+/* DER-encode data as an ASN.1 OCTET STRING. */
+static unsigned char *der_encode_octet_string(const unsigned char *data,
+	size_t data_len, size_t *der_len)
+{
+	ASN1_OCTET_STRING *os = NULL;
+	unsigned char *der = NULL, *p;
+	int len;
+
+	if (data == NULL || data_len == 0 || der_len == NULL)
+		return NULL;
+
+	if (data_len > INT_MAX)
+		return NULL;
+
+	os = ASN1_OCTET_STRING_new();
+	if (os == NULL)
+		return NULL;
+
+	if (!ASN1_OCTET_STRING_set(os, data, (int)data_len))
+		goto err;
+
+	len = i2d_ASN1_OCTET_STRING(os, NULL);
+	if (len <= 0)
+		goto err;
+
+	der = OPENSSL_malloc((size_t)len);
+	if (der == NULL)
+		goto err;
+
+	p = der;
+	if (i2d_ASN1_OCTET_STRING(os, &p) != len)
+		goto err;
+
+	*der_len = (size_t)len;
+	ASN1_OCTET_STRING_free(os);
+	return der;
+
+err:
+	OPENSSL_free(der);
+	ASN1_OCTET_STRING_free(os);
+	return NULL;
+}
+#endif /* OPENSSL_NO_EC */
 
 /* Build ASN.1 DigestInfo for PKCS#1 v1.5 signing. */
 static int pkcs11_build_digestinfo(const char *mdname,
@@ -828,7 +974,7 @@ int pkcs11_evp_pkey_ec_sign(PKCS11_OBJECT_private *key,
 }
 #endif /* OPENSSL_NO_EC */
 
-#ifndef OPENSSL_NO_ECX
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /*
  * Sign message input with EdDSA private key via PKCS#11 mechanism.
  * Returns 1 on success or -1 on failure.
@@ -851,7 +997,7 @@ int pkcs11_evp_pkey_eddsa_sign(PKCS11_OBJECT_private *key,
 
 	return 1;
 }
-#endif /* OPENSSL_NO_ECX */
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
 #ifndef OPENSSL_NO_ML_DSA
@@ -1001,6 +1147,122 @@ int pkcs11_evp_pkey_rsa_decrypt(PKCS11_OBJECT_private *key,
 	return (int)*outlen;
 }
 
+#ifndef OPENSSL_NO_EC
+/*
+ * Derive an ECDH shared secret.  Raw uncompressed peer EC points are tried
+ * first, with a fallback to the DER OCTET STRING form used by CKA_EC_POINT.
+ */
+extern int pkcs11_evp_pkey_ecdh_derive(PKCS11_OBJECT_private *key,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	int cofactor_mode, unsigned char *secret, size_t *secretlen)
+{
+	CK_MECHANISM mechanism;
+	CK_ECDH1_DERIVE_PARAMS derive_params;
+	unsigned char *der_pub = NULL;
+	size_t der_pub_len = 0;
+	size_t saved_secretlen = 0;
+	CK_RV rv;
+
+	if (key == NULL || peer_pub == NULL || peer_pub_len == 0 || secretlen == NULL)
+		return -1;
+
+	if (peer_pub_len > (size_t)(CK_ULONG)-1)
+		return -1;
+
+	memset(&derive_params, 0, sizeof(derive_params));
+	derive_params.kdf = CKD_NULL;
+	derive_params.pSharedData = NULL_PTR;
+	derive_params.ulSharedDataLen = 0;
+	derive_params.pPublicData = (CK_BYTE_PTR)peer_pub;
+	derive_params.ulPublicDataLen = (CK_ULONG)peer_pub_len;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = cofactor_mode == 1
+			? CKM_ECDH1_COFACTOR_DERIVE : CKM_ECDH1_DERIVE;
+
+	/* Both ECDH variants use CK_ECDH1_DERIVE_PARAMS.
+	 * The mechanism type selects plain vs cofactor ECDH; the token
+	 * obtains the cofactor from the EC domain parameters. */
+	mechanism.pParameter = &derive_params;
+	mechanism.ulParameterLen = sizeof(derive_params);
+
+	saved_secretlen = *secretlen;
+	rv = pkcs11_derive_with_mechanism(key, &mechanism, secret, secretlen);
+	if (rv == CKR_OK)
+		return 1;
+
+	/*
+	 * SoftHSM accepts raw uncompressed EC points in pPublicData, while
+	 * some tokens such as Luna expect the DER OCTET STRING form used by
+	 * CKA_EC_POINT. Try raw first and fall back to DER-wrapped form on
+	 * CKR_ECC_POINT_INVALID.
+	 */
+	if (rv != CKR_ECC_POINT_INVALID || peer_pub[0] != POINT_CONVERSION_UNCOMPRESSED)
+		return -1;
+
+	der_pub = der_encode_octet_string(peer_pub, peer_pub_len, &der_pub_len);
+	if (der_pub == NULL || der_pub_len > (size_t)(CK_ULONG)-1) {
+		OPENSSL_free(der_pub);
+		return -1;
+	}
+
+	*secretlen = saved_secretlen;
+	derive_params.pPublicData = der_pub;
+	derive_params.ulPublicDataLen = (CK_ULONG)der_pub_len;
+
+	rv = pkcs11_derive_with_mechanism(key, &mechanism, secret, secretlen);
+
+	OPENSSL_clear_free(der_pub, der_pub_len);
+
+	if (rv != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* OPENSSL_NO_EC */
+
+#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Derive an X25519/X448 shared secret using CKM_ECDH1_DERIVE and a raw
+ * RFC 7748 peer public key.
+ * TODO: Test this path once a token/module advertising
+ * EC_MONTGOMERY derive support is available.
+ */
+extern int pkcs11_evp_pkey_xdh_derive(PKCS11_OBJECT_private *key,
+	const unsigned char *peer_pub, size_t peer_pub_len,
+	unsigned char *secret, size_t *secretlen)
+{
+	CK_MECHANISM mechanism;
+	CK_ECDH1_DERIVE_PARAMS derive_params;
+	CK_RV rv;
+
+	if (key == NULL || peer_pub == NULL || peer_pub_len == 0 || secretlen == NULL)
+		return -1;
+
+	if (peer_pub_len > (size_t)(CK_ULONG)-1)
+		return -1;
+
+	memset(&derive_params, 0, sizeof(derive_params));
+	derive_params.kdf = CKD_NULL;
+	derive_params.pSharedData = NULL_PTR;
+	derive_params.ulSharedDataLen = 0;
+	derive_params.pPublicData = (CK_BYTE_PTR)peer_pub;
+	derive_params.ulPublicDataLen = (CK_ULONG)peer_pub_len;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ECDH1_DERIVE;
+	mechanism.pParameter = &derive_params;
+	mechanism.ulParameterLen = sizeof(derive_params);
+
+	/* X25519/X448 use CKM_ECDH1_DERIVE with raw RFC 7748 public keys
+	 * on tokens that support EC_MONTGOMERY derive. */
+	rv = pkcs11_derive_with_mechanism(key, &mechanism, secret, secretlen);
+	if (rv != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 #ifndef OPENSSL_NO_EC

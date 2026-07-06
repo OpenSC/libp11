@@ -51,6 +51,7 @@ typedef struct provider_ctx PROVIDER_CTX;
 typedef struct p11_keydata_st P11_KEYDATA;
 typedef struct p11_signature_ctx P11_SIGNATURE_CTX;
 typedef struct p11_asym_cipher_ctx P11_ASYM_CIPHER_CTX;
+typedef struct p11_keyexch_ctx P11_KEYEXCH_CTX;
 
 /******************************************************************************/
 /* PROVIDER interface helpers                                                 */
@@ -88,7 +89,7 @@ int p11_keydata_get_security_category(const P11_KEYDATA *keydata);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
 int p11_keydata_get_security_bits(const P11_KEYDATA *keydata);
 int p11_keydata_get_bits(const P11_KEYDATA *keydata);
-size_t p11_keydata_get_sigsize(const P11_KEYDATA *keydata);
+size_t p11_keydata_get_maxsize(const P11_KEYDATA *keydata);
 int p11_keydata_get_type(const P11_KEYDATA *keydata);
 OSSL_PARAM *p11_keydata_get_params(const P11_KEYDATA *key);
 int p11_keydata_set_params(P11_KEYDATA *keydata, const OSSL_PARAM *params);
@@ -166,6 +167,23 @@ int p11_asym_cipher_ctx_set_oaep_label(P11_ASYM_CIPHER_CTX *asym_ctx,
 	const unsigned char *label, size_t labellen);
 unsigned char *p11_asym_cipher_ctx_get_oaep_label(const P11_ASYM_CIPHER_CTX *asym_ctx);
 size_t p11_asym_cipher_ctx_get_oaep_labellen(const P11_ASYM_CIPHER_CTX *asym_ctx);
+
+/******************************************************************************/
+/* KEY EXCHANGE helper functions                                              */
+/******************************************************************************/
+P11_KEYEXCH_CTX *p11_keyexch_ctx_new(PROVIDER_CTX *ctx);
+void p11_keyexch_ctx_free(P11_KEYEXCH_CTX *keyexch_ctx);
+P11_KEYEXCH_CTX *p11_keyexch_dupctx(P11_KEYEXCH_CTX *keyexch_ctx);
+int p11_keyexch_ctx_init(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata,
+	const OSSL_PARAM params[]);
+int p11_keyexch_set_peer(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *provkey);
+int p11_keyexch_ctx_set_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx, int cofactor_mode);
+int p11_keyexch_ctx_get_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx);
+EVP_PKEY *p11_keyexch_ctx_get_evp_pkey(const P11_KEYEXCH_CTX *keyexch_ctx);
+int p11_keyexch_ctx_get_peer_pub(const P11_KEYEXCH_CTX *keyexch_ctx,
+	const unsigned char **buf, size_t *len);
+int p11_keyexch_ctx_get_type(const P11_KEYEXCH_CTX *keyexch_ctx);
+size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx);
 
 #endif /* _PROVIDER_HELPERS_H */
 

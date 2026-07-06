@@ -360,6 +360,7 @@ typedef unsigned long ck_key_type_t;
 #define CKK_GOSTR3411		(0x31UL)
 #define CKK_GOST28147		(0x32UL)
 #define CKK_EC_EDWARDS		(0x40UL)
+#define CKK_EC_MONTGOMERY	(0x41UL)
 #define CKK_ML_DSA		(0x4AUL)
 #define CKK_SLH_DSA		(0x4BUL)
 /*
@@ -731,6 +732,7 @@ typedef unsigned long ck_mechanism_type_t;
 #define CKM_ECDH1_COFACTOR_DERIVE	(0x1051UL)
 #define CKM_ECMQV_DERIVE		(0x1052UL)
 #define CKM_EC_EDWARDS_KEY_PAIR_GEN	(0x1055UL)
+#define CKM_EC_MONTGOMERY_KEY_PAIR_GEN	(0x1056UL)
 #define CKM_EDDSA			(0x1057UL)
 #define CKM_JUNIPER_KEY_GEN		(0x1060UL)
 #define CKM_JUNIPER_ECB128		(0x1061UL)
@@ -1404,6 +1406,7 @@ struct ck_c_initialize_args
 #define CKR_MUTEX_BAD				(0x1a0UL)
 #define CKR_MUTEX_NOT_LOCKED			(0x1a1UL)
 #define CKR_FUNCTION_REJECTED			(0x200UL)
+#define CKR_ECC_POINT_INVALID			(CKR_VENDOR_DEFINED + 0x2F)
 #define CKR_VENDOR_DEFINED			(1UL << 31)
 
 

@@ -45,6 +45,8 @@
 #define ED448_KEYLEN 57
 #define ED25519_SIGSIZE 64
 #define ED448_SIGSIZE 114
+#define X25519_KEYLEN 32
+#define X448_KEYLEN 56
 #endif /* OPENSSL_NO_ECX */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
@@ -157,9 +159,9 @@ struct p11_keydata_st {
 	 * - EC: group order size
 	 * - EdDSA / ML-DSA / SLH-DSA: raw public key size */
 	size_t keysize;
-	/* Signature size in bytes if fixed-size,
-	 * otherwise 0 for variable-size signatures */
-	size_t sigsize;
+	/* Maximum output size in bytes.
+	 * Zero means variable-size or not applicable. */
+	size_t maxsize;
 	/* owned by this struct; free with OSSL_PARAM_free() */
 	OSSL_PARAM *params;
 	/* optional provider-side public key cache */
@@ -196,6 +198,13 @@ struct p11_asym_cipher_ctx {
 	size_t oaep_labellen;
 };
 
+struct p11_keyexch_ctx {
+	PROVIDER_CTX *prov_ctx;
+	P11_KEYDATA *keydata;      /* local private key */
+	P11_KEYDATA *peerkeydata;  /* peer public key */
+	int cofactor_mode;         /* ECDH only: -1 default, 0 disable, 1 enable */
+};
+
 /* Internal helper functions */
 static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx);
 static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx);
@@ -210,7 +219,7 @@ static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata);
 static int p11_keydata_init_ec_from_params(P11_KEYDATA *keydata);
 #endif /* OPENSSL_NO_EC */
 #ifndef OPENSSL_NO_ECX
-static int p11_keydata_init_eddsa_from_params(P11_KEYDATA *keydata, int type);
+static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type);
 #endif /* OPENSSL_NO_ECX */
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
 #ifndef OPENSSL_NO_ML_DSA
@@ -231,15 +240,20 @@ static int ec_point_equal_by_value(const char *group_name,
 static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b);
 static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata);
 static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len);
-static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len);
+static int p11_keydata_get_pub(const P11_KEYDATA *keydata, const unsigned char **buf, size_t *len);
 static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
 	EVP_PKEY_CTX *pctx);
 static int evp_pkey_get_type_id(const EVP_PKEY *pkey);
 static int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
+#ifndef OPENSSL_NO_EC
 static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
+#endif /* OPENSSL_NO_EC */
 static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-static int keydata_has_rsa_pub(P11_KEYDATA *keydata);
-static int keydata_has_ec_pub(P11_KEYDATA *keydata);
+static int keydata_has_rsa_pub(const P11_KEYDATA *keydata);
+#ifndef OPENSSL_NO_EC
+static int keydata_has_ec_pub(const P11_KEYDATA *keydata);
+#endif /* OPENSSL_NO_EC */
+static int keydata_has_raw_pub(const P11_KEYDATA *keydata);
 
 /******************************************************************************/
 /* Provider helper API                                                        */
@@ -678,9 +692,11 @@ int p11_keydata_get_security_bits(const P11_KEYDATA *keydata)
 #endif /* OPENSSL_NO_EC */
 #ifndef OPENSSL_NO_ECX
 	case EVP_PKEY_ED25519:
+	case EVP_PKEY_X25519:
 		return 128;
 
 	case EVP_PKEY_ED448:
+	case EVP_PKEY_X448:
 		return 224;
 #endif /* OPENSSL_NO_ECX */
 
@@ -735,12 +751,12 @@ int p11_keydata_get_bits(const P11_KEYDATA *keydata)
 }
 
 /* Return maximum signature or operation size in bytes. */
-size_t p11_keydata_get_sigsize(const P11_KEYDATA *keydata)
+size_t p11_keydata_get_maxsize(const P11_KEYDATA *keydata)
 {
 	if (keydata == NULL)
 		return 0;
 
-	return keydata->sigsize;
+	return keydata->maxsize;
 }
 
 /*
@@ -811,9 +827,11 @@ int p11_keydata_set_params(P11_KEYDATA *key, const OSSL_PARAM *params)
 int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
 {
 	const OSSL_PARAM *n1, *e1, *n2, *e2;
-	const OSSL_PARAM *g1, *g2;
 	const OSSL_PARAM *pub1, *pub2;
+#ifndef OPENSSL_NO_EC
+	const OSSL_PARAM *g1, *g2;
 	const char *group1 = NULL, *group2 = NULL;
+#endif /* OPENSSL_NO_EC */
 
 	if (k1 == NULL || k2 == NULL ||
 	    k1->params == NULL || k2->params == NULL)
@@ -837,8 +855,8 @@ int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
 
 #ifndef OPENSSL_NO_EC
 	/* Classical EC keys include GROUP_NAME and must be compared using
-	 * curve-aware point comparison. Ed25519 and Ed448 also may expose
-	 * GROUP_NAME, but their public keys are raw octet strings. */
+	 * curve-aware point comparison. Ed25519/Ed448 and X25519/X448 also may
+	 * expose GROUP_NAME, but their public keys are raw octet strings. */
 	g1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_GROUP_NAME);
 	g2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_GROUP_NAME);
 
@@ -856,8 +874,10 @@ int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
 			return 0;
 
 		if (OPENSSL_strcasecmp(group1, "ed25519") == 0 ||
-			OPENSSL_strcasecmp(group1, "ed448") == 0)
-			return octet_equal(pub1, pub2); /* EdDSA */
+			OPENSSL_strcasecmp(group1, "ed448") == 0 ||
+			OPENSSL_strcasecmp(group1, "x25519") == 0 ||
+			OPENSSL_strcasecmp(group1, "x448") == 0)
+			return octet_equal(pub1, pub2); /* compare raw octet strings */
 
 		return ec_point_equal_by_value(group1,
 			(const unsigned char *)pub1->data, pub1->data_size,
@@ -865,7 +885,7 @@ int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
 	}
 #endif /* OPENSSL_NO_EC */
 
-	/* EdDSA, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms. */
+	/* EdDSA, ECX, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms. */
 	return octet_equal(pub1, pub2);
 }
 
@@ -911,10 +931,10 @@ int keydata_export_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbar
 
 	if (keydata_has_rsa_pub(keydata))
 		return export_rsa_pub(keydata, param_cb, cbarg);
-
+#ifndef OPENSSL_NO_EC
 	if (keydata_has_ec_pub(keydata))
 		return export_ec_pub(keydata, param_cb, cbarg);
-
+#endif /* OPENSSL_NO_EC */
 	return export_raw_pub(keydata, param_cb, cbarg);
 }
 
@@ -1224,7 +1244,7 @@ size_t p11_signature_ctx_get_sigsize(const P11_SIGNATURE_CTX *sig_ctx)
 	if (sig_ctx == NULL)
 		return 0;
 
-	return p11_keydata_get_sigsize(sig_ctx->keydata);
+	return p11_keydata_get_maxsize(sig_ctx->keydata);
 }
 
 /* Return key type used in signature context. */
@@ -1652,7 +1672,7 @@ size_t p11_asym_cipher_ctx_get_outsize(const P11_ASYM_CIPHER_CTX *asym_ctx)
 	 * For RSA decrypt the plaintext is at most modulus size.
 	 * This is a safe upper bound for output buffer sizing.
 	 */
-	return p11_keydata_get_sigsize(asym_ctx->keydata);
+	return p11_keydata_get_maxsize(asym_ctx->keydata);
 }
 
 /* Return key type used in asymmetric cipher context. */
@@ -1781,6 +1801,221 @@ size_t p11_asym_cipher_ctx_get_oaep_labellen(const P11_ASYM_CIPHER_CTX *asym_ctx
 	return asym_ctx->oaep_labellen;
 }
 
+/******************************************************************************/
+/* KEY EXCHANGE helper functions                                              */
+/******************************************************************************/
+
+/* Allocate a key exchange context. */
+P11_KEYEXCH_CTX *p11_keyexch_ctx_new(PROVIDER_CTX *ctx)
+{
+	P11_KEYEXCH_CTX *keyexch_ctx;
+
+	keyexch_ctx = OPENSSL_zalloc(sizeof(P11_KEYEXCH_CTX));
+	if (!keyexch_ctx)
+		return NULL;
+
+	keyexch_ctx->prov_ctx = ctx;
+	keyexch_ctx->cofactor_mode = -1; /* default */
+	return keyexch_ctx;
+}
+
+/* Free the key exchange context and release referenced keys. */
+void p11_keyexch_ctx_free(P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	if (keyexch_ctx == NULL)
+		return;
+
+	p11_keydata_free(keyexch_ctx->keydata);
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	OPENSSL_free(keyexch_ctx);
+}
+
+/*
+ * Duplicate a key exchange context.
+ * Key objects are shared by reference; mutable context state is copied.
+ */
+P11_KEYEXCH_CTX *p11_keyexch_dupctx(P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	P11_KEYEXCH_CTX *dst = NULL;
+
+	if (keyexch_ctx == NULL)
+		return NULL;
+
+	dst = p11_keyexch_ctx_new(keyexch_ctx->prov_ctx);
+	if (dst == NULL)
+		return NULL;
+
+	/* copy simple scalar state */
+	dst->cofactor_mode = keyexch_ctx->cofactor_mode;
+
+	/* share local keydata by reference */
+	if (keyexch_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(keyexch_ctx->keydata))
+			goto err;
+		dst->keydata = keyexch_ctx->keydata;
+	}
+
+	/* share peer keydata by reference */
+	if (keyexch_ctx->peerkeydata != NULL) {
+		if (!p11_keydata_up_ref(keyexch_ctx->peerkeydata))
+			goto err;
+		dst->peerkeydata = keyexch_ctx->peerkeydata;
+	}
+
+	return dst;
+
+err:
+	p11_keyexch_ctx_free(dst);
+	return NULL;
+}
+
+/* Set the local private key and reset per-operation state. */
+int p11_keyexch_ctx_init(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata,
+	const OSSL_PARAM params[])
+{
+	const OSSL_PARAM *p;
+
+	if (keyexch_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(keyexch_ctx->keydata);
+	keyexch_ctx->keydata = keydata;
+
+	/* A new derive operation must not reuse the previous peer key. */
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	keyexch_ctx->peerkeydata = NULL;
+
+	/* Restore the default cofactor mode for the new operation. */
+	if (!p11_keyexch_ctx_set_cofactor_mode(keyexch_ctx, -1))
+		return 0;
+
+	if (params == NULL)
+		return 1;
+
+	/* Cofactor mode is meaningful only for ECDH.  It is accepted here
+	 * because the same key exchange implementation is shared with X25519/X448. */
+	p = OSSL_PARAM_locate_const(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
+	if (p != NULL) {
+		int mode;
+
+		if (!OSSL_PARAM_get_int(p, &mode))
+			return 0;
+
+		if (mode < -1 || mode > 1)
+			return 0;
+
+		return p11_keyexch_ctx_set_cofactor_mode(keyexch_ctx, mode);
+	}
+
+	return 1;
+}
+
+/* Set the peer public key for shared-secret derivation. */
+int p11_keyexch_set_peer(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata)
+{
+	if (keyexch_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	keyexch_ctx->peerkeydata = keydata;
+
+	return 1;
+}
+
+/* Set ECDH cofactor mode: -1 = default, 0 = disabled, 1 = enabled. */
+int p11_keyexch_ctx_set_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx, int cofactor_mode)
+{
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	keyexch_ctx->cofactor_mode = cofactor_mode;
+	return 1;
+}
+
+/* Return ECDH cofactor mode. */
+int p11_keyexch_ctx_get_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	return keyexch_ctx->cofactor_mode;
+}
+
+/* Return the local private EVP_PKEY. The returned pointer is borrowed. */
+EVP_PKEY *p11_keyexch_ctx_get_evp_pkey(const P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	if (keyexch_ctx == NULL)
+		return NULL;
+
+	return p11_keydata_get_evp_pkey(keyexch_ctx->keydata);
+}
+
+/* Return the peer public key bytes. The returned buffer is borrowed. */
+int p11_keyexch_ctx_get_peer_pub(const P11_KEYEXCH_CTX *keyexch_ctx,
+	const unsigned char **buf, size_t *len)
+{
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	return p11_keydata_get_pub(keyexch_ctx->peerkeydata, buf, len);
+}
+
+/* Return the local key type. */
+int p11_keyexch_ctx_get_type(const P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	return p11_keydata_get_type(keyexch_ctx->keydata);
+}
+
+/* Return the maximum shared-secret size in bytes. */
+size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx)
+{
+#ifndef OPENSSL_NO_EC
+	EVP_PKEY *pkey;
+	int bits;
+#endif /* OPENSSL_NO_EC */
+	size_t outsize = 0;
+
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	switch (p11_keyexch_ctx_get_type(keyexch_ctx)) {
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		/* ECDH output is at most the EC field size. */
+		pkey = p11_keyexch_ctx_get_evp_pkey(keyexch_ctx);
+		if (pkey == NULL)
+			return 0;
+
+		bits = EVP_PKEY_bits(pkey);
+		if (bits <= 0)
+			return 0;
+
+		outsize = ((size_t)bits + 7) / 8;
+		break;
+#endif /* OPENSSL_NO_EC */
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_X25519:
+		return 32; /* X25519 shared secret has fixed length. */
+
+	case EVP_PKEY_X448:
+		return 56; /* X448 shared secret has fixed length. */
+#endif /* OPENSSL_NO_ECX */
+	default:
+		return 0;
+	}
+	return outsize;
+}
 
 /******************************************************************************/
 /* Internal helper functions                                                  */
@@ -2028,9 +2263,28 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 #ifndef OPENSSL_NO_ECX
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
 	{
 		size_t publen = 0;
-		const char *name = (nid == EVP_PKEY_ED25519) ? "ED25519" : "ED448";
+		const char *name;
+
+		switch (nid) {
+		case EVP_PKEY_ED25519:
+			name = "ED25519";
+			break;
+		case EVP_PKEY_ED448:
+			name = "ED448";
+			break;
+		case EVP_PKEY_X25519:
+			name = "X25519";
+			break;
+		case EVP_PKEY_X448:
+			name = "X448";
+			break;
+		default:
+			goto err;
+		}
 
 		if (!OSSL_PARAM_BLD_push_utf8_string(bld,
 			OSSL_PKEY_PARAM_GROUP_NAME, name, 0))
@@ -2119,7 +2373,7 @@ static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata)
 	keydata->type = 0;
 	keydata->name = NULL;
 	keydata->keysize = 0;
-	keydata->sigsize = 0;
+	keydata->maxsize = 0;
 
 	type = evp_pkey_get_type_id(pkey);
 
@@ -2136,7 +2390,9 @@ static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata)
 #ifndef OPENSSL_NO_ECX
 	case EVP_PKEY_ED25519:
 	case EVP_PKEY_ED448:
-		return p11_keydata_init_eddsa_from_params(keydata, type);
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+		return p11_keydata_init_ecx_from_params(keydata, type);
 #endif /* OPENSSL_NO_ECX */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
@@ -2198,7 +2454,7 @@ static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata)
 	keydata->type = EVP_PKEY_RSA;
 	keydata->name = "RSA";
 	keydata->keysize = p->data_size;
-	keydata->sigsize = p->data_size; /* RSA signature == modulus size */
+	keydata->maxsize = p->data_size; /* RSA signature == modulus size */
 	return 1;
 }
 
@@ -2261,7 +2517,7 @@ static int p11_keydata_init_ec_from_params(P11_KEYDATA *keydata)
 	keydata->keysize = order_bytes;
 
 	/* safe upper bound for DER-encoded ECDSA signatures */
-	keydata->sigsize = (2 * (order_bytes + 3)) +
+	keydata->maxsize = (2 * (order_bytes + 3)) +
 		((2 * (order_bytes + 3) < 128) ? 2 : 3);
 
 	BN_free(order);
@@ -2278,23 +2534,33 @@ err:
 #endif /* OPENSSL_NO_EC */
 
 #ifndef OPENSSL_NO_ECX
-static int p11_keydata_init_eddsa_from_params(P11_KEYDATA *keydata, int type)
+static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type)
 {
 	const OSSL_PARAM *p;
 	size_t keysize = 0;
-	size_t sigsize = 0;
+	size_t maxsize = 0;
 	const char *name = NULL;
 
 	switch (type) {
 	case EVP_PKEY_ED25519:
 		name = "ED25519";
 		keysize = ED25519_KEYLEN;
-		sigsize = ED25519_SIGSIZE;
+		maxsize = ED25519_SIGSIZE;
 		break;
 	case EVP_PKEY_ED448:
 		name = "ED448";
 		keysize = ED448_KEYLEN;
-		sigsize = ED448_SIGSIZE;
+		maxsize = ED448_SIGSIZE;
+		break;
+	case EVP_PKEY_X25519:
+		name = "X25519";
+		keysize = X25519_KEYLEN;
+		maxsize = X25519_KEYLEN; /* max derive output size */
+		break;
+	case EVP_PKEY_X448:
+		name = "X448";
+		keysize = X448_KEYLEN;
+		maxsize = X448_KEYLEN; /* max derive output size */
 		break;
 	default:
 		return 0;
@@ -2311,7 +2577,7 @@ static int p11_keydata_init_eddsa_from_params(P11_KEYDATA *keydata, int type)
 	keydata->type = type;
 	keydata->name = name;
 	keydata->keysize = keysize;
-	keydata->sigsize = sigsize;
+	keydata->maxsize = maxsize;
 	return 1;
 }
 #endif /* OPENSSL_NO_ECX */
@@ -2356,7 +2622,7 @@ static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type)
 	keydata->type = type;
 	keydata->name = name;
 	keydata->keysize = keysize;
-	keydata->sigsize = sigsize;
+	keydata->maxsize = sigsize;
 	return 1;
 }
 #endif /* OPENSSL_NO_ML_DSA */
@@ -2457,7 +2723,7 @@ static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type)
 	keydata->type = type;
 	keydata->name = name;
 	keydata->keysize = keysize;
-	keydata->sigsize = sigsize;
+	keydata->maxsize = sigsize;
 	return 1;
 }
 #endif /* OPENSSL_NO_SLH_DSA */
@@ -2498,7 +2764,7 @@ static int p11_keydata_init_falcon_from_params(P11_KEYDATA *keydata, int type)
 	keydata->type = type;
 	keydata->name = name;
 	keydata->keysize = keysize;
-	keydata->sigsize = sigsize;
+	keydata->maxsize = sigsize;
 
 	return 1;
 }
@@ -2646,21 +2912,36 @@ static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *
 	return 1;
 }
 
-/* Get stored raw public key data. */
-static int p11_keydata_get_pub(const P11_KEYDATA *keydata, unsigned char **buf, size_t *len)
+/* Get stored raw public key data. The returned buffer is not owned. */
+static int p11_keydata_get_pub(const P11_KEYDATA *keydata,
+		const unsigned char **buf, size_t *len)
 {
-	const P11_PUB_KEY *pubkey;
-
 	if (keydata == NULL || buf == NULL || len == NULL)
 		return 0;
 
-	pubkey = keydata->pubkey;
-	if (pubkey == NULL || pubkey->pub == NULL || pubkey->pub_len == 0)
-		return 0;
+	*buf = NULL;
+	*len = 0;
 
-	*buf = pubkey->pub;
-	*len = pubkey->pub_len;
-	return 1;
+	if (keydata->pubkey != NULL &&
+			keydata->pubkey->pub != NULL &&
+			keydata->pubkey->pub_len != 0) {
+		*buf = keydata->pubkey->pub;
+		*len = keydata->pubkey->pub_len;
+		return 1;
+	}
+#ifndef OPENSSL_NO_EC
+	if (keydata_has_ec_pub(keydata)) {
+		*buf = keydata->pubdata.ec.pub;
+		*len = keydata->pubdata.ec.pub_len;
+		return 1;
+	}
+#endif /* OPENSSL_NO_EC */
+	if (keydata_has_raw_pub(keydata)) {
+		*buf = keydata->pubdata.raw.pub;
+		*len = keydata->pubdata.raw.pub_len;
+		return 1;
+	}
+	return 0;
 }
 
 /*
@@ -2765,6 +3046,10 @@ static int evp_pkey_get_type_id(const EVP_PKEY *pkey)
 		return EVP_PKEY_ED25519;
 	if (EVP_PKEY_is_a(pkey, "ED448"))
 		return EVP_PKEY_ED448;
+	if (EVP_PKEY_is_a(pkey, "X25519"))
+		return EVP_PKEY_X25519;
+	if (EVP_PKEY_is_a(pkey, "X448"))
+		return EVP_PKEY_X448;
 #endif /* OPENSSL_NO_ECX */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
@@ -2829,6 +3114,7 @@ static int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *c
 	return param_cb(params, cbarg);
 }
 
+#ifndef OPENSSL_NO_EC
 static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
 {
 	OSSL_PARAM params[3];
@@ -2844,19 +3130,20 @@ static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cb
 
 	return param_cb(params, cbarg);
 }
+#endif /* OPENSSL_NO_EC */
 
 static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
 {
 	OSSL_PARAM params[2];
-	unsigned char *pub = NULL;
+	const unsigned char *pub = NULL;
 	size_t pub_len = 0;
 
-	if (keydata->pubdata.raw.pub != NULL && keydata->pubdata.raw.pub_len != 0)
+	if (keydata_has_raw_pub(keydata))
 		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
 			keydata->pubdata.raw.pub, keydata->pubdata.raw.pub_len);
 	else if (p11_keydata_get_pub(keydata, &pub, &pub_len) && pub != NULL && pub_len != 0)
 		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-			pub, pub_len);
+			(void *)pub, pub_len);
 	else
 		return 0;
 
@@ -2865,16 +3152,32 @@ static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *c
 	return param_cb(params, cbarg);
 }
 
-static int keydata_has_rsa_pub(P11_KEYDATA *keydata)
+static int keydata_has_rsa_pub(const P11_KEYDATA *keydata)
 {
+	if (keydata == NULL)
+		return 0;
+
 	return keydata->pubdata.rsa.n != NULL && keydata->pubdata.rsa.n_len != 0 &&
 		keydata->pubdata.rsa.e != NULL && keydata->pubdata.rsa.e_len != 0;
 }
 
-static int keydata_has_ec_pub(P11_KEYDATA *keydata)
+#ifndef OPENSSL_NO_EC
+static int keydata_has_ec_pub(const P11_KEYDATA *keydata)
 {
+	if (keydata == NULL || keydata->type != EVP_PKEY_EC)
+		return 0;
+
 	return keydata->pubdata.ec.group_name != NULL &&
 		keydata->pubdata.ec.pub != NULL && keydata->pubdata.ec.pub_len != 0;
+}
+#endif /* OPENSSL_NO_EC */
+
+static int keydata_has_raw_pub(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
+		return 0;
+
+	return keydata->pubdata.raw.pub != NULL && keydata->pubdata.raw.pub_len != 0;
 }
 
 /* vim: set noexpandtab: */

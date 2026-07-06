@@ -108,6 +108,17 @@ PROVIDER_FN(asym_cipher_gettable_ctx_params);
 PROVIDER_FN(asym_cipher_set_ctx_params);
 PROVIDER_FN(asym_cipher_settable_ctx_params);
 
+PROVIDER_FN(keyexch_newctx);
+PROVIDER_FN(keyexch_freectx);
+PROVIDER_FN(keyexch_dupctx);
+PROVIDER_FN(keyexch_init);
+PROVIDER_FN(keyexch_set_peer);
+PROVIDER_FN(keyexch_derive);
+PROVIDER_FN(keyexch_set_ctx_params);
+PROVIDER_FN(keyexch_settable_ctx_params);
+PROVIDER_FN(keyexch_get_ctx_params);
+PROVIDER_FN(keyexch_gettable_ctx_params);
+
 PROVIDER_FN(store_open);
 PROVIDER_FN(store_set_ctx_params);
 PROVIDER_FN(store_settable_ctx_params);
@@ -186,6 +197,20 @@ static const OSSL_DISPATCH asym_cipher_functions[] = {
 	OSSL_DISPATCH_END
 };
 
+static const OSSL_DISPATCH keyexch_functions[] = {
+	{OSSL_FUNC_KEYEXCH_NEWCTX, (void (*)(void))keyexch_newctx},
+	{OSSL_FUNC_KEYEXCH_FREECTX, (void (*)(void))keyexch_freectx},
+	{OSSL_FUNC_KEYEXCH_DUPCTX, (void (*)(void))keyexch_dupctx},
+	{OSSL_FUNC_KEYEXCH_INIT, (void (*)(void))keyexch_init},
+	{OSSL_FUNC_KEYEXCH_SET_PEER, (void (*)(void))keyexch_set_peer},
+	{OSSL_FUNC_KEYEXCH_DERIVE, (void (*)(void))keyexch_derive},
+	{OSSL_FUNC_KEYEXCH_GET_CTX_PARAMS, (void (*)(void))keyexch_get_ctx_params},
+	{OSSL_FUNC_KEYEXCH_GETTABLE_CTX_PARAMS, (void (*)(void))keyexch_gettable_ctx_params},
+	{OSSL_FUNC_KEYEXCH_SET_CTX_PARAMS, (void (*)(void))keyexch_set_ctx_params},
+	{OSSL_FUNC_KEYEXCH_SETTABLE_CTX_PARAMS, (void (*)(void))keyexch_settable_ctx_params},
+	OSSL_DISPATCH_END
+};
+
 static const OSSL_DISPATCH store_functions[] = {
 	{OSSL_FUNC_STORE_OPEN, (void (*)(void))store_open},
 	{OSSL_FUNC_STORE_SET_CTX_PARAMS, (void (*)(void))store_set_ctx_params},
@@ -199,9 +224,16 @@ static const OSSL_DISPATCH store_functions[] = {
 /* Keymgmt algorithms: must be real key types (e.g. RSA, EC), not provider names */
 static const OSSL_ALGORITHM p11_keymgmts[] = {
 	{"RSA:rsaEncryption", FIPS_PROPQ, keymgmt_functions, "PKCS#11 RSA keymgm functions"},
+#ifndef OPENSSL_NO_EC
 	{"EC:id-ecPublicKey", FIPS_PROPQ, keymgmt_functions, "PKCS#11 EC keymgm functions"},
+	{"ECDH", FIPS_PROPQ, keymgmt_functions, "PKCS#11 key exchange functions"},
+#endif /* OPENSSL_NO_EC */
+#ifndef OPENSSL_NO_ECX
 	{"ED25519", FIPS_PROPQ, keymgmt_functions, "PKCS#11 Ed25519 keymgm functions"},
 	{"ED448", FIPS_PROPQ, keymgmt_functions, "PKCS#11 Ed448 keymgm functions"},
+	{"X25519", FIPS_PROPQ, keymgmt_functions, "PKCS#11 X25519 keymgm functions"},
+	{"X448", FIPS_PROPQ, keymgmt_functions, "PKCS#11 X448 keymgm functions"},
+#endif /* OPENSSL_NO_ECX */
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
 #ifndef OPENSSL_NO_ML_DSA
 	{"ML-DSA-44", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-44 keymgmt functions"},
@@ -249,6 +281,11 @@ const OSSL_ALGORITHM p11_signatures[] = {
 
 static const OSSL_ALGORITHM p11_asym_cipher[] = {
 	{"PKCS11", FIPS_PROPQ, asym_cipher_functions, "PKCS#11 asym_cipher functions"},
+	{NULL, NULL, NULL, NULL}
+};
+
+static const OSSL_ALGORITHM p11_keyexch[] = {
+	{"PKCS11", FIPS_PROPQ, keyexch_functions, "PKCS#11 key exchange functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
@@ -406,6 +443,8 @@ static const OSSL_ALGORITHM *provider_query_operation(void *ctx,
 		return p11_signatures;
 	case OSSL_OP_ASYM_CIPHER:
 		return p11_asym_cipher;
+	case OSSL_OP_KEYEXCH:
+		return p11_keyexch;
 	case OSSL_OP_STORE:
 		return p11_storemgmt;
 	}
@@ -525,6 +564,7 @@ static const char *keymgmt_query_operation_name(int id)
 	switch (id) {
 	case OSSL_OP_SIGNATURE:
 	case OSSL_OP_ASYM_CIPHER:
+	case OSSL_OP_KEYEXCH:
 		return "PKCS11";
 	}
 	return NULL;
@@ -587,7 +627,7 @@ static const OSSL_PARAM *keymgmt_export_types(int selection)
 		/* RSA */
 		OSSL_PARAM_BN(OSSL_PKEY_PARAM_RSA_N, NULL, 0),
 		OSSL_PARAM_BN(OSSL_PKEY_PARAM_RSA_E, NULL, 0),
-		/* EC, ED25519, ED449 */
+		/* EC, ED25519, ED449, X25519, X448 */
 		OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, NULL, 0),
 		OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_PUB_KEY, NULL, 0),
 		OSSL_PARAM_END
@@ -635,7 +675,7 @@ static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 
 	/* EVP_PKEY_get_size() */
 	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_MAX_SIZE);
-	if (p != NULL && !OSSL_PARAM_set_int(p, (int)p11_keydata_get_sigsize(keydata)))
+	if (p != NULL && !OSSL_PARAM_set_int(p, (int)p11_keydata_get_maxsize(keydata)))
 		return 0;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30600000L
@@ -1866,6 +1906,155 @@ static const OSSL_PARAM *asym_cipher_settable_ctx_params(void *ctx, void *provct
 	return asym_cipher_gettable_ctx_params(ctx, provctx);
 }
 
+
+/******************************************************************************/
+/* Key exchange functions                                                     */
+/******************************************************************************/
+
+/* Create and initialize key exchange context. */
+void *keyexch_newctx(void *provctx)
+{
+	return p11_keyexch_ctx_new(provctx);
+}
+
+/* Free key exchange context. */
+void keyexch_freectx(void *ctx)
+{
+	p11_keyexch_ctx_free(ctx);
+}
+
+/* Duplicate key exchange context. */
+void *keyexch_dupctx(void *ctx)
+{
+	return p11_keyexch_dupctx(ctx);
+}
+
+/* Initialize a key exchange operation with the local private key. */
+int keyexch_init(void *ctx, void *provkey, const OSSL_PARAM params[])
+{
+	return p11_keyexch_ctx_init(ctx, provkey, params);
+}
+
+/* Set the peer public key for shared-secret derivation. */
+int keyexch_set_peer(void *ctx, void *provkey)
+{
+	return p11_keyexch_set_peer(ctx, provkey);
+}
+
+/* Derive the shared secret, or return the required output size. */
+static int keyexch_derive(void *ctx,
+	unsigned char *secret, size_t *secretlen, size_t outlen)
+{
+	P11_KEYEXCH_CTX *exch_ctx = (P11_KEYEXCH_CTX *)ctx;
+	const unsigned char *peer_pub = NULL;
+	size_t peer_pub_len = 0;
+	size_t need;
+
+	if (exch_ctx == NULL || secretlen == NULL)
+		return 0;
+
+	if (!p11_keyexch_ctx_get_peer_pub(exch_ctx, &peer_pub, &peer_pub_len))
+		return 0;
+
+	need = p11_keyexch_ctx_get_outsize(exch_ctx);
+	if (need == 0)
+		return 0;
+
+	if (secret == NULL) {
+		/* Return the maximum shared-secret output size. */
+		*secretlen = need;
+		return 1;
+	}
+
+	if (outlen < need) {
+		*secretlen = need;
+		return 0; /* buffer too small */
+	}
+
+	/* Request the required secret size, not the caller's buffer capacity. */
+	*secretlen = need;
+
+	return PKCS11_evp_pkey_derive(
+		p11_keyexch_ctx_get_evp_pkey(exch_ctx),
+		p11_keyexch_ctx_get_type(exch_ctx),
+		peer_pub, peer_pub_len,
+		p11_keyexch_ctx_get_cofactor_mode(exch_ctx),
+		secret, secretlen);
+}
+
+/* Return current key exchange context parameters. */
+static int keyexch_get_ctx_params(void *ctx, OSSL_PARAM params[])
+{
+	P11_KEYEXCH_CTX *exch_ctx = (P11_KEYEXCH_CTX *)ctx;
+	OSSL_PARAM *p;
+
+	if (exch_ctx == NULL)
+		return 0;
+
+	if (params == NULL)
+		return 1;
+
+	p = OSSL_PARAM_locate(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
+	if (p != NULL) {
+		int mode = p11_keyexch_ctx_get_cofactor_mode(exch_ctx);
+
+		if (!OSSL_PARAM_set_int(p, mode))
+			return 0;
+	}
+
+	return 1;
+}
+
+/* Return the list of gettable key exchange context parameters. */
+const OSSL_PARAM *keyexch_gettable_ctx_params(void *ctx, void *provctx)
+{
+	static const OSSL_PARAM gettable_ctx_params[] = {
+		OSSL_PARAM_int(OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE, NULL),
+		OSSL_PARAM_END
+	};
+
+	(void)ctx;
+	(void)provctx;
+	return gettable_ctx_params;
+}
+
+/* Set key exchange context parameters. */
+static int keyexch_set_ctx_params(void *ctx, const OSSL_PARAM params[])
+{
+	P11_KEYEXCH_CTX *exch_ctx = (P11_KEYEXCH_CTX *)ctx;
+	const OSSL_PARAM *p;
+
+	if (exch_ctx == NULL)
+		return 0;
+
+	if (params == NULL)
+		return 1;
+
+	/* Cofactor mode is meaningful only for ECDH.  It is accepted here
+	 * because the same key exchange implementation is shared with X25519/X448. */
+	p = OSSL_PARAM_locate_const(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
+	if (p != NULL) {
+		int mode;
+
+		if (!OSSL_PARAM_get_int(p, &mode))
+			return 0;
+
+		if (mode < -1 || mode > 1)
+			return 0;
+
+		return p11_keyexch_ctx_set_cofactor_mode(exch_ctx, mode);
+	}
+
+	return 1;
+}
+
+/* Return the list of settable key exchange context parameters. */
+static const OSSL_PARAM *keyexch_settable_ctx_params(void *ctx, void *provctx)
+{
+	return keyexch_gettable_ctx_params(ctx, provctx);
+}
+
+
 /******************************************************************************/
 /* Store functions                                                            */
 /******************************************************************************/
@@ -1952,7 +2141,7 @@ static const OSSL_PARAM *store_settable_ctx_params(void *ctx)
 		OSSL_PARAM_END
 	};
 
-	(void)(ctx);
+	(void)ctx;
 	return settable_ctx_params;
 }
 

@@ -3,8 +3,9 @@
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  * All rights reserved.
  *
- * This file implements the handling of EdDSA keys stored on a PKCS11 token.
- * Inside EVP_PKEY, Ed25519/Ed448 keys are stored in an ECX_KEY structure.
+ * This file implements the handling of EdDSA and XDH keys stored on a PKCS11 token.
+ * Inside EVP_PKEY, Ed25519/Ed448 and X25519/X448 keys are stored in an ECX_KEY
+ * structure.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,6 +41,11 @@ static EVP_PKEY_METHOD *pkcs11_ed25519_method = NULL;
 static EVP_PKEY_METHOD *pkcs11_ed448_method = NULL;
 static const EVP_PKEY_METHOD *orig_ed25519_method = NULL;
 static const EVP_PKEY_METHOD *orig_ed448_method = NULL;
+
+static EVP_PKEY_METHOD *pkcs11_x25519_method = NULL;
+static EVP_PKEY_METHOD *pkcs11_x448_method = NULL;
+static const EVP_PKEY_METHOD *orig_x25519_method = NULL;
+static const EVP_PKEY_METHOD *orig_x448_method = NULL;
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 int (*orig_ed25519_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen,
@@ -48,7 +54,15 @@ int (*orig_ed25519_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *sigl
 int (*orig_ed448_digestsign)(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen);
 
+int (*orig_x25519_derive)(EVP_PKEY_CTX *ctx, unsigned char *secret, size_t *secretlen);
+
+int (*orig_x448_derive)(EVP_PKEY_CTX *ctx, unsigned char *secret, size_t *secretlen);
+
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
+
+/******************************************************************************/
+/* EdDSA methods                                                              */
+/******************************************************************************/
 
 /*
  * EVP_PKEY method sign wrapper for EdDSA.
@@ -146,6 +160,7 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 
 	return 1;
 }
+
 
 static int pkcs11_pkey_ed25519_digestsign(EVP_MD_CTX *ctx,
 		unsigned char *sig, size_t *siglen,
@@ -304,7 +319,219 @@ void pkcs11_ed_key_method_free(void)
 	pkcs11_ed448_method_free();
 }
 
+
+/******************************************************************************/
+/* XDH methods                                                                */
+/******************************************************************************/
+
+static int pkcs11_xdh_pmeth_derive(EVP_PKEY_CTX *ctx, unsigned char *secret,
+	size_t *secretlen)
+{
+	EVP_PKEY *pkey, *peerkey;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	CK_SESSION_HANDLE session;
+	unsigned char peer_pub[56];
+	size_t peer_pub_len = sizeof(peer_pub);
+	size_t expected_len;
+	int type;
+
+	if (ctx == NULL || secretlen == NULL)
+		return 0;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(ctx);
+	if (!pkey)
+		return 0;
+
+	key = pkcs11_get_ex_data_pkey(pkey);
+	if (!key)
+		return -1;
+
+	slot = key->slot;
+	if (!slot)
+		return -1;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return -1;
+
+	pkcs11_put_session(slot, session);
+
+	type = EVP_PKEY_id(pkey);
+	switch (type) {
+	case EVP_PKEY_X25519:
+		expected_len = 32;
+		break;
+	case EVP_PKEY_X448:
+		expected_len = 56;
+		break;
+	default:
+		return -1; /* not an XDH key handled by this wrapper */
+	}
+
+	if (secret == NULL) {
+		*secretlen = expected_len;
+		return 1;
+	}
+
+	if (*secretlen < expected_len) {
+		*secretlen = expected_len;
+		return 0;
+	}
+
+	peerkey = EVP_PKEY_CTX_get0_peerkey(ctx);
+	if (peerkey == NULL)
+		return 0;
+
+	if (EVP_PKEY_get_raw_public_key(peerkey, NULL, &peer_pub_len) <= 0)
+		return 0;
+
+	if (peer_pub_len != expected_len)
+		return 0;
+
+	if (EVP_PKEY_get_raw_public_key(peerkey, peer_pub, &peer_pub_len) <= 0)
+		return 0;
+
+	if (!pkcs11_evp_pkey_xdh_derive(key, peer_pub, peer_pub_len,
+			secret, secretlen))
+		return 0;
+
+	return 1;
+}
+
+static int pkcs11_pkey_x25519_derive(EVP_PKEY_CTX *ctx, unsigned char *secret,
+	size_t *secretlen)
+{
+	int ret;
+
+	ret = pkcs11_xdh_pmeth_derive(ctx, secret, secretlen);
+	if (ret < 0)
+		/* assume a foreign key */
+		ret = (*orig_x25519_derive)(ctx, secret, secretlen);
+	return ret;
+}
+
+static int pkcs11_pkey_x448_derive(EVP_PKEY_CTX *ctx, unsigned char *secret,
+	size_t *secretlen)
+{
+	int ret;
+
+	ret = pkcs11_xdh_pmeth_derive(ctx, secret, secretlen);
+	if (ret < 0)
+		ret = (*orig_x448_derive)(ctx, secret, secretlen);
+	return ret;
+}
+
+/* Global initialize X25519 EVP_PKEY_METHOD */
+static int pkcs11_x25519_method_new(void)
+{
+	int orig_id, orig_flags;
+
+	if (pkcs11_x25519_method)
+		return 1; /* EVP_PKEY_X25519 method already initialized */
+
+	orig_x25519_method = EVP_PKEY_meth_find(EVP_PKEY_X25519);
+	if (!orig_x25519_method)
+		return 0;
+
+	EVP_PKEY_meth_get0_info(&orig_id, &orig_flags, orig_x25519_method);
+	if (orig_id != EVP_PKEY_X25519 || !(orig_flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM))
+		return 0;
+
+	EVP_PKEY_meth_get_derive(orig_x25519_method, NULL, &orig_x25519_derive);
+	if (!orig_x25519_derive)
+		return 0;
+
+	pkcs11_x25519_method = EVP_PKEY_meth_new(EVP_PKEY_X25519, EVP_PKEY_FLAG_AUTOARGLEN);
+	if (!pkcs11_x25519_method)
+		return 0;
+
+	/* Duplicate the original method */
+	EVP_PKEY_meth_copy(pkcs11_x25519_method, orig_x25519_method);
+
+	/* Override selected X25519 method callbacks with PKCS#11 implementations */
+	EVP_PKEY_meth_set_derive(pkcs11_x25519_method, NULL, pkcs11_pkey_x25519_derive);
+
+	/* Register the method globally */
+	if (!EVP_PKEY_meth_add0(pkcs11_x25519_method)) {
+		EVP_PKEY_meth_free(pkcs11_x25519_method);
+		pkcs11_x25519_method = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+/* Global initialize X448 EVP_PKEY_METHOD */
+static int pkcs11_x448_method_new(void)
+{
+	int orig_id, orig_flags;
+
+	if (pkcs11_x448_method)
+		return 1; /* EVP_PKEY_X448 method already initialized */
+
+	orig_x448_method = EVP_PKEY_meth_find(EVP_PKEY_X448);
+	if (!orig_x448_method)
+		return 0;
+
+	EVP_PKEY_meth_get0_info(&orig_id, &orig_flags, orig_x448_method);
+	if (orig_id != EVP_PKEY_X448 || !(orig_flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM))
+		return 0;
+
+	EVP_PKEY_meth_get_derive(orig_x448_method, NULL, &orig_x448_derive);
+	if (!orig_x448_derive)
+		return 0;
+
+	pkcs11_x448_method = EVP_PKEY_meth_new(EVP_PKEY_X448, EVP_PKEY_FLAG_AUTOARGLEN);
+	if (!pkcs11_x448_method)
+		return 0;
+
+	/* Duplicate the original method */
+	EVP_PKEY_meth_copy(pkcs11_x448_method, orig_x448_method);
+
+	/* Override selected X448 method callbacks with PKCS#11 implementations */
+	EVP_PKEY_meth_set_derive(pkcs11_x448_method, NULL, pkcs11_pkey_x448_derive);
+
+	/* Register the method globally */
+	if (!EVP_PKEY_meth_add0(pkcs11_x448_method)) {
+		EVP_PKEY_meth_free(pkcs11_x448_method);
+		pkcs11_x448_method = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+void pkcs11_x25519_method_free(void)
+{
+	if (pkcs11_x25519_method) {
+		free_pkey_ex_index();
+		/* Remove an EVP_PKEY_METHOD object added by EVP_PKEY_meth_add0() */
+		EVP_PKEY_meth_remove(pkcs11_x25519_method);
+		EVP_PKEY_meth_free(pkcs11_x25519_method);
+		pkcs11_x25519_method = NULL;
+	}
+}
+
+void pkcs11_x448_method_free(void)
+{
+	if (pkcs11_x448_method) {
+		free_pkey_ex_index();
+		EVP_PKEY_meth_remove(pkcs11_x448_method);
+		EVP_PKEY_meth_free(pkcs11_x448_method);
+		pkcs11_x448_method = NULL;
+	}
+}
+
+void pkcs11_xdh_key_method_free(void)
+{
+	pkcs11_x25519_method_free();
+	pkcs11_x448_method_free();
+}
+
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+
+/******************************************************************************/
+/* Get EVP_PKEY from raw public key bytes                                     */
+/******************************************************************************/
 
 /*
  * Decode a DER OCTET STRING and return its contents.
@@ -355,10 +582,11 @@ static int strip_der_octet_string_alloc(const unsigned char *in, size_t inlen,
 }
 
 /*
- * Parse a DER X.509 certificate and return raw Ed25519/Ed448 public key bytes.
+ * Parse a DER X.509 certificate and return raw Ed25519, Ed448, X25519 or X448
+ * public key bytes.
  * Returns 1 on success, 0 on error.
  */
-static int extract_eddsa_raw_from_x509_der(const unsigned char *der, size_t derlen,
+static int extract_ecx_raw_from_x509_der(const unsigned char *der, size_t derlen,
 	unsigned char **raw, size_t *rawlen)
 {
 	const unsigned char *p = der;
@@ -382,9 +610,10 @@ static int extract_eddsa_raw_from_x509_der(const unsigned char *der, size_t derl
 	if (pkey == NULL)
 		goto end;
 
-	/* Ensure it's EdDSA (Ed25519/Ed448) */
+	/* Ensure it is an ECX key with raw public-key support. */
 	type = EVP_PKEY_id(pkey);
-	if (type != EVP_PKEY_ED25519 && type != EVP_PKEY_ED448)
+	if (type != EVP_PKEY_ED25519 && type != EVP_PKEY_ED448 &&
+			type != EVP_PKEY_X25519 && type != EVP_PKEY_X448)
 		goto end;
 
 
@@ -436,7 +665,7 @@ static int extract_pub_from_public_key_obj(PKCS11_CTX_private *ctx, CK_SESSION_H
 }
 
 /*
- * Extract raw EdDSA public key bytes from a CKO_CERTIFICATE object.
+ * Extract raw ECX public key bytes from a CKO_CERTIFICATE object.
  * The certificate is read from CKA_VALUE (DER-encoded X.509) and
  * the public key is obtained via X.509 parsing.
  * Returns 1 on success, 0 on failure.
@@ -451,7 +680,7 @@ static int extract_pub_from_cert_obj(PKCS11_CTX_private *ctx, CK_SESSION_HANDLE 
 	if (pkcs11_getattr_alloc(ctx, session, obj, CKA_VALUE, &der, &derlen))
 		return 0;
 
-	ok = extract_eddsa_raw_from_x509_der(der, derlen, raw, rawlen);
+	ok = extract_ecx_raw_from_x509_der(der, derlen, raw, rawlen);
 	OPENSSL_free(der);
 	return ok;
 }
@@ -631,6 +860,78 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 	return pkey;
 }
 
+static EVP_PKEY *pkcs11_get_evp_key_x25519(PKCS11_OBJECT_private *key)
+{
+	EVP_PKEY *pkey = NULL;
+	unsigned char *raw = NULL;
+	size_t rawlen = 0;
+
+	/* Retrieve the public key in raw format from PKCS#11 */
+	if (pkcs11_get_raw_public_key(key, &raw, &rawlen) < 0)
+		return NULL;
+
+	/* Build a EVP_PKEY from the raw public key, used only as software public key */
+	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "X25519", NULL, raw, rawlen);
+	OPENSSL_free(raw);
+
+	if (!pkey)
+		return NULL;
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+	if (key->object_class == CKO_PRIVATE_KEY) {
+		if ((key->slot->ctx->flags & PKCS11_FLAG_NO_METHODS) == 0) {
+			/* global initialize X25519 EVP_PKEY_METHOD */
+			if (!pkcs11_x25519_method_new()) {
+				EVP_PKEY_free(pkey);
+				return NULL;
+			}
+			/* creates a new EVP_PKEY object which requires its own key object reference */
+			key = pkcs11_object_ref(key);
+			alloc_pkey_ex_index();
+			pkcs11_set_ex_data_pkey(pkey, key);
+			atexit(pkcs11_x25519_method_free);
+		}
+	}
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+	return pkey;
+}
+
+static EVP_PKEY *pkcs11_get_evp_key_x448(PKCS11_OBJECT_private *key)
+{
+	EVP_PKEY *pkey = NULL;
+	unsigned char *raw = NULL;
+	size_t rawlen = 0;
+
+	/* Retrieve the public key in raw format from PKCS#11 */
+	if (pkcs11_get_raw_public_key(key, &raw, &rawlen) < 0)
+		return NULL;
+
+	/* Build a EVP_PKEY from the raw public key, used only as software public key */
+	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "X448", NULL, raw, rawlen);
+	OPENSSL_free(raw);
+
+	if (!pkey)
+		return NULL;
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+	if (key->object_class == CKO_PRIVATE_KEY) {
+		if ((key->slot->ctx->flags & PKCS11_FLAG_NO_METHODS) == 0) {
+			/* global initialize X448 EVP_PKEY_METHOD */
+			if (!pkcs11_x448_method_new()) {
+				EVP_PKEY_free(pkey);
+				return NULL;
+			}
+			/* create a new EVP_PKEY object which requires its own key object reference */
+			key = pkcs11_object_ref(key);
+			alloc_pkey_ex_index();
+			pkcs11_set_ex_data_pkey(pkey, key);
+			atexit(pkcs11_x448_method_free);
+		}
+	}
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+	return pkey;
+}
+
 
 PKCS11_OBJECT_ops pkcs11_ed25519_ops = {
 	EVP_PKEY_ED25519,
@@ -642,10 +943,20 @@ PKCS11_OBJECT_ops pkcs11_ed448_ops = {
 	pkcs11_get_evp_key_ed448,
 };
 
+PKCS11_OBJECT_ops pkcs11_x25519_ops = {
+	EVP_PKEY_X25519,
+	pkcs11_get_evp_key_x25519,
+};
+
+PKCS11_OBJECT_ops pkcs11_x448_ops = {
+	EVP_PKEY_X448,
+	pkcs11_get_evp_key_x448,
+};
+
 #else /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
- * EdDSA (Ed25519/Ed448) support is not available:
+ * EdDSA (Ed25519/Ed448) and XDH (X5519/X448) support are not available:
  * - either OpenSSL was built without ECX (no-ecx), or
  * - OpenSSL version is older than 3.0.
  *
