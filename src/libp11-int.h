@@ -315,11 +315,6 @@ extern PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slo
 extern PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl);
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Get the public key object matching the given PKCS11_KEY */
-extern PKCS11_OBJECT_private *pkcs11_public_object_from_key(PKCS11_KEY *pkey);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
 /* Get the corresponding object (same ID, given different object type) */
 extern PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class);
@@ -343,8 +338,8 @@ extern PKCS11_CERT *pkcs11_find_certificate(PKCS11_OBJECT_private *key);
 extern PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert);
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Return the PKCS11_KEY handle associated with the given EVP_PKEY */
-extern PKCS11_KEY *pkcs11_get_pkcs11_key(const EVP_PKEY *pk);
+/* Return the borrowed PKCS#11 object associated with the EVP_PKEY */
+extern PKCS11_OBJECT_private *pkcs11_get_ex_data_object(const EVP_PKEY *pk);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Get a list of all certificates matching with template associated with this token */

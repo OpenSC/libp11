@@ -158,7 +158,7 @@ static int EVP_PKEY_is_a(const EVP_PKEY *pkey, const char *name);
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key);
-static PKCS11_KEY *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
+static PKCS11_OBJECT_private *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
 static void alloc_evp_pkey_ex_index(void);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
@@ -445,33 +445,6 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 
 	return obj;
 }
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Find the public key object matching the given PKCS11_KEY */
-PKCS11_OBJECT_private *pkcs11_public_object_from_key(PKCS11_KEY *pkey)
-{
-	PKCS11_OBJECT_private *key, *pubkey;
-	CK_SESSION_HANDLE session;
-
-	if (pkey == NULL)
-		return NULL;
-
-	key = pkey->_private;
-
-	if (check_object_fork(key) < 0)
-		return NULL;
-
-	if (key->id_len == 0)
-		return NULL;
-
-	if (pkcs11_get_session(key->slot, 0, &session))
-		return NULL;
-
-	pubkey = pkcs11_object_from_object(key, session, CKO_PUBLIC_KEY);
-	pkcs11_put_session(key->slot, session);
-	return pubkey;
-}
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 PKCS11_OBJECT_private *pkcs11_object_from_object(PKCS11_OBJECT_private *obj,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS object_class)
@@ -1279,8 +1252,8 @@ err:
 }
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Returns the PKCS11_KEY handle associated with the given EVP_PKEY */
-PKCS11_KEY *pkcs11_get_pkcs11_key(const EVP_PKEY *pk)
+/* Return the borrowed PKCS#11 object associated with the EVP_PKEY */
+PKCS11_OBJECT_private *pkcs11_get_ex_data_object(const EVP_PKEY *pk)
 {
 	return pkcs11_get_ex_data_evp_pkey(pk);
 }
@@ -1748,10 +1721,50 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key)
 {
-	EVP_PKEY_set_ex_data(pkey, evp_pkey_ex_index, key);
+	PKCS11_OBJECT_private *obj;
+
+	if (pkey == NULL || key == NULL || key->_private == NULL)
+		return;
+
+	obj = pkcs11_object_ref(key->_private);
+	if (obj == NULL)
+		return;
+
+	if (!EVP_PKEY_set_ex_data(pkey, evp_pkey_ex_index, obj))
+		pkcs11_object_free(obj);
 }
 
-static PKCS11_KEY *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey)
+static int pkcs11_dup_ex_data_evp_pkey(CRYPTO_EX_DATA *to,
+		const CRYPTO_EX_DATA *from, void **from_d,
+		int idx, long argl, void *argp)
+{
+	PKCS11_OBJECT_private *obj = *from_d;
+
+	(void)to;
+	(void)from;
+	(void)idx;
+	(void)argl;
+	(void)argp;
+
+	if (obj != NULL)
+		*from_d = pkcs11_object_ref(obj);
+
+	return 1;
+}
+
+static void pkcs11_free_ex_data_evp_pkey(void *parent, void *ptr,
+		CRYPTO_EX_DATA *ad, int idx, long argl, void *argp)
+{
+	(void)parent;
+	(void)ad;
+	(void)idx;
+	(void)argl;
+	(void)argp;
+
+	pkcs11_object_free(ptr);
+}
+
+static PKCS11_OBJECT_private *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey)
 {
 	return EVP_PKEY_get_ex_data(pkey, evp_pkey_ex_index);
 }
@@ -1760,8 +1773,10 @@ static void alloc_evp_pkey_ex_index(void)
 {
 	if (evp_pkey_ex_index == 0) {
 		while (evp_pkey_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-			evp_pkey_ex_index = EVP_PKEY_get_ex_new_index(0, "libp11 EVP_PKEY",
-				NULL, NULL, NULL);
+			evp_pkey_ex_index = EVP_PKEY_get_ex_new_index(0,
+				"libp11 EVP_PKEY", NULL,
+				pkcs11_dup_ex_data_evp_pkey,
+				pkcs11_free_ex_data_evp_pkey);
 		if (evp_pkey_ex_index < 0)
 			evp_pkey_ex_index = 0; /* Fallback to app_data */
 	}
