@@ -836,13 +836,8 @@ int PKCS11_evp_pkey_sign(EVP_PKEY *pk, int type, const char *mdname,
 	unsigned char *sig, size_t *siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
-	PKCS11_OBJECT_private *key;
-	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_object(pk);
 
-	if (pkey == NULL)
-		return -1;
-
-	key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 
@@ -901,14 +896,19 @@ int PKCS11_evp_pkey_verify(EVP_PKEY *pk, int type,
 	const unsigned char *sig, size_t siglen,
 	const unsigned char *tbs, size_t tbslen)
 {
+	PKCS11_OBJECT_private *obj = pkcs11_get_ex_data_object(pk);
 	PKCS11_OBJECT_private *key;
-	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
 	int ret = -1;
 
-	if (pkey == NULL)
+	if (check_object_fork(obj) < 0)
 		return -1;
 
-	key = pkcs11_public_object_from_key(pkey);
+	if (obj->object_class == CKO_PUBLIC_KEY) {
+		key = pkcs11_object_ref(obj);
+	} else {
+		key = pkcs11_object_from_object(obj, CK_INVALID_HANDLE, CKO_PUBLIC_KEY);
+	}
+
 	if (key == NULL)
 		return -1;
 
@@ -932,13 +932,8 @@ int PKCS11_evp_pkey_decrypt(EVP_PKEY *pk, int type, const char *mdname,
 	unsigned char *out, size_t *outlen,
 	const unsigned char *in, size_t inlen)
 {
-	PKCS11_OBJECT_private *key;
-	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_object(pk);
 
-	if (pkey == NULL)
-		return -1;
-
-	key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 
@@ -958,13 +953,8 @@ int PKCS11_evp_pkey_derive(EVP_PKEY *pk, int type,
 	const unsigned char *peer_pub, size_t peer_pub_len,
 	int cofactor_mode, unsigned char *secret, size_t *secretlen)
 {
-	PKCS11_OBJECT_private *key;
-	PKCS11_KEY *pkey = pkcs11_get_pkcs11_key(pk);
+	PKCS11_OBJECT_private *key = pkcs11_get_ex_data_object(pk);
 
-	if (pkey == NULL)
-		return -1;
-
-	key = pkey->_private;
 	if (check_object_fork(key) < 0)
 		return -1;
 
