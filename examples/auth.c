@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 
 	unsigned char *random = NULL, *signature = NULL;
 
-	char password[20];
+	char password[20] = { 0 };
 	int rc, fd, logged_in;
 	unsigned int nslots, ncerts, siglen;
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 
 	/* perform pkcs #11 login */
 	rc = PKCS11_login(slot, 0, password);
-	memset(password, 0, strlen(password));
+	OPENSSL_cleanse(password, sizeof(password));
 	if (rc != 0) {
 		fprintf(stderr, "PKCS11_login failed\n");
 		rc = 10;
@@ -285,6 +285,7 @@ int main(int argc, char *argv[])
 	rc = 0;
 
 failed:
+	OPENSSL_cleanse(password, sizeof(password));
 	if (rc)
 		ERR_print_errors_fp(stderr);
 	if (random != NULL)
