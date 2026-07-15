@@ -66,6 +66,7 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 	memset(mod, 0, sizeof(sc_pkcs11_module_t));
 	mod->_magic = MAGIC;
 
+	/* The caller intentionally selects the PKCS#11 module to load. */
 #ifdef WIN32
 	mod->handle = LoadLibraryA(mspec);
 #else
