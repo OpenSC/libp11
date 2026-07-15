@@ -695,20 +695,25 @@ static int parse_uri_attr_len(UTIL_CTX *ctx,
 	return ret;
 }
 
+/*
+ * Decode a URI attribute into a newly allocated NUL-terminated string.
+ * URI decoding cannot increase the input length.
+ */
 static int parse_uri_attr(UTIL_CTX *ctx,
-		const char *attr, int attrlen, char **field)
+		const char *attr, size_t attrlen, char **field)
 {
 	int ret = 1;
-	size_t outlen = attrlen + 1;
-	char *out = OPENSSL_malloc(outlen);
+	size_t outlen = attrlen;
+	char *out;
 
-	if (!out)
+	out = OPENSSL_malloc(outlen + 1); /* reserve 1 byte for NUL terminator */
+	if (out == NULL)
 		return 0;
 
 	ret = parse_uri_attr_len(ctx, attr, attrlen, out, &outlen);
 
 	if (ret) {
-		out[outlen] = 0;
+		out[outlen] = '\0';
 		*field = out;
 	} else {
 		OPENSSL_free(out);
@@ -716,7 +721,6 @@ static int parse_uri_attr(UTIL_CTX *ctx,
 
 	return ret;
 }
-
 
 static int read_from_file(UTIL_CTX *ctx,
 	const char *path, char *field, size_t *field_len)
@@ -752,7 +756,7 @@ static int read_from_file(UTIL_CTX *ctx,
 }
 
 static int parse_pin_source(UTIL_CTX *ctx,
-		const char *attr, int attrlen, char *field,
+		const char *attr, size_t attrlen, char *field,
 		size_t *field_len)
 {
 	char *val;
@@ -803,30 +807,30 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 
 		if (!strncmp(p, "model=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(ctx, p, (int)(end - p), &tok->model);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tok->model);
 		} else if (!strncmp(p, "manufacturer=", 13)) {
 			p += 13;
-			rv = parse_uri_attr(ctx, p, (int)(end - p), &tok->manufacturer);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tok->manufacturer);
 		} else if (!strncmp(p, "token=", 6)) {
 			p += 6;
-			rv = parse_uri_attr(ctx, p, (int)(end - p), &tok->label);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tok->label);
 		} else if (!strncmp(p, "serial=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(ctx, p, (int)(end - p), &tok->serialnr);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tok->serialnr);
 		} else if (!strncmp(p, "object=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(ctx, p, (int)(end - p), &newlabel);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &newlabel);
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
-			rv = parse_uri_attr_len(ctx, p, (int)(end - p), id, id_len);
+			rv = parse_uri_attr_len(ctx, p, (size_t)(end - p), id, id_len);
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
-			rv = pin_set ? 0 : parse_uri_attr_len(ctx, p, (int)(end - p), pin, pin_len);
+			rv = pin_set ? 0 : parse_uri_attr_len(ctx, p, (size_t)(end - p), pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "pin-source=", 11)) {
 			p += 11;
-			rv = pin_set ? 0 : parse_pin_source(ctx, p, (int)(end - p), pin, pin_len);
+			rv = pin_set ? 0 : parse_pin_source(ctx, p, (size_t)(end - p), pin, pin_len);
 			pin_set = 1;
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
