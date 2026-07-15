@@ -1254,6 +1254,40 @@ static PKCS11_CERT *cert_cmp(PKCS11_CERT *a, PKCS11_CERT *b)
 	}
 }
 
+static void log_cert(UTIL_CTX *ctx, unsigned int index,
+		PKCS11_CERT *cert, const char *which)
+{
+	char *hexbuf;
+	char *expiry;
+
+	hexbuf = dump_hex((unsigned char *)cert->id, cert->id_len);
+	expiry = dump_expiry(cert);
+
+	if (which != NULL) {
+		UTIL_CTX_log(ctx, LOG_NOTICE,
+			"Returning %s certificate:%s%s%s%s%s%s\n", which,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			cert->label ? " label=" : "",
+			cert->label ? cert->label : "",
+			expiry ? " expiry=" : "",
+			expiry ? expiry : "");
+	} else {
+		UTIL_CTX_log(ctx, LOG_NOTICE,
+			"  %2u    %s%s%s%s%s%s\n", index,
+			hexbuf ? " id=" : "",
+			hexbuf ? hexbuf : "",
+			cert->label ? " label=" : "",
+			cert->label ? cert->label : "",
+			expiry ? " expiry=" : "",
+			expiry ? expiry : "");
+	}
+
+	OPENSSL_free(hexbuf);
+	OPENSSL_free(expiry);
+}
+
+/* Find and select a certificate matching the requested object ID or label. */
 static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		const char *obj_id, size_t obj_id_len, const char *obj_label)
 {
@@ -1261,8 +1295,8 @@ static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 	PKCS11_CERT cert_template = {0};
 	unsigned int m, cert_count;
 	const char *which;
-	char *hexbuf, *expiry;
 
+	/* Build a certificate template from the requested label and ID. */
 	errno = 0;
 	cert_template.label = obj_label ? OPENSSL_strdup(obj_label) : NULL;
 	if (errno != 0) {
@@ -1279,6 +1313,7 @@ static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		cert_template.id_len = obj_id_len;
 	}
 
+	/* Enumerate certificates matching the template. */
 	if (PKCS11_enumerate_certs_ext(tok, &cert_template, &certs, &cert_count)) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to enumerate certificates\n");
 		goto cleanup;
@@ -1289,21 +1324,13 @@ static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 	}
 	UTIL_CTX_log(ctx, LOG_NOTICE, "Found %u certificate%s:\n", cert_count, cert_count == 1 ? "" : "s");
 	if (obj_id_len != 0 || obj_label) {
+		/* Select the matching certificate with the longest validity
+		 * period when the caller supplied an ID or label. */
 		which = "longest expiry matching";
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
 
-			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
-			expiry = dump_expiry(k);
-			UTIL_CTX_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
-				hexbuf ? " id=" : "",
-				hexbuf ? hexbuf : "",
-				k->label ? " label=" : "",
-				k->label ? k->label : "",
-				expiry ? " expiry=" : "",
-				expiry ? expiry : "");
-			OPENSSL_free(hexbuf);
-			OPENSSL_free(expiry);
+			log_cert(ctx, m + 1, k, NULL);
 
 			if (obj_label && obj_id_len != 0) {
 				if (k->label && strcmp(k->label, obj_label) == 0 &&
@@ -1323,21 +1350,13 @@ static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 			}
 		}
 	} else {
+		/* Without explicit selection criteria, prefer the first certificate
+		 * with a nonempty ID and otherwise use the first certificate. */
 		which = "first (with id present)";
 		for (m = 0; m < cert_count; m++) {
 			PKCS11_CERT *k = certs + m;
 
-			hexbuf = dump_hex((unsigned char *)k->id, k->id_len);
-			expiry = dump_expiry(k);
-			UTIL_CTX_log(ctx, LOG_NOTICE, "  %2u    %s%s%s%s%s%s\n", m + 1,
-				hexbuf ? " id=" : "",
-				hexbuf ? hexbuf : "",
-				k->label ? " label=" : "",
-				k->label ? k->label : "",
-				expiry ? " expiry=" : "",
-				expiry ? expiry : "");
-			OPENSSL_free(hexbuf);
-			OPENSSL_free(expiry);
+			log_cert(ctx, m + 1, k, NULL);
 
 			if (!selected_cert && k->id && *k->id) {
 				selected_cert = k; /* Use the first certificate with nonempty id */
@@ -1349,18 +1368,9 @@ static void *match_cert(UTIL_CTX *ctx, PKCS11_TOKEN *tok,
 		}
 	}
 
+	/* Log the certificate selected for return. */
 	if (selected_cert) {
-		hexbuf = dump_hex((unsigned char *)selected_cert->id, selected_cert->id_len);
-		expiry = dump_expiry(selected_cert);
-		UTIL_CTX_log(ctx, LOG_NOTICE, "Returning %s certificate:%s%s%s%s%s%s\n", which,
-			hexbuf ? " id=" : "",
-			hexbuf ? hexbuf : "",
-			selected_cert->label ? " label=" : "",
-			selected_cert->label ? selected_cert->label : "",
-			expiry ? " expiry=" : "",
-			expiry ? expiry : "");
-		OPENSSL_free(hexbuf);
-		OPENSSL_free(expiry);
+		log_cert(ctx, 0, selected_cert, which);
 	} else {
 		UTIL_CTX_log(ctx, LOG_ERR, "No matching certificate returned.\n");
 	}
