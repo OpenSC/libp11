@@ -423,7 +423,14 @@ static void pkcs11_ec_finish(EC_KEY *ec)
 
 	key = pkcs11_get_ex_data_ec(ec);
 	if (key) {
+		PKCS11_SLOT_private *slot = key->slot;
+
 		pkcs11_set_ex_data_ec(ec, NULL);
+		/* opt-in: release the login session now, during healthy runtime,
+		 * instead of leaking it because cleanup is skipped at exit */
+		if (slot && slot->no_login_cache
+				&& key->object_class == CKO_PRIVATE_KEY)
+			pkcs11_slot_logout_session_only(slot);
 		pkcs11_object_free(key);
 	}
 	if (ossl_ec_finish)

@@ -473,6 +473,40 @@ void pkcs11_object_free(PKCS11_OBJECT_private *obj)
 	OPENSSL_free(obj);
 }
 
+/*
+ * Release the cached login session for the slot backing this EVP_PKEY, if the
+ * no_login_cache option is enabled for that slot. Used by the OpenSSL 3 provider
+ * key-free path (keymgmt_free), where the legacy RSA/EC "finish" callbacks do not
+ * run because keymgmt_load transfers ownership of the wrapped key to OpenSSL.
+ */
+void pkcs11_release_login_for_pkey(EVP_PKEY *pkey)
+{
+	PKCS11_OBJECT_private *obj = NULL;
+
+	if (pkey == NULL)
+		return;
+	switch (EVP_PKEY_base_id(pkey)) {
+	case EVP_PKEY_RSA: {
+		const RSA *rsa = EVP_PKEY_get0_RSA(pkey);
+		if (rsa)
+			obj = pkcs11_get_ex_data_rsa(rsa);
+		break;
+	}
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC: {
+		const EC_KEY *ec = EVP_PKEY_get0_EC_KEY(pkey);
+		if (ec)
+			obj = pkcs11_get_ex_data_ec(ec);
+		break;
+	}
+#endif
+	default:
+		break;
+	}
+	if (obj != NULL && obj->slot != NULL && obj->slot->no_login_cache)
+		pkcs11_slot_logout_session_only(obj->slot);
+}
+
 /* Set UI method to allow retrieving CKU_CONTEXT_SPECIFIC PINs interactively */
 int pkcs11_set_ui_method(PKCS11_CTX_private *ctx,
 		UI_METHOD *ui_method, void *ui_user_data)

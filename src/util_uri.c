@@ -67,6 +67,7 @@ struct util_ctx_st {
 	size_t pin_length;
 	int forced_pin;
 	int force_login;
+	int no_login_cache;
 
 	/* Current operations */
 	PKCS11_CTX *pkcs11_ctx;
@@ -173,6 +174,8 @@ static int util_ctx_init_libp11(UTIL_CTX *ctx)
 	PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, ctx->vlog);
 	PKCS11_CTX_init_args(ctx->pkcs11_ctx, ctx->init_args);
 	PKCS11_set_ui_method(ctx->pkcs11_ctx, ctx->ui_method, ctx->ui_data);
+	if (ctx->no_login_cache)
+		PKCS11_set_no_login_cache(ctx->pkcs11_ctx, 1);
 	if (PKCS11_CTX_load(ctx->pkcs11_ctx, ctx->module) < 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
 		UTIL_CTX_free_libp11(ctx);
@@ -468,6 +471,11 @@ static int util_ctx_get_pin(UTIL_CTX *ctx, const char *token_label,
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login)
 {
 	ctx->force_login = force_login;
+}
+
+void UTIL_CTX_set_no_login_cache(UTIL_CTX *ctx, int no_login_cache)
+{
+	ctx->no_login_cache = no_login_cache;
 }
 
 /* Return 1 if the user has already logged in */
