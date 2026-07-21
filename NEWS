@@ -1,13 +1,23 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.19; unreleased
+New in 0.4.19; 2026-07-21; Michał Trojnara
 * Define LIBP11_VERSION_NUMBER (Michał Trojnara)
-* Added PKCS#11 provider support for OpenSSL 4.x. (Małgorzata Olszówka)
+* Added native KEYMGMT, SIGNATURE and ASYM_CIPHER operations to the PKCS#11
+  provider, enabling OpenSSL 4.x support and improving RSA interoperability
+  (Małgorzata Olszówka)
 * Added support for ML-DSA, SLH-DSA and FALCON key generation, signing and
   verification (Małgorzata Olszówka)
 * Added PQC key generation examples and provider tests (Małgorzata Olszówka)
 * Added PKCS#11 provider support for ECDH, X25519 and X448 key exchange,
   including X25519 and X448 key generation (Małgorzata Olszówka)
+* Improved Ed25519 and Ed448 public-key resolution with certificate fallback
+  (Małgorzata Olszówka)
+* Fixed use-after-free crashes after enumerating additional PKCS#11 keys
+  (Małgorzata Olszówka)
+* Fixed a potential out-of-bounds write while parsing PKCS#11 URI attributes
+  (Małgorzata Olszówka)
+* Fixed PKCS#11 session, attribute and key-reference leaks
+  (Małgorzata Olszówka)
 
 New in 0.4.18; 2026-02-16; Michał Trojnara
 * Support for RSA-PSS and RSA-OAEP using keys retrieved using the
