@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  version: 0.4.19
+  version: 0.4.20_git
   OPENSSL_VERSION: 4.0.0
   HOMEBREW_NO_AUTO_UPDATE: 1
 
