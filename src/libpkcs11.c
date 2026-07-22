@@ -42,28 +42,39 @@ struct sc_pkcs11_module {
 typedef struct sc_pkcs11_module sc_pkcs11_module_t;
 
 /*
- * Load a module - this will load the shared object, call
- * C_Initialize, and get the list of function pointers
+ * Load a module - this will load the shared object and get
+ * the legacy and, if available, PKCS#11 3.2 function lists.
  */
 void *
-C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
+C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs,
+	CK_FUNCTION_LIST_3_2_PTR_PTR funcs_3_2)
 {
 	sc_pkcs11_module_t *mod;
 	/* POSIX requires that the result of dlsym() is safely convertible
 	 * to a function pointer, even though ISO C doesn't guarantee this. */
 	union {
-		CK_RV (*func)(CK_FUNCTION_LIST_PTR_PTR);
+		CK_C_GetFunctionList func;
 		void *data;
 	} c_get_function_list;
-	int rv;
+	union {
+		CK_C_GetInterface func;
+		void *data;
+	} c_get_interface;
+	CK_INTERFACE_PTR interface = NULL;
+	CK_VERSION version = {3, 2};
+	CK_RV rv;
 
-	if (!mspec)
+	if (!mspec || !funcs)
 		return NULL;
 
-	mod = OPENSSL_malloc(sizeof(sc_pkcs11_module_t));
+	*funcs = NULL;
+	if (funcs_3_2)
+		*funcs_3_2 = NULL;
+
+	mod = OPENSSL_zalloc(sizeof(sc_pkcs11_module_t));
 	if (!mod)
 		return NULL;
-	memset(mod, 0, sizeof(sc_pkcs11_module_t));
+
 	mod->_magic = MAGIC;
 
 	/* The caller intentionally selects the PKCS#11 module to load. */
@@ -80,6 +91,8 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 		goto failed;
 	}
 
+	/* C_GetFunctionList provides the legacy PKCS#11 2.40-compatible
+	 * function list used by existing libp11 code. */
 #ifdef WIN32
 	c_get_function_list.func = (CK_C_GetFunctionList)
 		GetProcAddress(mod->handle, "C_GetFunctionList");
@@ -93,9 +106,33 @@ C_LoadModule(const char *mspec, CK_FUNCTION_LIST_PTR_PTR funcs)
 #endif
 		goto failed;
 	}
+
 	rv = c_get_function_list.func(funcs);
-	if (rv == CKR_OK)
-		return mod;
+	if (rv != CKR_OK)
+		goto failed;
+
+	/*
+	 * C_GetInterface is optional. Use it to obtain the PKCS#11 3.2
+	 * function list containing C_EncapsulateKey and C_DecapsulateKey.
+	 */
+#ifdef WIN32
+	c_get_interface.func = (CK_C_GetInterface)
+		GetProcAddress(mod->handle, "C_GetInterface");
+#else
+	c_get_interface.data = dlsym(mod->handle, "C_GetInterface");
+#endif
+
+	if (c_get_interface.func && funcs_3_2) {
+		rv = c_get_interface.func((CK_UTF8CHAR_PTR)"PKCS 11",
+			&version, &interface, 0);
+
+		if (rv == CKR_OK && interface && interface->pFunctionList) {
+			*funcs_3_2 = (CK_FUNCTION_LIST_3_2_PTR)
+				interface->pFunctionList;
+		}
+	}
+
+	return mod;
 
 failed:
 	C_UnloadModule((void *) mod);
