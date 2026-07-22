@@ -65,6 +65,7 @@ typedef struct pkcs11_template_st PKCS11_TEMPLATE;
 struct pkcs11_ctx_private {
 	int flags;
 	CK_FUNCTION_LIST_PTR method;
+	CK_FUNCTION_LIST_3_2_PTR method_3_2;
 	void *handle;
 	char *init_args;
 	CK_VERSION cryptoki_version;
@@ -177,6 +178,10 @@ extern PKCS11_OBJECT_ops pkcs11_falcon1024_ops;
 	} while (0)
 #define CRYPTOKI_call(ctx, func_and_args) \
 	ctx->method->func_and_args
+
+#define CRYPTOKI_call_3_2(ctx, func_and_args) \
+	(ctx)->method_3_2->func_and_args
+
 extern int ERR_load_CKR_strings(void);
 
 /* Memory allocation */
@@ -203,7 +208,8 @@ extern int check_slot_fork(PKCS11_SLOT_private *slot);
 extern int check_object_fork(PKCS11_OBJECT_private *key);
 
 /* Other internal functions */
-extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR);
+extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR,
+	CK_FUNCTION_LIST_3_2_PTR_PTR);
 extern CK_RV C_UnloadModule(void *module);
 extern void pkcs11_destroy_keys(PKCS11_SLOT_private *, unsigned int);
 extern void pkcs11_destroy_certs(PKCS11_SLOT_private *);
