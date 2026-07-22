@@ -70,6 +70,7 @@ examples/x25519keygen
 examples/x448keygen
 examples/falcon512keygen
 examples/mldsa87keygen
+examples/mlkem768keygen
 examples/slhdsa256skeygen
 examples/storecert
 
@@ -98,6 +99,7 @@ tests/ed448-keygen
 tests/ed25519-keygen-prov
 tests/ed448-keygen-prov
 tests/mldsa87-keygen-prov
+tests/mlkem768-keygen-prov
 tests/check-all-prov
 
 tests/*.log

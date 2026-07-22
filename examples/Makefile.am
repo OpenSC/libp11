@@ -7,7 +7,8 @@ EXTRA_DIST = README
 noinst_PROGRAMS = auth decrypt getrandom listkeys listkeys_ext \
 	ed25519keygen ed448keygen eckeygen rsakeygen \
 	x25519keygen x448keygen \
-	mldsa87keygen slhdsa256skeygen falcon512keygen \
+	mldsa87keygen mlkem768keygen \
+	slhdsa256skeygen falcon512keygen \
 	storecert
 
 LDADD = ../src/libp11.la $(OPENSSL_LIBS)
