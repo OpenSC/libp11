@@ -52,6 +52,7 @@ typedef struct p11_keydata_st P11_KEYDATA;
 typedef struct p11_signature_ctx P11_SIGNATURE_CTX;
 typedef struct p11_asym_cipher_ctx P11_ASYM_CIPHER_CTX;
 typedef struct p11_keyexch_ctx P11_KEYEXCH_CTX;
+typedef struct p11_kem_ctx P11_KEM_CTX;
 
 /******************************************************************************/
 /* PROVIDER interface helpers                                                 */
@@ -135,6 +136,8 @@ EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx);
 const char *p11_signature_pss_saltlen_to_string(int saltlen);
 const char *p11_pad_mode_to_string(int pad_mode);
 int is_oneshot_sig_type(int type);
+int has_raw_public_key(int type);
+int has_encoded_public_key(int type);
 
 
 /******************************************************************************/
@@ -168,6 +171,7 @@ int p11_asym_cipher_ctx_set_oaep_label(P11_ASYM_CIPHER_CTX *asym_ctx,
 unsigned char *p11_asym_cipher_ctx_get_oaep_label(const P11_ASYM_CIPHER_CTX *asym_ctx);
 size_t p11_asym_cipher_ctx_get_oaep_labellen(const P11_ASYM_CIPHER_CTX *asym_ctx);
 
+
 /******************************************************************************/
 /* KEY EXCHANGE helper functions                                              */
 /******************************************************************************/
@@ -184,6 +188,20 @@ int p11_keyexch_ctx_get_peer_pub(const P11_KEYEXCH_CTX *keyexch_ctx,
 	const unsigned char **buf, size_t *len);
 int p11_keyexch_ctx_get_type(const P11_KEYEXCH_CTX *keyexch_ctx);
 size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx);
+
+
+/******************************************************************************/
+/* ASYM KEM helper functions                                                  */
+/******************************************************************************/
+P11_KEM_CTX *p11_kem_ctx_new(PROVIDER_CTX *ctx);
+void p11_kem_ctx_free(P11_KEM_CTX *kem_ctx);
+P11_KEM_CTX *p11_kem_ctx_dupctx(P11_KEM_CTX *kem_ctx);
+int p11_kem_ctx_init(P11_KEM_CTX *kem_ctx, P11_KEYDATA *keydata, const OSSL_PARAM params[]);
+int p11_kem_ctx_encapsulate(P11_KEM_CTX *kem_ctx, unsigned char *out,
+	size_t *outlen, unsigned char *secret, size_t *secretlen);
+EVP_PKEY *p11_kem_ctx_get_evp_pkey(const P11_KEM_CTX *kem_ctx);
+int p11_kem_ctx_get_type(const P11_KEM_CTX *kem_ctx);
+size_t p11_kem_ctx_get_secret_size(const P11_KEM_CTX *kem_ctx);
 
 #endif /* _PROVIDER_HELPERS_H */
 

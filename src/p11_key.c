@@ -143,12 +143,16 @@ static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *, const char *,
 	const unsigned char *, size_t, const PKCS11_params *);
 static PKCS11_OBJECT_ops *pkcs11_mldsa_ops_from_param(CK_ULONG param_set);
 #endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_ML_KEM
+static PKCS11_OBJECT_ops *pkcs11_mlkem_ops_from_param(CK_ULONG param_set);
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 static PKCS11_OBJECT_ops *pkcs11_slhdsa_ops_from_param(CK_ULONG param_set);
 #endif /* OPENSSL_NO_SLH_DSA */
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey);
 static PKCS11_OBJECT_ops *pkcs11_falcon_ops_from_param(CK_ULONG param_set);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
@@ -299,6 +303,34 @@ PKCS11_OBJECT_private *pkcs11_object_from_handle(PKCS11_SLOT_private *slot,
 			break;
 		}
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+		case CKK_ML_KEM: {
+			CK_ULONG param_set;
+
+			if (pkcs11_getattr_alloc(ctx, session, object,
+				CKA_PARAMETER_SET, &data, &size)) {
+				pkcs11_log(ctx, LOG_DEBUG,
+					"Missing CKA_PARAMETER_SET attribute\n");
+				return NULL;
+			}
+			if (size != sizeof(CK_ULONG)) {
+				pkcs11_log(ctx, LOG_DEBUG, "Invalid CKA_PARAMETER_SET size for ML-KEM\n");
+				OPENSSL_free(data);
+				return NULL;
+			}
+			memcpy(&param_set, data, sizeof(param_set));
+			OPENSSL_free(data);
+
+			ops = pkcs11_mlkem_ops_from_param(param_set);
+			if (ops == NULL) {
+				pkcs11_log(ctx, LOG_DEBUG, "Unsupported ML-KEM parameter set\n");
+				return NULL;
+			}
+			break;
+		}
+#endif /* OPENSSL_NO_ML_KEM */
+
 #ifndef OPENSSL_NO_SLH_DSA
 		case CKK_SLH_DSA: {
 			CK_ULONG param_set;
@@ -560,6 +592,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 	/* The following attributes are necessary for RSA encryption and DSA */
 	/* pubkey attributes */
 	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
 	pkcs11_addattr_bool(&pubtmpl, CKA_ENCRYPT, TRUE);
 	pkcs11_addattr_var(&pubtmpl, CKA_MODULUS_BITS, num_bits);
 	pkcs11_addattr(&pubtmpl, CKA_PUBLIC_EXPONENT,
@@ -567,6 +600,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 
 	/* privkey attributes */
 	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
+	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(&privtmpl, CKA_DECRYPT, TRUE);
 
 	/* call the pkcs11 module to create the key pair */
@@ -654,9 +688,12 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	/* pubkey attributes */
 	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
 	pkcs11_addattr(&pubtmpl, CKA_EC_PARAMS, ec_params, ec_params_len);
+	pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
+	pkcs11_addattr_bool(&pubtmpl, CKA_DERIVE, TRUE);
 
 	/* privkey attributes */
 	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
+	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(&privtmpl, CKA_DERIVE, TRUE);
 
 	/* call the pkcs11 module to create the key pair */
@@ -810,7 +847,7 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 	CK_MECHANISM mechanism = {
 		CKM_ML_DSA_KEY_PAIR_GEN, NULL_PTR, 0
 	};
-	CK_SIGN_PARAMETER_SET_TYPE signParamSet = 0;
+	CK_ULONG signParamSet = 0;
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
@@ -861,10 +898,10 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 		pkcs11_luna_pubkey_attr(&pubtmpl, label, id, id_len);
 		pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
 			&signParamSet, sizeof(signParamSet));
+		pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
 
 		pkcs11_luna_privkey_attr(&privtmpl, label, id, id_len, params);
-		pkcs11_addattr(&privtmpl, CKA_PARAMETER_SET,
-			&signParamSet, sizeof(signParamSet));
+		pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
 
 		pub_key_obj = CK_INVALID_HANDLE;
 		priv_key_obj = CK_INVALID_HANDLE;
@@ -885,6 +922,98 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 	return 0;
 }
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+/**
+ * Generate ML-KEM (ML-KEM-512 / ML-KEM-768 / ML-KEM-1024)
+ * key pair directly on token.
+ */
+int pkcs11_mlkem_keygen(PKCS11_SLOT_private *slot, int nid,
+	const char *label, const unsigned char *id, size_t id_len,
+	const PKCS11_params *params)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_SESSION_HANDLE session;
+	PKCS11_TEMPLATE pubtmpl = {0}, privtmpl = {0};
+	CK_MECHANISM mechanism = {
+		CKM_ML_KEM_KEY_PAIR_GEN, NULL_PTR, 0
+	};
+	CK_ML_KEM_PARAMETER_SET_TYPE kemParamSet = 0;
+	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
+	CK_RV rv;
+
+	if (pkcs11_init_keygen(slot, &session))
+		return -1;
+
+	switch (nid) {
+	case NID_ML_KEM_512:
+		kemParamSet = CKP_ML_KEM_512;
+		break;
+	case NID_ML_KEM_768:
+		kemParamSet = CKP_ML_KEM_768;
+		break;
+	case NID_ML_KEM_1024:
+		kemParamSet = CKP_ML_KEM_1024;
+		break;
+	default:
+		pkcs11_put_session(slot, session);
+		return -1; /* unsupported */
+	}
+
+	/* public key attributes */
+	pkcs11_common_pubkey_attr(&pubtmpl, label, id, id_len);
+	pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
+		&kemParamSet, sizeof(kemParamSet));
+	pkcs11_addattr_bool(&pubtmpl, CKA_ENCAPSULATE, TRUE);
+
+	/* private key attributes */
+	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
+	pkcs11_addattr_bool(&privtmpl, CKA_DECAPSULATE, TRUE);
+
+	/* generate the key pair */
+	rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+		session, (CK_MECHANISM_PTR)&mechanism,
+		pubtmpl.attrs, pubtmpl.nattr,
+		privtmpl.attrs, privtmpl.nattr,
+		&pub_key_obj, &priv_key_obj));
+
+	if (rv != CKR_OK) {
+		/* Thales Luna HSM firmware does not support the wrapping
+		 * or unwrapping of CK_ML_KEM private key objects.
+		 * Retry with these attributes explicitly disabled. */
+		pkcs11_zap_attrs(&privtmpl);
+		pkcs11_zap_attrs(&pubtmpl);
+		memset(&privtmpl, 0, sizeof(privtmpl));
+		memset(&pubtmpl, 0, sizeof(pubtmpl));
+
+		pkcs11_luna_pubkey_attr(&pubtmpl, label, id, id_len);
+		pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
+			&kemParamSet, sizeof(kemParamSet));
+		pkcs11_addattr_bool(&pubtmpl, CKA_ENCAPSULATE, TRUE);
+
+		pkcs11_luna_privkey_attr(&privtmpl, label, id, id_len, params);
+		pkcs11_addattr_bool(&privtmpl, CKA_DECAPSULATE, TRUE);
+
+		pub_key_obj = CK_INVALID_HANDLE;
+		priv_key_obj = CK_INVALID_HANDLE;
+
+		rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+			session, (CK_MECHANISM_PTR)&mechanism,
+			pubtmpl.attrs, pubtmpl.nattr,
+			privtmpl.attrs, privtmpl.nattr,
+			&pub_key_obj, &priv_key_obj));
+	}
+
+	/* cleanup */
+	pkcs11_put_session(slot, session);
+	pkcs11_zap_attrs(&privtmpl);
+	pkcs11_zap_attrs(&pubtmpl);
+
+	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
+	return 0;
+}
+#endif /* OPENSSL_NO_ML_KEM */
+
 #ifndef OPENSSL_NO_SLH_DSA
 /**
  * Generate SLH-DSA key pair directly on token
@@ -899,7 +1028,7 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 	CK_MECHANISM mechanism = {
 		CKM_SLH_DSA_KEY_PAIR_GEN, NULL_PTR, 0
 	};
-	CK_SIGN_PARAMETER_SET_TYPE signParamSet = 0;
+	CK_ULONG signParamSet = 0;
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
@@ -956,8 +1085,6 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 
 	/* private key attributes */
 	pkcs11_common_privkey_attr(&privtmpl, label, id, id_len, params);
-	pkcs11_addattr(&privtmpl, CKA_PARAMETER_SET,
-		&signParamSet, sizeof(signParamSet));
 	pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
 
 	/* generate key pair */
@@ -994,7 +1121,7 @@ int pkcs11_falcon_keygen(PKCS11_SLOT_private *slot,
 	CK_MECHANISM mechanism = {
 		CKM_PQC_FALCON, NULL_PTR, 0
 	};
-	CK_SIGN_PARAMETER_SET_TYPE signParamSet = 0;
+	CK_ULONG signParamSet = 0;
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
@@ -1229,7 +1356,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	} else {
-		ret = EVP_PKEY_dup(key->evp_key);
+		ret = pkcs11_dup_raw_public_key(key->evp_key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	}
 
@@ -1551,7 +1678,6 @@ static void pkcs11_common_pubkey_attr(PKCS11_TEMPLATE *pubtmpl,
 	if (label)
 		pkcs11_addattr_s(pubtmpl, CKA_LABEL, label);
 	pkcs11_addattr_bool(pubtmpl, CKA_TOKEN, TRUE);
-	pkcs11_addattr_bool(pubtmpl, CKA_VERIFY, TRUE);
 	pkcs11_addattr_bool(pubtmpl, CKA_WRAP, TRUE);
 }
 
@@ -1567,13 +1693,11 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 	pkcs11_addattr_bool(privtmpl, CKA_TOKEN, TRUE);
 	pkcs11_addattr_bool(privtmpl, CKA_SENSITIVE, params->sensitive);
 	pkcs11_addattr_bool(privtmpl, CKA_EXTRACTABLE, params->extractable);
-	pkcs11_addattr_bool(privtmpl, CKA_SIGN, TRUE);
 	pkcs11_addattr_bool(privtmpl, CKA_UNWRAP, TRUE);
 }
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#ifndef OPENSSL_NO_ML_DSA
-
+#if !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM)
 static void pkcs11_luna_pubkey_attr(PKCS11_TEMPLATE *pubtmpl,
 		const char *label, const unsigned char *id, size_t id_len)
 {
@@ -1582,7 +1706,6 @@ static void pkcs11_luna_pubkey_attr(PKCS11_TEMPLATE *pubtmpl,
 	if (label)
 		pkcs11_addattr_s(pubtmpl, CKA_LABEL, label);
 	pkcs11_addattr_bool(pubtmpl, CKA_TOKEN, TRUE);
-	pkcs11_addattr_bool(pubtmpl, CKA_VERIFY, TRUE);
 }
 
 static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *privtmpl,
@@ -1597,9 +1720,10 @@ static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 	pkcs11_addattr_bool(privtmpl, CKA_TOKEN, TRUE);
 	pkcs11_addattr_bool(privtmpl, CKA_SENSITIVE, params->sensitive);
 	pkcs11_addattr_bool(privtmpl, CKA_EXTRACTABLE, params->extractable);
-	pkcs11_addattr_bool(privtmpl, CKA_SIGN, TRUE);
 }
+#endif /* !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM) */
 
+#ifndef OPENSSL_NO_ML_DSA
 static PKCS11_OBJECT_ops *pkcs11_mldsa_ops_from_param(CK_ULONG param_set)
 {
 	switch (param_set) {
@@ -1614,6 +1738,22 @@ static PKCS11_OBJECT_ops *pkcs11_mldsa_ops_from_param(CK_ULONG param_set)
 	}
 }
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+static PKCS11_OBJECT_ops *pkcs11_mlkem_ops_from_param(CK_ULONG param_set)
+{
+	switch (param_set) {
+	case CKP_ML_KEM_512:
+		return &pkcs11_mlkem512_ops;
+	case CKP_ML_KEM_768:
+		return &pkcs11_mlkem768_ops;
+	case CKP_ML_KEM_1024:
+		return &pkcs11_mlkem1024_ops;
+	default:
+		return NULL;
+	}
+}
+#endif /* OPENSSL_NO_ML_KEM */
 
 #ifndef OPENSSL_NO_SLH_DSA
 static PKCS11_OBJECT_ops *pkcs11_slhdsa_ops_from_param(CK_ULONG param_set)
@@ -1651,6 +1791,52 @@ static PKCS11_OBJECT_ops *pkcs11_slhdsa_ops_from_param(CK_ULONG param_set)
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Recreate a raw public key, since EVP_PKEY_dup() does not support raw keys.
+ */
+static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey)
+{
+	const char *name;
+	unsigned char *pub = NULL;
+	size_t publen = 0;
+	EVP_PKEY *ret = NULL;
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+	PKCS11_OBJECT_private *obj;
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+
+	if (pkey == NULL)
+		return NULL;
+
+	name = EVP_PKEY_get0_type_name(pkey);
+	if (name == NULL)
+		return NULL;
+
+	if (!EVP_PKEY_get_raw_public_key(pkey, NULL, &publen) ||
+			publen == 0)
+		return NULL;
+
+	pub = OPENSSL_malloc(publen);
+	if (pub == NULL)
+		return NULL;
+
+	if (!EVP_PKEY_get_raw_public_key(pkey, pub, &publen))
+		goto end;
+
+	ret = EVP_PKEY_new_raw_public_key_ex(NULL, name, NULL, pub, publen);
+	if (ret == NULL)
+		goto end;
+
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+	/* Preserve the ex_data association used by legacy EVP_PKEY_METHOD wrappers. */
+	obj = pkcs11_get_ex_data_pkey(pkey);
+	if (obj != NULL)
+		pkcs11_set_ex_data_pkey(ret, obj);
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
+end:
+	OPENSSL_free(pub);
+	return ret;
+}
+
 static PKCS11_OBJECT_ops *pkcs11_falcon_ops_from_param(CK_ULONG param_set)
 {
 	switch (param_set) {

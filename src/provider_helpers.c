@@ -58,6 +58,18 @@
 #define ML_DSA_65_SIG_LEN 3309
 #define ML_DSA_87_SIG_LEN 4627
 #endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_ML_KEM
+#define ML_KEM_SHARED_SECRET_BYTES   32
+#define ML_KEM_512_PUBLIC_KEY_BYTES  800
+#define ML_KEM_512_CIPHERTEXT_BYTES  768
+#define ML_KEM_512_SECURITY_BITS     128
+#define ML_KEM_768_PUBLIC_KEY_BYTES  1184
+#define ML_KEM_768_CIPHERTEXT_BYTES  1088
+#define ML_KEM_768_SECURITY_BITS     192
+#define ML_KEM_1024_PUBLIC_KEY_BYTES 1568
+#define ML_KEM_1024_CIPHERTEXT_BYTES 1568
+#define ML_KEM_1024_SECURITY_BITS    256
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 #define SLH_DSA_128S_PUB_BYTES 32
 #define SLH_DSA_128F_PUB_BYTES 32
@@ -205,6 +217,11 @@ struct p11_keyexch_ctx {
 	int cofactor_mode;         /* ECDH only: -1 default, 0 disable, 1 enable */
 };
 
+struct p11_kem_ctx {
+	PROVIDER_CTX *prov_ctx;
+	P11_KEYDATA *keydata;      /* recipient public/private key */
+};
+
 /* Internal helper functions */
 static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx);
 static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx);
@@ -225,6 +242,9 @@ static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type);
 #ifndef OPENSSL_NO_ML_DSA
 static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type);
 #endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_ML_KEM
+static int p11_keydata_init_mlkem_from_params(P11_KEYDATA *keydata, int type);
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type);
 #endif /* OPENSSL_NO_SLH_DSA */
@@ -709,6 +729,15 @@ int p11_keydata_get_security_bits(const P11_KEYDATA *keydata)
 	case EVP_PKEY_ML_DSA_87:
 		return 256;
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+	case EVP_PKEY_ML_KEM_512:
+		return 128;
+	case EVP_PKEY_ML_KEM_768:
+		return 192;
+	case EVP_PKEY_ML_KEM_1024:
+		return 256;
+#endif /* OPENSSL_NO_ML_KEM */
 
 #ifndef OPENSSL_NO_SLH_DSA
 	case EVP_PKEY_SLH_DSA_SHA2_128S:
@@ -1443,6 +1472,45 @@ int is_oneshot_sig_type(int type)
 	}
 }
 
+int has_raw_public_key(int type)
+{
+	if (is_oneshot_sig_type(type))
+		return 1;
+
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	switch (type) {
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return 1;
+	default:
+		return 0;
+	}
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	return 0;
+}
+
+int has_encoded_public_key(int type)
+{
+	switch (type) {
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+#endif /* OPENSSL_NO_EC */
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+#endif /* OPENSSL_NO_ECX */
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 
 /******************************************************************************/
 /* ASYM CIPHER helper functions                                               */
@@ -2018,6 +2086,158 @@ size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx)
 }
 
 /******************************************************************************/
+/* ASYM KEM helper functions                                                  */
+/******************************************************************************/
+
+/* Allocate a asymmetric KEM context. */
+P11_KEM_CTX *p11_kem_ctx_new(PROVIDER_CTX *ctx)
+{
+	P11_KEM_CTX *kem_ctx;
+
+	kem_ctx = OPENSSL_zalloc(sizeof(P11_KEM_CTX));
+	if (!kem_ctx)
+		return NULL;
+
+	kem_ctx->prov_ctx = ctx;
+	return kem_ctx;
+}
+
+/* Free the asymmetric KEM context and release referenced keys. */
+void p11_kem_ctx_free(P11_KEM_CTX *kem_ctx)
+{
+	if (kem_ctx == NULL)
+		return;
+
+	p11_keydata_free(kem_ctx->keydata);
+	OPENSSL_free(kem_ctx);
+}
+
+/*
+ * Duplicate a asymmetric KEM context.
+ * Key objects are shared by reference; mutable context state is copied.
+ */
+P11_KEM_CTX *p11_kem_ctx_dupctx(P11_KEM_CTX *kem_ctx)
+{
+	P11_KEM_CTX *dst = NULL;
+
+	if (kem_ctx == NULL)
+		return NULL;
+
+	dst = p11_kem_ctx_new(kem_ctx->prov_ctx);
+	if (dst == NULL)
+		return NULL;
+
+	/* share local keydata by reference */
+	if (kem_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(kem_ctx->keydata))
+			goto err;
+		dst->keydata = kem_ctx->keydata;
+	}
+
+	return dst;
+
+err:
+	p11_kem_ctx_free(dst);
+	return NULL;
+}
+
+/* Initialize an asymmetric KEM context with a key. */
+int p11_kem_ctx_init(P11_KEM_CTX *kem_ctx, P11_KEYDATA *keydata, const OSSL_PARAM params[])
+{
+	if (kem_ctx == NULL || keydata == NULL)
+		return 0;
+
+	(void)params;
+
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(kem_ctx->keydata);
+	kem_ctx->keydata = keydata;
+
+	return 1;
+}
+
+/*
+ * Encapsulate a shared secret using a temporary public key copy
+ * in the default provider.
+ */
+int p11_kem_ctx_encapsulate(P11_KEM_CTX *kem_ctx, unsigned char *out,
+	size_t *outlen, unsigned char *secret, size_t *secretlen)
+{
+	EVP_PKEY *pub = NULL;
+	EVP_PKEY_CTX *pctx = NULL;
+	int ok = 0;
+
+	if (kem_ctx == NULL || kem_ctx->keydata == NULL ||
+			outlen == NULL || secretlen == NULL)
+		return 0;
+
+	pub = pubkey_from_params_default(kem_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
+	if (pctx == NULL)
+		goto end;
+
+	if (EVP_PKEY_encapsulate_init(pctx, NULL) <= 0)
+		goto end;
+
+	/* EVP_PKEY_encapsulate() also handles the length query when
+	 * out and secret are NULL. */
+	if (EVP_PKEY_encapsulate(pctx, out, outlen, secret, secretlen) <= 0)
+		goto end;
+
+	ok = 1;
+
+end:
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+	return ok;
+}
+
+/* Return EVP_PKEY associated with asymmetric KEM context. */
+EVP_PKEY *p11_kem_ctx_get_evp_pkey(const P11_KEM_CTX *kem_ctx)
+{
+	if (kem_ctx == NULL)
+		return NULL;
+
+	return p11_keydata_get_evp_pkey(kem_ctx->keydata);
+}
+
+/* Return the local key type. */
+int p11_kem_ctx_get_type(const P11_KEM_CTX *kem_ctx)
+{
+	if (kem_ctx == NULL)
+		return 0;
+
+	return p11_keydata_get_type(kem_ctx->keydata);
+}
+
+/* Return the shared-secret size for an asymmetric KEM operation. */
+size_t p11_kem_ctx_get_secret_size(const P11_KEM_CTX *kem_ctx)
+{
+	int type;
+
+	if (kem_ctx == NULL || kem_ctx->keydata == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(kem_ctx->keydata);
+
+	switch (type) {
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return ML_KEM_SHARED_SECRET_BYTES;
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	default:
+		return 0;
+	}
+}
+
+/******************************************************************************/
 /* Internal helper functions                                                  */
 /******************************************************************************/
 
@@ -2313,6 +2533,11 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 	case EVP_PKEY_ML_DSA_65:
 	case EVP_PKEY_ML_DSA_87:
 #endif
+#ifndef OPENSSL_NO_ML_KEM
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 	case EVP_PKEY_SLH_DSA_SHA2_128S:
 	case EVP_PKEY_SLH_DSA_SHA2_128F:
@@ -2402,6 +2627,13 @@ static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata)
 	case EVP_PKEY_ML_DSA_87:
 		return p11_keydata_init_mldsa_from_params(keydata, type);
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return p11_keydata_init_mlkem_from_params(keydata, type);
+#endif /* OPENSSL_NO_ML_KEM */
 
 #ifndef OPENSSL_NO_SLH_DSA
 	case EVP_PKEY_SLH_DSA_SHA2_128S:
@@ -2626,6 +2858,61 @@ static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type)
 	return 1;
 }
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+static int p11_keydata_init_mlkem_from_params(P11_KEYDATA *keydata, int type)
+{
+	const OSSL_PARAM *p;
+	const char *name = NULL;
+	size_t keysize = 0;
+	size_t ciphertext_size = 0;
+
+	switch (type) {
+	case NID_ML_KEM_512:
+		name = "ML-KEM-512";
+		keysize = ML_KEM_512_PUBLIC_KEY_BYTES;
+		ciphertext_size = ML_KEM_512_CIPHERTEXT_BYTES;
+		break;
+	case NID_ML_KEM_768:
+		name = "ML-KEM-768";
+		keysize = ML_KEM_768_PUBLIC_KEY_BYTES;
+		ciphertext_size = ML_KEM_768_CIPHERTEXT_BYTES;
+		break;
+	case NID_ML_KEM_1024:
+		name = "ML-KEM-1024";
+		keysize = ML_KEM_1024_PUBLIC_KEY_BYTES;
+		ciphertext_size = ML_KEM_1024_CIPHERTEXT_BYTES;
+		break;
+	default:
+		return 0;
+	}
+
+	/*
+	 * OSSL_PKEY_PARAM_PUB_KEY is normally returned by
+	 * EVP_PKEY_todata(). Accept ENCODED_PUBLIC_KEY as a fallback;
+	 * both contain the complete FIPS 203 encapsulation key ek.
+	 */
+	p = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
+	if (p == NULL) {
+		p = OSSL_PARAM_locate_const(keydata->params,
+			OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY);
+	}
+
+	if (p == NULL || p->data_type != OSSL_PARAM_OCTET_STRING ||
+			p->data == NULL || p->data_size != keysize)
+		return 0;
+
+	if (!p11_dup_param_blob(p, &keydata->pubdata.raw.pub,
+			&keydata->pubdata.raw.pub_len))
+		return 0;
+
+	keydata->type = type;
+	keydata->name = name;
+	keydata->keysize = keysize;
+	keydata->maxsize = ciphertext_size;
+	return 1;
+}
+#endif /* OPENSSL_NO_ML_KEM */
 
 #ifndef OPENSSL_NO_SLH_DSA
 static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type)
@@ -3061,6 +3348,15 @@ static int evp_pkey_get_type_id(const EVP_PKEY *pkey)
 	if (EVP_PKEY_is_a(pkey, "ML-DSA-87"))
 		return EVP_PKEY_ML_DSA_87;
 #endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-512"))
+		return EVP_PKEY_ML_KEM_512;
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-768"))
+		return EVP_PKEY_ML_KEM_768;
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-1024"))
+		return EVP_PKEY_ML_KEM_1024;
+#endif /* OPENSSL_NO_ML_KEM */
 
 #ifndef OPENSSL_NO_SLH_DSA
 	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-128s"))

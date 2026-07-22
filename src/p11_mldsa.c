@@ -3,7 +3,8 @@
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  * All rights reserved.
  *
- * This file implements the handling of ML-DSA keys stored on a PKCS11 token.
+ * This file implements the handling of ML-DSA and ML-KEM keys
+ * stored on a PKCS#11 token.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,18 +31,28 @@
 #include "libp11-int.h"
 #include <string.h>
 
-#if !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
 
+#ifndef OPENSSL_NO_ML_DSA
 #define ML_DSA_44_PUB_LEN 1312
 #define ML_DSA_65_PUB_LEN 1952
 #define ML_DSA_87_PUB_LEN 2592
+#endif /* OPENSSL_NO_ML_DSA */
 
+#ifndef OPENSSL_NO_ML_KEM
+#define ML_KEM_512_PUB_LEN   800
+#define ML_KEM_768_PUB_LEN  1184
+#define ML_KEM_1024_PUB_LEN 1568
+#endif /* OPENSSL_NO_ML_KEM */
+
+#if !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM)
 /*
- * Extract raw ML-DSA public key bytes from a CKO_PUBLIC_KEY object using CKA_VALUE.
+ * Extract raw ML-DSA or ML-KEM public key bytes from a
+ * CKO_PUBLIC_KEY object using CKA_VALUE.
  * Returns 1 on success, 0 on failure.
  */
 static int extract_pub_from_public_key_obj(PKCS11_CTX_private *ctx,
-	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj,
+	CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj, const char *algname,
 	size_t expected_len, unsigned char **raw, size_t *rawlen)
 {
 	unsigned char *value = NULL;
@@ -56,14 +67,15 @@ static int extract_pub_from_public_key_obj(PKCS11_CTX_private *ctx,
 
 	if (pkcs11_getattr_alloc(ctx, session, obj, CKA_VALUE, &value, &value_len)) {
 		pkcs11_log(ctx, LOG_DEBUG,
-			"Missing CKA_VALUE attribute on ML-DSA public key\n");
+			"Missing CKA_VALUE attribute on %s public key\n", algname);
 		return 0;
 	}
 
 	if (value_len != expected_len) {
 		pkcs11_log(ctx, LOG_DEBUG,
-			"Unexpected ML-DSA public key size: got %lu, expected %lu\n",
-			(unsigned long)value_len, (unsigned long)expected_len);
+			"Unexpected %s public key size: got %lu, expected %lu\n",
+			algname, (unsigned long)value_len,
+			(unsigned long)expected_len);
 		OPENSSL_free(value);
 		return 0;
 	}
@@ -74,7 +86,8 @@ static int extract_pub_from_public_key_obj(PKCS11_CTX_private *ctx,
 }
 
 /*
- * Extract raw ML-DSA public key bytes from a CKO_CERTIFICATE object.
+ * Extract raw ML-DSA or ML-KEM public key bytes from a
+ * CKO_CERTIFICATE object.
  * The certificate is read from CKA_VALUE (DER-encoded X.509) and
  * the public key is obtained via X.509 parsing.
  * Returns 1 on success, 0 on failure.
@@ -189,7 +202,7 @@ static PKCS11_OBJECT_private *pkcs11_choose_public_source(PKCS11_OBJECT_private 
 }
 
 /*
- * Retrieve raw ML-DSA public key bytes.
+ * Retrieve raw ML-DSA or ML-KEM public key bytes.
  *
  * Preference order:
  *   1. CKO_PUBLIC_KEY  -> CKA_VALUE
@@ -228,7 +241,7 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	switch (obj->object_class) {
 	case CKO_PUBLIC_KEY:
 		ok = extract_pub_from_public_key_obj(ctx, session, obj->object,
-			expected_len, raw, rawlen);
+			algname, expected_len, raw, rawlen);
 		break;
 	case CKO_CERTIFICATE:
 		ok = extract_pub_from_cert_obj(ctx, session, obj->object,
@@ -253,7 +266,7 @@ end:
 	return ok ? 0 : -1;
 }
 
-static EVP_PKEY *pkcs11_get_evp_key_mldsa(PKCS11_OBJECT_private *key,
+static EVP_PKEY *pkcs11_get_evp_key_ml(PKCS11_OBJECT_private *key,
 	size_t publen, const char *algname)
 {
 	EVP_PKEY *pkey = NULL;
@@ -264,27 +277,30 @@ static EVP_PKEY *pkcs11_get_evp_key_mldsa(PKCS11_OBJECT_private *key,
 	if (pkcs11_get_raw_public_key(key, publen, algname, &raw, &rawlen) < 0)
 		return NULL;
 
-	/* Build a EVP_PKEY from the raw public key, used only as software public key */
+	/* Build an EVP_PKEY used only as a software public key */
 	pkey = EVP_PKEY_new_raw_public_key_ex(NULL, algname, NULL, raw, rawlen);
 	OPENSSL_free(raw);
+
 	return pkey;
 }
 
+#endif /* !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM) */
+
+#ifndef OPENSSL_NO_ML_DSA
 static EVP_PKEY *pkcs11_get_evp_key_mldsa44(PKCS11_OBJECT_private *key)
 {
-	return pkcs11_get_evp_key_mldsa(key, ML_DSA_44_PUB_LEN, "ML-DSA-44");
+	return pkcs11_get_evp_key_ml(key, ML_DSA_44_PUB_LEN, "ML-DSA-44");
 }
 
 static EVP_PKEY *pkcs11_get_evp_key_mldsa65(PKCS11_OBJECT_private *key)
 {
-	return pkcs11_get_evp_key_mldsa(key, ML_DSA_65_PUB_LEN, "ML-DSA-65");
+	return pkcs11_get_evp_key_ml(key, ML_DSA_65_PUB_LEN, "ML-DSA-65");
 }
 
 static EVP_PKEY *pkcs11_get_evp_key_mldsa87(PKCS11_OBJECT_private *key)
 {
-	return pkcs11_get_evp_key_mldsa(key, ML_DSA_87_PUB_LEN, "ML-DSA-87");
+	return pkcs11_get_evp_key_ml(key, ML_DSA_87_PUB_LEN, "ML-DSA-87");
 }
-
 
 PKCS11_OBJECT_ops pkcs11_mldsa44_ops = {
 	EVP_PKEY_ML_DSA_44,
@@ -300,15 +316,49 @@ PKCS11_OBJECT_ops pkcs11_mldsa87_ops = {
 	EVP_PKEY_ML_DSA_87,
 	pkcs11_get_evp_key_mldsa87,
 };
-
-#else /* !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
-/*
- * ML-DSA support is not available:
- * - either OpenSSL was built without ML-DSA support, or
- * - OpenSSL version is older than 3.5.
- */
+#else /* OPENSSL_NO_ML_DSA */
 #warning "ML-DSA support not built with libp11"
+#endif /* OPENSSL_NO_ML_DSA */
 
-#endif /* !defined(OPENSSL_NO_ML_DSA) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+#ifndef OPENSSL_NO_ML_KEM
+static EVP_PKEY *pkcs11_get_evp_key_mlkem512(PKCS11_OBJECT_private *key)
+{
+	return pkcs11_get_evp_key_ml(key, ML_KEM_512_PUB_LEN, "ML-KEM-512");
+}
+
+static EVP_PKEY *pkcs11_get_evp_key_mlkem768(PKCS11_OBJECT_private *key)
+{
+	return pkcs11_get_evp_key_ml(key, ML_KEM_768_PUB_LEN, "ML-KEM-768");
+}
+
+static EVP_PKEY *pkcs11_get_evp_key_mlkem1024(PKCS11_OBJECT_private *key)
+{
+	return pkcs11_get_evp_key_ml(key, ML_KEM_1024_PUB_LEN, "ML-KEM-1024");
+}
+
+PKCS11_OBJECT_ops pkcs11_mlkem512_ops = {
+	EVP_PKEY_ML_KEM_512,
+	pkcs11_get_evp_key_mlkem512,
+};
+
+PKCS11_OBJECT_ops pkcs11_mlkem768_ops = {
+	EVP_PKEY_ML_KEM_768,
+	pkcs11_get_evp_key_mlkem768,
+};
+
+PKCS11_OBJECT_ops pkcs11_mlkem1024_ops = {
+	EVP_PKEY_ML_KEM_1024,
+	pkcs11_get_evp_key_mlkem1024,
+};
+#else /* OPENSSL_NO_ML_KEM */
+#warning "ML-KEM support not built with libp11"
+#endif /* OPENSSL_NO_ML_KEM */
+
+#else /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+#warning "ML-DSA support not built with libp11"
+#warning "ML-KEM support not built with libp11"
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 /* vim: set noexpandtab: */

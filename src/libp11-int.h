@@ -52,6 +52,12 @@ extern int NID_FALCON_512;
 extern int NID_FALCON_1024;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+#define EVP_PKEY_ML_KEM_512 NID_ML_KEM_512
+#define EVP_PKEY_ML_KEM_768 NID_ML_KEM_768
+#define EVP_PKEY_ML_KEM_1024 NID_ML_KEM_1024
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
 /* forward type declarations */
 typedef struct pkcs11_keys PKCS11_keys;
 typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
@@ -144,6 +150,11 @@ extern PKCS11_OBJECT_ops pkcs11_mldsa44_ops;
 extern PKCS11_OBJECT_ops pkcs11_mldsa65_ops;
 extern PKCS11_OBJECT_ops pkcs11_mldsa87_ops;
 #endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_ML_KEM
+extern PKCS11_OBJECT_ops pkcs11_mlkem512_ops;
+extern PKCS11_OBJECT_ops pkcs11_mlkem768_ops;
+extern PKCS11_OBJECT_ops pkcs11_mlkem1024_ops;
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_128s_ops;
 extern PKCS11_OBJECT_ops pkcs11_slhdsa_sha2_128f_ops;
@@ -417,6 +428,12 @@ extern int pkcs11_mldsa_keygen(PKCS11_SLOT_private *tpriv,
 	size_t id_len, const PKCS11_params *params);
 #endif /* OPENSSL_NO_ML_DSA */
 
+#ifndef OPENSSL_NO_ML_KEM
+extern int pkcs11_mlkem_keygen(PKCS11_SLOT_private *tpriv,
+	int nid, const char *label, const unsigned char *id,
+	size_t id_len, const PKCS11_params *params);
+#endif /* OPENSSL_NO_ML_KEM */
+
 #ifndef OPENSSL_NO_SLH_DSA
 extern int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *tpriv,
 	int nid, const char *label, const unsigned char *id,
@@ -515,6 +532,18 @@ extern int pkcs11_evp_pkey_xdh_derive(PKCS11_OBJECT_private *key,
 	const unsigned char *peer_pub, size_t peer_pub_len,
 	unsigned char *secret, size_t *secretlen);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+extern int pkcs11_evp_pkey_rsa_decapsulate(PKCS11_OBJECT_private *key,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+extern int pkcs11_evp_pkey_ml_kem_decapsulate(PKCS11_OBJECT_private *key,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen);
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 /* This function has never been implemented */
 extern int pkcs11_verify(int type,

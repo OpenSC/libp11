@@ -342,6 +342,8 @@ const char *pkcs11_mechanism_name(CK_MECHANISM *mechanism)
 		return "CKM_ECDH1_DERIVE";
 	case CKM_ECDH1_COFACTOR_DERIVE:
 		return "CKM_ECDH1_COFACTOR_DERIVE";
+	case CKM_ML_KEM:
+		return "CKM_ML_KEM";
 	default:
 		return "UNKNOWN_MECHANISM";
 	}
@@ -660,6 +662,133 @@ end:
 	pkcs11_put_session(slot, session);
 	return rv;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Execute a PKCS#11 decapsulation operation using the specified mechanism.
+ *
+ * The resulting secret key is created as an extractable session object,
+ * read through CKA_VALUE and destroyed before the session is released.
+ *
+ * Returns CKR_OK on success or a PKCS#11/vendor-defined error code on failure.
+ */
+static CK_RV pkcs11_decapsulate_with_mechanism(
+	PKCS11_OBJECT_private *key, CK_MECHANISM *mechanism,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	CK_RV rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
+	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_BBOOL ck_false = CK_FALSE;
+	CK_BBOOL ck_true = CK_TRUE;
+	CK_ULONG newkey_len = 0;
+	CK_ULONG ck_inlen;
+	unsigned char *value = NULL;
+	size_t len, value_len_alloc = 0;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &ck_false, sizeof(ck_false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
+		{CKA_SENSITIVE, &ck_false, sizeof(ck_false)},
+		{CKA_EXTRACTABLE, &ck_true, sizeof(ck_true)},
+	};
+
+	if (key == NULL || mechanism == NULL || out == NULL ||
+			outlen == NULL || *outlen == 0 || in == NULL)
+		return CKR_ARGUMENTS_BAD;
+
+	if (*outlen > (size_t)(CK_ULONG)-1 ||
+			inlen > (size_t)(CK_ULONG)-1)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG,
+		"%s:%d pkcs11_decapsulate_with_mechanism() "
+		"%s out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism),
+		out, (unsigned long)*outlen,
+		in, (unsigned long)inlen);
+#endif
+
+	len = *outlen;
+	newkey_len = (CK_ULONG)len;
+	ck_inlen = (CK_ULONG)inlen;
+
+	if (pkcs11_get_session(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	if (key->always_authenticate == CK_TRUE) {
+		rv = pkcs11_authenticate(key, session);
+		if (rv != CKR_OK)
+			goto end;
+	}
+
+	if (ctx->method_3_2 == NULL ||
+			ctx->method_3_2->C_DecapsulateKey == NULL) {
+		pkcs11_log(ctx, LOG_DEBUG,
+			"PKCS#11 3.2 C_DecapsulateKey is not available\n");
+		rv = CKR_FUNCTION_NOT_SUPPORTED;
+		goto end;
+	}
+
+	rv = CRYPTOKI_call_3_2(ctx,
+		C_DecapsulateKey(session, mechanism, key->object,
+			newkey_template,
+			sizeof(newkey_template) / sizeof(*newkey_template),
+			(CK_BYTE_PTR)in, ck_inlen, &newkey));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG,
+			"%s:%d C_DecapsulateKey rv=0x%08lX (%lu)\n",
+			__FILE__, __LINE__,
+			(unsigned long)rv, (unsigned long)rv);
+		goto end;
+	}
+
+	if (newkey == CK_INVALID_HANDLE) {
+		rv = CKR_GENERAL_ERROR;
+		goto end;
+	}
+
+	if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE,
+			&value, &value_len_alloc)) {
+		rv = CKR_GENERAL_ERROR;
+		goto end;
+	}
+
+	if (value_len_alloc > len) {
+		*outlen = value_len_alloc;
+		rv = CKR_BUFFER_TOO_SMALL;
+		goto end;
+	}
+
+	memcpy(out, value, value_len_alloc);
+	*outlen = value_len_alloc;
+	rv = CKR_OK;
+
+end:
+	if (newkey != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
+
+	OPENSSL_clear_free(value, value_len_alloc);
+	pkcs11_put_session(slot, session);
+	return rv;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* DER-encode data as an ASN.1 OCTET STRING. */
 static unsigned char *der_encode_octet_string(const unsigned char *data,
@@ -1263,6 +1392,51 @@ extern int pkcs11_evp_pkey_xdh_derive(PKCS11_OBJECT_private *key,
 	return 1;
 }
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+extern int pkcs11_evp_pkey_rsa_decapsulate(PKCS11_OBJECT_private *key,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || outlen == NULL || in == NULL)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_RSA_X_509;
+
+	if (pkcs11_decapsulate_with_mechanism(key, &mechanism,
+			out, outlen, in, inlen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+/*
+ * Decapsulate an ML-KEM ciphertext using a private key on the token.
+ */
+extern int pkcs11_evp_pkey_ml_kem_decapsulate(PKCS11_OBJECT_private *key,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	CK_MECHANISM mechanism;
+
+	if (key == NULL || outlen == NULL || in == NULL)
+		return -1;
+
+	memset(&mechanism, 0, sizeof(mechanism));
+	mechanism.mechanism = CKM_ML_KEM;
+
+	if (pkcs11_decapsulate_with_mechanism(key, &mechanism,
+			out, outlen, in, inlen) != CKR_OK)
+		return -1;
+
+	return 1;
+}
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
 #ifndef OPENSSL_NO_EC
