@@ -177,7 +177,7 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	CK_INFO ck_info;
 	int rv;
 
-	cpriv->handle = C_LoadModule(name, &cpriv->method);
+	cpriv->handle = C_LoadModule(name, &cpriv->method, &cpriv->method_3_2);
 	if (!cpriv->handle) {
 		P11err(P11_F_PKCS11_CTX_LOAD, P11_R_LOAD_MODULE_ERROR);
 		return -1;

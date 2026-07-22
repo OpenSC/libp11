@@ -2,6 +2,8 @@ NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.20; unreleased
 * Updated the bundled PKCS#11 header to version 3.2. (Małgorzata Olszówka)
+* Added PKCS#11 provider support for ML-KEM key generation,
+  encapsulation and decapsulation (Małgorzata Olszówka)
 
 New in 0.4.19; 2026-07-21; Michał Trojnara
 * Define LIBP11_VERSION_NUMBER (Michał Trojnara)

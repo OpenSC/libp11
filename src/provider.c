@@ -119,6 +119,18 @@ PROVIDER_FN(keyexch_settable_ctx_params);
 PROVIDER_FN(keyexch_get_ctx_params);
 PROVIDER_FN(keyexch_gettable_ctx_params);
 
+PROVIDER_FN(kem_newctx);
+PROVIDER_FN(kem_freectx);
+PROVIDER_FN(kem_dupctx);
+PROVIDER_FN(kem_encapsulate_init);
+PROVIDER_FN(kem_encapsulate);
+PROVIDER_FN(kem_decapsulate_init);
+PROVIDER_FN(kem_decapsulate);
+PROVIDER_FN(kem_get_ctx_params);
+PROVIDER_FN(kem_gettable_ctx_params);
+PROVIDER_FN(kem_set_ctx_params);
+PROVIDER_FN(kem_settable_ctx_params);
+
 PROVIDER_FN(store_open);
 PROVIDER_FN(store_set_ctx_params);
 PROVIDER_FN(store_settable_ctx_params);
@@ -211,6 +223,21 @@ static const OSSL_DISPATCH keyexch_functions[] = {
 	OSSL_DISPATCH_END
 };
 
+static const OSSL_DISPATCH asym_kem_functions[] = {
+	{OSSL_FUNC_KEM_NEWCTX, (void (*)(void))kem_newctx},
+	{OSSL_FUNC_KEM_FREECTX, (void (*)(void))kem_freectx},
+	{OSSL_FUNC_KEM_DUPCTX, (void (*)(void))kem_dupctx},
+	{OSSL_FUNC_KEM_ENCAPSULATE_INIT, (void (*)(void))kem_encapsulate_init},
+	{OSSL_FUNC_KEM_ENCAPSULATE, (void (*)(void))kem_encapsulate},
+	{OSSL_FUNC_KEM_DECAPSULATE_INIT, (void (*)(void))kem_decapsulate_init},
+	{OSSL_FUNC_KEM_DECAPSULATE, (void (*)(void))kem_decapsulate},
+	{OSSL_FUNC_KEM_GET_CTX_PARAMS, (void (*)(void))kem_get_ctx_params},
+	{OSSL_FUNC_KEM_GETTABLE_CTX_PARAMS, (void (*)(void))kem_gettable_ctx_params},
+	{OSSL_FUNC_KEM_SET_CTX_PARAMS, (void (*)(void))kem_set_ctx_params},
+	{OSSL_FUNC_KEM_SETTABLE_CTX_PARAMS, (void (*)(void))kem_settable_ctx_params},
+	OSSL_DISPATCH_END
+};
+
 static const OSSL_DISPATCH store_functions[] = {
 	{OSSL_FUNC_STORE_OPEN, (void (*)(void))store_open},
 	{OSSL_FUNC_STORE_SET_CTX_PARAMS, (void (*)(void))store_set_ctx_params},
@@ -240,6 +267,11 @@ static const OSSL_ALGORITHM p11_keymgmts[] = {
 	{"ML-DSA-65", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-65 keymgmt functions"},
 	{"ML-DSA-87", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-DSA-87 keymgmt functions"},
 #endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_ML_KEM
+	{"ML-KEM-512", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-KEM-512 keymgmt functions"},
+	{"ML-KEM-768", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-KEM-768 keymgmt functions"},
+	{"ML-KEM-1024", FIPS_PROPQ, keymgmt_functions, "PKCS#11 ML-KEM-1024 keymgmt functions"},
+#endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
 	{"SLH-DSA-SHA2-128s", FIPS_PROPQ, keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-128s keymgmt functions"},
@@ -286,6 +318,11 @@ static const OSSL_ALGORITHM p11_asym_cipher[] = {
 
 static const OSSL_ALGORITHM p11_keyexch[] = {
 	{"PKCS11", FIPS_PROPQ, keyexch_functions, "PKCS#11 key exchange functions"},
+	{NULL, NULL, NULL, NULL}
+};
+
+static const OSSL_ALGORITHM p11_asym_kem[] = {
+	{"PKCS11", FIPS_PROPQ, asym_kem_functions, "PKCS#11 asymmetric kem functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
@@ -445,6 +482,8 @@ static const OSSL_ALGORITHM *provider_query_operation(void *ctx,
 		return p11_asym_cipher;
 	case OSSL_OP_KEYEXCH:
 		return p11_keyexch;
+	case OSSL_OP_KEM:
+		return p11_asym_kem;
 	case OSSL_OP_STORE:
 		return p11_storemgmt;
 	}
@@ -565,6 +604,7 @@ static const char *keymgmt_query_operation_name(int id)
 	case OSSL_OP_SIGNATURE:
 	case OSSL_OP_ASYM_CIPHER:
 	case OSSL_OP_KEYEXCH:
+	case OSSL_OP_KEM:
 		return "PKCS11";
 	}
 	return NULL;
@@ -646,7 +686,10 @@ static const OSSL_PARAM *keymgmt_export_types(int selection)
 static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 {
 	P11_KEYDATA *keydata = (P11_KEYDATA *)provkey;
-	const OSSL_PARAM *pub;
+	const OSSL_PARAM *key_params = NULL;
+	const OSSL_PARAM *pub = NULL;
+	OSSL_PARAM *encoded_pub;
+	OSSL_PARAM *raw_pub;
 	OSSL_PARAM *p;
 	int type, bits, secbits;
 #if OPENSSL_VERSION_NUMBER >= 0x30600000L
@@ -685,42 +728,36 @@ static int keymgmt_get_params(void *provkey, OSSL_PARAM params[])
 		return 0;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
 
+	encoded_pub = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY);
+	raw_pub = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
+
+	if ((encoded_pub != NULL && has_encoded_public_key(type)) ||
+		(raw_pub != NULL && has_raw_public_key(type))) {
+		key_params = p11_keydata_get_params(keydata);
+		if (key_params == NULL)
+			return 0;
+
+		pub = OSSL_PARAM_locate_const(key_params, OSSL_PKEY_PARAM_PUB_KEY);
+		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
+			pub->data == NULL || pub->data_size == 0)
+			return 0;
+	}
+
 	/* EVP_PKEY_get1_encoded_public_key(), not covered by tests */
-	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY);
-	if (p != NULL && type == EVP_PKEY_EC) {
-		const OSSL_PARAM *key_params = p11_keydata_get_params(keydata);
+	if (encoded_pub != NULL && has_encoded_public_key(type) &&
+		!OSSL_PARAM_set_octet_string(encoded_pub, pub->data, pub->data_size))
+		return 0;
 
-		if (key_params == NULL)
-		    return 0;
+	if (raw_pub != NULL && has_raw_public_key(type) &&
+		!OSSL_PARAM_set_octet_string(raw_pub, pub->data, pub->data_size))
+		return 0;
 
-		pub = OSSL_PARAM_locate_const(key_params, OSSL_PKEY_PARAM_PUB_KEY);
-		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
-			pub->data == NULL || pub->data_size == 0)
-			return 0;
-		if (!OSSL_PARAM_set_octet_string(p, pub->data, pub->data_size))
-			return 0;
-	}
-
-	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
-	if (p != NULL && is_oneshot_sig_type(type)) {
-		const OSSL_PARAM *key_params = p11_keydata_get_params(keydata);
-
-		if (key_params == NULL)
-		    return 0;
-
-		pub = OSSL_PARAM_locate_const(key_params, OSSL_PKEY_PARAM_PUB_KEY);
-		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
-			pub->data == NULL || pub->data_size == 0)
-			return 0;
-		if (!OSSL_PARAM_set_octet_string(p, pub->data, pub->data_size))
-			return 0;
-	}
-
-	/* EVP_PKEY_get_default_digest_name(), "pkeyutl -sign -rawin"
+	/*
+	 * EVP_PKEY_get_default_digest_name(), "pkeyutl -sign -rawin".
 	 * Hash-and-sign algorithms such as RSA and ECDSA use SHA256 as the
-	 * default digest. One-shot signature algorithms (EdDSA, ML-DSA,
-	 * SLH-DSA) do not accept an external digest and therefore report
-	 * OSSL_PKEY_PARAM_MANDATORY_DIGEST = "UNDEF". */
+	 * default digest. One-shot signature algorithms do not accept an
+	 * external digest and therefore report a mandatory digest of UNDEF.
+	 */
 	if (is_oneshot_sig_type(type)) {
 		p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_MANDATORY_DIGEST);
 		if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "UNDEF"))
@@ -2054,6 +2091,129 @@ static const OSSL_PARAM *keyexch_settable_ctx_params(void *ctx, void *provctx)
 	return keyexch_gettable_ctx_params(ctx, provctx);
 }
 
+
+/******************************************************************************/
+/* Asymmetric kem functions                                                   */
+/******************************************************************************/
+
+/* Create and initialize asymmetric KEM context. */
+static void *kem_newctx(void *provctx)
+{
+	return p11_kem_ctx_new(provctx);
+}
+
+/* Free asymmetric KEM context. */
+
+static void kem_freectx(void *ctx)
+{
+	p11_kem_ctx_free(ctx);
+}
+
+/* Duplicate asymmetric KEM context. */
+static void *kem_dupctx(void *ctx)
+{
+	return p11_kem_ctx_dupctx(ctx);
+}
+
+/*
+ * Initialize an asymmetric KEM context for encapsulation using
+ * the recipient's public key.
+ */
+static int kem_encapsulate_init(void *ctx, void *provkey,
+	const OSSL_PARAM params[])
+{
+	return p11_kem_ctx_init(ctx, provkey, params);
+}
+
+/* Encapsulate a shared secret using an ML-KEM public key. */
+static int kem_encapsulate(void *ctx, unsigned char *out, size_t *outlen,
+	unsigned char *secret, size_t *secretlen)
+{
+	return p11_kem_ctx_encapsulate(ctx, out, outlen, secret, secretlen);
+}
+
+/*
+ * Initialise a context for an asymmetric decapsulation given a provider side
+ * asymmetric KEM context in the ctx parameter, a pointer to a provider key
+ * object in the provkey parameter, and a name of the algorithm.
+ */
+static int kem_decapsulate_init(void *ctx, void *provkey, const OSSL_PARAM params[])
+{
+	return p11_kem_ctx_init(ctx, provkey, params);
+}
+
+/* Perform the actual decapsulation. */
+static int kem_decapsulate(void *ctx, unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	P11_KEM_CTX *kem_ctx = (P11_KEM_CTX *)ctx;
+	size_t secret_size;
+
+	if (kem_ctx == NULL || outlen == NULL || in == NULL)
+		return 0;
+
+	secret_size = p11_kem_ctx_get_secret_size(kem_ctx);
+	if (secret_size == 0)
+		return 0;
+
+	if (out == NULL) {
+		*outlen = secret_size;
+		return 1;
+	}
+
+	if (*outlen < secret_size) {
+		*outlen = secret_size;
+		return 0;
+	}
+
+	return PKCS11_evp_pkey_decapsulate(
+		p11_kem_ctx_get_evp_pkey(kem_ctx),
+		p11_kem_ctx_get_type(kem_ctx),
+		out, outlen, in, inlen);
+}
+
+/* Return the  current asymmetric KEM context parameters. */
+static int kem_get_ctx_params(void *ctx, OSSL_PARAM params[])
+{
+	if (ctx == NULL)
+		return 0;
+
+	(void)params;
+	return 1;
+}
+
+/* Return the list of gettable asymmetric KEM context parameters. */
+static const OSSL_PARAM *kem_gettable_ctx_params(void *ctx, void *provctx)
+{
+	static const OSSL_PARAM gettable[] = {
+		OSSL_PARAM_END
+	};
+
+	(void)ctx;
+	(void)provctx;
+	return gettable;
+}
+
+/*
+ * Set asymmetric KEM context parameters.
+ * OSSL_KEM_PARAM_IKME is not supported because PKCS#11 ML-KEM
+ * encapsulation uses randomness generated internally by the token.
+ * This parameter should not be used for purposes other than testing.
+ */
+static int kem_set_ctx_params(void *ctx, const OSSL_PARAM params[])
+{
+	if (ctx == NULL)
+		return 0;
+
+	(void)params;
+	return 1;
+}
+
+/* Return the list of gettable asymmetric KEM context parameters. */
+static const OSSL_PARAM *kem_settable_ctx_params(void *ctx, void *provctx)
+{
+	return kem_gettable_ctx_params(ctx, provctx);
+}
 
 /******************************************************************************/
 /* Store functions                                                            */

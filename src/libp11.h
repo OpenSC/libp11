@@ -581,6 +581,11 @@ extern int PKCS11_evp_pkey_derive(EVP_PKEY *pk, int type,
 	const unsigned char *peer_pub, size_t peer_pub_len,
 	int cofactor_mode, unsigned char *secret, size_t *secretlen);
 
+/* Perform a private-key decapsulate operation using a PKCS#11-backed EVP_PKEY */
+extern int PKCS11_evp_pkey_decapsulate(EVP_PKEY *pk, int type,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen);
+
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Encrypts data using the private key */
