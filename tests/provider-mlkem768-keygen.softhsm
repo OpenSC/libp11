@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
+# Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+# Load common test functions
+. ${srcdir}/common.sh
+
+# Initialize SoftHSM DB
+init_db
+
+# Create token
+init_card "token1"
+
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH=${MODULE}
+echo "OPENSSL_MODULES=${OPENSSL_MODULES}"
+echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
+
+# Load openssl settings
+. ${srcdir}/openssl-settings.sh
+
+# Restore openssl settings
+trap cleanup EXIT
+
+if ! has_mechanism ML-KEM; then
+	echo "ML-KEM key generation test skipped."
+	rm -rf "$outdir"
+	exit 77
+fi
+
+${WRAPPER} ./mlkem768-keygen-prov ${MODULE} token1 libp11-keylabel ${PIN}
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "ML-KEM key generation test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "ML-KEM key generation test failed."
+	exit 1
+fi
+
+echo "Checking pkcs11-tool result..."
+list_objects | grep -q libp11-keylabel
+if [[ $? != 0 ]]; then
+	echo "ML-KEM key was not properly generated."
+	exit 1
+fi
+
+rm -rf "$outdir"
+
+exit 0

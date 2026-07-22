@@ -34,7 +34,8 @@ check_PROGRAMS = \
 	ed448-keygen \
 	ed25519-keygen-prov \
 	ed448-keygen-prov \
-	mldsa87-keygen-prov
+	mldsa87-keygen-prov \
+	mlkem768-keygen-prov
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -78,6 +79,8 @@ dist_check_SCRIPTS = \
 	provider-mldsa87-check-privkey.softhsm \
 	provider-mldsa87-keygen.softhsm \
 	provider-mldsa87-copy.softhsm \
+	provider-mlkem768-keygen.softhsm \
+	provider-mlkem768-copy.softhsm \
 	provider-fork-change-slot.softhsm \
 	provider-case-insensitive.softhsm \
 	provider-pkcs11-uri-without-token.softhsm \
@@ -87,13 +90,15 @@ dist_check_DATA = \
 	ec-cert.der ec-privkey.der ec-pubkey.der \
 	ed25519-cert.der ed25519-privkey.der ed25519-pubkey.der \
 	ed448-cert.der ed448-privkey.der ed448-pubkey.der \
-	mldsa87-cert.der mldsa87-privkey.der mldsa87-pubkey.der
+	mldsa87-cert.der mldsa87-privkey.der mldsa87-pubkey.der \
+	mlkem768-privkey.der mlkem768-pubkey.der
 
 ed25519_keygen_SOURCES = ed25519-keygen.c oneshot_common.c
 ed448_keygen_SOURCES = ed448-keygen.c oneshot_common.c
 ed25519_keygen_prov_SOURCES = ed25519-keygen-prov.c helpers_prov.c oneshot_common.c
 ed448_keygen_prov_SOURCES = ed448-keygen-prov.c helpers_prov.c oneshot_common.c
 mldsa87_keygen_prov_SOURCES = mldsa87-keygen-prov.c helpers_prov.c oneshot_common.c
+mlkem768_keygen_prov_SOURCES = mlkem768-keygen-prov.c helpers_prov.c
 evp_sign_prov_SOURCES = evp-sign-prov.c helpers_prov.c
 fork_change_slot_prov_SOURCES = fork-change-slot-prov.c helpers_prov.c
 dup_key_prov_SOURCES = dup-key-prov.c helpers_prov.c
