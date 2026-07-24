@@ -113,21 +113,42 @@ static unsigned int pkcs11_session_pool_count(
 }
 
 /*
- * Set the access mode of this slot's session pool.
- * The caller must hold slot->transition_lock.
+ * Keep transition ownership in plain slot state rather than a separate mutex:
+ * after fork, only the child thread survives, and pkcs11_reload_slot() can
+ * safely clear this reservation before the child opens new sessions.
  */
-int pkcs11_session_pool_set_mode_locked(PKCS11_SLOT_private *slot, int rw)
+static void pkcs11_session_pool_reserve_transition(PKCS11_SLOT_private *slot)
+{
+	pthread_mutex_lock(&slot->lock);
+	while (slot->transition_active)
+		pthread_cond_wait(&slot->cond, &slot->lock);
+	slot->transition_active = 1;
+	pthread_mutex_unlock(&slot->lock);
+}
+
+static void pkcs11_session_pool_finish_transition(PKCS11_SLOT_private *slot)
+{
+	pthread_mutex_lock(&slot->lock);
+	slot->transition_active = 0;
+	pthread_cond_broadcast(&slot->cond);
+	pthread_mutex_unlock(&slot->lock);
+}
+
+/*
+ * Set the access mode of this slot's session pool.
+ * The caller must own the transition reservation.
+ */
+static int pkcs11_session_pool_set_mode_reserved(PKCS11_SLOT_private *slot, int rw)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 
 	pthread_mutex_lock(&slot->lock);
 	/* If different mode requested, flush pool */
 	if (rw != slot->rw_mode) {
-		/* Block new session checkouts in pkcs11_session_pool_acquire() */
-		slot->transition_pending = 1;
-		/* Wait until all checked-out sessions are returned to the
-		 * pool, so that C_CloseAllSessions() cannot invalidate
+		/* Block new session checkouts while the transition drains
+		 * the pool, so that C_CloseAllSessions() cannot invalidate
 		 * sessions used by concurrent operations */
+		slot->checkout_blocked = 1;
 		while (slot->num_sessions > pkcs11_session_pool_count(slot))
 			pthread_cond_wait(&slot->cond, &slot->lock);
 		CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
@@ -135,9 +156,7 @@ int pkcs11_session_pool_set_mode_locked(PKCS11_SLOT_private *slot, int rw)
 		slot->logged_in = -1;
 		slot->num_sessions = 0;
 		slot->session_head = slot->session_tail = 0;
-		slot->transition_pending = 0;
-		/* Wake up any threads waiting in pkcs11_session_pool_acquire(),
-		 * so they open fresh sessions in the new mode */
+		slot->checkout_blocked = 0;
 		pthread_cond_broadcast(&slot->cond);
 	}
 	pthread_mutex_unlock(&slot->lock);
@@ -149,13 +168,12 @@ int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *slot, int rw)
 {
 	int rv;
 
-	pthread_mutex_lock(&slot->transition_lock);
-	rv = pkcs11_session_pool_set_mode_locked(slot, rw);
-	pthread_mutex_unlock(&slot->transition_lock);
+	pkcs11_session_pool_reserve_transition(slot);
+	rv = pkcs11_session_pool_set_mode_reserved(slot, rw);
+	pkcs11_session_pool_finish_transition(slot);
 
 	return rv;
 }
-
 
 static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
 {
@@ -178,7 +196,7 @@ int pkcs11_session_pool_acquire(PKCS11_SLOT_private *slot, int rw,
 	do {
 		/* Do not check out sessions while an R/W mode transition
 		 * is draining the pool, or it could wait indefinitely */
-		if (slot->transition_pending) {
+		if (slot->checkout_blocked) {
 			pthread_cond_wait(&slot->cond, &slot->lock);
 			continue;
 		}
@@ -245,7 +263,7 @@ void pkcs11_session_pool_release(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE se
 	slot->session_tail = (slot->session_tail + 1) % slot->session_poolsize;
 	/* Broadcast while draining so a blocked consumer cannot consume
 	 * the wakeup intended for the transition waiter. */
-	if (slot->transition_pending)
+	if (slot->checkout_blocked)
 		pthread_cond_broadcast(&slot->cond);
 	else
 		pthread_cond_signal(&slot->cond);
@@ -297,6 +315,31 @@ int pkcs11_login(PKCS11_SLOT_private *slot, int so, const char *pin)
 	return 0;
 }
 
+int pkcs11_session_pool_acquire_keygen(PKCS11_SLOT_private *slot,
+		CK_SESSION_HANDLE *sessionp)
+{
+	int rw_mode, rv = -1;
+
+	/* Serialize mode switching, login, and session acquisition
+	 * against all other R/W mode transitions. */
+	pkcs11_session_pool_reserve_transition(slot);
+	pthread_mutex_lock(&slot->lock);
+	rw_mode = slot->rw_mode;
+	pthread_mutex_unlock(&slot->lock);
+	/* R/W session is mandatory for key generation. */
+	if (rw_mode != 1) {
+		if (pkcs11_session_pool_set_mode_reserved(slot, 1))
+			goto out;
+		/* Changing the pool mode closes all sessions and logs everyone out */
+		if (pkcs11_login(slot, 0, slot->prev_pin))
+			goto out;
+	}
+	rv = pkcs11_session_pool_acquire(slot, 1, sessionp);
+out:
+	pkcs11_session_pool_finish_transition(slot);
+	return rv;
+}
+
 /*
  * Reopens the slot by creating a session and logging in if needed.
  */
@@ -304,6 +347,9 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 {
 	int logged_in = slot->logged_in;
 
+	/* No transition owner survives fork(). */
+	slot->transition_active = 0;
+	slot->checkout_blocked = 0;
 	slot->num_sessions = 0;
 	slot->session_head = slot->session_tail = 0;
 	if (logged_in >= 0) {
@@ -492,7 +538,6 @@ static PKCS11_SLOT_private *pkcs11_slot_new(PKCS11_CTX_private *ctx, CK_SLOT_ID 
 	slot->session_poolsize = slot->max_sessions + 1;
 	slot->session_pool = OPENSSL_malloc(slot->session_poolsize * sizeof(CK_SESSION_HANDLE));
 	pthread_mutex_init(&slot->lock, 0);
-	pthread_mutex_init(&slot->transition_lock, 0);
 	pthread_cond_init(&slot->cond, 0);
 	return slot;
 }
@@ -516,7 +561,6 @@ int pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 	CRYPTOKI_call(slot->ctx, C_CloseAllSessions(slot->id));
 	OPENSSL_free(slot->session_pool);
 	pthread_cond_destroy(&slot->cond);
-	pthread_mutex_destroy(&slot->transition_lock);
 	pthread_mutex_destroy(&slot->lock);
 
 	return 1;

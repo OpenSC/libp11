@@ -125,7 +125,6 @@ static int pkcs11_find_keys(PKCS11_SLOT_private *, CK_SESSION_HANDLE, unsigned i
 	PKCS11_TEMPLATE *);
 static int pkcs11_init_key(PKCS11_SLOT_private *, CK_SESSION_HANDLE session,
 	CK_OBJECT_HANDLE o, CK_OBJECT_CLASS type, PKCS11_KEY **);
-static int pkcs11_init_keygen(PKCS11_SLOT_private *, CK_SESSION_HANDLE *);
 static int pkcs11_next_key(PKCS11_CTX_private *ctx, PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session, CK_OBJECT_CLASS type);
 static int pkcs11_store_key(PKCS11_SLOT_private *, EVP_PKEY *, CK_OBJECT_CLASS,
@@ -586,7 +585,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	int rv;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	/* The following attributes are necessary for RSA encryption and DSA */
@@ -644,7 +643,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	ASN1_OBJECT *curve_obj = NULL;
 	int curve_nid = NID_undef;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	curve_nid = EC_curve_nist2nid(curve);
@@ -730,7 +729,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 	unsigned char *eddsa_params = NULL;
 	size_t eddsa_params_len = 0;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	if (nid == NID_ED25519) {
@@ -787,7 +786,7 @@ int pkcs11_xdh_keygen(PKCS11_SLOT_private *slot,
 	unsigned char *xdh_params = NULL;
 	size_t xdh_params_len = 0;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	if (nid == NID_X25519) {
@@ -846,7 +845,7 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	switch (nid) {
@@ -937,7 +936,7 @@ int pkcs11_mlkem_keygen(PKCS11_SLOT_private *slot, int nid,
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	switch (nid) {
@@ -1027,7 +1026,7 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	switch (nid) {
@@ -1120,7 +1119,7 @@ int pkcs11_falcon_keygen(PKCS11_SLOT_private *slot,
 	CK_OBJECT_HANDLE pub_key_obj, priv_key_obj;
 	CK_RV rv;
 
-	if (pkcs11_init_keygen(slot, &session))
+	if (pkcs11_session_pool_acquire_keygen(slot, &session))
 		return -1;
 
 	if (nid == NID_FALCON_512) {
@@ -1647,30 +1646,6 @@ CK_RSA_PKCS_MGF_TYPE pkcs11_md2ckg(const EVP_MD *md)
 	default:
 		return 0;
 	}
-}
-
-static int pkcs11_init_keygen(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE *session)
-{
-	int rw_mode, rv = -1;
-
-	/* Serialize mode switching, login, and session acquisition
-	 * against all other R/W mode transitions. */
-	pthread_mutex_lock(&slot->transition_lock);
-	pthread_mutex_lock(&slot->lock);
-	rw_mode = slot->rw_mode;
-	pthread_mutex_unlock(&slot->lock);
-	/* R/W session is mandatory for key generation. */
-	if (rw_mode != 1) {
-		if (pkcs11_session_pool_set_mode_locked(slot, 1))
-			goto out;
-		/* Changing the pool mode closes all sessions and logs everyone out */
-		if (pkcs11_login(slot, 0, slot->prev_pin))
-			goto out;
-	}
-	rv = pkcs11_session_pool_acquire(slot, 1, session);
-out:
-	pthread_mutex_unlock(&slot->transition_lock);
-	return rv;
 }
 
 static void pkcs11_common_pubkey_attr(PKCS11_TEMPLATE *pubtmpl,
