@@ -652,26 +652,18 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 		curve_nid = OBJ_sn2nid(curve);
 	if (curve_nid == NID_undef)
 		curve_nid = OBJ_ln2nid(curve);
-	if (curve_nid == NID_undef) {
-		pkcs11_put_session(slot, session);
-		return -1;
-	}
+	if (curve_nid == NID_undef)
+		goto error;
 	curve_obj = OBJ_nid2obj(curve_nid);
-	if (!curve_obj) {
-		pkcs11_put_session(slot, session);
-		return -1;
-	}
+	if (!curve_obj)
+		goto error;
 	/* convert to DER format and take just the length */
 	ec_params_len = i2d_ASN1_OBJECT(curve_obj, NULL);
-	if (ec_params_len < 0) {
-		pkcs11_put_session(slot, session);
-		return -1;
-	}
+	if (ec_params_len < 0)
+		goto error;
 	ec_params = OPENSSL_malloc(ec_params_len);
-	if (!ec_params) {
-		pkcs11_put_session(slot, session);
-		return -1;
-	}
+	if (!ec_params)
+		goto error;
 	/**
 	 * ec_params points to beginning of DER encoded object. Since we need this
 	 * location later and OpenSSL changes it in i2d_ASN1_OBJECT to point to 1 byte
@@ -679,10 +671,8 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	 * pointer tmp
 	 */
 	tmp = ec_params;
-	if (i2d_ASN1_OBJECT(curve_obj, &tmp) < 0) {
-		pkcs11_put_session(slot, session);
-		return -1;
-	}
+	if (i2d_ASN1_OBJECT(curve_obj, &tmp) < 0)
+		goto error;
 
 	/* The following attributes are necessary for ECDSA and ECDH mechanisms */
 	/* pubkey attributes */
@@ -713,6 +703,11 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_KEY, rv);
 	return 0;
+
+error:
+	pkcs11_put_session(slot, session);
+	OPENSSL_free(ec_params);
+	return -1;
 }
 #endif /* OPENSSL_NO_EC */
 
