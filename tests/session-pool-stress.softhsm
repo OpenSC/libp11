@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+outdir="output.$$"
+child=""
+watchdog=""
+
+. "${srcdir}/common.sh"
+
+cleanup_stress_test()
+{
+	if [[ -n "${child}" ]]; then
+		kill "${child}" 2>/dev/null || true
+	fi
+	if [[ -n "${watchdog}" ]]; then
+		kill "${watchdog}" 2>/dev/null || true
+	fi
+	cleanup
+	rm -rf "${outdir}"
+}
+trap cleanup_stress_test EXIT
+
+init_db
+init_card "session-pool-stress"
+generate_rsa_key_pair "stress-signing-key" "session-pool-stress"
+
+${WRAPPER} ./session-pool-stress \
+	"${MODULE}" "session-pool-stress" "${PIN}" &
+child=$!
+(
+	sleep 60
+	kill -TERM "${child}" 2>/dev/null || true
+) &
+watchdog=$!
+
+wait "${child}"
+rc=$?
+child=""
+kill "${watchdog}" 2>/dev/null || true
+wait "${watchdog}" 2>/dev/null || true
+watchdog=""
+
+if [[ ${rc} -ne 0 ]]; then
+	echo "Concurrent session-pool stress test failed or timed out."
+	exit 1
+fi
+
+exit 0

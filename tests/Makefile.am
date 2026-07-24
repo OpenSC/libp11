@@ -35,7 +35,9 @@ check_PROGRAMS = \
 	ed25519-keygen-prov \
 	ed448-keygen-prov \
 	mldsa87-keygen-prov \
-	mlkem768-keygen-prov
+	mlkem768-keygen-prov \
+	session-pool-test \
+	session-pool-stress
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -54,6 +56,7 @@ dist_check_SCRIPTS = \
 	ec-copy.softhsm \
 	ec-keygen.softhsm \
 	ec-derive.softhsm \
+	session-pool-stress.softhsm \
 	ed25519-keygen.softhsm \
 	ed448-keygen.softhsm \
 	fork-change-slot.softhsm \
@@ -107,8 +110,10 @@ rsa_pss_sign_prov_SOURCES = rsa-pss-sign-prov.c helpers_prov.c
 rsa_oaep_prov_SOURCES = rsa-oaep-prov.c helpers_prov.c
 check_all_prov_SOURCES = check-all-prov.c helpers_prov.c
 ec_derive_prov_SOURCES = ec-derive-prov.c helpers_prov.c
+session_pool_test_SOURCES = session-pool-test.c session-pool-under-test.c
+session_pool_test_LDADD = $(OPENSSL_LIBS)
 
-TESTS = $(dist_check_SCRIPTS)
+TESTS = session-pool-test$(EXEEXT) $(dist_check_SCRIPTS)
 
 TESTS_ENVIRONMENT =	\
 	LC_ALL="C" \
