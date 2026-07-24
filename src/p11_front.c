@@ -75,7 +75,7 @@ int PKCS11_open_session(PKCS11_SLOT *pslot, int rw)
 	PKCS11_SLOT_private *slot = pslot->_private;
 	if (check_slot_fork(slot) < 0)
 		return -1;
-	return pkcs11_open_session(slot, rw);
+	return pkcs11_session_pool_set_mode(slot, rw);
 }
 
 int PKCS11_enumerate_slots(PKCS11_CTX *pctx,

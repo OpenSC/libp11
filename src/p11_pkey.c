@@ -391,7 +391,7 @@ static int pkcs11_sign_with_mechanism(PKCS11_OBJECT_private *key,
 	ck_siglen = (CK_ULONG)*siglen;
 	ck_tbslen = (CK_ULONG)tbslen;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return CKR_GENERAL_ERROR;
 
 	rv = CRYPTOKI_call(ctx, C_SignInit(session, mechanism, key->object));
@@ -427,7 +427,7 @@ static int pkcs11_sign_with_mechanism(PKCS11_OBJECT_private *key,
 	*siglen = (size_t)ck_siglen;
 
 end:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 
@@ -470,7 +470,7 @@ static int pkcs11_verify_with_mechanism(PKCS11_OBJECT_private *key,
 	ck_siglen = (CK_ULONG)siglen;
 	ck_tbslen = (CK_ULONG)tbslen;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return CKR_GENERAL_ERROR;
 
 	rv = CRYPTOKI_call(ctx,
@@ -492,7 +492,7 @@ static int pkcs11_verify_with_mechanism(PKCS11_OBJECT_private *key,
 	}
 
 end:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
@@ -534,7 +534,7 @@ static int pkcs11_decrypt_with_mechanism(PKCS11_OBJECT_private *key,
 	ck_outlen = (CK_ULONG)*outlen;
 	ck_inlen = (CK_ULONG)inlen;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return CKR_GENERAL_ERROR;
 
 	rv = CRYPTOKI_call(ctx, C_DecryptInit(session, mechanism, key->object));
@@ -561,7 +561,7 @@ static int pkcs11_decrypt_with_mechanism(PKCS11_OBJECT_private *key,
 	*outlen = (size_t)ck_outlen;
 
 end:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 
@@ -617,7 +617,7 @@ static CK_RV pkcs11_derive_with_mechanism(PKCS11_OBJECT_private *key,
 		pkcs11_mechanism_name(mechanism), secret, (unsigned long)*secretlen);
 #endif
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return CKR_GENERAL_ERROR;
 
 	if (key->always_authenticate == CK_TRUE) {
@@ -659,7 +659,7 @@ end:
 		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 
 	OPENSSL_clear_free(value, value_len_alloc);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 
@@ -729,7 +729,7 @@ static CK_RV pkcs11_decapsulate_with_mechanism(
 	newkey_len = (CK_ULONG)len;
 	ck_inlen = (CK_ULONG)inlen;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return CKR_GENERAL_ERROR;
 
 	if (key->always_authenticate == CK_TRUE) {
@@ -785,7 +785,7 @@ end:
 		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
 
 	OPENSSL_clear_free(value, value_len_alloc);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
@@ -1485,10 +1485,10 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	return pkcs11_evp_pkey_ec_sign(key, sig, siglen, tbs, tbslen);
 }
@@ -1506,10 +1506,10 @@ static int pkcs11_eddsa_sign(unsigned char *sig, size_t *siglen,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	return pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen);
 }

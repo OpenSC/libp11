@@ -82,10 +82,10 @@ int pkcs11_private_encrypt(int flen,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	siglen = pkcs11_get_key_size(key);
 	if (pkcs11_evp_pkey_rsa_sign(key,
@@ -118,10 +118,10 @@ int pkcs11_private_decrypt(int flen,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	/* Openssl API for RSA_private_decrypt() allows to use
 	 * RSA_PKCS1_OAEP_PADDING only with SHA_1 hash and and MGF1_SHA1 mask
@@ -168,7 +168,7 @@ static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 	RSA *rsa;
 	BIGNUM *rsa_n = NULL, *rsa_e = NULL;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return NULL;
 
 	/* Retrieve the modulus */
@@ -202,14 +202,14 @@ static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 		goto success;
 
 failure:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	/* BN_clear_free() is NULL-safe */
 	BN_clear_free(rsa_n);
 	BN_clear_free(rsa_e);
 	return NULL;
 
 success:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	rsa = RSA_new();
 	if (!rsa) {
 		BN_clear_free(rsa_n);

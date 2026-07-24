@@ -281,16 +281,18 @@ extern void pkcs11_CTX_unload(PKCS11_CTX *ctx);
 /* Free a libp11 context */
 extern void pkcs11_CTX_free(PKCS11_CTX *ctx);
 
-/* Open a session in RO or RW mode */
-extern int pkcs11_open_session(PKCS11_SLOT_private *, int rw);
+/* Set the R/O or R/W mode of the session pool */
+extern int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *, int rw);
 /* Internal variant: the caller holds transition_lock */
-extern int pkcs11_open_session_locked(PKCS11_SLOT_private *, int rw);
+extern int pkcs11_session_pool_set_mode_locked(PKCS11_SLOT_private *, int rw);
 
-/* Acquire a session from the slot specific session pool */
-extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw, CK_SESSION_HANDLE *sessionp);
+/* Acquire a session from the slot-specific session pool */
+extern int pkcs11_session_pool_acquire(PKCS11_SLOT_private *, int rw,
+	CK_SESSION_HANDLE *sessionp);
 
-/* Return a session the the slot specific session pool */
-extern void pkcs11_put_session(PKCS11_SLOT_private *, CK_SESSION_HANDLE session);
+/* Release a session back to the slot-specific session pool */
+extern void pkcs11_session_pool_release(PKCS11_SLOT_private *,
+	CK_SESSION_HANDLE session);
 
 /* Get a list of all slots */
 extern int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx,

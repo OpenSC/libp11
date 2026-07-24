@@ -463,7 +463,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 	int release = 0;
 
 	if (session == CK_INVALID_HANDLE) {
-		if (pkcs11_get_session(slot, 0, &session))
+		if (pkcs11_session_pool_acquire(slot, 0, &session))
 			return NULL;
 		release = 1;
 	}
@@ -473,7 +473,7 @@ PKCS11_OBJECT_private *pkcs11_object_from_template(PKCS11_SLOT_private *slot,
 		obj = pkcs11_object_from_handle(slot, session, object_handle);
 
 	if (release)
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 
 	return obj;
 }
@@ -548,7 +548,7 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 	CK_SESSION_HANDLE session;
 	PKCS11_TEMPLATE tmpl = {0};
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
 	pkcs11_addattr_var(&tmpl, CKA_CLASS, obj->object_class);
@@ -560,7 +560,7 @@ int pkcs11_reload_object(PKCS11_OBJECT_private *obj)
 	obj->object = pkcs11_handle_from_template(slot, session, &tmpl);
 
 	pkcs11_zap_attrs(&tmpl);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	if (obj->object == CK_INVALID_HANDLE)
 		CRYPTOKI_checkerr(CKR_F_PKCS11_RELOAD_KEY, CKR_OBJECT_HANDLE_INVALID);
@@ -610,7 +610,7 @@ int pkcs11_rsa_keygen(PKCS11_SLOT_private *slot, unsigned int bits,
 		privtmpl.attrs, privtmpl.nattr,
 		&pub_key_obj, &priv_key_obj));
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	/* zap all memory allocated when building the template */
 	pkcs11_zap_attrs(&privtmpl);
@@ -693,7 +693,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 			privtmpl.attrs, privtmpl.nattr,
 			&pub_key_obj, &priv_key_obj));
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	/* zap all memory allocated when building the template */
 	pkcs11_zap_attrs(&privtmpl);
@@ -705,7 +705,7 @@ int pkcs11_ec_keygen(PKCS11_SLOT_private *slot, const char *curve,
 	return 0;
 
 error:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	OPENSSL_free(ec_params);
 	return -1;
 }
@@ -740,7 +740,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 		eddsa_params = (unsigned char *)OID_ED448;
 		eddsa_params_len = sizeof(OID_ED448);
 	} else {
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -761,7 +761,7 @@ int pkcs11_eddsa_keygen(PKCS11_SLOT_private *slot,
 		&pub_key_obj, &priv_key_obj));
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -797,7 +797,7 @@ int pkcs11_xdh_keygen(PKCS11_SLOT_private *slot,
 		xdh_params = (unsigned char *)OID_X448;
 		xdh_params_len = sizeof(OID_X448);
 	} else {
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -818,7 +818,7 @@ int pkcs11_xdh_keygen(PKCS11_SLOT_private *slot,
 		&pub_key_obj, &priv_key_obj));
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -860,7 +860,7 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 		signParamSet = CKP_ML_DSA_87;
 		break;
 	default:
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -909,7 +909,7 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 	}
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -951,7 +951,7 @@ int pkcs11_mlkem_keygen(PKCS11_SLOT_private *slot, int nid,
 		kemParamSet = CKP_ML_KEM_1024;
 		break;
 	default:
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -1000,7 +1000,7 @@ int pkcs11_mlkem_keygen(PKCS11_SLOT_private *slot, int nid,
 	}
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -1068,7 +1068,7 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 		signParamSet = CKP_SLH_DSA_SHAKE_256F;
 		break;
 	default:
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -1090,7 +1090,7 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 		&pub_key_obj, &priv_key_obj));
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -1128,7 +1128,7 @@ int pkcs11_falcon_keygen(PKCS11_SLOT_private *slot,
 	} else if (nid == NID_FALCON_1024) {
 		signParamSet = CKP_FALCON_1024;
 	} else {
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 		return -1; /* unsupported */
 	}
 
@@ -1150,7 +1150,7 @@ int pkcs11_falcon_keygen(PKCS11_SLOT_private *slot,
 		&pub_key_obj, &priv_key_obj));
 
 	/* cleanup */
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	pkcs11_zap_attrs(&privtmpl);
 	pkcs11_zap_attrs(&pubtmpl);
 
@@ -1250,7 +1250,7 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		return -1;
 	}
 
-	if (pkcs11_get_session(slot, 1, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 1, &session)) {
 		pkcs11_zap_attrs(&tmpl);
 		return -1;
 	}
@@ -1265,7 +1265,7 @@ static int pkcs11_store_key(PKCS11_SLOT_private *slot, EVP_PKEY *pk,
 		/* Gobble the key object */
 		r = pkcs11_init_key(slot, session, object, type, ret_key);
 	}
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_KEY, rv);
 	return r;
@@ -1455,7 +1455,7 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PK
 		if (key_template->label)
 			pkcs11_addattr_s(&tmpl, CKA_LABEL, key_template->label);
 	}
-	if (pkcs11_get_session(slot, 0, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 0, &session)) {
 		pkcs11_zap_attrs(&tmpl);
 		return -1;
 	}
@@ -1463,7 +1463,7 @@ int pkcs11_enumerate_keys(PKCS11_SLOT_private *slot, unsigned int type, const PK
 	rv = pkcs11_find_keys(slot, session, type, &tmpl);
 
 	pkcs11_zap_attrs(&tmpl);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	if (rv < 0) {
 		pkcs11_destroy_keys(slot, type);
 		return -1;
@@ -1485,11 +1485,11 @@ int pkcs11_remove_object(PKCS11_OBJECT_private *obj)
 	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (pkcs11_get_session(slot, 1, &session))
+	if (pkcs11_session_pool_acquire(slot, 1, &session))
 		return -1;
 
 	rv = CRYPTOKI_call(ctx, C_DestroyObject(session, obj->object));
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_REMOVE_KEY, rv);
 
 	return 0;
@@ -1661,13 +1661,13 @@ static int pkcs11_init_keygen(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE *sess
 	pthread_mutex_unlock(&slot->lock);
 	/* R/W session is mandatory for key generation. */
 	if (rw_mode != 1) {
-		if (pkcs11_open_session_locked(slot, 1))
+		if (pkcs11_session_pool_set_mode_locked(slot, 1))
 			goto out;
-		/* open_session will call C_CloseAllSessions which logs everyone out */
+		/* Changing the pool mode closes all sessions and logs everyone out */
 		if (pkcs11_login(slot, 0, slot->prev_pin))
 			goto out;
 	}
-	rv = pkcs11_get_session(slot, 1, session);
+	rv = pkcs11_session_pool_acquire(slot, 1, session);
 out:
 	pthread_mutex_unlock(&slot->transition_lock);
 	return rv;
@@ -2052,10 +2052,10 @@ static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	/* retrieve PSS parameters */
 	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
@@ -2127,10 +2127,10 @@ static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	switch (padding) {
 	case RSA_PKCS1_PADDING:
