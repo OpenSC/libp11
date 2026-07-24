@@ -94,8 +94,8 @@ struct pkcs11_slot_private {
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	int8_t rw_mode, logged_in;
-	int transition_active; /* R/W mode transition reservation active */
-	int checkout_blocked; /* session checkout blocked while draining */
+	int transition_active; /* session-pool transition active */
+	unsigned int sessions_in_use; /* sessions currently checked out */
 	CK_SLOT_ID id;
 	CK_SESSION_HANDLE *session_pool;
 	unsigned int session_head, session_tail, session_poolsize;

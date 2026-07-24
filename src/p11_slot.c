@@ -105,76 +105,6 @@ int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx, PKCS11_SLOT **slotp,
 	return 0;
 }
 
-static unsigned int pkcs11_session_pool_count(
-		const PKCS11_SLOT_private *slot)
-{
-	return (slot->session_tail + slot->session_poolsize -
-			slot->session_head) % slot->session_poolsize;
-}
-
-/*
- * Keep transition ownership in plain slot state rather than a separate mutex:
- * after fork, only the child thread survives, and pkcs11_reload_slot() can
- * safely clear this reservation before the child opens new sessions.
- */
-static void pkcs11_session_pool_reserve_transition(PKCS11_SLOT_private *slot)
-{
-	pthread_mutex_lock(&slot->lock);
-	while (slot->transition_active)
-		pthread_cond_wait(&slot->cond, &slot->lock);
-	slot->transition_active = 1;
-	pthread_mutex_unlock(&slot->lock);
-}
-
-static void pkcs11_session_pool_finish_transition(PKCS11_SLOT_private *slot)
-{
-	pthread_mutex_lock(&slot->lock);
-	slot->transition_active = 0;
-	pthread_cond_broadcast(&slot->cond);
-	pthread_mutex_unlock(&slot->lock);
-}
-
-/*
- * Set the access mode of this slot's session pool.
- * The caller must own the transition reservation.
- */
-static int pkcs11_session_pool_set_mode_reserved(PKCS11_SLOT_private *slot, int rw)
-{
-	PKCS11_CTX_private *ctx = slot->ctx;
-
-	pthread_mutex_lock(&slot->lock);
-	/* If different mode requested, flush pool */
-	if (rw != slot->rw_mode) {
-		/* Block new session checkouts while the transition drains
-		 * the pool, so that C_CloseAllSessions() cannot invalidate
-		 * sessions used by concurrent operations */
-		slot->checkout_blocked = 1;
-		while (slot->num_sessions > pkcs11_session_pool_count(slot))
-			pthread_cond_wait(&slot->cond, &slot->lock);
-		CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
-		slot->rw_mode = rw;
-		slot->logged_in = -1;
-		slot->num_sessions = 0;
-		slot->session_head = slot->session_tail = 0;
-		slot->checkout_blocked = 0;
-		pthread_cond_broadcast(&slot->cond);
-	}
-	pthread_mutex_unlock(&slot->lock);
-
-	return 0;
-}
-
-int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *slot, int rw)
-{
-	int rv;
-
-	pkcs11_session_pool_reserve_transition(slot);
-	rv = pkcs11_session_pool_set_mode_reserved(slot, rw);
-	pkcs11_session_pool_finish_transition(slot);
-
-	return rv;
-}
-
 static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
 {
 	pkcs11_destroy_keys(slot, CKO_PRIVATE_KEY);
@@ -182,92 +112,204 @@ static void pkcs11_wipe_cache(PKCS11_SLOT_private *slot)
 	pkcs11_destroy_certs(slot);
 }
 
-int pkcs11_session_pool_acquire(PKCS11_SLOT_private *slot, int rw,
+static void pkcs11_session_pool_reset_locked(PKCS11_SLOT_private *slot)
+{
+	slot->sessions_in_use = 0;
+	slot->num_sessions = 0;
+	slot->session_head = 0;
+	slot->session_tail = 0;
+}
+
+/*
+ * Keep transition ownership in plain slot state rather than a separate mutex:
+ * after fork, only the child thread survives, and pkcs11_reload_slot() can
+ * safely clear this reservation before the child opens new sessions.
+ */
+static void pkcs11_session_pool_begin_transition(PKCS11_SLOT_private *slot)
+{
+	pthread_mutex_lock(&slot->lock);
+	while (slot->transition_active)
+		pthread_cond_wait(&slot->cond, &slot->lock);
+	slot->transition_active = 1;
+	while (slot->sessions_in_use != 0)
+		pthread_cond_wait(&slot->cond, &slot->lock);
+	pthread_mutex_unlock(&slot->lock);
+}
+
+static void pkcs11_session_pool_end_transition(PKCS11_SLOT_private *slot)
+{
+	pthread_mutex_lock(&slot->lock);
+	slot->transition_active = 0;
+	pthread_cond_broadcast(&slot->cond);
+	pthread_mutex_unlock(&slot->lock);
+}
+
+/* The caller must hold slot->lock and own a drained transition. */
+static int pkcs11_session_pool_switch_mode_locked(
+		PKCS11_SLOT_private *slot, int rw, int *changed)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	CK_RV rv;
+
+	if (changed)
+		*changed = 0;
+	if (rw == slot->rw_mode)
+		return 0;
+	if (slot->sessions_in_use != 0) {
+		CKRerr(CKR_F_PKCS11_OPEN_SESSION, CKR_GENERAL_ERROR);
+		return -1;
+	}
+
+	rv = CRYPTOKI_call(ctx, C_CloseAllSessions(slot->id));
+	if (rv != CKR_OK) {
+		CKRerr(CKR_F_PKCS11_OPEN_SESSION, rv);
+		return -1;
+	}
+	pkcs11_session_pool_reset_locked(slot);
+	slot->rw_mode = rw;
+	slot->logged_in = -1;
+	if (changed)
+		*changed = 1;
+	return 0;
+}
+
+int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *slot, int rw)
+{
+	int rv;
+
+	pkcs11_session_pool_begin_transition(slot);
+	pthread_mutex_lock(&slot->lock);
+	rv = pkcs11_session_pool_switch_mode_locked(slot, rw, NULL);
+	pthread_mutex_unlock(&slot->lock);
+	pkcs11_session_pool_end_transition(slot);
+
+	return rv;
+}
+
+enum pkcs11_session_select_result {
+	PKCS11_SESSION_SELECT_ERROR = -1,
+	PKCS11_SESSION_SELECT_SUCCESS = 0,
+	PKCS11_SESSION_SELECT_UNAVAILABLE = 1
+};
+
+/* The caller must hold slot->lock.  This helper never waits. */
+static int pkcs11_session_pool_select_locked(PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE *sessionp)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	int rv = CKR_OK;
 	CK_SESSION_INFO session_info;
+	CK_RV rv;
+
+	while (slot->session_head != slot->session_tail) {
+		*sessionp = slot->session_pool[slot->session_head];
+		slot->session_head =
+			(slot->session_head + 1) % slot->session_poolsize;
+
+		/* Discard sessions invalidated by the PKCS#11 module. */
+		rv = CRYPTOKI_call(ctx,
+			C_GetSessionInfo(*sessionp, &session_info));
+		if (rv == CKR_OK)
+			return PKCS11_SESSION_SELECT_SUCCESS;
+		if (slot->num_sessions == 0) {
+			slot->session_head = slot->session_tail = 0;
+			CKRerr(CKR_F_PKCS11_GET_SESSION, CKR_GENERAL_ERROR);
+			return PKCS11_SESSION_SELECT_ERROR;
+		}
+		slot->num_sessions--;
+		if (slot->num_sessions == 0) {
+			/* Object handles are valid across sessions, so only clear
+			 * the cache when there are no valid sessions. */
+			pkcs11_wipe_cache(slot);
+		}
+	}
+
+	if (slot->num_sessions >= slot->max_sessions)
+		return PKCS11_SESSION_SELECT_UNAVAILABLE;
+
+	rv = CRYPTOKI_call(ctx,
+		C_OpenSession(slot->id,
+			CKF_SERIAL_SESSION |
+			(slot->rw_mode ? CKF_RW_SESSION : 0),
+			NULL, NULL, sessionp));
+	if (rv == CKR_OK) {
+		slot->num_sessions++;
+		return PKCS11_SESSION_SELECT_SUCCESS;
+	}
+
+	/* If the module reports a lower limit than the configured one,
+	 * wait for one of this pool's sessions when that can make progress. */
+	if (rv == CKR_SESSION_COUNT && slot->num_sessions > 0) {
+		slot->max_sessions = slot->num_sessions;
+		return PKCS11_SESSION_SELECT_UNAVAILABLE;
+	}
+	CKRerr(CKR_F_PKCS11_GET_SESSION, rv);
+	return PKCS11_SESSION_SELECT_ERROR;
+}
+
+int pkcs11_session_pool_acquire(PKCS11_SLOT_private *slot, int rw,
+		CK_SESSION_HANDLE *sessionp)
+{
+	int select_result;
 
 	if (rw < 0)
 		return -1;
 
 	pthread_mutex_lock(&slot->lock);
-	do {
-		/* Do not check out sessions while an R/W mode transition
-		 * is draining the pool, or it could wait indefinitely */
-		if (slot->checkout_blocked) {
+	for (;;) {
+		while (slot->transition_active)
 			pthread_cond_wait(&slot->cond, &slot->lock);
-			continue;
-		}
 		if (slot->rw_mode < 0)
 			slot->rw_mode = rw;
-		rw = slot->rw_mode;
 
-		/* Get session from the pool */
-		if (slot->session_head != slot->session_tail) {
-			*sessionp = slot->session_pool[slot->session_head];
-			slot->session_head = (slot->session_head + 1) % slot->session_poolsize;
-
-			/* Check if session is valid */
-			rv = CRYPTOKI_call(ctx,
-				C_GetSessionInfo(*sessionp, &session_info));
-			if (rv == CKR_OK) {
-				break;
-			} else {
-				/* Forget this session */
-				slot->num_sessions--;
-				if (slot->num_sessions == 0) {
-					/* Object handles are valid across
-					 * sessions, so the cache should only be
-					 * cleared when there are no valid
-					 * sessions.*/
-					pkcs11_wipe_cache(slot);
-				}
-				continue;
-			}
+		select_result = pkcs11_session_pool_select_locked(slot, sessionp);
+		if (select_result == PKCS11_SESSION_SELECT_SUCCESS) {
+			slot->sessions_in_use++;
+			pthread_mutex_unlock(&slot->lock);
+			return 0;
+		}
+		if (select_result == PKCS11_SESSION_SELECT_ERROR) {
+			pthread_mutex_unlock(&slot->lock);
+			return -1;
 		}
 
-		/* Check if new can be instantiated */
-		if (slot->num_sessions < slot->max_sessions) {
-			rv = CRYPTOKI_call(ctx,
-				C_OpenSession(slot->id,
-					CKF_SERIAL_SESSION | (rw ? CKF_RW_SESSION : 0),
-					NULL, NULL, sessionp));
-			if (rv == CKR_OK) {
-				slot->num_sessions++;
-				break;
-			} else {
-				pthread_mutex_unlock(&slot->lock);
-				return -1;
-			}
-
-			/* Remember the maximum session count */
-			if (rv == CKR_SESSION_COUNT)
-				slot->max_sessions = slot->num_sessions;
-		}
-
-		/* Wait for a session to become available */
+		/* The configured maximum is in use.  Every wakeup must
+		 * recheck both transition ownership and pool availability. */
 		pthread_cond_wait(&slot->cond, &slot->lock);
-	} while (1);
-	pthread_mutex_unlock(&slot->lock);
-
-	return 0;
+	}
 }
 
-void pkcs11_session_pool_release(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session)
+void pkcs11_session_pool_release(PKCS11_SLOT_private *slot,
+		CK_SESSION_HANDLE session)
 {
+	PKCS11_CTX_private *ctx = slot->ctx;
+	unsigned int next_tail;
+	CK_RV rv;
+
 	pthread_mutex_lock(&slot->lock);
-
-	slot->session_pool[slot->session_tail] = session;
-	slot->session_tail = (slot->session_tail + 1) % slot->session_poolsize;
-	/* Broadcast while draining so a blocked consumer cannot consume
-	 * the wakeup intended for the transition waiter. */
-	if (slot->checkout_blocked)
+	if (slot->sessions_in_use == 0 || slot->session_poolsize < 2) {
+		CKRerr(CKR_F_PKCS11_GET_SESSION, CKR_SESSION_HANDLE_INVALID);
 		pthread_cond_broadcast(&slot->cond);
-	else
-		pthread_cond_signal(&slot->cond);
+		pthread_mutex_unlock(&slot->lock);
+		return;
+	}
 
+	next_tail = (slot->session_tail + 1) % slot->session_poolsize;
+	slot->sessions_in_use--;
+	if (next_tail == slot->session_head) {
+		/* Do not overwrite an available session if accounting was
+		 * corrupted by an invalid or duplicate release. */
+		rv = CRYPTOKI_call(ctx, C_CloseSession(session));
+		if (slot->num_sessions > 0)
+			slot->num_sessions--;
+		if (slot->num_sessions == 0)
+			pkcs11_wipe_cache(slot);
+		if (rv != CKR_OK)
+			CKRerr(CKR_F_PKCS11_GET_SESSION, rv);
+	} else {
+		slot->session_pool[slot->session_tail] = session;
+		slot->session_tail = next_tail;
+	}
+	pthread_cond_broadcast(&slot->cond);
 	pthread_mutex_unlock(&slot->lock);
 }
 
@@ -276,7 +318,47 @@ void pkcs11_session_pool_release(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE se
  */
 int pkcs11_is_logged_in(PKCS11_SLOT_private *slot, int so, int *res)
 {
+	pthread_mutex_lock(&slot->lock);
 	*res = slot->logged_in == so;
+	pthread_mutex_unlock(&slot->lock);
+	return 0;
+}
+
+/* Authenticate using a session already checked out from this slot. */
+static int pkcs11_login_on_session(PKCS11_SLOT_private *slot,
+		CK_SESSION_HANDLE session, int so, const char *pin)
+{
+	PKCS11_CTX_private *ctx = slot->ctx;
+	char *pin_copy = NULL;
+	CK_RV rv;
+
+	if (pin) {
+		pin_copy = OPENSSL_strdup(pin);
+		if (!pin_copy)
+			return -1;
+	}
+
+	rv = CRYPTOKI_call(ctx,
+		C_Login(session, so ? CKU_SO : CKU_USER,
+			(CK_UTF8CHAR *) pin_copy,
+			pin_copy ? (CK_ULONG)strlen(pin_copy) : 0));
+	if (rv != CKR_OK && rv != CKR_USER_ALREADY_LOGGED_IN) {
+		if (pin_copy) {
+			OPENSSL_cleanse(pin_copy, strlen(pin_copy));
+			OPENSSL_free(pin_copy);
+		}
+		CKRerr(CKR_F_PKCS11_LOGIN, rv);
+		return -1;
+	}
+
+	pthread_mutex_lock(&slot->lock);
+	if (slot->prev_pin) {
+		OPENSSL_cleanse(slot->prev_pin, strlen(slot->prev_pin));
+		OPENSSL_free(slot->prev_pin);
+	}
+	slot->prev_pin = pin_copy;
+	slot->logged_in = so;
+	pthread_mutex_unlock(&slot->lock);
 	return 0;
 }
 
@@ -285,58 +367,62 @@ int pkcs11_is_logged_in(PKCS11_SLOT_private *slot, int so, int *res)
  */
 int pkcs11_login(PKCS11_SLOT_private *slot, int so, const char *pin)
 {
-	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
-	int rv;
+	int logged_in, rv;
 
-	if (slot->logged_in >= 0)
+	pthread_mutex_lock(&slot->lock);
+	logged_in = slot->logged_in;
+	pthread_mutex_unlock(&slot->lock);
+	if (logged_in >= 0)
 		return 0; /* Nothing to do */
 
-	/* SO needs a r/w session, user can be checked with a r/o session. */
+	/* SO needs a r/w session, user can use a r/o session. */
 	if (pkcs11_session_pool_acquire(slot, so, &session))
 		return -1;
-
-	rv = CRYPTOKI_call(ctx,
-		C_Login(session, so ? CKU_SO : CKU_USER,
-			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0));
+	rv = pkcs11_login_on_session(slot, session, so, pin);
 	pkcs11_session_pool_release(slot, session);
-
-	if (rv && rv != CKR_USER_ALREADY_LOGGED_IN) { /* logged in -> OK */
-		CRYPTOKI_checkerr(CKR_F_PKCS11_LOGIN, rv);
-	}
-	if (slot->prev_pin != pin) {
-		if (slot->prev_pin) {
-			OPENSSL_cleanse(slot->prev_pin, strlen(slot->prev_pin));
-			OPENSSL_free(slot->prev_pin);
-		}
-		slot->prev_pin = OPENSSL_strdup(pin);
-	}
-	slot->logged_in = so;
-	return 0;
+	return rv;
 }
 
 int pkcs11_session_pool_acquire_keygen(PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE *sessionp)
 {
-	int rw_mode, rv = -1;
+	const char *pin = NULL;
+	int login_state, mode_changed = 0, select_result;
+	int session_acquired = 0, rv = -1;
 
-	/* Serialize mode switching, login, and session acquisition
-	 * against all other R/W mode transitions. */
-	pkcs11_session_pool_reserve_transition(slot);
+	/* Keep normal acquisition gated until the R/W session has been
+	 * acquired and any login invalidated by the mode switch is restored. */
+	pkcs11_session_pool_begin_transition(slot);
 	pthread_mutex_lock(&slot->lock);
-	rw_mode = slot->rw_mode;
-	pthread_mutex_unlock(&slot->lock);
-	/* R/W session is mandatory for key generation. */
-	if (rw_mode != 1) {
-		if (pkcs11_session_pool_set_mode_reserved(slot, 1))
-			goto out;
-		/* Changing the pool mode closes all sessions and logs everyone out */
-		if (pkcs11_login(slot, 0, slot->prev_pin))
-			goto out;
+	login_state = slot->logged_in;
+	if (pkcs11_session_pool_switch_mode_locked(
+			slot, 1, &mode_changed)) {
+		pthread_mutex_unlock(&slot->lock);
+		goto out;
 	}
-	rv = pkcs11_session_pool_acquire(slot, 1, sessionp);
+
+	select_result = pkcs11_session_pool_select_locked(slot, sessionp);
+	if (select_result != PKCS11_SESSION_SELECT_SUCCESS) {
+		if (select_result == PKCS11_SESSION_SELECT_UNAVAILABLE)
+			CKRerr(CKR_F_PKCS11_GET_SESSION, CKR_SESSION_COUNT);
+		pthread_mutex_unlock(&slot->lock);
+		goto out;
+	}
+	slot->sessions_in_use++;
+	session_acquired = 1;
+	if (mode_changed && login_state >= 0)
+		pin = slot->prev_pin;
+	pthread_mutex_unlock(&slot->lock);
+
+	if (mode_changed && login_state >= 0 &&
+			pkcs11_login_on_session(slot, *sessionp, login_state, pin))
+		goto out;
+	rv = 0;
 out:
-	pkcs11_session_pool_finish_transition(slot);
+	if (rv != 0 && session_acquired)
+		pkcs11_session_pool_release(slot, *sessionp);
+	pkcs11_session_pool_end_transition(slot);
 	return rv;
 }
 
@@ -347,9 +433,9 @@ int pkcs11_reload_slot(PKCS11_SLOT_private *slot)
 {
 	int logged_in = slot->logged_in;
 
-	/* No transition owner survives fork(). */
+	/* No transition owner or checked-out session survives fork(). */
 	slot->transition_active = 0;
-	slot->checkout_blocked = 0;
+	slot->sessions_in_use = 0;
 	slot->num_sessions = 0;
 	slot->session_head = slot->session_tail = 0;
 	if (logged_in >= 0) {
@@ -368,18 +454,31 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
 	CK_SESSION_HANDLE session;
-	int rv = CKR_OK;
+	int logged_in, session_acquired = 0, rv = CKR_OK;
 
 	/* Calling PKCS11_logout invalidates all cached
 	 * keys we have */
 	pkcs11_wipe_cache(slot);
 
-	if (pkcs11_session_pool_acquire(slot, slot->logged_in, &session) == 0) {
+	pthread_mutex_lock(&slot->lock);
+	logged_in = slot->logged_in;
+	pthread_mutex_unlock(&slot->lock);
+	if (pkcs11_session_pool_acquire(slot, logged_in, &session) == 0) {
+		session_acquired = 1;
 		rv = CRYPTOKI_call(ctx, C_Logout(session));
+		if (rv == CKR_OK) {
+			pthread_mutex_lock(&slot->lock);
+			slot->logged_in = -1;
+			pthread_mutex_unlock(&slot->lock);
+		}
 		pkcs11_session_pool_release(slot, session);
 	}
 	CRYPTOKI_checkerr(CKR_F_PKCS11_LOGOUT, rv);
-	slot->logged_in = -1;
+	if (!session_acquired) {
+		pthread_mutex_lock(&slot->lock);
+		slot->logged_in = -1;
+		pthread_mutex_unlock(&slot->lock);
+	}
 	return 0;
 }
 
@@ -553,6 +652,8 @@ int pkcs11_slot_unref(PKCS11_SLOT_private *slot)
 	if (pkcs11_atomic_add(&slot->refcnt, -1, &slot->lock) != 0)
 		return 0;
 
+	/* Destruction also obeys the no-close-while-leased invariant. */
+	pkcs11_session_pool_begin_transition(slot);
 	pkcs11_wipe_cache(slot);
 	if (slot->prev_pin) {
 		OPENSSL_cleanse(slot->prev_pin, strlen(slot->prev_pin));
