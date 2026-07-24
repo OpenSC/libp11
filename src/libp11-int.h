@@ -92,8 +92,10 @@ struct pkcs11_slot_private {
 	int refcnt;
 	PKCS11_CTX_private *ctx;
 	pthread_mutex_t lock;
+	pthread_mutex_t transition_lock; /* serializes R/W mode transitions */
 	pthread_cond_t cond;
 	int8_t rw_mode, logged_in;
+	int transition_pending; /* blocks session checkout while draining */
 	CK_SLOT_ID id;
 	CK_SESSION_HANDLE *session_pool;
 	unsigned int session_head, session_tail, session_poolsize;
@@ -281,6 +283,8 @@ extern void pkcs11_CTX_free(PKCS11_CTX *ctx);
 
 /* Open a session in RO or RW mode */
 extern int pkcs11_open_session(PKCS11_SLOT_private *, int rw);
+/* Internal variant: the caller holds transition_lock */
+extern int pkcs11_open_session_locked(PKCS11_SLOT_private *, int rw);
 
 /* Acquire a session from the slot specific session pool */
 extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw, CK_SESSION_HANDLE *sessionp);
