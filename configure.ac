@@ -15,6 +15,14 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 
+# Automake's cpio fallback extracts files without preserving mtimes.  When
+# distcheck makes the extracted source tree read-only, that can make generated
+# files such as configure look older than their inputs and trigger unwanted
+# autoreconf attempts in the read-only tree.
+case $am__untar in
+	cpio\ *) am__untar="$am__untar -m" ;;
+esac
+
 LIBP11_VERSION_MAJOR="PACKAGE_VERSION_MAJOR"
 LIBP11_VERSION_MINOR="PACKAGE_VERSION_MINOR"
 LIBP11_VERSION_FIX="PACKAGE_VERSION_FIX"
