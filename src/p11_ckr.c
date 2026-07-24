@@ -48,7 +48,7 @@ static ERR_STRING_DATA CKR_str_functs[] = {
 	{ERR_FUNC(CKR_F_PKCS11_LOGOUT), "pkcs11_logout"},
 	{ERR_FUNC(CKR_F_PKCS11_NEXT_CERT), "pkcs11_next_cert"},
 	{ERR_FUNC(CKR_F_PKCS11_NEXT_KEY), "pkcs11_next_key"},
-	{ERR_FUNC(CKR_F_PKCS11_OPEN_SESSION), "pkcs11_open_session"},
+	{ERR_FUNC(CKR_F_PKCS11_OPEN_SESSION), "pkcs11_session_pool_set_mode"},
 	{ERR_FUNC(CKR_F_PKCS11_PRIVATE_DECRYPT), "pkcs11_private_decrypt"},
 	{ERR_FUNC(CKR_F_PKCS11_PRIVATE_ENCRYPT), "pkcs11_private_encrypt"},
 	{ERR_FUNC(CKR_F_PKCS11_RELOAD_KEY), "pkcs11_reload_key"},
@@ -56,7 +56,7 @@ static ERR_STRING_DATA CKR_str_functs[] = {
 	{ERR_FUNC(CKR_F_PKCS11_STORE_CERTIFICATE), "pkcs11_store_certificate"},
 	{ERR_FUNC(CKR_F_PKCS11_STORE_KEY), "pkcs11_store_key"},
 	{ERR_FUNC(CKR_F_PKCS11_RELOAD_CERTIFICATE), "pkcs11_reload_certificate"},
-	{ERR_FUNC(CKR_F_PKCS11_GET_SESSION), "pkcs11_get_session"},
+	{ERR_FUNC(CKR_F_PKCS11_GET_SESSION), "pkcs11_session_pool_acquire"},
 	{ERR_FUNC(CKR_F_PKCS11_EDDSA_SIGN), "pkcs11_eddsa_sign"},
 	{0, NULL}
 };

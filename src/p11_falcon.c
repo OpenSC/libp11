@@ -217,7 +217,7 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	slot = key->slot;
 	ctx = slot->ctx;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
 	obj = pkcs11_choose_public_source(key, session, &obj_needs_free);
@@ -239,7 +239,7 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	}
 
 end:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	if (!ok) {
 		OPENSSL_free(*raw);

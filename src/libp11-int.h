@@ -94,6 +94,8 @@ struct pkcs11_slot_private {
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	int8_t rw_mode, logged_in;
+	int transition_active; /* session-pool transition active */
+	unsigned int sessions_in_use; /* sessions currently checked out */
 	CK_SLOT_ID id;
 	CK_SESSION_HANDLE *session_pool;
 	unsigned int session_head, session_tail, session_poolsize;
@@ -279,14 +281,20 @@ extern void pkcs11_CTX_unload(PKCS11_CTX *ctx);
 /* Free a libp11 context */
 extern void pkcs11_CTX_free(PKCS11_CTX *ctx);
 
-/* Open a session in RO or RW mode */
-extern int pkcs11_open_session(PKCS11_SLOT_private *, int rw);
+/* Set the R/O or R/W mode of the session pool */
+extern int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *, int rw);
 
-/* Acquire a session from the slot specific session pool */
-extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw, CK_SESSION_HANDLE *sessionp);
+/* Acquire a session from the slot-specific session pool */
+extern int pkcs11_session_pool_acquire(PKCS11_SLOT_private *, int rw,
+	CK_SESSION_HANDLE *sessionp);
 
-/* Return a session the the slot specific session pool */
-extern void pkcs11_put_session(PKCS11_SLOT_private *, CK_SESSION_HANDLE session);
+/* Switch to R/W mode, log in again if needed, and acquire a session */
+extern int pkcs11_session_pool_acquire_keygen(PKCS11_SLOT_private *,
+	CK_SESSION_HANDLE *sessionp);
+
+/* Release a session back to the slot-specific session pool */
+extern void pkcs11_session_pool_release(PKCS11_SLOT_private *,
+	CK_SESSION_HANDLE session);
 
 /* Get a list of all slots */
 extern int pkcs11_enumerate_slots(PKCS11_CTX_private *ctx,
