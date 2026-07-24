@@ -188,6 +188,7 @@ static RSA *pkcs11_get_rsa(PKCS11_OBJECT_private *key)
 	pkcs11_addattr_var(&tmpl, CKA_CLASS, class_public_key);
 	pkcs11_addattr_bn(&tmpl, CKA_MODULUS, rsa_n);
 	pubkey = pkcs11_object_from_template(slot, session, &tmpl);
+	pkcs11_zap_attrs(&tmpl);
 	if (pubkey && !pkcs11_getattr_bn(ctx, session, pubkey->object,
 			CKA_PUBLIC_EXPONENT, &rsa_e)) {
 		pkcs11_object_free(pubkey);
