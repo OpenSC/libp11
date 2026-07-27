@@ -87,6 +87,12 @@ static int pthread_cond_signal(pthread_cond_t *cond)
 	return 0;
 }
 
+static int pthread_cond_broadcast(pthread_cond_t *cond)
+{
+	WakeAllConditionVariable(cond);
+	return 0;
+}
+
 #else
 
 #error Locking not supported on this platform.
