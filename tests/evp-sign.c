@@ -260,9 +260,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	/* Free the functional reference from ENGINE_init */
-	ENGINE_finish(e);
-
 	digest_algo = EVP_get_digestbyname("sha256");
 
 	ctx = EVP_MD_CTX_create();
@@ -314,6 +311,8 @@ int main(int argc, char **argv)
 
 	printf("Signature verified\n");
 
+	/* Free the functional reference from ENGINE_init */
+	ENGINE_finish(e);
 	CONF_modules_unload(1);
 	UI_destroy_method(ui_detect_failed_ctrl);
 	UI_destroy_method(ui_console_with_default);

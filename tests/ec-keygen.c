@@ -116,7 +116,7 @@ err:
 
 int main(int argc, char* argv[])
 {
-	int ret = EXIT_FAILURE, res;
+	int engine_initialized = 0, ret = EXIT_FAILURE, res;
 	ENGINE* engine = NULL;
 	const char *efile, *module;
 	char *key_pass;
@@ -196,6 +196,7 @@ int main(int argc, char* argv[])
 		display_openssl_errors(__LINE__);
 		goto cleanup;
 	}
+	engine_initialized = 1;
 	/*
 	 * ENGINE_init() returned a functional reference, so free the structural
 	 * reference from ENGINE_by_id().
@@ -221,9 +222,12 @@ int main(int argc, char* argv[])
 
 	ret = 0;
 cleanup:
-	ENGINE_finish(engine);
 	EVP_PKEY_free(ecpb);
 	EVP_PKEY_free(ecpr);
+	if (engine_initialized)
+		ENGINE_finish(engine);
+	else if (engine)
+		ENGINE_free(engine);
 
 	return ret;
 }

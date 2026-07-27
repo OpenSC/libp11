@@ -45,7 +45,7 @@ void display_openssl_errors(void)
 int main(int argc, char *argv[])
 {
 	ENGINE *engine = NULL;
-	int ret = EXIT_FAILURE;
+	int engine_initialized = 0, ret = EXIT_FAILURE;
 	EVP_PKEY *private_key = NULL, *public_key = NULL;
 	PKCS11_EDDSA_KGEN eddsa = {
 		.nid = NID_ED25519
@@ -109,6 +109,7 @@ int main(int argc, char *argv[])
 		display_openssl_errors();
 		goto cleanup;
 	}
+	engine_initialized = 1;
 	/*
 	 * ENGINE_init() returned a functional reference, so free the structural
 	 * reference from ENGINE_by_id().
@@ -155,9 +156,12 @@ int main(int argc, char *argv[])
 
 	ret = 0;
 cleanup:
-	ENGINE_finish(engine);
 	EVP_PKEY_free(private_key);
 	EVP_PKEY_free(public_key);
+	if (engine_initialized)
+		ENGINE_finish(engine);
+	else if (engine)
+		ENGINE_free(engine);
 	printf("\n");
 	return ret;
 }

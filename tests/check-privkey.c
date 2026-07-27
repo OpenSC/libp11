@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 
 	const char *module, *efile, *certfile, *privkey;
 
-	int ret = 0;
+	int engine_initialized = 0, ret = 0;
 
 	struct {
 		const char *cert_id;
@@ -113,12 +113,14 @@ int main(int argc, char *argv[])
 
 	if (!ENGINE_ctrl_cmd_string(engine, "DEBUG_LEVEL", "7", 0)) {
 		display_openssl_errors(__LINE__);
-		exit(1);
+		ret = 1;
+		goto end;
 	}
 
 	if (!ENGINE_ctrl_cmd_string(engine, "MODULE_PATH", module, 0)) {
 		display_openssl_errors(__LINE__);
-		exit(1);
+		ret = 1;
+		goto end;
 	}
 
 	if (!ENGINE_init(engine)) {
@@ -127,6 +129,7 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto end;
 	}
+	engine_initialized = 1;
 	/*
 	 * ENGINE_init() returned a functional reference, so free the structural
 	 * reference from ENGINE_by_id().
@@ -168,24 +171,24 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	/* Free the functional reference from ENGINE_init */
-	ENGINE_finish(engine);
-
 	if (!X509_check_private_key(cert, pkey)) {
 		printf("Could not check private key\n");
 		display_openssl_errors(__LINE__);
-		EVP_PKEY_free(pkey);
 		ret = 1;
 		goto end;
 	}
-	EVP_PKEY_free(pkey);
 
 	printf("Key and certificate matched\n");
 	ret = 0;
 
-	CONF_modules_unload(1);
 end:
+	EVP_PKEY_free(pkey);
+	if (engine_initialized)
+		ENGINE_finish(engine);
+	else if (engine)
+		ENGINE_free(engine);
 	X509_free(cert);
+	CONF_modules_unload(1);
 
 	return ret;
 }

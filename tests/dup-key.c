@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 
 	const char *module, *efile, *privkey;
 
-	int ret = 0;
+	int engine_initialized = 0, ret = 0;
 
 	if (argc < 3){
 		printf("Too few arguments\n");
@@ -109,12 +109,14 @@ int main(int argc, char *argv[])
 
 	if (!ENGINE_ctrl_cmd_string(engine, "DEBUG_LEVEL", "7", 0)) {
 		display_openssl_errors(__LINE__);
-		exit(1);
+		ret = 1;
+		goto end;
 	}
 
 	if (!ENGINE_ctrl_cmd_string(engine, "MODULE_PATH", module, 0)) {
 		display_openssl_errors(__LINE__);
-		exit(1);
+		ret = 1;
+		goto end;
 	}
 
 	if (!ENGINE_init(engine)) {
@@ -123,6 +125,7 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto end;
 	}
+	engine_initialized = 1;
 
 	/*
 	 * ENGINE_init() returned a functional reference, so free the structural
@@ -169,8 +172,6 @@ int main(int argc, char *argv[])
 	/* Do it one more time */
 	pkey = ENGINE_load_private_key(engine, privkey, 0, 0);
 
-	/* Free the functional reference from ENGINE_init */
-	ENGINE_finish(engine);
 	if (pkey == NULL) {
 		printf("Could not load key\n");
 		display_openssl_errors(__LINE__);
@@ -180,9 +181,13 @@ int main(int argc, char *argv[])
 
 	ret = 0;
 
-	CONF_modules_unload(1);
 end:
 	EVP_PKEY_free(pkey);
+	if (engine_initialized)
+		ENGINE_finish(engine);
+	else if (engine)
+		ENGINE_free(engine);
+	CONF_modules_unload(1);
 
 	return ret;
 }
