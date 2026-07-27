@@ -92,10 +92,10 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *ctx, unsigned char *sig,
 	if (!slot)
 		return 0;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return 0;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	if (!pkcs11_evp_pkey_eddsa_sign(key, sig, siglen, tbs, tbslen))
 		return 0;
@@ -136,10 +136,10 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	/* Step 1: caller asks for signature length only */
 	if (sig == NULL) {
@@ -351,10 +351,10 @@ static int pkcs11_xdh_pmeth_derive(EVP_PKEY_CTX *ctx, unsigned char *secret,
 	if (!slot)
 		return -1;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	type = EVP_PKEY_id(pkey);
 	switch (type) {
@@ -755,7 +755,7 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	slot = key->slot;
 	ctx = slot->ctx;
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
 	obj = pkcs11_choose_public_source(key, session, &obj_needs_free);
@@ -775,7 +775,7 @@ static int pkcs11_get_raw_public_key(PKCS11_OBJECT_private *key,
 	}
 
 end:
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	if (!ok) {
 		OPENSSL_free(*raw);

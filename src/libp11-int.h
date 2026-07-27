@@ -282,10 +282,10 @@ extern void pkcs11_CTX_unload(PKCS11_CTX *ctx);
 extern void pkcs11_CTX_free(PKCS11_CTX *ctx);
 
 /* Set the R/O or R/W mode of the session pool */
-extern int pkcs11_open_session(PKCS11_SLOT_private *, int rw);
+extern int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *, int rw);
 
 /* Acquire a session from the slot-specific session pool */
-extern int pkcs11_get_session(PKCS11_SLOT_private *, int rw,
+extern int pkcs11_session_pool_acquire(PKCS11_SLOT_private *, int rw,
 	CK_SESSION_HANDLE *sessionp);
 
 /* Switch to R/W mode, log in again if needed, and acquire a session */
@@ -293,7 +293,7 @@ extern int pkcs11_session_pool_acquire_keygen(PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE *sessionp);
 
 /* Release a session back to the slot-specific session pool */
-extern void pkcs11_put_session(PKCS11_SLOT_private *,
+extern void pkcs11_session_pool_release(PKCS11_SLOT_private *,
 	CK_SESSION_HANDLE session);
 
 /* Get a list of all slots */
