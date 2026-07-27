@@ -160,7 +160,8 @@ static int EVP_PKEY_is_a(const EVP_PKEY *pkey, const char *name);
 #endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key);
+static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey,
+	PKCS11_OBJECT_private *obj);
 static PKCS11_OBJECT_private *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
 static void alloc_evp_pkey_ex_index(void);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
@@ -1363,7 +1364,7 @@ EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_cla
 	/* Store the backing PKCS#11 object in EVP_PKEY ex_data. Public key
 	 * ex_data is needed as a workaround for FALCON token-side verify. */
 	alloc_evp_pkey_ex_index();
-	pkcs11_set_ex_data_evp_pkey(ret, key->public);
+	pkcs11_set_ex_data_evp_pkey(ret, key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 err:
 	if (key != key0)
@@ -1581,9 +1582,6 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 	key->id_len = kpriv->id_len;
 	key->label = kpriv->label;
 	key->isPrivate = (type == CKO_PRIVATE_KEY);
-
-	/* Link back */
-	kpriv->public = key;
 
 	if (ret)
 		*ret = key;
@@ -1883,19 +1881,20 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 }
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey, PKCS11_KEY *key)
+static void pkcs11_set_ex_data_evp_pkey(EVP_PKEY *pkey,
+		PKCS11_OBJECT_private *obj)
 {
-	PKCS11_OBJECT_private *obj;
+	PKCS11_OBJECT_private *obj_ref;
 
-	if (pkey == NULL || key == NULL || key->_private == NULL)
+	if (pkey == NULL || obj == NULL)
 		return;
 
-	obj = pkcs11_object_ref(key->_private);
-	if (obj == NULL)
+	obj_ref = pkcs11_object_ref(obj);
+	if (obj_ref == NULL)
 		return;
 
-	if (!EVP_PKEY_set_ex_data(pkey, evp_pkey_ex_index, obj))
-		pkcs11_object_free(obj);
+	if (!EVP_PKEY_set_ex_data(pkey, evp_pkey_ex_index, obj_ref))
+		pkcs11_object_free(obj_ref);
 }
 
 static int pkcs11_dup_ex_data_evp_pkey(CRYPTO_EX_DATA *to,
