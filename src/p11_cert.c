@@ -50,11 +50,11 @@ int pkcs11_enumerate_certs(PKCS11_SLOT_private *slot, const PKCS11_CERT *cert_te
 			pkcs11_addattr_s(&tmpl, CKA_LABEL, cert_template->label);
 	}
 
-	if (pkcs11_get_session(slot, 0, &session))
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
 		return -1;
 
 	rv = pkcs11_find_certs(slot, &tmpl, session);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	if (rv < 0) {
 		pkcs11_destroy_certs(slot);
 		return -1;
@@ -211,7 +211,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	CK_MECHANISM_TYPE ckm_md;
 
 	/* First, make sure we have a session */
-	if (pkcs11_get_session(slot, 1, &session))
+	if (pkcs11_session_pool_acquire(slot, 1, &session))
 		return -1;
 
 	/* Now build the template */
@@ -295,7 +295,7 @@ int pkcs11_store_certificate(PKCS11_SLOT_private *slot, X509 *x509, char *label,
 	if (rv == CKR_OK) {
 		r = pkcs11_init_cert(slot, session, object, ret_cert);
 	}
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_STORE_CERTIFICATE, rv);
 	return r;

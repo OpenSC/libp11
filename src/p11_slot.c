@@ -173,7 +173,7 @@ static int pkcs11_session_pool_switch_mode_locked(
 	return 0;
 }
 
-int pkcs11_open_session(PKCS11_SLOT_private *slot, int rw)
+int pkcs11_session_pool_set_mode(PKCS11_SLOT_private *slot, int rw)
 {
 	int rv;
 
@@ -246,7 +246,7 @@ static int pkcs11_session_pool_select_locked(PKCS11_SLOT_private *slot,
 	return PKCS11_SESSION_SELECT_ERROR;
 }
 
-int pkcs11_get_session(PKCS11_SLOT_private *slot, int rw,
+int pkcs11_session_pool_acquire(PKCS11_SLOT_private *slot, int rw,
 		CK_SESSION_HANDLE *sessionp)
 {
 	int select_result;
@@ -278,7 +278,7 @@ int pkcs11_get_session(PKCS11_SLOT_private *slot, int rw,
 	}
 }
 
-void pkcs11_put_session(PKCS11_SLOT_private *slot,
+void pkcs11_session_pool_release(PKCS11_SLOT_private *slot,
 		CK_SESSION_HANDLE session)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
@@ -377,10 +377,10 @@ int pkcs11_login(PKCS11_SLOT_private *slot, int so, const char *pin)
 		return 0; /* Nothing to do */
 
 	/* SO needs a r/w session, user can use a r/o session. */
-	if (pkcs11_get_session(slot, so, &session))
+	if (pkcs11_session_pool_acquire(slot, so, &session))
 		return -1;
 	rv = pkcs11_login_on_session(slot, session, so, pin);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
 
@@ -421,7 +421,7 @@ int pkcs11_session_pool_acquire_keygen(PKCS11_SLOT_private *slot,
 	rv = 0;
 out:
 	if (rv != 0 && session_acquired)
-		pkcs11_put_session(slot, *sessionp);
+		pkcs11_session_pool_release(slot, *sessionp);
 	pkcs11_session_pool_end_transition(slot);
 	return rv;
 }
@@ -463,7 +463,7 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 	pthread_mutex_lock(&slot->lock);
 	logged_in = slot->logged_in;
 	pthread_mutex_unlock(&slot->lock);
-	if (pkcs11_get_session(slot, logged_in, &session) == 0) {
+	if (pkcs11_session_pool_acquire(slot, logged_in, &session) == 0) {
 		session_acquired = 1;
 		rv = CRYPTOKI_call(ctx, C_Logout(session));
 		if (rv == CKR_OK) {
@@ -471,7 +471,7 @@ int pkcs11_logout(PKCS11_SLOT_private *slot)
 			slot->logged_in = -1;
 			pthread_mutex_unlock(&slot->lock);
 		}
-		pkcs11_put_session(slot, session);
+		pkcs11_session_pool_release(slot, session);
 	}
 	CRYPTOKI_checkerr(CKR_F_PKCS11_LOGOUT, rv);
 	if (!session_acquired) {
@@ -530,14 +530,14 @@ int pkcs11_init_pin(PKCS11_SLOT_private *slot, const char *pin)
 	CK_OBJECT_HANDLE session;
 	int len, rv;
 
-	if (pkcs11_get_session(slot, 1, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 1, &session)) {
 		P11err(P11_F_PKCS11_INIT_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	len = pin ? (int) strlen(pin) : 0;
 	rv = CRYPTOKI_call(ctx, C_InitPIN(session, (CK_UTF8CHAR *) pin, len));
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_PIN, rv);
 
 	return 0;
@@ -553,7 +553,7 @@ int pkcs11_change_pin(PKCS11_SLOT_private *slot, const char *old_pin,
 	CK_SESSION_HANDLE session;
 	int old_len, new_len, rv;
 
-	if (pkcs11_get_session(slot, 1, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 1, &session)) {
 		P11err(P11_F_PKCS11_CHANGE_PIN, P11_R_NO_SESSION);
 		return -1;
 	}
@@ -563,7 +563,7 @@ int pkcs11_change_pin(PKCS11_SLOT_private *slot, const char *old_pin,
 	rv = CRYPTOKI_call(ctx,
 		C_SetPIN(session, (CK_UTF8CHAR *) old_pin, old_len,
 			(CK_UTF8CHAR *) new_pin, new_len));
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_CHANGE_PIN, rv);
 
 	return 0;
@@ -579,14 +579,14 @@ int pkcs11_seed_random(PKCS11_SLOT_private *slot, const unsigned char *s,
 	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (pkcs11_get_session(slot, 0, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 0, &session)) {
 		P11err(P11_F_PKCS11_SEED_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
 		C_SeedRandom(session, (CK_BYTE_PTR) s, s_len));
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 	CRYPTOKI_checkerr(CKR_F_PKCS11_SEED_RANDOM, rv);
 
 	return 0;
@@ -602,14 +602,14 @@ int pkcs11_generate_random(PKCS11_SLOT_private *slot, unsigned char *r,
 	CK_SESSION_HANDLE session;
 	int rv;
 
-	if (pkcs11_get_session(slot, 0, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 0, &session)) {
 		P11err(P11_F_PKCS11_GENERATE_RANDOM, P11_R_NO_SESSION);
 		return -1;
 	}
 
 	rv = CRYPTOKI_call(ctx,
 		C_GenerateRandom(session, (CK_BYTE_PTR) r, r_len));
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	CRYPTOKI_checkerr(CKR_F_PKCS11_GENERATE_RANDOM, rv);
 

@@ -325,7 +325,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
 	 * Continue even if it fails, as the sign operation does not need
 	 * it if the PKCS#11 module or the hardware can figure this out
 	 */
-	if (pkcs11_get_session(slot, 0, &session)) {
+	if (pkcs11_session_pool_acquire(slot, 0, &session)) {
 		EC_KEY_free(ec);
 		return NULL;
 	}
@@ -335,7 +335,7 @@ static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
 		no_point = pkcs11_get_point_associated(ec, key, CKO_PUBLIC_KEY, session);
 	if (no_point && key->object_class == CKO_PRIVATE_KEY) /* Retry with the certificate */
 		no_point = pkcs11_get_point_associated(ec, key, CKO_CERTIFICATE, session);
-	pkcs11_put_session(slot, session);
+	pkcs11_session_pool_release(slot, session);
 
 	if (key->object_class == CKO_PRIVATE_KEY && EC_KEY_get0_private_key(ec) == NULL) {
 		BIGNUM *bn = BN_new();
