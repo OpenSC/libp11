@@ -2400,6 +2400,10 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 	OSSL_PARAM_BLD *bld = NULL;
 	BIGNUM *n = NULL, *e = NULL;
 	unsigned char *pub = NULL;
+#ifndef OPENSSL_NO_EC
+	/* OSSL_PARAM_BLD borrows strings until OSSL_PARAM_BLD_to_param(). */
+	char group[128];
+#endif
 	int nid;
 
 	if (pkey == NULL)
@@ -2426,7 +2430,6 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 	{
-		char group[128];
 		size_t grouplen = 0;
 		size_t publen = 0;
 
