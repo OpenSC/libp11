@@ -126,7 +126,6 @@ struct pkcs11_object_private {
 	unsigned int forkid;
 	int refcnt;
 	pthread_mutex_t lock;
-	PKCS11_KEY *public; /* our current public object */
 };
 
 struct pkcs11_object_ops {
