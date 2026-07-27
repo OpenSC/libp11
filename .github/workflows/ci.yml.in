@@ -160,6 +160,13 @@ jobs:
     - name: Results of tests
       run: cat ${{github.workspace}}/tests/test-suite.log || true
 
+    - name: Upload test logs
+      if: failure()
+      uses: actions/upload-artifact@v6
+      with:
+        name: test-logs-${{matrix.id}}
+        path: ${{github.workspace}}/tests/*.log
+
   windows:
     strategy:
       fail-fast: false
