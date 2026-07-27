@@ -813,8 +813,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ed25519(PKCS11_OBJECT_private *key)
 				EVP_PKEY_free(pkey);
 				return NULL;
 			}
-			/* creates a new EVP_PKEY object which requires its own key object reference */
-			key = pkcs11_object_ref(key);
+			/* The cached EVP_PKEY borrows the object. Returned keys get
+			 * an owning reference in pkcs11_get_key(). */
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pkey, key);
 			atexit(pkcs11_ed25519_method_free);
@@ -849,8 +849,8 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 				EVP_PKEY_free(pkey);
 				return NULL;
 			}
-			/* create a new EVP_PKEY object which requires its own key object reference */
-			key = pkcs11_object_ref(key);
+			/* The cached EVP_PKEY borrows the object. Returned keys get
+			 * an owning reference in pkcs11_get_key(). */
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pkey, key);
 			atexit(pkcs11_ed25519_method_free);
@@ -885,8 +885,8 @@ static EVP_PKEY *pkcs11_get_evp_key_x25519(PKCS11_OBJECT_private *key)
 				EVP_PKEY_free(pkey);
 				return NULL;
 			}
-			/* creates a new EVP_PKEY object which requires its own key object reference */
-			key = pkcs11_object_ref(key);
+			/* The cached EVP_PKEY borrows the object. Returned keys get
+			 * an owning reference in pkcs11_get_key(). */
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pkey, key);
 			atexit(pkcs11_x25519_method_free);
@@ -921,8 +921,8 @@ static EVP_PKEY *pkcs11_get_evp_key_x448(PKCS11_OBJECT_private *key)
 				EVP_PKEY_free(pkey);
 				return NULL;
 			}
-			/* create a new EVP_PKEY object which requires its own key object reference */
-			key = pkcs11_object_ref(key);
+			/* The cached EVP_PKEY borrows the object. Returned keys get
+			 * an owning reference in pkcs11_get_key(). */
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pkey, key);
 			atexit(pkcs11_x448_method_free);
