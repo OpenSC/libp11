@@ -853,7 +853,7 @@ static EVP_PKEY *pkcs11_get_evp_key_ed448(PKCS11_OBJECT_private *key)
 			 * an owning reference in pkcs11_get_key(). */
 			alloc_pkey_ex_index();
 			pkcs11_set_ex_data_pkey(pkey, key);
-			atexit(pkcs11_ed25519_method_free);
+			atexit(pkcs11_ed448_method_free);
 		}
 	}
 #endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
