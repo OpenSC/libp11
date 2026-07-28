@@ -64,6 +64,9 @@ static void libp11_global_free(void)
 	pkcs11_ecdh_method_free();
 #endif /* OPENSSL_NO_ECDH */
 #endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
+
+	ERR_unload_CKR_strings();
+	ERR_unload_P11_strings();
 }
 
 /*
