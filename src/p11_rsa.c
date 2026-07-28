@@ -298,10 +298,10 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 			atexit(pkcs11_rsa_key_method_free);
 		}
 # endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
-		/* creates a new EVP_PKEY object which requires its own key object reference */
-		key = pkcs11_object_ref(key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
+		/* The RSA object owns the reference stored in its ex_data. */
+		key = pkcs11_object_ref(key);
 		RSA_set_method(rsa, PKCS11_get_rsa_method());
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
