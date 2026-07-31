@@ -76,6 +76,8 @@ fi
 
 # Load openssl settings
 TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+TEMP_OPENSSL_CONF=${OPENSSL_CONF-}
+TEMP_OPENSSL_CONF_SET=${OPENSSL_CONF+x}
 . ${srcdir}/openssl-settings.sh
 
 OPENSSL_VERSION=$(./openssl_version | cut -d ' ' -f 2)
@@ -118,6 +120,12 @@ else
 fi
 
 mkdir -p ${outdir}
+
+# Do not let system-wide OpenSSL configuration activate an installed
+# PKCS#11 provider instead of the provider built for this test run.
+: >"${outdir}/openssl.cnf"
+export OPENSSL_CONF="${outdir}/openssl.cnf"
+echo "OPENSSL_CONF=${OPENSSL_CONF}"
 
 sed -e "s|@MODULE_PATH@|${MODULE}|g" -e \
 	"s|@ENGINE_PATH@|../src/.libs/pkcs11${SHARED_EXT}|g" \
@@ -327,6 +335,11 @@ list_objects () {
 # Cleanup test environment
 cleanup() {
 	export LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}"
+	if [[ -n "${TEMP_OPENSSL_CONF_SET}" ]]; then
+		export OPENSSL_CONF="${TEMP_OPENSSL_CONF}"
+	else
+		unset OPENSSL_CONF
+	fi
 }
 
 # Return success if the PKCS#11 token supports the given mechanism.
