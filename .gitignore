@@ -101,6 +101,8 @@ tests/ed448-keygen-prov
 tests/mldsa87-keygen-prov
 tests/mlkem768-keygen-prov
 tests/check-all-prov
+tests/session-pool-stress
+tests/session-pool-test
 
 tests/*.log
 tests/*.trs
