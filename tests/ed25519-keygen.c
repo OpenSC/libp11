@@ -23,9 +23,10 @@
 #include "oneshot_common.h"
 
 #if !defined(OPENSSL_NO_ENGINE) && \
-    !defined(OPENSSL_NO_ECX) && \
-    (OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
-    (OPENSSL_VERSION_NUMBER < 0x40000000L)
+	!defined(OPENSSL_NO_ECX) && \
+	(OPENSSL_VERSION_NUMBER >= 0x30000000L) && \
+	(OPENSSL_VERSION_NUMBER < 0x40000000L) && \
+	!defined(OPENSSL_NO_DEPRECATED_3_0)
 
 void display_openssl_errors(void)
 {

@@ -387,11 +387,10 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 	ec = pkcs11_get_ec(key);
 	if (!ec)
 		return NULL;
+
 	pk = EVP_PKEY_new();
-	if (!pk) {
-		EC_KEY_free(ec);
-		return NULL;
-	}
+	if (!pk)
+		goto error;
 
 	if (key->object_class == CKO_PRIVATE_KEY) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
@@ -400,17 +399,24 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
 		ECDH_set_method(ec, PKCS11_get_ecdh_method());
 #endif
-		/* This creates a new EC_KEY object which requires its own key object reference */
+		/* The EC_KEY object owns the reference stored in its ex_data,
+		 * released by pkcs11_ec_finish() */
 		key = pkcs11_object_ref(key);
 		pkcs11_set_ex_data_ec(ec, key);
 	}
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */
 
-	EVP_PKEY_set1_EC_KEY(pk, ec); /* Also increments the ec ref count */
-	EC_KEY_free(ec); /* Drops our reference to it */
+	if (EVP_PKEY_set1_EC_KEY(pk, ec) != 1) /* Also increments the ec ref count */
+		goto error;
 
+	EC_KEY_free(ec); /* Drops our reference to it */
 	return pk;
+
+error:
+	EVP_PKEY_free(pk);
+	EC_KEY_free(ec);
+	return NULL;
 }
 
 /********** ECDSA signing */

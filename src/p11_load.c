@@ -38,16 +38,11 @@ static void libp11_global_free(void)
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #ifndef OPENSSL_NO_RSA
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+	pkcs11_rsa_pkey_method_free();
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 	pkcs11_rsa_method_free();
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_rsa_key_method_free();
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 #endif /* OPENSSL_NO_RSA */
-
-#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_ed_key_method_free();
-	pkcs11_xdh_key_method_free();
-#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L
 #ifndef OPENSSL_NO_EC
@@ -64,6 +59,10 @@ static void libp11_global_free(void)
 	pkcs11_ecdh_method_free();
 #endif /* OPENSSL_NO_ECDH */
 #endif /* OPENSSL_VERSION_NUMBER >= 0x10100002L */
+
+#ifdef LIBP11_HAVE_ECX_METHODS
+	pkcs11_ecx_methods_free();
+#endif /* LIBP11_HAVE_ECX_METHODS */
 
 	ERR_unload_CKR_strings();
 	ERR_unload_P11_strings();
