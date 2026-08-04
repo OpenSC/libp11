@@ -1660,11 +1660,16 @@ static int signature_set_ctx_params(void *ctx, const OSSL_PARAM params[])
 	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PSS_SALTLEN);
 	if (p != NULL) {
 		int saltlen = 0;
-		const char *s = NULL;
 
-		if (OSSL_PARAM_get_int(p, &saltlen)) {
-			/* got int directly */
-		} else if (OSSL_PARAM_get_utf8_string_ptr(p, &s) && s != NULL) {
+		if (p->data_type == OSSL_PARAM_INTEGER) {
+			if (!OSSL_PARAM_get_int(p, &saltlen))
+				return 0;
+		} else if (p->data_type == OSSL_PARAM_UTF8_STRING) {
+			const char *s = NULL;
+
+			if (OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
+				return 0;
+
 			if (OPENSSL_strcasecmp(s, "digest") == 0)
 				saltlen = RSA_PSS_SALTLEN_DIGEST; /* -1 */
 			else if (OPENSSL_strcasecmp(s, "auto") == 0)
