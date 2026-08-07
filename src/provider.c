@@ -1518,7 +1518,7 @@ static int signature_digest_verify(void *ctx,
 	return 0;
 }
 
-/* Get signature context parameters. */
+/* Get signature context parameters, EVP_PKEY_CTX_get_params(). */
 static int signature_get_ctx_params(void *vctx, OSSL_PARAM params[])
 {
 	P11_SIGNATURE_CTX *sig_ctx = (P11_SIGNATURE_CTX *)vctx;
@@ -1545,6 +1545,11 @@ static int signature_get_ctx_params(void *vctx, OSSL_PARAM params[])
 		if (!OSSL_PARAM_set_utf8_string(p, mdname))
 			return 0;
 	}
+
+	/* algorithm-id */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_ALGORITHM_ID);
+	if (p != NULL && !p11_signature_set_algorithm_id(p, sig_ctx))
+		return 0;
 
 	/* pad-mode (RSA), EVP_PKEY_CTX_get_rsa_padding() */
 	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_PAD_MODE);
@@ -1592,8 +1597,9 @@ static int signature_get_ctx_params(void *vctx, OSSL_PARAM params[])
 /* Return signature context parameters that can be retrieved. */
 static const OSSL_PARAM *signature_gettable_ctx_params(void *ctx, void *provctx)
 {
-	static const OSSL_PARAM settable[] = {
+	static const OSSL_PARAM gettable[] = {
 		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_DIGEST, NULL, 0),
+		OSSL_PARAM_octet_string(OSSL_SIGNATURE_PARAM_ALGORITHM_ID, NULL, 0),
 		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_PAD_MODE, NULL, 0),
 		OSSL_PARAM_int(OSSL_SIGNATURE_PARAM_PAD_MODE, NULL),
 		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_MGF1_DIGEST, NULL, 0),
@@ -1604,7 +1610,7 @@ static const OSSL_PARAM *signature_gettable_ctx_params(void *ctx, void *provctx)
 
 	(void)ctx;
 	(void)provctx;
-	return settable;
+	return gettable;
 }
 
 /* Set signature context parameters (digest, padding, PSS options) */
@@ -1667,7 +1673,7 @@ static int signature_set_ctx_params(void *ctx, const OSSL_PARAM params[])
 		} else if (p->data_type == OSSL_PARAM_UTF8_STRING) {
 			const char *s = NULL;
 
-			if (OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
+			if (!OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
 				return 0;
 
 			if (OPENSSL_strcasecmp(s, "digest") == 0)
@@ -1693,10 +1699,22 @@ static int signature_set_ctx_params(void *ctx, const OSSL_PARAM params[])
 	return 1;
 }
 
-/* Return signature context parameters that can be retrieved (same as gettable) */
+/* Return signature context parameters that can be retrieved */
 static const OSSL_PARAM *signature_settable_ctx_params(void *ctx, void *provctx)
 {
-	return signature_gettable_ctx_params(ctx, provctx);
+	static const OSSL_PARAM settable[] = {
+		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_DIGEST, NULL, 0),
+		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_PAD_MODE, NULL, 0),
+		OSSL_PARAM_int(OSSL_SIGNATURE_PARAM_PAD_MODE, NULL),
+		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_MGF1_DIGEST, NULL, 0),
+		OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_PSS_SALTLEN, NULL, 0),
+		OSSL_PARAM_int(OSSL_SIGNATURE_PARAM_PSS_SALTLEN, NULL),
+		OSSL_PARAM_END
+	};
+
+	(void)ctx;
+	(void)provctx;
+	return settable;
 }
 
 
