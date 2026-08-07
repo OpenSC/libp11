@@ -44,6 +44,13 @@
 
 #include "p11_pthread.h"
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && \
+	OPENSSL_VERSION_NUMBER < 0x40000000L && \
+	!defined(OPENSSL_NO_DEPRECATED_3_0) && \
+	!defined(OPENSSL_NO_ECX)
+#define LIBP11_HAVE_ECX_METHODS
+#endif
+
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #define EVP_PKEY_FALCON512 0x10001
 #define EVP_PKEY_FALCON1024 0x10002
@@ -364,6 +371,12 @@ extern PKCS11_KEY *pkcs11_find_key(PKCS11_OBJECT_private *cert);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* Return the borrowed PKCS#11 object associated with the EVP_PKEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_object(const EVP_PKEY *pk);
+
+/* Return the borrowed private PKCS#11 object for EVP_PKEY_METHOD operations */
+extern PKCS11_OBJECT_private *pkcs11_get_legacy_pkey_object(const EVP_PKEY *pkey);
+
+/* Free the allocated EVP_PKEY ex_data index. */
+extern void free_evp_pkey_ex_index(void);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* Get a list of all certificates matching with template associated with this token */
@@ -581,25 +594,6 @@ extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
 extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
 #endif /* OPENSSL_NO_EC */
 
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-/* Set PKCS11_OBJECT_private for an EVP_PKEY */
-extern void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key);
-
-/* Retrieve PKCS11_OBJECT_private from an EVP_PKEY */
-extern PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey);
-
-/* Allocate a global EVP_PKEY ex_data index */
-extern void alloc_pkey_ex_index(void);
-
-/* Free the allocated EVP_PKEY ex_data index. */
-extern void free_pkey_ex_index(void);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/* Free the allocated EVP_PKEY ex_data index. */
-extern void free_evp_pkey_ex_index(void);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
 /* Convert an OpenSSL digest (EVP_MD) to the corresponding PKCS#11 hash mechanism */
 extern CK_MECHANISM_TYPE pkcs11_md2ckm(const EVP_MD *md);
 
@@ -618,18 +612,21 @@ extern void pkcs11_ecdsa_method_free(void);
 /* Free the global ECDH_METHOD */
 extern void pkcs11_ecdh_method_free(void);
 
-#if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-/* Free the global ED25519/ED448 EVP_PKEY_METHOD */
-extern void pkcs11_ed_key_method_free(void);
+#ifdef LIBP11_HAVE_ECX_METHODS
+/* Enable an ECX EVP_PKEY_METHOD wrapper for a PKCS#11 private key */
+extern int pkcs11_ecx_method_enable(PKCS11_OBJECT_private *key, int type);
 
-/* Free the global X25519/X448 EVP_PKEY_METHOD */
-extern void pkcs11_xdh_key_method_free(void);
-#endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+/* Remove and free all registered ECX EVP_PKEY_METHOD wrappers */
+extern void pkcs11_ecx_methods_free(void);
+#endif /* LIBP11_HAVE_ECX_METHODS */
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-/* Free the global RSA EVP_PKEY_METHOD */
-extern void pkcs11_rsa_key_method_free(void);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
+#if OPENSSL_VERSION_NUMBER < 0x40000000L
+/* Enable the RSA EVP_PKEY_METHOD wrapper for a PKCS#11 private key. */
+extern int pkcs11_rsa_method_enable(PKCS11_OBJECT_private *key);
+
+/* Remove and free the registered RSA EVP_PKEY_METHOD wrapper. */
+extern void pkcs11_rsa_pkey_method_free(void);
+#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
 /* Get sign_init and sign callbacks from EVP_PKEY_METHOD */
@@ -639,11 +636,6 @@ extern void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
 			unsigned char *sig, size_t *siglen,
 			const unsigned char *tbs, size_t tbslen));
 #endif /* OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER) */
-
-#if OPENSSL_VERSION_NUMBER < 0x40000000L
-/* Attempt to sign using the PKCS#11-backed RSA implementation */
-extern EVP_PKEY_METHOD *pkcs11_pkey_method_rsa(void);
-#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #endif /* _LIBP11_INT_H */
 

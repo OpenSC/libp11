@@ -30,27 +30,6 @@
 static int evp_pkey_ex_index = 0;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
-#if OPENSSL_VERSION_NUMBER < 0x40000000L
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static int pkey_ex_index = 0;
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L*/
-
-#if OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER)
-static EVP_PKEY_METHOD *orig_method_rsa = NULL;
-#else
-static const EVP_PKEY_METHOD *orig_method_rsa = NULL;
-#endif /* OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER) */
-
-static int (*orig_pkey_rsa_sign_init) (EVP_PKEY_CTX *ctx);
-static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
-	unsigned char *sig, size_t *siglen,
-	const unsigned char *tbs, size_t tbslen);
-static int (*orig_pkey_rsa_decrypt_init) (EVP_PKEY_CTX *ctx);
-static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
-	unsigned char *out, size_t *outlen,
-	const unsigned char *in, size_t inlen);
-#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
-
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 /* DER OIDs */
 static const unsigned char OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
@@ -1379,6 +1358,26 @@ PKCS11_OBJECT_private *pkcs11_get_ex_data_object(const EVP_PKEY *pk)
 {
 	return pkcs11_get_ex_data_evp_pkey(pk);
 }
+
+/*
+ * Return the borrowed private PKCS#11 object for legacy EVP_PKEY_METHOD
+ * operations, or NULL if unavailable or disabled.
+ */
+PKCS11_OBJECT_private *pkcs11_get_legacy_pkey_object(const EVP_PKEY *pkey)
+{
+	PKCS11_OBJECT_private *key;
+
+	key = pkcs11_get_ex_data_object(pkey);
+	if (key == NULL)
+		return NULL;
+
+	if (key->object_class != CKO_PRIVATE_KEY ||
+			key->slot == NULL || key->slot->ctx == NULL ||
+			(key->slot->ctx->flags & PKCS11_FLAG_NO_METHODS) != 0)
+		return NULL;
+
+	return key;
+}
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
@@ -1773,12 +1772,10 @@ static PKCS11_OBJECT_ops *pkcs11_slhdsa_ops_from_param(CK_ULONG param_set)
 static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey)
 {
 	const char *name;
+	const char *properties = NULL;
 	unsigned char *pub = NULL;
 	size_t publen = 0;
 	EVP_PKEY *ret = NULL;
-#if OPENSSL_VERSION_NUMBER < 0x40000000L
-	PKCS11_OBJECT_private *obj;
-#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 	if (pkey == NULL)
 		return NULL;
@@ -1786,6 +1783,9 @@ static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey)
 	name = EVP_PKEY_get0_type_name(pkey);
 	if (name == NULL)
 		return NULL;
+
+	if (!strcmp(name, "FALCON-512") || !strcmp(name, "FALCON-1024"))
+		properties = "provider=pkcs11prov";
 
 	if (!EVP_PKEY_get_raw_public_key(pkey, NULL, &publen) ||
 			publen == 0)
@@ -1798,16 +1798,10 @@ static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey)
 	if (!EVP_PKEY_get_raw_public_key(pkey, pub, &publen))
 		goto end;
 
-	ret = EVP_PKEY_new_raw_public_key_ex(NULL, name, NULL, pub, publen);
+	ret = EVP_PKEY_new_raw_public_key_ex(NULL, name, properties, pub, publen);
 	if (ret == NULL)
 		goto end;
 
-#if OPENSSL_VERSION_NUMBER < 0x40000000L
-	/* Preserve the ex_data association used by legacy EVP_PKEY_METHOD wrappers. */
-	obj = pkcs11_get_ex_data_pkey(pkey);
-	if (obj != NULL)
-		pkcs11_set_ex_data_pkey(ret, obj);
-#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 end:
 	OPENSSL_free(pub);
 	return ret;
@@ -1953,288 +1947,5 @@ void free_evp_pkey_ex_index(void)
 	}
 }
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
-
-#if OPENSSL_VERSION_NUMBER < 0x40000000L
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L
-void pkcs11_set_ex_data_pkey(EVP_PKEY *pkey, PKCS11_OBJECT_private *key)
-{
-	EVP_PKEY_set_ex_data(pkey, pkey_ex_index, key);
-}
-
-PKCS11_OBJECT_private *pkcs11_get_ex_data_pkey(const EVP_PKEY *pkey)
-{
-	return EVP_PKEY_get_ex_data(pkey, pkey_ex_index);
-}
-
-void alloc_pkey_ex_index(void)
-{
-	if (pkey_ex_index == 0) {
-		while (pkey_ex_index == 0) /* Workaround for OpenSSL RT3710 */
-			pkey_ex_index = EVP_PKEY_get_ex_new_index(0, "libp11 PKCS11_KEY",
-				NULL, NULL, NULL);
-		if (pkey_ex_index < 0)
-			pkey_ex_index = 0; /* Fallback to app_data */
-	}
-}
-
-void free_pkey_ex_index(void)
-{
-	if (pkey_ex_index > 0) {
-		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_EVP_PKEY, pkey_ex_index);
-		pkey_ex_index = 0;
-	}
-}
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
-/* Attempt to sign using the PKCS#11-backed RSA implementation */
-static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
-		unsigned char *sig, size_t *siglen,
-		const unsigned char *tbs, size_t tbslen)
-{
-	EVP_PKEY *pkey;
-	RSA *rsa;
-	int padding;
-	PKCS11_OBJECT_private *key;
-	PKCS11_SLOT_private *slot;
-	const EVP_MD *md, *mgf1_md;
-	CK_SESSION_HANDLE session;
-	const char *mdname, *mgf1_mdname;
-	int salt_len;
-
-	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
-	 * the size inquiry internally. */
-	if (!sig)
-		return -1;
-
-	if (!evp_pkey_ctx)
-		return -1;
-
-	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
-	if (!pkey)
-		return -1;
-
-	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
-	if (!rsa)
-		return -1;
-
-	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_object_fork(key) < 0)
-		return -1;
-
-	slot = key->slot;
-	if (!slot)
-		return -1;
-
-	if (pkcs11_session_pool_acquire(slot, 0, &session))
-		return -1;
-
-	pkcs11_session_pool_release(slot, session);
-
-	/* retrieve PSS parameters */
-	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
-		return -1;
-
-	if (padding != RSA_PKCS1_PSS_PADDING)
-		return -1; /* unsupported */
-
-	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &md) <= 0)
-		return -1;
-
-	if (tbslen != (size_t)EVP_MD_size(md))
-		return -1;
-
-	if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
-		return -1;
-
-	if (EVP_PKEY_CTX_get_rsa_pss_saltlen(evp_pkey_ctx, &salt_len) == 0)
-		return -1;
-
-	mdname = EVP_MD_name(md);
-	mgf1_mdname = EVP_MD_name(mgf1_md);
-
-	return pkcs11_evp_pkey_rsa_sign(key, pkey, mdname, padding,
-		salt_len, mgf1_mdname, sig, siglen, tbs, tbslen);
-}
-
-/* Attempt to decrypt using the PKCS#11-backed RSA implementation */
-static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
-		unsigned char *out, size_t *outlen,
-		const unsigned char *in, size_t inlen)
-{
-	EVP_PKEY *pkey;
-	RSA *rsa;
-	int padding;
-	PKCS11_OBJECT_private *key;
-	PKCS11_SLOT_private *slot;
-	CK_SESSION_HANDLE session;
-	const EVP_MD *md, *mgf1_md;
-	const char *mdname = NULL, *mgf1_mdname = NULL;
-	unsigned char *oaep_label = NULL;
-	int oaep_labellen = 0;
-
-	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
-	 * the size inquiry internally. */
-	if (!out)
-		return -1;
-
-	if (!evp_pkey_ctx)
-		return -1;
-
-	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
-	if (!pkey)
-		return -1;
-
-	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
-	if (!rsa)
-		return -1;
-
-	key = pkcs11_get_ex_data_rsa(rsa);
-	if (check_object_fork(key) < 0)
-		return -1;
-
-	/* check RSA padding */
-	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
-		return -1;
-
-	slot = key->slot;
-	if (!slot)
-		return -1;
-
-	if (pkcs11_session_pool_acquire(slot, 0, &session))
-		return -1;
-
-	pkcs11_session_pool_release(slot, session);
-
-	switch (padding) {
-	case RSA_PKCS1_PADDING:
-		break;
-
-	case RSA_PKCS1_OAEP_PADDING:
-		/* retrieve OAEP parameters */
-		if (EVP_PKEY_CTX_get_rsa_oaep_md(evp_pkey_ctx, &md) <= 0 ||
-				md == NULL)
-			return -1;
-
-		if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0 ||
-				mgf1_md == NULL)
-			return -1;
-
-		mdname = EVP_MD_name(md);
-		mgf1_mdname = EVP_MD_name(mgf1_md);
-
-		oaep_labellen = EVP_PKEY_CTX_get0_rsa_oaep_label(evp_pkey_ctx,
-			&oaep_label);
-		if (oaep_labellen < 0) {
-			oaep_labellen = 0;
-			oaep_label = NULL;
-		}
-		break;
-
-	default:
-		return -1;
-	}
-
-	return pkcs11_evp_pkey_rsa_decrypt(key, mdname, padding, mgf1_mdname,
-		oaep_label, oaep_labellen, out, outlen, in, inlen);
-}
-
-static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
-		unsigned char *sig, size_t *siglen,
-		const unsigned char *tbs, size_t tbslen)
-{
-	int ret;
-
-	ret = pkcs11_try_pkey_rsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
-	if (ret < 0)
-		ret = (*orig_pkey_rsa_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
-	return ret;
-}
-
-static int pkcs11_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
-		unsigned char *out, size_t *outlen,
-		const unsigned char *in, size_t inlen)
-{
-	int ret;
-
-	ret = pkcs11_try_pkey_rsa_decrypt(evp_pkey_ctx, out, outlen, in, inlen);
-	if (ret < 0)
-		ret = (*orig_pkey_rsa_decrypt)(evp_pkey_ctx, out, outlen, in, inlen);
-	return ret;
-}
-
-#if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
-void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
-		int (**psign_init) (EVP_PKEY_CTX *ctx),
-		int (**psign) (EVP_PKEY_CTX *ctx,
-			unsigned char *sig, size_t *siglen,
-			const unsigned char *tbs, size_t tbslen))
-{
-	if (psign_init)
-		*psign_init = pmeth->sign_init;
-	if (psign)
-		*psign = pmeth->sign;
-}
-
-static void EVP_PKEY_meth_get_decrypt(EVP_PKEY_METHOD *pmeth,
-		int (**pdecrypt_init) (EVP_PKEY_CTX *ctx),
-		int (**pdecrypt) (EVP_PKEY_CTX *ctx,
-			unsigned char *out,
-			size_t *outlen,
-			const unsigned char *in,
-			size_t inlen))
-{
-	if (pdecrypt_init)
-		*pdecrypt_init = pmeth->decrypt_init;
-	if (pdecrypt)
-		*pdecrypt = pmeth->decrypt;
-}
-#endif
-
-EVP_PKEY_METHOD *pkcs11_pkey_method_rsa(void)
-{
-	EVP_PKEY_METHOD *new_meth_rsa = NULL;
-	int orig_id;
-
-	/* Cache the original EVP_PKEY_RSA method (once) */
-	if (!orig_method_rsa)
-#if OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER)
-		orig_method_rsa = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_RSA);
-#else
-		orig_method_rsa = EVP_PKEY_meth_find(EVP_PKEY_RSA);
-#endif /* OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER) */
-
-	if (!orig_method_rsa)
-		return NULL;
-
-	EVP_PKEY_meth_get0_info(&orig_id, NULL, orig_method_rsa);
-	if (orig_id != EVP_PKEY_RSA)
-		return NULL;
-
-	EVP_PKEY_meth_get_sign(orig_method_rsa,
-		&orig_pkey_rsa_sign_init, &orig_pkey_rsa_sign);
-	if (!orig_pkey_rsa_sign)
-		return NULL;
-
-	EVP_PKEY_meth_get_decrypt(orig_method_rsa,
-		&orig_pkey_rsa_decrypt_init, &orig_pkey_rsa_decrypt);
-	if (!orig_pkey_rsa_decrypt)
-		return NULL;
-
-	new_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA, EVP_PKEY_FLAG_AUTOARGLEN);
-	if (!new_meth_rsa)
-		return NULL;
-
-	/* Duplicate the original method */
-	EVP_PKEY_meth_copy(new_meth_rsa, orig_method_rsa);
-
-	EVP_PKEY_meth_set_sign(new_meth_rsa,
-		orig_pkey_rsa_sign_init, pkcs11_pkey_rsa_sign);
-	EVP_PKEY_meth_set_decrypt(new_meth_rsa,
-		orig_pkey_rsa_decrypt_init, pkcs11_pkey_rsa_decrypt);
-
-	return new_meth_rsa;
-}
-#endif /* OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 /* vim: set noexpandtab: */

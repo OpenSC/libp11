@@ -35,6 +35,23 @@
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
+#if OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER)
+static EVP_PKEY_METHOD *orig_method_rsa = NULL;
+#else
+static const EVP_PKEY_METHOD *orig_method_rsa = NULL;
+#endif /* OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER) */
+
+static EVP_PKEY_METHOD *rsa_pkey_method = NULL;
+
+static int (*orig_pkey_rsa_sign_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_rsa_sign) (EVP_PKEY_CTX *ctx,
+	unsigned char *sig, size_t *siglen,
+	const unsigned char *tbs, size_t tbslen);
+static int (*orig_pkey_rsa_decrypt_init) (EVP_PKEY_CTX *ctx);
+static int (*orig_pkey_rsa_decrypt) (EVP_PKEY_CTX *ctx,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen);
+
 # ifndef OPENSSL_NO_EC
 static int (*orig_pkey_ec_sign_init) (EVP_PKEY_CTX *ctx);
 static int (*orig_pkey_ec_sign) (EVP_PKEY_CTX *ctx,
@@ -495,6 +512,131 @@ end:
 	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
+
+/*
+ * Execute a PKCS#11 decapsulation operation using the specified mechanism.
+ *
+ * The resulting secret key is created as an extractable session object,
+ * read through CKA_VALUE and destroyed before the session is released.
+ *
+ * Returns CKR_OK on success or a PKCS#11/vendor-defined error code on failure.
+ */
+static CK_RV pkcs11_decapsulate_with_mechanism(
+	PKCS11_OBJECT_private *key, CK_MECHANISM *mechanism,
+	unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	CK_RV rv = CKR_GENERAL_ERROR;
+	PKCS11_SLOT_private *slot;
+	PKCS11_CTX_private *ctx;
+	CK_SESSION_HANDLE session;
+	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
+	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
+	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
+	CK_BBOOL ck_false = CK_FALSE;
+	CK_BBOOL ck_true = CK_TRUE;
+	CK_ULONG newkey_len = 0;
+	CK_ULONG ck_inlen;
+	unsigned char *value = NULL;
+	size_t len, value_len_alloc = 0;
+	CK_ATTRIBUTE newkey_template[] = {
+		{CKA_TOKEN, &ck_false, sizeof(ck_false)}, /* session only object */
+		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
+		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
+		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
+		{CKA_SENSITIVE, &ck_false, sizeof(ck_false)},
+		{CKA_EXTRACTABLE, &ck_true, sizeof(ck_true)},
+	};
+
+	if (key == NULL || mechanism == NULL || out == NULL ||
+			outlen == NULL || *outlen == 0 || in == NULL)
+		return CKR_ARGUMENTS_BAD;
+
+	if (*outlen > (size_t)(CK_ULONG)-1 ||
+			inlen > (size_t)(CK_ULONG)-1)
+		return CKR_ARGUMENTS_BAD;
+
+	slot = key->slot;
+	if (slot == NULL)
+		return CKR_GENERAL_ERROR;
+
+	ctx = slot->ctx;
+	if (ctx == NULL)
+		return CKR_GENERAL_ERROR;
+
+#ifdef DEBUG
+	pkcs11_log(ctx, LOG_DEBUG,
+		"%s:%d pkcs11_decapsulate_with_mechanism() "
+		"%s out=%p *outlen=%lu in=%p inlen=%lu\n",
+		__FILE__, __LINE__,
+		pkcs11_mechanism_name(mechanism),
+		out, (unsigned long)*outlen,
+		in, (unsigned long)inlen);
+#endif
+
+	len = *outlen;
+	newkey_len = (CK_ULONG)len;
+	ck_inlen = (CK_ULONG)inlen;
+
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
+		return CKR_GENERAL_ERROR;
+
+	if (key->always_authenticate == CK_TRUE) {
+		rv = pkcs11_authenticate(key, session);
+		if (rv != CKR_OK)
+			goto end;
+	}
+
+	if (ctx->method_3_2 == NULL ||
+			ctx->method_3_2->C_DecapsulateKey == NULL) {
+		pkcs11_log(ctx, LOG_DEBUG,
+			"PKCS#11 3.2 C_DecapsulateKey is not available\n");
+		rv = CKR_FUNCTION_NOT_SUPPORTED;
+		goto end;
+	}
+
+	rv = CRYPTOKI_call_3_2(ctx,
+		C_DecapsulateKey(session, mechanism, key->object,
+			newkey_template,
+			sizeof(newkey_template) / sizeof(*newkey_template),
+			(CK_BYTE_PTR)in, ck_inlen, &newkey));
+	if (rv != CKR_OK) {
+		pkcs11_log(ctx, LOG_DEBUG,
+			"%s:%d C_DecapsulateKey rv=0x%08lX (%lu)\n",
+			__FILE__, __LINE__,
+			(unsigned long)rv, (unsigned long)rv);
+		goto end;
+	}
+
+	if (newkey == CK_INVALID_HANDLE) {
+		rv = CKR_GENERAL_ERROR;
+		goto end;
+	}
+
+	if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE,
+			&value, &value_len_alloc)) {
+		rv = CKR_GENERAL_ERROR;
+		goto end;
+	}
+
+	if (value_len_alloc > len) {
+		*outlen = value_len_alloc;
+		rv = CKR_BUFFER_TOO_SMALL;
+		goto end;
+	}
+
+	memcpy(out, value, value_len_alloc);
+	*outlen = value_len_alloc;
+	rv = CKR_OK;
+
+end:
+	if (newkey != CK_INVALID_HANDLE)
+		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
+
+	OPENSSL_clear_free(value, value_len_alloc);
+	pkcs11_session_pool_release(slot, session);
+	return rv;
+}
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /*
@@ -662,133 +804,6 @@ end:
 	pkcs11_session_pool_release(slot, session);
 	return rv;
 }
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/*
- * Execute a PKCS#11 decapsulation operation using the specified mechanism.
- *
- * The resulting secret key is created as an extractable session object,
- * read through CKA_VALUE and destroyed before the session is released.
- *
- * Returns CKR_OK on success or a PKCS#11/vendor-defined error code on failure.
- */
-static CK_RV pkcs11_decapsulate_with_mechanism(
-	PKCS11_OBJECT_private *key, CK_MECHANISM *mechanism,
-	unsigned char *out, size_t *outlen,
-	const unsigned char *in, size_t inlen)
-{
-	CK_RV rv = CKR_GENERAL_ERROR;
-	PKCS11_SLOT_private *slot;
-	PKCS11_CTX_private *ctx;
-	CK_SESSION_HANDLE session;
-	CK_OBJECT_HANDLE newkey = CK_INVALID_HANDLE;
-	CK_OBJECT_CLASS newkey_class = CKO_SECRET_KEY;
-	CK_KEY_TYPE newkey_type = CKK_GENERIC_SECRET;
-	CK_BBOOL ck_false = CK_FALSE;
-	CK_BBOOL ck_true = CK_TRUE;
-	CK_ULONG newkey_len = 0;
-	CK_ULONG ck_inlen;
-	unsigned char *value = NULL;
-	size_t len, value_len_alloc = 0;
-	CK_ATTRIBUTE newkey_template[] = {
-		{CKA_TOKEN, &ck_false, sizeof(ck_false)}, /* session only object */
-		{CKA_CLASS, &newkey_class, sizeof(newkey_class)},
-		{CKA_KEY_TYPE, &newkey_type, sizeof(newkey_type)},
-		{CKA_VALUE_LEN, &newkey_len, sizeof(newkey_len)},
-		{CKA_SENSITIVE, &ck_false, sizeof(ck_false)},
-		{CKA_EXTRACTABLE, &ck_true, sizeof(ck_true)},
-	};
-
-	if (key == NULL || mechanism == NULL || out == NULL ||
-			outlen == NULL || *outlen == 0 || in == NULL)
-		return CKR_ARGUMENTS_BAD;
-
-	if (*outlen > (size_t)(CK_ULONG)-1 ||
-			inlen > (size_t)(CK_ULONG)-1)
-		return CKR_ARGUMENTS_BAD;
-
-	slot = key->slot;
-	if (slot == NULL)
-		return CKR_GENERAL_ERROR;
-
-	ctx = slot->ctx;
-	if (ctx == NULL)
-		return CKR_GENERAL_ERROR;
-
-#ifdef DEBUG
-	pkcs11_log(ctx, LOG_DEBUG,
-		"%s:%d pkcs11_decapsulate_with_mechanism() "
-		"%s out=%p *outlen=%lu in=%p inlen=%lu\n",
-		__FILE__, __LINE__,
-		pkcs11_mechanism_name(mechanism),
-		out, (unsigned long)*outlen,
-		in, (unsigned long)inlen);
-#endif
-
-	len = *outlen;
-	newkey_len = (CK_ULONG)len;
-	ck_inlen = (CK_ULONG)inlen;
-
-	if (pkcs11_session_pool_acquire(slot, 0, &session))
-		return CKR_GENERAL_ERROR;
-
-	if (key->always_authenticate == CK_TRUE) {
-		rv = pkcs11_authenticate(key, session);
-		if (rv != CKR_OK)
-			goto end;
-	}
-
-	if (ctx->method_3_2 == NULL ||
-			ctx->method_3_2->C_DecapsulateKey == NULL) {
-		pkcs11_log(ctx, LOG_DEBUG,
-			"PKCS#11 3.2 C_DecapsulateKey is not available\n");
-		rv = CKR_FUNCTION_NOT_SUPPORTED;
-		goto end;
-	}
-
-	rv = CRYPTOKI_call_3_2(ctx,
-		C_DecapsulateKey(session, mechanism, key->object,
-			newkey_template,
-			sizeof(newkey_template) / sizeof(*newkey_template),
-			(CK_BYTE_PTR)in, ck_inlen, &newkey));
-	if (rv != CKR_OK) {
-		pkcs11_log(ctx, LOG_DEBUG,
-			"%s:%d C_DecapsulateKey rv=0x%08lX (%lu)\n",
-			__FILE__, __LINE__,
-			(unsigned long)rv, (unsigned long)rv);
-		goto end;
-	}
-
-	if (newkey == CK_INVALID_HANDLE) {
-		rv = CKR_GENERAL_ERROR;
-		goto end;
-	}
-
-	if (pkcs11_getattr_alloc(ctx, session, newkey, CKA_VALUE,
-			&value, &value_len_alloc)) {
-		rv = CKR_GENERAL_ERROR;
-		goto end;
-	}
-
-	if (value_len_alloc > len) {
-		*outlen = value_len_alloc;
-		rv = CKR_BUFFER_TOO_SMALL;
-		goto end;
-	}
-
-	memcpy(out, value, value_len_alloc);
-	*outlen = value_len_alloc;
-	rv = CKR_OK;
-
-end:
-	if (newkey != CK_INVALID_HANDLE)
-		CRYPTOKI_call(ctx, C_DestroyObject(session, newkey));
-
-	OPENSSL_clear_free(value, value_len_alloc);
-	pkcs11_session_pool_release(slot, session);
-	return rv;
-}
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 /* DER-encode data as an ASN.1 OCTET STRING. */
 static unsigned char *der_encode_octet_string(const unsigned char *data,
@@ -1478,6 +1493,9 @@ static int pkcs11_try_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 		return -1; /* buffer too small */
 
 	key = pkcs11_get_ex_data_ec(eckey);
+	if (!key)
+		return -1;
+
 	if (check_object_fork(key) < 0)
 		return -1;
 
@@ -1537,7 +1555,7 @@ static int pkcs11_eddsa_pmeth_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	if (!pkey)
 		return -1;
 
-	key = pkcs11_get_ex_data_pkey(pkey);
+	key = pkcs11_get_legacy_pkey_object(pkey);
 	if (!key)
 		return -1;
 
@@ -1572,7 +1590,7 @@ static int pkcs11_eddsa_pmeth_digestsign(EVP_MD_CTX *ctx, unsigned char *sig,
 	if (!pkey)
 		return -1;
 
-	key = pkcs11_get_ex_data_pkey(pkey);
+	key = pkcs11_get_legacy_pkey_object(pkey);
 	if (!key)
 		return -1;
 
@@ -1646,6 +1664,7 @@ static int pkcs11_pkey_ec_sign(EVP_PKEY_CTX *evp_pkey_ctx,
 	ret = pkcs11_try_pkey_ec_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
 	if (ret < 0)
 		ret = (*orig_pkey_ec_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+
 	return ret;
 }
 
@@ -1725,6 +1744,319 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method_ed448(void)
 	return new_meth;
 }
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+
+/* Attempt to sign using the PKCS#11-backed RSA implementation */
+static int pkcs11_try_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	EVP_PKEY *pkey;
+	RSA *rsa;
+	int padding;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	const EVP_MD *md, *mgf1_md;
+	CK_SESSION_HANDLE session;
+	const char *mdname, *mgf1_mdname;
+	int salt_len;
+
+	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
+	 * the size inquiry internally. */
+	if (!sig)
+		return -1;
+
+	if (!evp_pkey_ctx)
+		return -1;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
+	if (!pkey)
+		return -1;
+
+	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
+	if (!rsa)
+		return -1;
+
+	key = pkcs11_get_ex_data_rsa(rsa);
+	if (!key)
+		return -1;
+
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	slot = key->slot;
+	if (!slot)
+		return -1;
+
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
+		return -1;
+
+	pkcs11_session_pool_release(slot, session);
+
+	/* retrieve PSS parameters */
+	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
+		return -1;
+
+	if (padding != RSA_PKCS1_PSS_PADDING)
+		return -1; /* unsupported */
+
+	if (EVP_PKEY_CTX_get_signature_md(evp_pkey_ctx, &md) <= 0)
+		return -1;
+
+	if (tbslen != (size_t)EVP_MD_size(md))
+		return -1;
+
+	if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0)
+		return -1;
+
+	if (EVP_PKEY_CTX_get_rsa_pss_saltlen(evp_pkey_ctx, &salt_len) == 0)
+		return -1;
+
+	mdname = EVP_MD_name(md);
+	mgf1_mdname = EVP_MD_name(mgf1_md);
+
+	return pkcs11_evp_pkey_rsa_sign(key, pkey, mdname, padding,
+		salt_len, mgf1_mdname, sig, siglen, tbs, tbslen);
+}
+
+/* Attempt to decrypt using the PKCS#11-backed RSA implementation */
+static int pkcs11_try_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *out, size_t *outlen,
+		const unsigned char *in, size_t inlen)
+{
+	EVP_PKEY *pkey;
+	RSA *rsa;
+	int padding;
+	PKCS11_OBJECT_private *key;
+	PKCS11_SLOT_private *slot;
+	CK_SESSION_HANDLE session;
+	const EVP_MD *md, *mgf1_md;
+	const char *mdname = NULL, *mgf1_mdname = NULL;
+	unsigned char *oaep_label = NULL;
+	int oaep_labellen = 0;
+
+	/* RSA method has EVP_PKEY_FLAG_AUTOARGLEN set. OpenSSL core will handle
+	 * the size inquiry internally. */
+	if (!out)
+		return -1;
+
+	if (!evp_pkey_ctx)
+		return -1;
+
+	pkey = EVP_PKEY_CTX_get0_pkey(evp_pkey_ctx);
+	if (!pkey)
+		return -1;
+
+	rsa = (RSA *)EVP_PKEY_get0_RSA(pkey);
+	if (!rsa)
+		return -1;
+
+	key = pkcs11_get_ex_data_rsa(rsa);
+	if (!key)
+		return -1;
+
+	if (check_object_fork(key) < 0)
+		return -1;
+
+	/* check RSA padding */
+	if (EVP_PKEY_CTX_get_rsa_padding(evp_pkey_ctx, &padding) <= 0)
+		return -1;
+
+	slot = key->slot;
+	if (!slot)
+		return -1;
+
+	if (pkcs11_session_pool_acquire(slot, 0, &session))
+		return -1;
+
+	pkcs11_session_pool_release(slot, session);
+
+	switch (padding) {
+	case RSA_PKCS1_PADDING:
+		break;
+
+	case RSA_PKCS1_OAEP_PADDING:
+		/* retrieve OAEP parameters */
+		if (EVP_PKEY_CTX_get_rsa_oaep_md(evp_pkey_ctx, &md) <= 0 ||
+				md == NULL)
+			return -1;
+
+		if (EVP_PKEY_CTX_get_rsa_mgf1_md(evp_pkey_ctx, &mgf1_md) <= 0 ||
+				mgf1_md == NULL)
+			return -1;
+
+		mdname = EVP_MD_name(md);
+		mgf1_mdname = EVP_MD_name(mgf1_md);
+
+		oaep_labellen = EVP_PKEY_CTX_get0_rsa_oaep_label(evp_pkey_ctx,
+			&oaep_label);
+		if (oaep_labellen < 0) {
+			oaep_labellen = 0;
+			oaep_label = NULL;
+		}
+		break;
+
+	default:
+		return -1;
+	}
+
+	return pkcs11_evp_pkey_rsa_decrypt(key, mdname, padding, mgf1_mdname,
+		oaep_label, oaep_labellen, out, outlen, in, inlen);
+}
+
+static int pkcs11_pkey_rsa_sign(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *sig, size_t *siglen,
+		const unsigned char *tbs, size_t tbslen)
+{
+	int ret;
+
+	ret = pkcs11_try_pkey_rsa_sign(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+	if (ret < 0)
+		ret = (*orig_pkey_rsa_sign)(evp_pkey_ctx, sig, siglen, tbs, tbslen);
+
+	return ret;
+}
+
+static int pkcs11_pkey_rsa_decrypt(EVP_PKEY_CTX *evp_pkey_ctx,
+		unsigned char *out, size_t *outlen,
+		const unsigned char *in, size_t inlen)
+{
+	int ret;
+
+	ret = pkcs11_try_pkey_rsa_decrypt(evp_pkey_ctx, out, outlen, in, inlen);
+	if (ret < 0)
+		ret = (*orig_pkey_rsa_decrypt)(evp_pkey_ctx, out, outlen, in, inlen);
+
+
+	return ret;
+}
+
+#if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
+void EVP_PKEY_meth_get_sign(EVP_PKEY_METHOD *pmeth,
+		int (**psign_init) (EVP_PKEY_CTX *ctx),
+		int (**psign) (EVP_PKEY_CTX *ctx,
+			unsigned char *sig, size_t *siglen,
+			const unsigned char *tbs, size_t tbslen))
+{
+	if (psign_init)
+		*psign_init = pmeth->sign_init;
+	if (psign)
+		*psign = pmeth->sign;
+}
+
+static void EVP_PKEY_meth_get_decrypt(EVP_PKEY_METHOD *pmeth,
+		int (**pdecrypt_init) (EVP_PKEY_CTX *ctx),
+		int (**pdecrypt) (EVP_PKEY_CTX *ctx,
+			unsigned char *out,
+			size_t *outlen,
+			const unsigned char *in,
+			size_t inlen))
+{
+	if (pdecrypt_init)
+		*pdecrypt_init = pmeth->decrypt_init;
+	if (pdecrypt)
+		*pdecrypt = pmeth->decrypt;
+}
+#endif /* OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER) */
+
+/* Attempt to sign using the PKCS#11-backed RSA implementation */
+static EVP_PKEY_METHOD *pkcs11_pkey_method_rsa(void)
+{
+	EVP_PKEY_METHOD *new_meth_rsa = NULL;
+	int orig_id;
+
+	/* Cache the original EVP_PKEY_RSA method (once) */
+	if (!orig_method_rsa)
+#if OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER)
+		orig_method_rsa = (EVP_PKEY_METHOD *)EVP_PKEY_meth_find(EVP_PKEY_RSA);
+#else
+		orig_method_rsa = EVP_PKEY_meth_find(EVP_PKEY_RSA);
+#endif /* OPENSSL_VERSION_NUMBER < 0x10101000L || defined(LIBRESSL_VERSION_NUMBER) */
+
+	if (!orig_method_rsa)
+		return NULL;
+
+	EVP_PKEY_meth_get0_info(&orig_id, NULL, orig_method_rsa);
+	if (orig_id != EVP_PKEY_RSA)
+		return NULL;
+
+	EVP_PKEY_meth_get_sign(orig_method_rsa,
+		&orig_pkey_rsa_sign_init, &orig_pkey_rsa_sign);
+	if (!orig_pkey_rsa_sign)
+		return NULL;
+
+	EVP_PKEY_meth_get_decrypt(orig_method_rsa,
+		&orig_pkey_rsa_decrypt_init, &orig_pkey_rsa_decrypt);
+	if (!orig_pkey_rsa_decrypt)
+		return NULL;
+
+	new_meth_rsa = EVP_PKEY_meth_new(EVP_PKEY_RSA, EVP_PKEY_FLAG_AUTOARGLEN);
+	if (!new_meth_rsa)
+		return NULL;
+
+	/* Duplicate the original method */
+	EVP_PKEY_meth_copy(new_meth_rsa, orig_method_rsa);
+
+	EVP_PKEY_meth_set_sign(new_meth_rsa,
+		orig_pkey_rsa_sign_init, pkcs11_pkey_rsa_sign);
+	EVP_PKEY_meth_set_decrypt(new_meth_rsa,
+		orig_pkey_rsa_decrypt_init, pkcs11_pkey_rsa_decrypt);
+
+	return new_meth_rsa;
+}
+
+/* Remove and free the registered RSA EVP_PKEY_METHOD wrapper. */
+void pkcs11_rsa_pkey_method_free(void)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+	if (rsa_pkey_method == NULL)
+		return;
+
+	if (EVP_PKEY_meth_remove(rsa_pkey_method) != 1)
+		return;
+
+	EVP_PKEY_meth_free(rsa_pkey_method);
+	rsa_pkey_method = NULL;
+#else
+	/*
+	 * OpenSSL 1.1.0 provides EVP_PKEY_meth_add0(), but no public API
+	 * for unregistering a method. Keep the registered method alive
+	 * until process termination.
+	 */
+#endif
+}
+
+/* Create and register the RSA EVP_PKEY_METHOD wrapper. */
+static int pkcs11_rsa_pkey_method_new(void)
+{
+	if (rsa_pkey_method != NULL)
+		return 1;
+
+	rsa_pkey_method = pkcs11_pkey_method_rsa();
+	if (rsa_pkey_method == NULL)
+		return 0;
+
+	if (!EVP_PKEY_meth_add0(rsa_pkey_method)) {
+		EVP_PKEY_meth_free(rsa_pkey_method);
+		rsa_pkey_method = NULL;
+		return 0;
+	}
+
+	return 1;
+}
+
+/* Enable the RSA EVP_PKEY_METHOD wrapper for a PKCS#11 private key. */
+int pkcs11_rsa_method_enable(PKCS11_OBJECT_private *key)
+{
+	if (key == NULL || key->slot == NULL || key->slot->ctx == NULL)
+		return 0;
+
+	if (key->object_class != CKO_PRIVATE_KEY ||
+			(key->slot->ctx->flags & PKCS11_FLAG_NO_METHODS) != 0)
+		return 1;
+
+	return pkcs11_rsa_pkey_method_new();
+}
 
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid)
