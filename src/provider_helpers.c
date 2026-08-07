@@ -274,6 +274,8 @@ static int keydata_has_rsa_pub(const P11_KEYDATA *keydata);
 static int keydata_has_ec_pub(const P11_KEYDATA *keydata);
 #endif /* OPENSSL_NO_EC */
 static int keydata_has_raw_pub(const P11_KEYDATA *keydata);
+static int p11_signature_set_pss_algorithm_id(OSSL_PARAM *p,
+	const P11_SIGNATURE_CTX *sig_ctx, const char *mdname);
 
 /******************************************************************************/
 /* Provider helper API                                                        */
@@ -1090,7 +1092,12 @@ int p11_signature_ctx_init(P11_SIGNATURE_CTX *sig_ctx, P11_KEYDATA *keydata,
 
 	/* (re)set defaults (important when params don't include them) */
 	sig_ctx->pad_mode = RSA_PKCS1_PADDING;
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+	/* Maximize up to digest length for sign */
+	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX; /* -4 */
+#else
 	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO; /* -2 */
+#endif
 
 	OPENSSL_free(sig_ctx->mdname);
 	sig_ctx->mdname = NULL;
@@ -1408,6 +1415,83 @@ const char *p11_signature_pss_saltlen_to_string(int saltlen)
 	default:
 		return NULL;
 	}
+}
+
+/*
+ * Build and return a DER-encoded signature AlgorithmIdentifier
+ * for the current key type, digest and signature parameters.
+ */
+int p11_signature_set_algorithm_id(OSSL_PARAM *p, const P11_SIGNATURE_CTX *sig_ctx)
+{
+	X509_ALGOR *alg = NULL;
+	ASN1_OBJECT *obj = NULL;
+	unsigned char *der = NULL;
+	const char *mdname;
+	int key_type;
+	int md_nid;
+	int sig_nid;
+	int param_type;
+	int der_len;
+	int ret = 0;
+
+	if (p == NULL || sig_ctx == NULL)
+		return 0;
+
+	key_type = p11_signature_ctx_get_type(sig_ctx);
+	mdname = p11_signature_ctx_get_mdname(sig_ctx);
+
+	/* RSA-PSS requires RSASSA-PSS-params and must be handled separately. */
+	if ((key_type == EVP_PKEY_RSA || key_type == EVP_PKEY_RSA_PSS) &&
+		p11_signature_ctx_get_pad_mode(sig_ctx) == RSA_PKCS1_PSS_PADDING)
+		return p11_signature_set_pss_algorithm_id(p, sig_ctx, mdname);
+
+	if (mdname != NULL && *mdname != '\0') {
+		/* RSA PKCS#1, ECDSA, DSA, SM2 and other algorithms
+		 * combining a digest with a key algorithm */
+		md_nid = OBJ_txt2nid(mdname);
+		if (md_nid == NID_undef || !OBJ_find_sigid_by_algs(&sig_nid, md_nid, key_type))
+			goto end;
+
+		obj = OBJ_dup(OBJ_nid2obj(sig_nid));
+		if (obj == NULL)
+			goto end;
+
+		/* RSA PKCS#1 uses NULL; ECDSA/DSA parameters are absent. */
+		param_type = key_type == EVP_PKEY_RSA ? V_ASN1_NULL : V_ASN1_UNDEF;
+	} else {
+		/* Ed25519, Ed448, ML-DSA, SLH-DSA, Falcon: parameters are absent */
+		const char *algname = p11_keydata_get_name(sig_ctx->keydata);
+
+		if (algname == NULL)
+			goto end;
+
+		obj = OBJ_txt2obj(algname, 0);
+		if (obj == NULL)
+			goto end;
+
+		param_type = V_ASN1_UNDEF;
+	}
+
+	alg = X509_ALGOR_new();
+	if (alg == NULL)
+		goto end;
+
+	if (!X509_ALGOR_set0(alg, obj, param_type, NULL))
+		goto end;
+
+	obj = NULL; /* owned by alg */
+
+	der_len = i2d_X509_ALGOR(alg, &der);
+	if (der_len <= 0)
+		goto end;
+
+	ret = OSSL_PARAM_set_octet_string(p, der, (size_t)der_len);
+
+end:
+	ASN1_OBJECT_free(obj);
+	X509_ALGOR_free(alg);
+	OPENSSL_free(der);
+	return ret;
 }
 
 /* Convert RSA padding mode to its string representation. */
@@ -2065,7 +2149,7 @@ size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx)
 		if (pkey == NULL)
 			return 0;
 
-		bits = EVP_PKEY_bits(pkey);
+		bits = EVP_PKEY_get_bits(pkey);
 		if (bits <= 0)
 			return 0;
 
@@ -3477,6 +3561,160 @@ static int keydata_has_raw_pub(const P11_KEYDATA *keydata)
 		return 0;
 
 	return keydata->pubdata.raw.pub != NULL && keydata->pubdata.raw.pub_len != 0;
+}
+
+/*
+ * Build and return a DER-encoded RSASSA-PSS AlgorithmIdentifier
+ * using the digest, MGF1 digest and salt length from the signature context.
+ */
+static int p11_signature_set_pss_algorithm_id(OSSL_PARAM *p,
+	const P11_SIGNATURE_CTX *sig_ctx, const char *mdname)
+{
+	RSA_PSS_PARAMS *pss = NULL;
+	X509_ALGOR *alg = NULL;
+	X509_ALGOR *mgf1_hash = NULL;
+	ASN1_STRING *mgf1_params = NULL;
+	ASN1_STRING *pss_params = NULL;
+	ASN1_OBJECT *obj = NULL;
+	EVP_PKEY *pkey;
+	const EVP_MD *md, *mgf1_md;
+	const char *mgf1_mdname;
+	unsigned char *der = NULL;
+	int saltlen, digest_salt, max_salt, der_len, key_size, key_bits;
+	int ret = 0;
+
+	if (p == NULL || sig_ctx == NULL || mdname == NULL)
+		return 0;
+
+	pkey = p11_signature_ctx_get_evp_pkey(sig_ctx);
+	if (pkey == NULL)
+		return 0;
+
+	mgf1_mdname = p11_signature_ctx_get_mgf1_mdname(sig_ctx);
+	if (mgf1_mdname == NULL)
+		mgf1_mdname = mdname;
+
+	md = EVP_get_digestbyname(mdname);
+	mgf1_md = EVP_get_digestbyname(mgf1_mdname);
+	if (md == NULL || mgf1_md == NULL)
+		goto end;
+
+	digest_salt = EVP_MD_get_size(md);
+	key_size = EVP_PKEY_get_size(pkey);
+	key_bits = EVP_PKEY_get_bits(pkey);
+	if (digest_salt <= 0 || key_size <= 0 || key_bits <= 0)
+		goto end;
+
+	max_salt = key_size - digest_salt - 2;
+
+	if (((key_bits - 1) & 0x7) == 0)
+		max_salt--;
+
+	if (max_salt < 0)
+		goto end;
+
+	saltlen = p11_signature_ctx_get_pss_saltlen(sig_ctx);
+
+	switch (saltlen) {
+	case RSA_PSS_SALTLEN_DIGEST: /* -1 */
+		/* sets the salt length to the digest length */
+		saltlen = digest_salt;
+		break;
+	case RSA_PSS_SALTLEN_AUTO: /* -2 */
+		/* for signing: it has the same meaning as RSA_PSS_SALTLEN_MAX */
+	case RSA_PSS_SALTLEN_MAX:  /* -3 */
+		/* sets the salt length to the maximum permissible value */
+		saltlen = max_salt;
+		break;
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+	case RSA_PSS_SALTLEN_AUTO_DIGEST_MAX: /* -4 */
+		/* for signing: use min(max_salt, digest_len) per FIPS 186-4 */
+		saltlen = max_salt < digest_salt ? max_salt : digest_salt;
+		break;
+#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
+	default:
+		if (saltlen < 0 || saltlen > max_salt)
+			goto end;
+		break;
+	}
+
+	pss = RSA_PSS_PARAMS_new();
+	alg = X509_ALGOR_new();
+	mgf1_hash = X509_ALGOR_new();
+	if (pss == NULL || alg == NULL || mgf1_hash == NULL)
+		goto end;
+
+	/* hashAlgorithm */
+	pss->hashAlgorithm = X509_ALGOR_new();
+	if (pss->hashAlgorithm == NULL)
+		goto end;
+
+	/* RFC 4055 Section 2.1 defines SHA AlgorithmIdentifiers used in
+	 * RSASSA-PSS parameters with an explicit ASN.1 NULL parameter. */
+	obj = OBJ_dup(OBJ_nid2obj(EVP_MD_get_type(md)));
+	if (obj == NULL || !X509_ALGOR_set0(pss->hashAlgorithm, obj, V_ASN1_NULL, NULL))
+		goto end;
+	obj = NULL;
+
+	/* maskGenAlgorithm: MGF1 with selected digest */
+	obj = OBJ_dup(OBJ_nid2obj(EVP_MD_get_type(mgf1_md)));
+	if (obj == NULL || !X509_ALGOR_set0(mgf1_hash, obj, V_ASN1_NULL, NULL))
+		goto end;
+	obj = NULL;
+
+	mgf1_params = ASN1_item_pack(mgf1_hash, ASN1_ITEM_rptr(X509_ALGOR), NULL);
+	if (mgf1_params == NULL)
+		goto end;
+
+	pss->maskGenAlgorithm = X509_ALGOR_new();
+	if (pss->maskGenAlgorithm == NULL)
+		goto end;
+
+	obj = OBJ_dup(OBJ_nid2obj(NID_mgf1));
+	if (obj == NULL)
+		goto end;
+
+	if (!X509_ALGOR_set0(pss->maskGenAlgorithm, obj, V_ASN1_SEQUENCE, mgf1_params))
+		goto end;
+
+	obj = NULL;
+	mgf1_params = NULL;
+
+	/* saltLength */
+	pss->saltLength = ASN1_INTEGER_new();
+	if (pss->saltLength == NULL || !ASN1_INTEGER_set(pss->saltLength, saltlen))
+		goto end;
+
+	/* trailerField is omitted because its default value is 1. */
+	pss_params = ASN1_item_pack(pss, ASN1_ITEM_rptr(RSA_PSS_PARAMS), NULL);
+	if (pss_params == NULL)
+		goto end;
+
+	obj = OBJ_dup(OBJ_nid2obj(NID_rsassaPss));
+	if (obj == NULL)
+		goto end;
+
+	if (!X509_ALGOR_set0(alg, obj, V_ASN1_SEQUENCE, pss_params))
+		goto end;
+
+	obj = NULL; /* owned by alg */
+	pss_params = NULL;
+
+	der_len = i2d_X509_ALGOR(alg, &der);
+	if (der_len <= 0)
+		goto end;
+
+	ret = OSSL_PARAM_set_octet_string(p, der, (size_t)der_len);
+
+end:
+	ASN1_OBJECT_free(obj);
+	ASN1_STRING_free(mgf1_params);
+	ASN1_STRING_free(pss_params);
+	X509_ALGOR_free(mgf1_hash);
+	RSA_PSS_PARAMS_free(pss);
+	X509_ALGOR_free(alg);
+	OPENSSL_free(der);
+	return ret;
 }
 
 /* vim: set noexpandtab: */

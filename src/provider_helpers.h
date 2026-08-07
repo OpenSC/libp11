@@ -134,6 +134,7 @@ const char *p11_signature_ctx_get_mgf1_mdname(const P11_SIGNATURE_CTX *sig_ctx);
 
 EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx);
 const char *p11_signature_pss_saltlen_to_string(int saltlen);
+int p11_signature_set_algorithm_id(OSSL_PARAM *p, const P11_SIGNATURE_CTX *sig_ctx);
 const char *p11_pad_mode_to_string(int pad_mode);
 int is_oneshot_sig_type(int type);
 int has_raw_public_key(int type);
