@@ -1,9 +1,22 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.20; unreleased
-* Updated the bundled PKCS#11 header to version 3.2. (Małgorzata Olszówka)
-* Added PKCS#11 provider support for ML-KEM key generation,
-  encapsulation and decapsulation (Małgorzata Olszówka)
+New in 0.4.20; 2026-08-08; Michał Trojnara
+* Added PKCS#11 3.2 interface discovery and updated the bundled header
+  to version 3.2 (Małgorzata Olszówka)
+* Added PKCS#11 provider support for ML-KEM-512, ML-KEM-768 and ML-KEM-1024
+  key generation, encapsulation and decapsulation (Małgorzata Olszówka)
+* Added the PKCS11_evp_pkey_decapsulate() API (Małgorzata Olszówka)
+* Added provider signature AlgorithmIdentifier support, including RSA-PSS
+  parameters and correct default salt length handling (Małgorzata Olszówka)
+* Fixed RSA-PSS salt length parsing and spurious OpenSSL errors
+  (Małgorzata Olszówka)
+* Fixed session-pool races and deadlocks during concurrent key generation and
+  cryptographic operations (Michał Trojnara)
+* Fixed key-cache and OpenSSL 1.x RSA object use-after-free bugs
+  (Michał Trojnara)
+* Fixed provider EC parameter lifetime handling and resource leaks during EC,
+  RSA, EdDSA and XDH operations and context cleanup (Michał Trojnara)
+* Fixed installation of p11_ver.h, which is required by p11_err.h (botantony)
 
 New in 0.4.19; 2026-07-21; Michał Trojnara
 * Define LIBP11_VERSION_NUMBER (Michał Trojnara)

@@ -6,7 +6,7 @@ AC_PREREQ([2.69])
 define([PACKAGE_VERSION_MAJOR], [0])
 define([PACKAGE_VERSION_MINOR], [4])
 define([PACKAGE_VERSION_FIX], [20])
-define([PACKAGE_SUFFIX], [_git])
+define([PACKAGE_SUFFIX], [])
 
 AC_INIT([libp11],[PACKAGE_VERSION_MAJOR.PACKAGE_VERSION_MINOR.PACKAGE_VERSION_FIX[]PACKAGE_SUFFIX])
 AC_CONFIG_AUX_DIR([.])
@@ -89,7 +89,7 @@ AM_CONDITIONAL([LIBP11_BUILD_ENGINE], [test x$LIBP11_BUILD_ENGINE = xyes])
 # release, we should either stick to supporting a single openssl ABI
 # or bump the LT_OLDEST version sufficiently to avoid clashes.
 LIBP11_LT_REVISION="0"
-LIBP11_LT_CURRENT="11"
+LIBP11_LT_CURRENT="12"
 LIBP11_LT_AGE="$((${LIBP11_LT_CURRENT}-${LIBP11_LT_OLDEST}))"
 
 gl_LD_VERSION_SCRIPT
