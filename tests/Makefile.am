@@ -21,6 +21,7 @@ check_PROGRAMS = \
 	rsa-pss-sign-prov \
 	rsa-oaep \
 	rsa-oaep-prov \
+	rsa-software-key \
 	check-privkey \
 	check-privkey-prov \
 	dup-key \
@@ -46,6 +47,7 @@ dist_check_SCRIPTS = \
 	rsa-evp-sign.softhsm \
 	rsa-pss-sign.softhsm \
 	rsa-oaep.softhsm \
+	rsa-software-key.softhsm \
 	rsa-check-privkey.softhsm \
 	rsa-cert-store.softhsm \
 	rsa-keygen.softhsm \

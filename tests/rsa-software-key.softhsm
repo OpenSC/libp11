@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# Copyright (C) 2026 OpenSC Project
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+outdir="output.$$"
+
+PRIVATE_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=private;pin-value=1234"
+PUBLIC_KEY="pkcs11:token=libp11-0;id=%01%02%03%04;object=server-key-0;type=public;pin-value=1234"
+
+# Load common test functions
+. "${srcdir}/common.sh"
+
+# Do the token initialization
+init_token "rsa" "1" "libp11" "${ID}" "server-key" "privkey" "pubkey"
+
+#
+# Configure SoftHSM2 to expose PKCS#1 v1.5 but not raw RSA.
+#
+# The direct libp11 test must therefore reach CKM_RSA_PKCS through the
+# RSA_METHOD attached to the key returned by PKCS11_get_private_key().
+#
+if [[ -n "${SOFTHSM2_CONF}" ]]; then
+	echo "slots.mechanisms = CKM_RSA_PKCS_KEY_PAIR_GEN,CKM_RSA_PKCS" \
+		>>"${SOFTHSM2_CONF}"
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-PKCS
+	has_pkcs1=$?
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-X-509
+	has_raw=$?
+	if [[ $has_pkcs1 -ne 0 || $has_raw -eq 0 ]]; then
+		echo "Failed to configure PKCS#1 v1.5 without raw RSA."
+		exit 1
+	fi
+	echo "PKCS#1 v1.5 enabled and raw RSA disabled."
+fi
+
+# Load OpenSSL settings
+. "${srcdir}/openssl-settings.sh"
+
+# Restore OpenSSL settings
+trap cleanup EXIT
+
+#
+# Test direct PKCS#1 signing and isolation between software and PKCS#11 keys.
+#
+${WRAPPER} ./rsa-software-key "${MODULE}" "${PIN}"
+rc=$?
+
+if [[ $rc -eq 77 ]]; then
+	echo "Direct libp11 RSA regression test skipped."
+	rm -rf "$outdir"
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Direct libp11 RSA regression test failed."
+	exit 1
+fi
+
+#
+# Configure SoftHSM2 to expose raw RSA but not native RSA-PSS.
+#
+# This forces libp11/OpenSSL to perform PSS encoding in software and
+# use CKM_RSA_X_509 for the actual private-key operation.
+#
+if [[ -n "${SOFTHSM2_CONF}" ]]; then
+	grep -v '^slots.mechanisms' "${SOFTHSM2_CONF}" \
+		>"${SOFTHSM2_CONF}.tmp"
+	echo "slots.mechanisms = CKM_RSA_PKCS_KEY_PAIR_GEN,CKM_RSA_X_509" \
+		>>"${SOFTHSM2_CONF}.tmp"
+	mv "${SOFTHSM2_CONF}.tmp" "${SOFTHSM2_CONF}"
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-PKCS-PSS
+	has_pss=$?
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-X-509
+	has_raw=$?
+	if [[ $has_pss -eq 0 || $has_raw -ne 0 ]]; then
+		echo "Failed to configure raw RSA without native RSA-PSS."
+		exit 1
+	fi
+	echo "Raw RSA enabled and native RSA-PSS disabled."
+fi
+
+#
+# Test RSA-PSS through the ENGINE interface.
+#
+# With the SoftHSM2 configuration above, native CKM_RSA_PKCS_PSS is
+# unavailable, so this exercises software PSS encoding over
+# CKM_RSA_X_509.
+#
+${WRAPPER} ./rsa-pss-sign "${PIN}" "${outdir}/engines.cnf" \
+	"${PRIVATE_KEY}" "${PUBLIC_KEY}" "${MODULE}"
+rc=$?
+
+if [[ $rc -ne 0 && $rc -ne 77 ]]; then
+	echo "Raw RSA-PSS ENGINE test failed."
+	exit 1
+fi
+echo
+
+#
+# Configure SoftHSM2 for native RSA-PSS.
+#
+# CKM_RSA_X_509 is deliberately disabled. Therefore, a successful
+# RSA-PSS signature cannot use the software-PSS/raw-RSA fallback.
+#
+if [[ -n "${SOFTHSM2_CONF}" ]]; then
+	grep -v '^slots.mechanisms' "${SOFTHSM2_CONF}" \
+		>"${SOFTHSM2_CONF}.tmp"
+	echo "slots.mechanisms = CKM_RSA_PKCS_KEY_PAIR_GEN,CKM_RSA_PKCS_PSS" \
+		>>"${SOFTHSM2_CONF}.tmp"
+	mv "${SOFTHSM2_CONF}.tmp" "${SOFTHSM2_CONF}"
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-PKCS-PSS
+	has_pss=$?
+	LD_LIBRARY_PATH="${TEMP_LD_LIBRARY_PATH}" has_mechanism RSA-X-509
+	has_raw=$?
+	if [[ $has_pss -ne 0 || $has_raw -eq 0 ]]; then
+		echo "Failed to configure native RSA-PSS without raw RSA."
+		exit 1
+	fi
+	echo "Native RSA-PSS enabled and raw RSA disabled."
+fi
+
+#
+# Test native RSA-PSS through ENGINE when the ENGINE test is supported.
+#
+${WRAPPER} ./rsa-pss-sign "${PIN}" "${outdir}/engines.cnf" \
+	"${PRIVATE_KEY}" "${PUBLIC_KEY}" "${MODULE}"
+rc=$?
+if [[ $rc -eq 77 ]]; then
+	echo "Native RSA-PSS ENGINE test skipped."
+	exit 77
+elif [[ $rc -ne 0 ]]; then
+	echo "Native RSA-PSS ENGINE test failed."
+	exit 1
+fi
+
+rm -rf "$outdir"
+exit 0

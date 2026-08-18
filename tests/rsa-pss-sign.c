@@ -40,6 +40,10 @@
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 
+#ifndef RSA_PSS_SALTLEN_DIGEST
+#define RSA_PSS_SALTLEN_DIGEST -1
+#endif
+
 #ifndef OPENSSL_NO_ENGINE
 
 static void display_openssl_errors(int l)
@@ -183,8 +187,8 @@ int main(int argc, char **argv)
 
 	EVP_MD_CTX_destroy(md_ctx);
 
-	/* Sign the hash */
-	pkey_ctx = EVP_PKEY_CTX_new(private_key, e);
+	/* The key-loading callback selects ENGINE dispatch for this key. */
+	pkey_ctx = EVP_PKEY_CTX_new(private_key, NULL);
 
 	if (pkey_ctx == NULL) {
 		fprintf(stderr, "Could not create context\n");
@@ -210,6 +214,19 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	if (EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, digest_algo) <= 0) {
+		fprintf(stderr, "Could not set MGF1 digest algorithm\n");
+		display_openssl_errors(__LINE__);
+		exit(1);
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx,
+			RSA_PSS_SALTLEN_DIGEST) <= 0) {
+		fprintf(stderr, "Could not set RSA-PSS salt length\n");
+		display_openssl_errors(__LINE__);
+		exit(1);
+	}
+
 	sig_len = sizeof(sig);
 	if (EVP_PKEY_sign(pkey_ctx, sig, &sig_len, md,
 			EVP_MD_size(digest_algo)) <= 0) {
@@ -222,7 +239,7 @@ int main(int argc, char **argv)
 
 	printf("Signature created\n");
 
-	pkey_ctx = EVP_PKEY_CTX_new(public_key, e);
+	pkey_ctx = EVP_PKEY_CTX_new(public_key, NULL);
 
 	if (pkey_ctx == NULL) {
 		fprintf(stderr, "Could not create context\n");
@@ -244,6 +261,19 @@ int main(int argc, char **argv)
 
 	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, digest_algo) <= 0) {
 		fprintf(stderr, "Could not set message digest algorithm\n");
+		display_openssl_errors(__LINE__);
+		exit(1);
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, digest_algo) <= 0) {
+		fprintf(stderr, "Could not set MGF1 digest algorithm\n");
+		display_openssl_errors(__LINE__);
+		exit(1);
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx,
+			RSA_PSS_SALTLEN_DIGEST) <= 0) {
+		fprintf(stderr, "Could not set RSA-PSS salt length\n");
 		display_openssl_errors(__LINE__);
 		exit(1);
 	}
