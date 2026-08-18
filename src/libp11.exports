@@ -1,6 +1,7 @@
 PKCS11_CTX_init_args
 PKCS11_CTX_new_ex
 PKCS11_CTX_new
+PKCS11_CTX_set_pkey_callback
 PKCS11_CTX_load
 PKCS11_CTX_unload
 PKCS11_CTX_free

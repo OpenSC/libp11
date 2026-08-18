@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2026 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -158,6 +158,28 @@ int ENGINE_CTX_finish(ENGINE_CTX *ctx)
 		UTIL_CTX_free_libp11(ctx->util_ctx);
 	}
 	return 1;
+}
+
+/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
+ * but otherwise setting pkey->engine breaks OpenSSL 1.0.2 */
+#ifdef EVP_F_EVP_PKEY_SET1_ENGINE
+static int set_pkey_engine(PKCS11_KEY *key, EVP_PKEY *pkey, void *user_data)
+{
+	(void)key;
+	return EVP_PKEY_set1_engine(pkey, user_data) ? 0 : -1;
+}
+#endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
+
+int ENGINE_CTX_set_pkey_callback(ENGINE_CTX *ctx, ENGINE *engine)
+{
+#ifdef EVP_F_EVP_PKEY_SET1_ENGINE
+	return UTIL_CTX_set_pkey_callback(ctx->util_ctx,
+		PKCS11_PKEY_CALLBACK_GET_PRIVATE_KEY, set_pkey_engine, engine);
+#else
+	(void)ctx;
+	(void)engine;
+	return 1;
+#endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
 }
 
 /******************************************************************************/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2025-2026 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,6 +58,8 @@ void UTIL_CTX_free(UTIL_CTX *ctx);
 int UTIL_CTX_set_module(UTIL_CTX *ctx, const char *module);
 int UTIL_CTX_set_init_args(UTIL_CTX *ctx, const char *init_args);
 int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data);
+int UTIL_CTX_set_pkey_callback(UTIL_CTX *ctx, int callback_type,
+	PKCS11_PKEY_CALLBACK callback, void *user_data);
 int UTIL_CTX_enumerate_slots(UTIL_CTX *ctx);
 void UTIL_CTX_free_libp11(UTIL_CTX *ctx);
 

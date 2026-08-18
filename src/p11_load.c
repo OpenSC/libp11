@@ -39,9 +39,6 @@ static void libp11_global_free(void)
 
 #ifndef OPENSSL_NO_RSA
 	pkcs11_rsa_method_free();
-# if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-	pkcs11_rsa_key_method_free();
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 #endif /* OPENSSL_NO_RSA */
 
 #if !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L

@@ -3,7 +3,7 @@
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2002 Olaf Kirch
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2026 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,6 +53,9 @@ struct util_ctx_st {
 	char *init_args;
 	UI_METHOD *ui_method;
 	void *ui_data;
+	int pkey_callback_type;
+	PKCS11_PKEY_CALLBACK pkey_callback;
+	void *pkey_callback_data;
 
 	/* Logging */
 	int debug_level;                             /* level of debug output */
@@ -127,6 +130,18 @@ int UTIL_CTX_set_ui_method(UTIL_CTX *ctx, UI_METHOD *ui_method, void *ui_data)
 	return 1;
 }
 
+int UTIL_CTX_set_pkey_callback(UTIL_CTX *ctx, int callback_type,
+		PKCS11_PKEY_CALLBACK callback, void *user_data)
+{
+	ctx->pkey_callback_type = callback_type;
+	ctx->pkey_callback = callback;
+	ctx->pkey_callback_data = callback ? user_data : NULL;
+	if (ctx->pkcs11_ctx && PKCS11_CTX_set_pkey_callback(ctx->pkcs11_ctx,
+			callback_type, callback, user_data) < 0)
+		return 0;
+	return 1;
+}
+
 static int util_ctx_enumerate_slots_unlocked(UTIL_CTX *ctx)
 {
 	/* PKCS11_update_slots() uses C_GetSlotList() via libp11 */
@@ -173,6 +188,12 @@ static int util_ctx_init_libp11(UTIL_CTX *ctx)
 	PKCS11_set_vlog_a_method(ctx->pkcs11_ctx, ctx->vlog);
 	PKCS11_CTX_init_args(ctx->pkcs11_ctx, ctx->init_args);
 	PKCS11_set_ui_method(ctx->pkcs11_ctx, ctx->ui_method, ctx->ui_data);
+	if (ctx->pkey_callback && PKCS11_CTX_set_pkey_callback(ctx->pkcs11_ctx,
+			ctx->pkey_callback_type, ctx->pkey_callback,
+			ctx->pkey_callback_data) < 0) {
+		UTIL_CTX_free_libp11(ctx);
+		return -1;
+	}
 	if (PKCS11_CTX_load(ctx->pkcs11_ctx, ctx->module) < 0) {
 		UTIL_CTX_log(ctx, LOG_ERR, "Unable to load module %s\n", ctx->module);
 		UTIL_CTX_free_libp11(ctx);

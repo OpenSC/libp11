@@ -2,7 +2,7 @@
  * Copyright (c) 2001 Markus Friedl
  * Copyright (c) 2002 Juha Yrjölä
  * Copyright (c) 2003 Kevin Stefanik
- * Copyright (c) 2016-2025 Michał Trojnara
+ * Copyright (c) 2016-2026 Michał Trojnara
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -83,6 +83,8 @@ int ENGINE_CTX_destroy(ENGINE_CTX *ctx);
 int ENGINE_CTX_init(ENGINE_CTX *ctx);
 
 int ENGINE_CTX_finish(ENGINE_CTX *ctx);
+
+int ENGINE_CTX_set_pkey_callback(ENGINE_CTX *ctx, ENGINE *engine);
 
 int ENGINE_CTX_ctrl(ENGINE_CTX *ctx, int cmd, long i, void *p, void (*f)(void));
 

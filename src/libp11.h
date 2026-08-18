@@ -1,6 +1,6 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
- * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+ * Copyright © 2025-2026 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -172,6 +172,18 @@ struct PKCS11_kgen_attrs_st {
 typedef void (*PKCS11_VLOG_A_CB)(int, const char *, va_list);
 
 /**
+ * Callback invoked for an EVP_PKEY returned by libp11
+ *
+ * The key arguments are borrowed and must not be freed by the callback.
+ * The callback may modify the EVP_PKEY and must return 0 on success or -1
+ * on error.
+ */
+typedef int (*PKCS11_PKEY_CALLBACK)(PKCS11_KEY *, EVP_PKEY *, void *);
+
+/** Callback type for PKCS11_get_private_key() */
+#define PKCS11_PKEY_CALLBACK_GET_PRIVATE_KEY 1
+
+/**
  * Create a new libp11 context with specified flags
  *
  * This should be the first function called in the use of libp11
@@ -186,6 +198,23 @@ extern PKCS11_CTX *PKCS11_CTX_new_ex(int flags);
  * @return an allocated context
  */
 extern PKCS11_CTX *PKCS11_CTX_new(void);
+
+/**
+ * Set a callback for EVP_PKEY objects returned by this context
+ *
+ * The callback and its user data must remain valid until they are replaced,
+ * unset, or the context is freed. Callback registration must not be changed
+ * concurrently with key retrieval.
+ *
+ * @param ctx context allocated by PKCS11_CTX_new()
+ * @param callback_type one of PKCS11_PKEY_CALLBACK_* types
+ * @param callback callback function, or NULL to unset it
+ * @param user_data opaque callback data
+ * @retval 0 success
+ * @retval -1 unsupported callback type or invalid context
+ */
+extern int PKCS11_CTX_set_pkey_callback(PKCS11_CTX *ctx,
+	int callback_type, PKCS11_PKEY_CALLBACK callback, void *user_data);
 
 /**
  * Specify any private PKCS#11 module initialization args, if necessary

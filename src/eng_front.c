@@ -5,7 +5,7 @@
  * Portions Copyright (c) 2003 Kevin Stefanik (kstef@mtppi.org)
  * Copied/modified by Kevin Stefanik (kstef@mtppi.org) for the OpenSC
  * project 2003.
- * Copyright (c) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
+ * Copyright (c) 2016-2026 Michał Trojnara <Michal.Trojnara@stunnel.org>
  *
  * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -175,12 +175,13 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		UI_METHOD *ui_method, void *ui_data)
 {
 	ENGINE_CTX *ctx;
-	EVP_PKEY *pkey;
 
 	ctx = ENGINE_CTX_get(engine);
 	if (!ctx)
 		return 0;
-	bind_helper_methods(engine);
+	if (!bind_helper_methods(engine) ||
+			!ENGINE_CTX_set_pkey_callback(ctx, engine))
+		return 0;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	/*
 	 * A workaround for an OpenSSL bug affecting the handling of foreign
@@ -207,16 +208,7 @@ static EVP_PKEY *load_privkey(ENGINE *engine, const char *s_key_id,
 		}
 	}
 #endif
-	pkey = ENGINE_CTX_load_privkey(ctx, s_key_id, ui_method, ui_data);
-#ifdef EVP_F_EVP_PKEY_SET1_ENGINE
-	/* EVP_PKEY_set1_engine() is required for OpenSSL 1.1.x,
-	 * but otherwise setting pkey->engine breaks OpenSSL 1.0.2 */
-	if (pkey && !EVP_PKEY_set1_engine(pkey, engine)) {
-		EVP_PKEY_free(pkey);
-		pkey = NULL;
-	}
-#endif /* EVP_F_EVP_PKEY_SET1_ENGINE */
-	return pkey;
+	return ENGINE_CTX_load_privkey(ctx, s_key_id, ui_method, ui_data);
 }
 
 static int engine_ctrl(ENGINE *engine, int cmd, long i, void *p, void (*f) (void))

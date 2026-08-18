@@ -1,7 +1,7 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2005 Olaf Kirch <okir@lst.de>
  * Copyright (C) 2015-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
- * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+ * Copyright © 2025-2026 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -63,6 +63,8 @@ typedef struct pkcs11_keys PKCS11_keys;
 typedef struct pkcs11_object_ops PKCS11_OBJECT_ops;
 typedef struct pkcs11_template_st PKCS11_TEMPLATE;
 
+#define PKCS11_PKEY_CALLBACK_COUNT 2
+
 /* get private implementations of PKCS11 structures */
 
 /*
@@ -81,6 +83,8 @@ struct pkcs11_ctx_private {
 	unsigned int forkid;
 	int initialized;
 	void (*vlog_a)(int, const char *, va_list); /* for the logging callback */
+	PKCS11_PKEY_CALLBACK pkey_callbacks[PKCS11_PKEY_CALLBACK_COUNT];
+	void *pkey_callback_data[PKCS11_PKEY_CALLBACK_COUNT];
 };
 
 struct pkcs11_keys {
@@ -627,11 +631,6 @@ extern void pkcs11_ed_key_method_free(void);
 /* Free the global X25519/X448 EVP_PKEY_METHOD */
 extern void pkcs11_xdh_key_method_free(void);
 #endif /* !defined(OPENSSL_NO_ECX) && OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L
-/* Free the global RSA EVP_PKEY_METHOD */
-extern void pkcs11_rsa_key_method_free(void);
-# endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x40000000L */
 
 #if OPENSSL_VERSION_NUMBER < 0x100020d0L || defined(LIBRESSL_VERSION_NUMBER)
 /* Get sign_init and sign callbacks from EVP_PKEY_METHOD */

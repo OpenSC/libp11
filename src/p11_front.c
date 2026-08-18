@@ -1,6 +1,6 @@
 /* libp11, a simple layer on top of PKCS#11 API
  * Copyright (C) 2016-2025 Michał Trojnara <Michal.Trojnara@stunnel.org>
- * Copyright © 2025 Mobi - Com Polska Sp. z o.o.
+ * Copyright © 2025-2026 Mobi - Com Polska Sp. z o.o.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,22 @@ PKCS11_CTX *PKCS11_CTX_new_ex(int flags)
 PKCS11_CTX *PKCS11_CTX_new(void)
 {
 	return pkcs11_CTX_new(0);
+}
+
+int PKCS11_CTX_set_pkey_callback(PKCS11_CTX *pctx,
+		int callback_type, PKCS11_PKEY_CALLBACK callback, void *user_data)
+{
+	PKCS11_CTX_private *ctx;
+
+	if (!pctx || callback_type <= 0 ||
+			callback_type >= PKCS11_PKEY_CALLBACK_COUNT)
+		return -1;
+	ctx = pctx->_private;
+	if (check_fork(ctx) < 0)
+		return -1;
+	ctx->pkey_callbacks[callback_type] = callback;
+	ctx->pkey_callback_data[callback_type] = callback ? user_data : NULL;
+	return 0;
 }
 
 void PKCS11_CTX_init_args(PKCS11_CTX *ctx, const char *init_args)
@@ -255,9 +271,22 @@ int PKCS11_get_key_type(PKCS11_KEY *pkey)
 EVP_PKEY *PKCS11_get_private_key(PKCS11_KEY *pkey)
 {
 	PKCS11_OBJECT_private *key = pkey->_private;
+	PKCS11_CTX_private *ctx = key->slot->ctx;
+	PKCS11_PKEY_CALLBACK callback;
+	EVP_PKEY *ret;
+
 	if (check_object_fork(key) < 0)
 		return NULL;
-	return pkcs11_get_key(key, CKO_PRIVATE_KEY);
+	ret = pkcs11_get_key(key, CKO_PRIVATE_KEY);
+	if (!ret)
+		return NULL;
+	callback = ctx->pkey_callbacks[PKCS11_PKEY_CALLBACK_GET_PRIVATE_KEY];
+	if (callback && callback(pkey, ret,
+			ctx->pkey_callback_data[PKCS11_PKEY_CALLBACK_GET_PRIVATE_KEY])) {
+		EVP_PKEY_free(ret);
+		return NULL;
+	}
+	return ret;
 }
 
 EVP_PKEY *PKCS11_get_public_key(PKCS11_KEY *pkey)
