@@ -516,6 +516,16 @@ ECDH_METHOD *PKCS11_get_ecdh_method(void);
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x40000000L
+/**
+ * Return supported key types or create a legacy OpenSSL pkey method.
+ *
+ * A method returned through @p pmeth is newly allocated and owned by the
+ * caller.  Do not install this function directly with ENGINE_set_pkey_meths():
+ * OpenSSL expects repeated callback calls to return the same method, while
+ * this function returns a fresh method to avoid sharing methods between
+ * ENGINE instances.  Direct callback use therefore leaks methods.  Use the
+ * bundled pkcs11 engine, which caches methods per ENGINE.
+ */
 int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		const int **nids, int nid);
 #else /* OPENSSL_VERSION_NUMBER < 0x40000000L */

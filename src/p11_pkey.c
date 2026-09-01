@@ -85,7 +85,6 @@ typedef enum {
 typedef struct {
 	int type;
 	P11_PKEY_KIND kind;
-	EVP_PKEY_METHOD *method;
 	P11_PKEY_INIT_FN original_init;
 	P11_PKEY_SIGN_FN original_sign;
 	P11_PKEY_INIT_FN original_decrypt_init;
@@ -2164,18 +2163,6 @@ static int pkcs11_ecx_derive(EVP_PKEY_CTX *ctx,
 
 /* --- ENGINE method construction and registration ------------------------- */
 
-/* Reset cached ENGINE method and original OpenSSL callbacks. */
-static void pkey_method_reset(P11_PKEY_METHOD *state)
-{
-	state->method = NULL;
-	state->original_init = NULL;
-	state->original_sign = NULL;
-	state->original_decrypt_init = NULL;
-	state->original_decrypt = NULL;
-	state->original_digestsign = NULL;
-	state->original_derive = NULL;
-}
-
 /*
  * Build an ENGINE-scoped EVP_PKEY_METHOD by preserving the original OpenSSL
  * method, flags and callbacks and overriding only the callbacks implemented
@@ -2199,12 +2186,6 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method(int type)
 
 	if (!pkey_method_lock_acquire())
 		return NULL;
-
-	/* Already initialized */
-	if (state->method != NULL) {
-		method = state->method;
-		goto end;
-	}
 
 	/*
 	 * PKEY methods are wrappers around the original OpenSSL method.
@@ -2312,15 +2293,11 @@ static EVP_PKEY_METHOD *pkcs11_pkey_method(int type)
 	default:
 		goto error;
 	}
-
-	/* Publish only after the method is fully constructed. */
-	state->method = method;
 	goto end;
 
 error:
 	EVP_PKEY_meth_free(method);
 	method = NULL;
-	pkey_method_reset(state);
 
 end:
 	pkey_method_lock_release();
@@ -2347,7 +2324,6 @@ int PKCS11_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth,
 		0
 	};
 	(void)e; /* squash the unused parameter warning */
-	/* all PKCS#11 engines currently share the same pkey_meths */
 
 	if (!pmeth) { /* get the list of supported nids */
 		if (nids == NULL)

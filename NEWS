@@ -1,6 +1,10 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.21; unreleased
+* Fixed EVP_PKEY_METHOD use-after-free when multiple ENGINE instances are used.
+  As a compatibility regression, registering PKCS11_pkey_meths() directly as
+  an ENGINE callback now leaks methods; use the bundled engine, which caches
+  methods per ENGINE.
 
 New in 0.4.20; 2026-08-08; Michał Trojnara
 * Added PKCS#11 3.2 interface discovery and updated the bundled header
