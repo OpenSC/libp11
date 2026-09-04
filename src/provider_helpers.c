@@ -1,5 +1,5 @@
 /*
- * Copyright © 2026 Mobi - Com Polska Sp. z o.o.
+ * Copyright © 2025-2026 Mobi - Com Polska Sp. z o.o.
  * Author: Małgorzata Olszówka <Malgorzata.Olszowka@stunnel.org>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,6 +25,10 @@
 
 #include "provider_helpers.h"
 #include <ctype.h> /* isdigit() */
+#include <errno.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #if defined(__GNUC__) || defined(__clang__)
 #define DISABLE_OSSL3_DEPRECATED_BEGIN \
@@ -189,13 +193,6 @@ struct p11_keygen_ctx {
 	unsigned int param; /* bits for RSA, nid for EC, unused for others */
 };
 
-struct p11_store_ctx_st {
-	PROVIDER_CTX *prov_ctx;
-	char *uri;
-	int expected_type;
-	int types_tried;
-};
-
 struct p11_signature_ctx {
 	PROVIDER_CTX *prov_ctx;
 	char *propq;
@@ -229,64 +226,94 @@ struct p11_kem_ctx {
 	P11_KEYDATA *keydata;      /* recipient public/private key */
 };
 
-/* Internal helper functions */
-static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx);
-static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx);
-
-static EVP_PKEY *pubkey_from_params_default(P11_KEYDATA *keydata);
-static EVP_PKEY *p11_keydata_get_evp_pkey(P11_KEYDATA *keydata);
-static int p11_keydata_set_pub(P11_KEYDATA *keydata, const void *buf, size_t len);
-static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey);
-static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata);
-static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata);
-#ifndef OPENSSL_NO_EC
-static int p11_keydata_init_ec_from_params(P11_KEYDATA *keydata);
-#endif /* OPENSSL_NO_EC */
-#ifndef OPENSSL_NO_ECX
-static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type);
-#endif /* OPENSSL_NO_ECX */
-#if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#ifndef OPENSSL_NO_ML_DSA
-static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type);
-#endif /* OPENSSL_NO_ML_DSA */
-#ifndef OPENSSL_NO_ML_KEM
-static int p11_keydata_init_mlkem_from_params(P11_KEYDATA *keydata, int type);
-#endif /* OPENSSL_NO_ML_KEM */
-#ifndef OPENSSL_NO_SLH_DSA
-static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type);
-#endif /* OPENSSL_NO_SLH_DSA */
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
-static int p11_keydata_init_falcon_from_params(P11_KEYDATA *keydata, int type);
-static int params_contains_private_key(const OSSL_PARAM *params);
-static int param_blob_equal(const OSSL_PARAM *a, const OSSL_PARAM *b);
-#ifndef OPENSSL_NO_EC
-static int p11_dup_param_utf8(const OSSL_PARAM *p, char **out);
-static int ec_point_equal_by_value(const char *group_name,
-	const unsigned char *a, size_t alen, const unsigned char *b, size_t blen);
-#endif /* OPENSSL_NO_EC */
-static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b);
-static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata);
-static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len);
-static int p11_keydata_get_pub(const P11_KEYDATA *keydata, const unsigned char **buf, size_t *len);
-static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
-	EVP_PKEY_CTX *pctx);
-static int evp_pkey_get_type_id(const EVP_PKEY *pkey);
-static int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-#ifndef OPENSSL_NO_EC
-static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-#endif /* OPENSSL_NO_EC */
-static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg);
-static int keydata_has_rsa_pub(const P11_KEYDATA *keydata);
-#ifndef OPENSSL_NO_EC
-static int keydata_has_ec_pub(const P11_KEYDATA *keydata);
-#endif /* OPENSSL_NO_EC */
-static int keydata_has_raw_pub(const P11_KEYDATA *keydata);
-static int p11_signature_set_pss_algorithm_id(OSSL_PARAM *p,
-	const P11_SIGNATURE_CTX *sig_ctx, const char *mdname);
 
 /******************************************************************************/
-/* Provider helper API                                                        */
+/* PROVIDER context helper functions                                          */
 /******************************************************************************/
+
+/* Update the provider context with environment variable values */
+static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx)
+{
+	char *str;
+
+	str = getenv("PKCS11_MODULE_PATH");
+	if (str != NULL && str[0] != '\0') {
+		OPENSSL_free(prov_ctx->pkcs11_module);
+		prov_ctx->pkcs11_module = OPENSSL_strdup(str);
+	}
+	str = getenv("PKCS11_PIN");
+	if (str != NULL && str[0] != '\0') {
+		OPENSSL_free(prov_ctx->pin);
+		prov_ctx->pin = OPENSSL_strdup(str);
+	}
+	str = getenv("PKCS11_DEBUG_LEVEL");
+	if (str != NULL && str[0] != '\0') {
+		OPENSSL_free(prov_ctx->p_debug_level);
+		prov_ctx->p_debug_level = OPENSSL_strdup(str);
+	}
+	str = getenv("PKCS11_FORCE_LOGIN");
+	if (str != NULL && str[0] != '\0') {
+		OPENSSL_free(prov_ctx->p_force_login);
+		prov_ctx->p_force_login = OPENSSL_strdup(str);
+	}
+}
+
+/*
+ * Retrieve provider-specific parameters. The parameters are returned by
+ * reference, not as copies, and so the elements of the param array must have
+ * OSSL_PARAM_UTF8_PTR as their data_type.
+ */
+static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx)
+{
+	int rv;
+	PROVIDER_PARAMS params = {0};
+	OSSL_PARAM specific_params[] = {
+		{"pkcs11_module", OSSL_PARAM_UTF8_PTR, &params.pkcs11_module, 0, 0},
+		{"pin", OSSL_PARAM_UTF8_PTR, &params.pin, 0, 0},
+		{"debug_level", OSSL_PARAM_UTF8_PTR, &params.debug_level, 0, 0},
+		{"force_login", OSSL_PARAM_UTF8_PTR, &params.force_login, 0, 0},
+		{"init_args", OSSL_PARAM_UTF8_PTR, &params.init_args, 0, 0},
+		OSSL_PARAM_END
+	};
+
+	if (!prov_ctx || !prov_ctx->handle || !prov_ctx->core_get_params)
+		return 0;
+
+	/* Retrieve provider-specific settings */
+	rv = prov_ctx->core_get_params(prov_ctx->handle, specific_params);
+
+	if (params.pkcs11_module && (!prov_ctx->params.pkcs11_module
+		|| strcmp(params.pkcs11_module, prov_ctx->params.pkcs11_module))) {
+		OPENSSL_free(prov_ctx->pkcs11_module);
+		prov_ctx->pkcs11_module = OPENSSL_strdup(params.pkcs11_module);
+	}
+#ifdef DEFAULT_PKCS11_MODULE
+	if (!prov_ctx->pkcs11_module) {
+		prov_ctx->pkcs11_module = OPENSSL_strdup(DEFAULT_PKCS11_MODULE);
+	}
+#endif
+	if (params.pin && (!prov_ctx->params.pin || strcmp(params.pin, prov_ctx->params.pin))) {
+		OPENSSL_free(prov_ctx->pin);
+		prov_ctx->pin = OPENSSL_strdup(params.pin);
+	}
+	if (params.debug_level && (!prov_ctx->params.debug_level
+		|| strcmp(params.debug_level, prov_ctx->params.debug_level))) {
+		OPENSSL_free(prov_ctx->p_debug_level);
+		prov_ctx->p_debug_level = OPENSSL_strdup(params.debug_level);
+	}
+	if (params.force_login && (!prov_ctx->params.force_login
+		|| strcmp(params.force_login, prov_ctx->params.force_login))) {
+		OPENSSL_free(prov_ctx->p_force_login);
+		prov_ctx->p_force_login = OPENSSL_strdup(params.force_login);
+	}
+	if (params.init_args && (!prov_ctx->params.init_args
+		|| strcmp(params.init_args, prov_ctx->params.init_args))) {
+		OPENSSL_free(prov_ctx->init_args);
+		prov_ctx->init_args = OPENSSL_strdup(params.init_args);
+	}
+	return rv;
+}
+
 
 #ifdef __GNUC__
 	__attribute__((format(printf, 6, 7)))
@@ -533,158 +560,230 @@ int PROVIDER_CTX_set_ui_method(PROVIDER_CTX *prov_ctx, UI_METHOD *ui_method, voi
 
 
 /******************************************************************************/
-/* KEYMGMT helper functions                                                  */
+/* KEYMGMT helper functions                                                   */
 /******************************************************************************/
 
-/* Create and initialize P11_KEYDATA structure with refcount and lock. */
-P11_KEYDATA *p11_keydata_new(PROVIDER_CTX *ctx)
+/* Basic P11_KEYDATA accessors and key type helpers. */
+
+/* Return maximum signature or operation size in bytes. */
+static size_t p11_keydata_get_maxsize(const P11_KEYDATA *keydata)
 {
-	P11_KEYDATA *keydata = OPENSSL_zalloc(sizeof(P11_KEYDATA));
+	if (keydata == NULL)
+		return 0;
+
+	return keydata->maxsize;
+}
+
+/*
+ * Return key type identifier:
+ * EVP_PKEY_RSA, EVP_PKEY_EC, EVP_PKEY_ED25519, EVP_PKEY_ED448
+ * EVP_PKEY_ML_DSA*, EVP_PKEY_SLH_DSA_*
+ */
+static int p11_keydata_get_type(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
+		return 0;
+
+	return keydata->type;
+}
+
+/* Return EVP_PKEY stored in keydata. */
+static EVP_PKEY *p11_keydata_get_evp_pkey(const P11_KEYDATA *keydata)
+{
 	if (keydata == NULL)
 		return NULL;
 
-	keydata->refcnt = 1;
-	keydata->lock = CRYPTO_THREAD_lock_new();
-	if (keydata->lock == NULL) {
-		OPENSSL_free(keydata);
-		return NULL;
-	}
-	keydata->prov_ctx = ctx;
-	return keydata;
+	return keydata->pkey;
 }
 
-/* Increment the reference count of a P11_KEY. */
-int p11_keydata_up_ref(P11_KEYDATA *keydata)
+/*
+ * Return a legacy EVP_PKEY_* type identifier for the given EVP_PKEY.
+ *
+ * OpenSSL 3.x deprecates the use of EVP_PKEY_base_id() in favor of
+ * provider-aware type checks via EVP_PKEY_is_a(). This helper maps an
+ * EVP_PKEY object to the corresponding EVP_PKEY_* identifier used by
+ * the existing PKCS#11 code paths and switch statements.
+ *
+ * Returns:
+ *   EVP_PKEY_* identifier on success
+ *   EVP_PKEY_NONE if the key type is unknown or unsupported
+ */
+static int evp_pkey_get_type_id(const EVP_PKEY *pkey)
 {
-	if (keydata == NULL || keydata->lock == NULL)
-		return 0;
-
-	if (!CRYPTO_THREAD_write_lock(keydata->lock))
-		return 0;
-
-	keydata->refcnt++;
-
-	CRYPTO_THREAD_unlock(keydata->lock);
-	return 1;
-}
-
-/* Decrement refcount and free the key when it reaches zero. */
-void p11_keydata_free(P11_KEYDATA *keydata)
-{
-	int ref = 0;
-
-	if (keydata == NULL)
-		return;
-
-	if (!CRYPTO_THREAD_write_lock(keydata->lock))
-		return;
-
-	ref = --keydata->refcnt;
-	CRYPTO_THREAD_unlock(keydata->lock);
-
-	if (ref > 0)
-		return;
-
-	OSSL_PARAM_free(keydata->params);
-	EVP_PKEY_free(keydata->pkey);
-
-	if (keydata->name != NULL) {
-		if (strcmp(keydata->name, "RSA") == 0 ||
-		    strcmp(keydata->name, "RSA-PSS") == 0) {
-			OPENSSL_free(keydata->pubdata.rsa.n);
-			OPENSSL_free(keydata->pubdata.rsa.e);
-#ifndef OPENSSL_NO_EC
-		} else if (strcmp(keydata->name, "EC") == 0) {
-			OPENSSL_free(keydata->pubdata.ec.group_name);
-			OPENSSL_free(keydata->pubdata.ec.pub);
-#endif
-		} else {
-			/* EdDSA / ML-DSA / SLH-DSA / FALCON */
-			OPENSSL_free(keydata->pubdata.raw.pub);
-		}
-	}
-
-	if (keydata->pubkey != NULL) {
-		OPENSSL_free(keydata->pubkey->pub);
-		OPENSSL_free(keydata->pubkey);
-	}
-
-	CRYPTO_THREAD_lock_free(keydata->lock);
-	OPENSSL_free(keydata);
-}
-
-/* Create keydata object from EVP_PKEY and initialize key metadata. */
-P11_KEYDATA *p11_keydata_from_evp_pkey(PROVIDER_CTX *ctx, EVP_PKEY *pkey, int is_private)
-{
-	P11_KEYDATA *keydata = NULL;
-
 	if (pkey == NULL)
-		return NULL;
+		return EVP_PKEY_NONE;
 
-	keydata = p11_keydata_new(ctx);
-	if (keydata == NULL)
-		goto err;
+	if (EVP_PKEY_is_a(pkey, "RSA"))
+		return EVP_PKEY_RSA;
+	if (EVP_PKEY_is_a(pkey, "RSA-PSS"))
+		return EVP_PKEY_RSA_PSS;
 
-	keydata->type = evp_pkey_get_type_id(pkey);
-	keydata->is_private = is_private;
+#ifndef OPENSSL_NO_EC
+	if (EVP_PKEY_is_a(pkey, "EC"))
+		return EVP_PKEY_EC;
+#endif /* OPENSSL_NO_EC */
 
-	/* optional, params may be unavailable for some private keys */
-	keydata->params = public_params_from_evp_pkey(pkey);
-	if (keydata->params != NULL && p11_keydata_init_from_params(pkey, keydata) != 1)
-		goto err;
+#ifndef OPENSSL_NO_ECX
+	if (EVP_PKEY_is_a(pkey, "ED25519"))
+		return EVP_PKEY_ED25519;
+	if (EVP_PKEY_is_a(pkey, "ED448"))
+		return EVP_PKEY_ED448;
+	if (EVP_PKEY_is_a(pkey, "X25519"))
+		return EVP_PKEY_X25519;
+	if (EVP_PKEY_is_a(pkey, "X448"))
+		return EVP_PKEY_X448;
+#endif /* OPENSSL_NO_ECX */
 
-	/* take our own reference before storing the pointer */
-	if (EVP_PKEY_up_ref(pkey) != 1)
-		goto err;
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	if (EVP_PKEY_is_a(pkey, "ML-DSA-44"))
+		return EVP_PKEY_ML_DSA_44;
+	if (EVP_PKEY_is_a(pkey, "ML-DSA-65"))
+		return EVP_PKEY_ML_DSA_65;
+	if (EVP_PKEY_is_a(pkey, "ML-DSA-87"))
+		return EVP_PKEY_ML_DSA_87;
+#endif /* OPENSSL_NO_ML_DSA */
 
-	keydata->pkey = pkey;
-	return keydata;
+#ifndef OPENSSL_NO_ML_KEM
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-512"))
+		return EVP_PKEY_ML_KEM_512;
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-768"))
+		return EVP_PKEY_ML_KEM_768;
+	if (EVP_PKEY_is_a(pkey, "ML-KEM-1024"))
+		return EVP_PKEY_ML_KEM_1024;
+#endif /* OPENSSL_NO_ML_KEM */
 
-err:
-	p11_keydata_free(keydata);
-	return NULL;
+#ifndef OPENSSL_NO_SLH_DSA
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-128s"))
+		return EVP_PKEY_SLH_DSA_SHA2_128S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-128f"))
+		return EVP_PKEY_SLH_DSA_SHA2_128F;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-192s"))
+		return EVP_PKEY_SLH_DSA_SHA2_192S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-192f"))
+		return EVP_PKEY_SLH_DSA_SHA2_192F;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-256s"))
+		return EVP_PKEY_SLH_DSA_SHA2_256S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-256f"))
+		return EVP_PKEY_SLH_DSA_SHA2_256F;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-128s"))
+		return EVP_PKEY_SLH_DSA_SHAKE_128S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-128f"))
+		return EVP_PKEY_SLH_DSA_SHAKE_128F;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-192s"))
+		return EVP_PKEY_SLH_DSA_SHAKE_192S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-192f"))
+		return EVP_PKEY_SLH_DSA_SHAKE_192F;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-256s"))
+		return EVP_PKEY_SLH_DSA_SHAKE_256S;
+	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-256f"))
+		return EVP_PKEY_SLH_DSA_SHAKE_256F;
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+
+	if (EVP_PKEY_is_a(pkey, "FALCON-512"))
+		return EVP_PKEY_FALCON512;
+	if (EVP_PKEY_is_a(pkey, "FALCON-1024"))
+		return EVP_PKEY_FALCON1024;
+
+	return EVP_PKEY_NONE;
 }
 
-/* Return key name associated with keydata. */
-const char *p11_keydata_get_name(P11_KEYDATA *keydata)
+/**
+ * Return whether the key type uses one-shot signing without an external digest.
+ *
+ * These algorithms internally process the input message as specified by
+ * their standards and therefore do not accept a separately supplied digest.
+ * Such key types report OSSL_PKEY_PARAM_MANDATORY_DIGEST = "UNDEF" via
+ * keymgmt_get_params().
+ */
+static int is_oneshot_sig_type(int type)
 {
-	if (keydata == NULL)
-		return NULL;
-
-	return keydata->name;
-}
-
-/* Return whether keydata represents a private key. */
-int p11_keydata_is_private(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return 0;
-
-	return keydata->is_private;
-}
-
-#if OPENSSL_VERSION_NUMBER >= 0x30600000L
-/* Map security bits to security category level. */
-int p11_keydata_get_security_category(const P11_KEYDATA *keydata)
-{
-	int secbits = p11_keydata_get_security_bits(keydata);
-
-	if (secbits >= 256)
-		return 5;
-	if (secbits >= 192)
-		return 4;
-	if (secbits >= 128)
-		return 3;
-	if (secbits >= 112)
-		return 2;
-	if (secbits >= 80)
+	switch (type) {
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+#endif /* OPENSSL_NO_ML_DSA */
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
 		return 1;
+
+	default:
+		return 0;
+	}
+}
+
+static int has_raw_public_key(int type)
+{
+	if (is_oneshot_sig_type(type))
+		return 1;
+
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	switch (type) {
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return 1;
+	default:
+		return 0;
+	}
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
 	return 0;
 }
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
+
+static int has_encoded_public_key(int type)
+{
+	switch (type) {
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+#endif /* OPENSSL_NO_EC */
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+#endif /* OPENSSL_NO_ECX */
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+/* Return key size in bits. */
+static int p11_keydata_get_bits(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
+		return 0;
+
+	return (int)(keydata->keysize * 8);
+}
 
 /* Return estimated security strength in bits based on key type and size. */
-int p11_keydata_get_security_bits(const P11_KEYDATA *keydata)
+static int p11_keydata_get_security_bits(const P11_KEYDATA *keydata)
 {
 	if (keydata == NULL)
 		return 0;
@@ -779,1799 +878,112 @@ int p11_keydata_get_security_bits(const P11_KEYDATA *keydata)
 	}
 }
 
-/* Return key size in bits. */
-int p11_keydata_get_bits(const P11_KEYDATA *keydata)
+#if OPENSSL_VERSION_NUMBER >= 0x30600000L
+/* Map security bits to security category level. */
+static int p11_keydata_get_security_category(const P11_KEYDATA *keydata)
+{
+	int secbits = p11_keydata_get_security_bits(keydata);
+
+	if (secbits >= 256)
+		return 5;
+	if (secbits >= 192)
+		return 4;
+	if (secbits >= 128)
+		return 3;
+	if (secbits >= 112)
+		return 2;
+	if (secbits >= 80)
+		return 1;
+	return 0;
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
+
+
+/* Public-key cache and comparison helpers. */
+
+static int keydata_has_rsa_pub(const P11_KEYDATA *keydata)
 {
 	if (keydata == NULL)
 		return 0;
 
-	return (int)(keydata->keysize * 8);
+	return keydata->pubdata.rsa.n != NULL && keydata->pubdata.rsa.n_len != 0 &&
+		keydata->pubdata.rsa.e != NULL && keydata->pubdata.rsa.e_len != 0;
 }
-
-/* Return maximum signature or operation size in bytes. */
-size_t p11_keydata_get_maxsize(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return 0;
-
-	return keydata->maxsize;
-}
-
-/*
- * Return key type identifier:
- * EVP_PKEY_RSA, EVP_PKEY_EC, EVP_PKEY_ED25519, EVP_PKEY_ED448
- * EVP_PKEY_ML_DSA*, EVP_PKEY_SLH_DSA_*
- */
-int p11_keydata_get_type(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return 0;
-
-	return keydata->type;
-}
-
-/* Return stored OSSL_PARAM array associated with key object. */
-OSSL_PARAM *p11_keydata_get_params(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return NULL;
-
-	return keydata->params;
-}
-
-/* Duplicate and set key parameters, extracting and storing public key data if present. */
-int p11_keydata_set_params(P11_KEYDATA *key, const OSSL_PARAM *params)
-{
-	const OSSL_PARAM *p;
-	const void *pub = NULL;
-	size_t publen = 0;
-	OSSL_PARAM *dup;
-
-	if (key == NULL || params == NULL)
-		return 0;
-
-	dup = OSSL_PARAM_dup(params);
-	if (dup == NULL)
-		return 0;
-
-	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PUB_KEY);
-	if (p != NULL) {
-		if (!OSSL_PARAM_get_octet_string_ptr(p, &pub, &publen) ||
-			pub == NULL || publen == 0 ||
-			!p11_keydata_set_pub(key, pub, publen)) {
-			OSSL_PARAM_free(dup);
-			return 0;
-		}
-	}
-	/* replace existing parameter set in key object with new OSSL_PARAM array */
-	OSSL_PARAM_free(key->params);
-	key->params = dup;
-	key->is_private = params_contains_private_key(dup);
-	return 1;
-}
-
-/*
- * Compare two public keys represented as OSSL_PARAM arrays.
- *
- * The key type is inferred from the available parameters:
- *   - RSA keys are identified by the presence of RSA modulus and exponent.
- *   - Classical EC keys are identified by GROUP_NAME and compared using
- *     curve-aware point comparison.
- *   - EdDSA, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms
- *     are compared as raw public-key octet strings.
- *
- * Returns 1 if the public keys are equal, 0 otherwise.
- */
-int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
-{
-	const OSSL_PARAM *n1, *e1, *n2, *e2;
-	const OSSL_PARAM *pub1, *pub2;
-#ifndef OPENSSL_NO_EC
-	const OSSL_PARAM *g1, *g2;
-	const char *group1 = NULL, *group2 = NULL;
-#endif /* OPENSSL_NO_EC */
-
-	if (k1 == NULL || k2 == NULL ||
-	    k1->params == NULL || k2->params == NULL)
-		return 0;
-
-	/* RSA: compare modulus (n) and public exponent (e). */
-	n1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_RSA_N);
-	e1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_RSA_E);
-	n2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_RSA_N);
-	e2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_RSA_E);
-
-	if (n1 != NULL || e1 != NULL || n2 != NULL || e2 != NULL)
-		return (n1 && e1 && n2 && e2 &&
-			param_blob_equal(n1, n2) && param_blob_equal(e1, e2));
-
-	pub1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_PUB_KEY);
-	pub2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_PUB_KEY);
-
-	if (pub1 == NULL || pub2 == NULL)
-		return 0;
 
 #ifndef OPENSSL_NO_EC
-	/* Classical EC keys include GROUP_NAME and must be compared using
-	 * curve-aware point comparison. Ed25519/Ed448 and X25519/X448 also may
-	 * expose GROUP_NAME, but their public keys are raw octet strings. */
-	g1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_GROUP_NAME);
-	g2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_GROUP_NAME);
-
-	if (g1 != NULL && g2 != NULL) {
-		if (g1->data_type != OSSL_PARAM_UTF8_STRING ||
-			g2->data_type != OSSL_PARAM_UTF8_STRING)
-			return 0;
-
-		if (!OSSL_PARAM_get_utf8_string_ptr(g1, &group1) ||
-			!OSSL_PARAM_get_utf8_string_ptr(g2, &group2) ||
-			group1 == NULL || group2 == NULL)
-			return 0;
-
-		if (OPENSSL_strcasecmp(group1, group2) != 0)
-			return 0;
-
-		if (OPENSSL_strcasecmp(group1, "ed25519") == 0 ||
-			OPENSSL_strcasecmp(group1, "ed448") == 0 ||
-			OPENSSL_strcasecmp(group1, "x25519") == 0 ||
-			OPENSSL_strcasecmp(group1, "x448") == 0)
-			return octet_equal(pub1, pub2); /* compare raw octet strings */
-
-		return ec_point_equal_by_value(group1,
-			(const unsigned char *)pub1->data, pub1->data_size,
-			(const unsigned char *)pub2->data, pub2->data_size);
-	}
-#endif /* OPENSSL_NO_EC */
-
-	/* EdDSA, ECX, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms. */
-	return octet_equal(pub1, pub2);
-}
-
-/* Parse RSA padding mode from OSSL_PARAM (integer or string). */
-int pad_mode_from_param(const OSSL_PARAM *p, int *pad_mode)
+static int keydata_has_ec_pub(const P11_KEYDATA *keydata)
 {
-	if (p == NULL || pad_mode == NULL)
+	if (keydata == NULL || keydata->type != EVP_PKEY_EC)
 		return 0;
 
-	if (p->data_type == OSSL_PARAM_INTEGER) {
-		return OSSL_PARAM_get_int(p, pad_mode);
-	}
+	return keydata->pubdata.ec.group_name != NULL &&
+		keydata->pubdata.ec.pub != NULL && keydata->pubdata.ec.pub_len != 0;
+}
+#endif /* OPENSSL_NO_EC */
 
-	if (p->data_type == OSSL_PARAM_UTF8_STRING) {
-		const char *s = NULL;
+static int keydata_has_raw_pub(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
+		return 0;
 
-		if (!OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
-			return 0;
+	return keydata->pubdata.raw.pub != NULL && keydata->pubdata.raw.pub_len != 0;
+}
 
-		if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_PKCSV15) == 0)
-			*pad_mode = RSA_PKCS1_PADDING;
-		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_NONE) == 0)
-			*pad_mode = RSA_NO_PADDING;
-		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_X931) == 0)
-			*pad_mode = RSA_X931_PADDING;
-		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_PSS) == 0)
-			*pad_mode = RSA_PKCS1_PSS_PADDING;
-		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_OAEP) == 0)
-			*pad_mode = RSA_PKCS1_OAEP_PADDING;
-		else
-			return 0;
+/* Get stored raw public key data. The returned buffer is not owned. */
+static int p11_keydata_get_pub(const P11_KEYDATA *keydata,
+		const unsigned char **buf, size_t *len)
+{
+	if (keydata == NULL || buf == NULL || len == NULL)
+		return 0;
 
+	*buf = NULL;
+	*len = 0;
+
+	if (keydata->pubkey != NULL &&
+			keydata->pubkey->pub != NULL &&
+			keydata->pubkey->pub_len != 0) {
+		*buf = keydata->pubkey->pub;
+		*len = keydata->pubkey->pub_len;
 		return 1;
 	}
-
+#ifndef OPENSSL_NO_EC
+	if (keydata_has_ec_pub(keydata)) {
+		*buf = keydata->pubdata.ec.pub;
+		*len = keydata->pubdata.ec.pub_len;
+		return 1;
+	}
+#endif /* OPENSSL_NO_EC */
+	if (keydata_has_raw_pub(keydata)) {
+		*buf = keydata->pubdata.raw.pub;
+		*len = keydata->pubdata.raw.pub_len;
+		return 1;
+	}
 	return 0;
 }
 
-int keydata_export_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
+static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata)
 {
-	if (keydata == NULL || param_cb == NULL)
-		return 0;
-
-	if (keydata_has_rsa_pub(keydata))
-		return export_rsa_pub(keydata, param_cb, cbarg);
-#ifndef OPENSSL_NO_EC
-	if (keydata_has_ec_pub(keydata))
-		return export_ec_pub(keydata, param_cb, cbarg);
-#endif /* OPENSSL_NO_EC */
-	return export_raw_pub(keydata, param_cb, cbarg);
-}
-
-/******************************************************************************/
-/* KEY GENERATION helper functions                                            */
-/******************************************************************************/
-
-P11_KEYGEN_CTX *p11_keygen_ctx_new(PROVIDER_CTX *prov_ctx, int type,
-	const OSSL_PARAM params[])
-{
-	P11_KEYGEN_CTX *gen_ctx;
-
-	if (prov_ctx == NULL)
-		return NULL;
-
-	if (!PROVIDER_CTX_is_initialized(prov_ctx)) {
-		if (!PROVIDER_CTX_set_parameters(prov_ctx))
-			return NULL;
-		PROVIDER_CTX_initialize(prov_ctx);
-	}
-
-	gen_ctx = OPENSSL_zalloc(sizeof(P11_KEYGEN_CTX));
-	if (gen_ctx == NULL)
-		return NULL;
-
-	gen_ctx->prov_ctx = prov_ctx;
-	gen_ctx->type = type;
-	if (type == EVP_PKEY_RSA)
-		gen_ctx->param = 2048;
-
-	if (!p11_keygen_ctx_set_params(gen_ctx, params)) {
-		p11_keygen_ctx_free(gen_ctx);
-		return NULL;
-	}
-	return gen_ctx;
-}
-
-void p11_keygen_ctx_free(P11_KEYGEN_CTX *gen_ctx)
-{
-	if (gen_ctx == NULL)
+	if (keydata == NULL)
 		return;
 
-	OPENSSL_free(gen_ctx->uri);
-	OPENSSL_free(gen_ctx);
-}
-
-int p11_keygen_ctx_set_params(P11_KEYGEN_CTX *gen_ctx, const OSSL_PARAM params[])
-{
-	const OSSL_PARAM *p;
-
-	if (gen_ctx == NULL)
-		return 0;
-
-	if (params == NULL)
-		return 1;
-
-	p = OSSL_PARAM_locate_const(params, "pkcs11_uri");
-	if (p != NULL) {
-		char *uri = NULL;
-
-		if (!OSSL_PARAM_get_utf8_string(p, &uri, 0))
-			return 0;
-
-		OPENSSL_free(gen_ctx->uri);
-		gen_ctx->uri = uri;
-	}
-
-	switch (gen_ctx->type) {
-	case EVP_PKEY_RSA:
-		p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_BITS);
-		if (p != NULL && !OSSL_PARAM_get_uint(p, &gen_ctx->param))
-			return 0;
-		break;
-
-#ifndef OPENSSL_NO_EC
-	case EVP_PKEY_EC:
-		p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME);
-		if (p != NULL) {
-			const char *group;
-			int nid;
-
-			if (!OSSL_PARAM_get_utf8_string_ptr(p, &group))
-				return 0;
-
-			nid = OBJ_txt2nid(group);
-			if (nid == NID_undef)
-				nid = EC_curve_nist2nid(group);
-			if (nid == NID_undef)
-				return 0;
-
-			gen_ctx->param = (unsigned int)nid;
-		}
-		break;
-#endif /* OPENSSL_NO_EC */
-
-	default:
-		break;
-	}
-
-	return 1;
-}
-
-P11_KEYDATA *p11_keygen_ctx_generate(P11_KEYGEN_CTX *gen_ctx)
-{
-	EVP_PKEY *key;
-	P11_KEYDATA *keydata;
-
-	if (gen_ctx == NULL || gen_ctx->prov_ctx == NULL ||
-			gen_ctx->uri == NULL)
-		return NULL;
-
-	key = UTIL_CTX_generate_key(gen_ctx->prov_ctx->util_ctx,
-		gen_ctx->uri, gen_ctx->type, gen_ctx->param);
-	if (key == NULL)
-		return NULL;
-
-	keydata = p11_keydata_from_evp_pkey(gen_ctx->prov_ctx, key, 1);
-
-	EVP_PKEY_free(key);
-	return keydata;
-}
-
-/******************************************************************************/
-/* SIGNATURE helper functions                                                 */
-/******************************************************************************/
-
-/* Allocate and initialize signature context structure. */
-P11_SIGNATURE_CTX *p11_signature_ctx_new(PROVIDER_CTX *ctx, const char *propq)
-{
-	P11_SIGNATURE_CTX *sig_ctx;
-
-	sig_ctx = OPENSSL_zalloc(sizeof(P11_SIGNATURE_CTX));
-	if (!sig_ctx)
-		return NULL;
-
-	if (propq != NULL) {
-		sig_ctx->propq = OPENSSL_strdup(propq);
-		if (sig_ctx->propq == NULL) {
-			OPENSSL_free(sig_ctx);
-			return NULL;
-		}
-	}
-	/* prov_ctx is shared, not owned */
-	sig_ctx->prov_ctx = ctx;
-	return sig_ctx;
-}
-
-/* Release signature context and associated resources. */
-void p11_signature_ctx_free(P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return;
-
-	p11_keydata_free(sig_ctx->keydata);
-	EVP_MD_CTX_free(sig_ctx->mdctx);
-	OPENSSL_free(sig_ctx->mdname);
-	OPENSSL_free(sig_ctx->mgf1_mdname);
-	OPENSSL_free(sig_ctx->propq);
-	OPENSSL_free(sig_ctx);
-}
-
-/*
- * Duplicate signature context. This must be a real duplicate, not just another
- * reference to the same mutable object.
- */
-P11_SIGNATURE_CTX *p11_signature_dupctx(P11_SIGNATURE_CTX *sig_ctx)
-{
-	P11_SIGNATURE_CTX *dst;
-
-	if (sig_ctx == NULL)
-		return NULL;
-
-	dst = p11_signature_ctx_new(sig_ctx->prov_ctx, sig_ctx->propq);
-	if (dst == NULL)
-		return NULL;
-
-	/* deep-copy dynamically allocated string parameters */
-	if (sig_ctx->propq != NULL) {
-		dst->propq = OPENSSL_strdup(sig_ctx->propq);
-		if (dst->propq == NULL)
-			goto err;
-	}
-
-	if (sig_ctx->mdname != NULL) {
-		dst->mdname = OPENSSL_strdup(sig_ctx->mdname);
-		if (dst->mdname == NULL)
-			goto err;
-	}
-
-	if (sig_ctx->mgf1_mdname != NULL) {
-		dst->mgf1_mdname = OPENSSL_strdup(sig_ctx->mgf1_mdname);
-		if (dst->mgf1_mdname == NULL)
-			goto err;
-	}
-
-	/* copy simple scalar state */
-	dst->pad_mode = sig_ctx->pad_mode;
-	dst->pss_saltlen = sig_ctx->pss_saltlen;
-
-	/* share keydata by reference */
-	if (sig_ctx->keydata != NULL) {
-		if (!p11_keydata_up_ref(sig_ctx->keydata))
-			goto err;
-		dst->keydata = sig_ctx->keydata;
-	}
-
-	/* duplicate digest state so EVP_DigestVerifyFinal() on the duplicate
-	 * does not mutate the original context */
-	if (sig_ctx->mdctx != NULL) {
-		dst->mdctx = EVP_MD_CTX_new();
-		if (dst->mdctx == NULL)
-			goto err;
-		if (EVP_MD_CTX_copy_ex(dst->mdctx, sig_ctx->mdctx) <= 0)
-			goto err;
-	}
-
-	return dst;
-
-err:
-	p11_signature_ctx_free(dst);
-	return NULL;
-}
-
-/* Initialize signature context with key and reset operation defaults. */
-int p11_signature_ctx_init(P11_SIGNATURE_CTX *sig_ctx, P11_KEYDATA *keydata,
-	const OSSL_PARAM params[])
-{
-	(void)params; /* unused */
-
-	if (sig_ctx == NULL || keydata == NULL)
-		return 0;
-
-	/* replace previous key if present */
-	if (sig_ctx->keydata != NULL) {
-		p11_keydata_free(sig_ctx->keydata);
-		sig_ctx->keydata = NULL;
-	}
-
-	if (!p11_keydata_up_ref(keydata))
-		return 0;
-
-	sig_ctx->keydata = keydata;
-
-	/* (re)set defaults (important when params don't include them) */
-	sig_ctx->pad_mode = RSA_PKCS1_PADDING;
-#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
-	/* Maximize up to digest length for sign */
-	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX; /* -4 */
-#else
-	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO; /* -2 */
-#endif
-
-	OPENSSL_free(sig_ctx->mdname);
-	sig_ctx->mdname = NULL;
-
-	OPENSSL_free(sig_ctx->mgf1_mdname);
-	sig_ctx->mgf1_mdname = NULL;
-	return 1;
-}
-
-/* Initialize or reset digest context for signature operation. */
-int p11_signature_ctx_init_digest(P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	OPENSSL_free(sig_ctx->mdname);
-	sig_ctx->mdname = NULL;
-
-	if (sig_ctx->mdctx != NULL)
-		EVP_MD_CTX_reset(sig_ctx->mdctx);
-
-	if (sig_ctx->mdctx == NULL) {
-		sig_ctx->mdctx = EVP_MD_CTX_new();
-		if (sig_ctx->mdctx == NULL)
-			return 0;
-	}
-	return 1;
-}
-
-/*
- * Verify signature against precomputed input using a temporary public key copy
- * in the default provider.
- */
-int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
-	const unsigned char *sig, size_t siglen,
-	const unsigned char *tbs, size_t tbslen)
-{
-	EVP_PKEY *pub = NULL;
-	EVP_PKEY_CTX *pctx = NULL;
-	EVP_MD_CTX *mdctx = NULL;
-	int ok = 0;
-
-	if (sig_ctx == NULL || sig_ctx->keydata == NULL || sig == NULL || tbs == NULL)
-		return 0;
-
-	pub = pubkey_from_params_default(sig_ctx->keydata);
-	if (pub == NULL)
-		return 0;
-
-	if (is_oneshot_sig_type(sig_ctx->keydata->type)) {
-		mdctx = EVP_MD_CTX_new();
-		if (mdctx == NULL)
-			goto end;
-
-		if (EVP_DigestVerifyInit(mdctx, NULL, NULL, NULL, pub) <= 0)
-			goto end;
-
-		if (EVP_DigestVerify(mdctx, sig, siglen,
-				tbs, tbslen) <= 0)
-			goto end;
-
-		ok = 1;
-		goto end;
-	}
-
-	switch (sig_ctx->keydata->type) {
+	switch (p11_keydata_get_type(keydata)) {
 	case EVP_PKEY_RSA:
 	case EVP_PKEY_RSA_PSS:
-		pctx = EVP_PKEY_CTX_new(pub, NULL);
-		if (pctx == NULL)
-			goto end;
-
-		if (EVP_PKEY_verify_init(pctx) <= 0)
-			goto end;
-
-		if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
-			goto end;
-
-		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
-			goto end;
-
-		ok = 1;
+		OPENSSL_free(keydata->pubdata.rsa.n);
+		OPENSSL_free(keydata->pubdata.rsa.e);
 		break;
-
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
-		pctx = EVP_PKEY_CTX_new(pub, NULL);
-		if (pctx == NULL)
-			goto end;
-
-		if (EVP_PKEY_verify_init(pctx) <= 0)
-			goto end;
-
-		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
-			goto end;
-
-		ok = 1;
+		OPENSSL_free(keydata->pubdata.ec.group_name);
+		OPENSSL_free(keydata->pubdata.ec.pub);
 		break;
 #endif /* OPENSSL_NO_EC */
 	default:
+		OPENSSL_free(keydata->pubdata.raw.pub);
 		break;
 	}
 
-end:
-	EVP_MD_CTX_free(mdctx);
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(pub);
-
-	return ok;
-}
-
-/*
- * Recover signed data using a temporary public key copy in the default provider.
- * Applicable only to signature schemes that support signature recovery (such as RSA).
- */
-int p11_signature_ctx_verifyrecover(P11_SIGNATURE_CTX *sig_ctx,
-	unsigned char *rout, size_t *routlen, size_t routsize,
-	const unsigned char *sig, size_t siglen)
-{
-	EVP_PKEY *pub;
-	EVP_PKEY_CTX *pctx;
-	int ok = 0;
-
-	if (sig_ctx == NULL || sig_ctx->keydata == NULL || routlen == NULL || sig == NULL)
-		return 0;
-
-	if (sig_ctx->keydata->type != EVP_PKEY_RSA)
-		return 0;
-
-	/* RSASSA-PSS does not support signature recovery */
-	if (sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING)
-		return 0;
-
-	pub = pubkey_from_params_default(sig_ctx->keydata);
-	if (pub == NULL)
-		return 0;
-
-	pctx = EVP_PKEY_CTX_new(pub, NULL);
-	if (pctx == NULL)
-		goto end;
-
-	if (EVP_PKEY_verify_recover_init(pctx) <= 0)
-		goto end;
-
-	if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
-		goto end;
-
-	if (rout == NULL) {
-		if (EVP_PKEY_verify_recover(pctx, NULL, routlen, sig, siglen) <= 0)
-			goto end;
-
-		ok = 1;
-		goto end;
-	}
-
-	*routlen = routsize;
-	if (EVP_PKEY_verify_recover(pctx, rout, routlen, sig, siglen) <= 0)
-		goto end;
-
-	ok = 1;
-
-end:
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(pub);
-	return ok;
-}
-
-/* Return EVP_PKEY associated with signature context. */
-EVP_PKEY *p11_signature_ctx_get_evp_pkey(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return NULL;
-
-	return p11_keydata_get_evp_pkey(sig_ctx->keydata);
-}
-
-/* Return maximum signature size for current key. */
-size_t p11_signature_ctx_get_sigsize(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_maxsize(sig_ctx->keydata);
-}
-
-/* Return key type used in signature context. */
-int p11_signature_ctx_get_type(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_type(sig_ctx->keydata);
-}
-
-/* Set digest algorithm name for signature context. */
-int p11_signature_ctx_set_mdname(P11_SIGNATURE_CTX *sig_ctx, const char *mdname)
-{
-	char *name;
-
-	if (sig_ctx == NULL)
-		return 0;
-
-	OPENSSL_free(sig_ctx->mdname);
-	sig_ctx->mdname = NULL;
-
-	if (mdname == NULL)
-		return 1;
-
-	name = OPENSSL_strdup(mdname);
-	if (name == NULL)
-		return 0;
-
-	sig_ctx->mdname = name;
-	return 1;
-}
-
-/* Return digest algorithm name used by signature context. */
-const char *p11_signature_ctx_get_mdname(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return NULL;
-
-	return sig_ctx->mdname;
-}
-
-/* Set padding mode for signature operations. */
-int p11_signature_ctx_set_pad_mode(P11_SIGNATURE_CTX *sig_ctx, int pad_mode)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	sig_ctx->pad_mode = pad_mode;
-	return 1;
-}
-
-/* Return padding mode used for signature operations. */
-int p11_signature_ctx_get_pad_mode(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	return sig_ctx->pad_mode;
-}
-
-/* Set RSA-PSS salt length for signature operations. */
-int p11_signature_ctx_set_pss_saltlen(P11_SIGNATURE_CTX *sig_ctx, int saltlen)
-{
-	if (sig_ctx == NULL)
-		return 0;
-
-	sig_ctx->pss_saltlen = saltlen;
-	return 1;
-}
-
-/* Return RSA-PSS salt length used for signature operations. */
-int p11_signature_ctx_get_pss_saltlen(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return RSA_PSS_SALTLEN_AUTO; /* -2 */
-
-	return sig_ctx->pss_saltlen;
-}
-
-/* Set MGF1 digest algorithm name for RSA-PSS operations. */
-int p11_signature_ctx_set_mgf1_mdname(P11_SIGNATURE_CTX *sig_ctx, const char *mdname)
-{
-	char *dup = NULL;
-
-	if (sig_ctx == NULL)
-		return 0;
-
-	if (mdname != NULL) {
-		dup = OPENSSL_strdup(mdname);
-		if (dup == NULL)
-			return 0;
-	}
-
-	OPENSSL_free(sig_ctx->mgf1_mdname);
-	sig_ctx->mgf1_mdname = dup;
-	return 1;
-}
-
-/* Return MGF1 digest algorithm name used for RSA-PSS operations. */
-const char *p11_signature_ctx_get_mgf1_mdname(const P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return NULL;
-
-	return sig_ctx->mgf1_mdname;
-}
-
-/* Return digest context used for signature operations. */
-EVP_MD_CTX *p11_signature_ctx_get_mdctx(P11_SIGNATURE_CTX *sig_ctx)
-{
-	if (sig_ctx == NULL)
-		return NULL;
-
-	return sig_ctx->mdctx;
-}
-
-/* Convert RSA-PSS salt length value to its string representation. */
-const char *p11_signature_pss_saltlen_to_string(int saltlen)
-{
-	switch (saltlen) {
-	case RSA_PSS_SALTLEN_DIGEST:
-		return OSSL_PKEY_RSA_PSS_SALT_LEN_DIGEST; /* "digest" */
-	case RSA_PSS_SALTLEN_AUTO:
-		return OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO; /* "auto" */
-	case RSA_PSS_SALTLEN_MAX:
-		return OSSL_PKEY_RSA_PSS_SALT_LEN_MAX; /* "max" */
-#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
-	case RSA_PSS_SALTLEN_AUTO_DIGEST_MAX:
-		return OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO_DIGEST_MAX; /* "auto-digestmax" */
-#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
-	default:
-		return NULL;
-	}
-}
-
-/*
- * Build and return a DER-encoded signature AlgorithmIdentifier
- * for the current key type, digest and signature parameters.
- */
-int p11_signature_set_algorithm_id(OSSL_PARAM *p, const P11_SIGNATURE_CTX *sig_ctx)
-{
-	X509_ALGOR *alg = NULL;
-	ASN1_OBJECT *obj = NULL;
-	unsigned char *der = NULL;
-	const char *mdname;
-	int key_type;
-	int md_nid;
-	int sig_nid;
-	int param_type;
-	int der_len;
-	int ret = 0;
-
-	if (p == NULL || sig_ctx == NULL)
-		return 0;
-
-	key_type = p11_signature_ctx_get_type(sig_ctx);
-	mdname = p11_signature_ctx_get_mdname(sig_ctx);
-
-	/* RSA-PSS requires RSASSA-PSS-params and must be handled separately. */
-	if ((key_type == EVP_PKEY_RSA || key_type == EVP_PKEY_RSA_PSS) &&
-		p11_signature_ctx_get_pad_mode(sig_ctx) == RSA_PKCS1_PSS_PADDING)
-		return p11_signature_set_pss_algorithm_id(p, sig_ctx, mdname);
-
-	if (mdname != NULL && *mdname != '\0') {
-		/* RSA PKCS#1, ECDSA, DSA, SM2 and other algorithms
-		 * combining a digest with a key algorithm */
-		md_nid = OBJ_txt2nid(mdname);
-		if (md_nid == NID_undef || !OBJ_find_sigid_by_algs(&sig_nid, md_nid, key_type))
-			goto end;
-
-		obj = OBJ_dup(OBJ_nid2obj(sig_nid));
-		if (obj == NULL)
-			goto end;
-
-		/* RSA PKCS#1 uses NULL; ECDSA/DSA parameters are absent. */
-		param_type = key_type == EVP_PKEY_RSA ? V_ASN1_NULL : V_ASN1_UNDEF;
-	} else {
-		/* Ed25519, Ed448, ML-DSA, SLH-DSA, Falcon: parameters are absent */
-		const char *algname = p11_keydata_get_name(sig_ctx->keydata);
-
-		if (algname == NULL)
-			goto end;
-
-		obj = OBJ_txt2obj(algname, 0);
-		if (obj == NULL)
-			goto end;
-
-		param_type = V_ASN1_UNDEF;
-	}
-
-	alg = X509_ALGOR_new();
-	if (alg == NULL)
-		goto end;
-
-	if (!X509_ALGOR_set0(alg, obj, param_type, NULL))
-		goto end;
-
-	obj = NULL; /* owned by alg */
-
-	der_len = i2d_X509_ALGOR(alg, &der);
-	if (der_len <= 0)
-		goto end;
-
-	ret = OSSL_PARAM_set_octet_string(p, der, (size_t)der_len);
-
-end:
-	ASN1_OBJECT_free(obj);
-	X509_ALGOR_free(alg);
-	OPENSSL_free(der);
-	return ret;
-}
-
-/* Convert RSA padding mode to its string representation. */
-const char *p11_pad_mode_to_string(int pad_mode)
-{
-	switch (pad_mode) {
-	case RSA_PKCS1_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_PKCSV15;
-	case RSA_PKCS1_PSS_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_PSS;
-	case RSA_NO_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_NONE;
-	case RSA_PKCS1_OAEP_PADDING:
-		return OSSL_PKEY_RSA_PAD_MODE_OAEP;
-	default:
-		return NULL;
-	}
-}
-
-/**
- * Return whether the key type uses one-shot signing without an external digest.
- *
- * These algorithms internally process the input message as specified by
- * their standards and therefore do not accept a separately supplied digest.
- * Such key types report OSSL_PKEY_PARAM_MANDATORY_DIGEST = "UNDEF" via
- * keymgmt_get_params().
- */
-int is_oneshot_sig_type(int type)
-{
-	switch (type) {
-#ifndef OPENSSL_NO_ECX
-	case EVP_PKEY_ED25519:
-	case EVP_PKEY_ED448:
-#endif
-#if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#ifndef OPENSSL_NO_ML_DSA
-	case EVP_PKEY_ML_DSA_44:
-	case EVP_PKEY_ML_DSA_65:
-	case EVP_PKEY_ML_DSA_87:
-#endif /* OPENSSL_NO_ML_DSA */
-#ifndef OPENSSL_NO_SLH_DSA
-	case EVP_PKEY_SLH_DSA_SHA2_128S:
-	case EVP_PKEY_SLH_DSA_SHA2_128F:
-	case EVP_PKEY_SLH_DSA_SHA2_192S:
-	case EVP_PKEY_SLH_DSA_SHA2_192F:
-	case EVP_PKEY_SLH_DSA_SHA2_256S:
-	case EVP_PKEY_SLH_DSA_SHA2_256F:
-	case EVP_PKEY_SLH_DSA_SHAKE_128S:
-	case EVP_PKEY_SLH_DSA_SHAKE_128F:
-	case EVP_PKEY_SLH_DSA_SHAKE_192S:
-	case EVP_PKEY_SLH_DSA_SHAKE_192F:
-	case EVP_PKEY_SLH_DSA_SHAKE_256S:
-	case EVP_PKEY_SLH_DSA_SHAKE_256F:
-#endif /* OPENSSL_NO_SLH_DSA */
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
-	case EVP_PKEY_FALCON512:
-	case EVP_PKEY_FALCON1024:
-		return 1;
-
-	default:
-		return 0;
-	}
-}
-
-int has_raw_public_key(int type)
-{
-	if (is_oneshot_sig_type(type))
-		return 1;
-
-#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
-	switch (type) {
-	case EVP_PKEY_ML_KEM_512:
-	case EVP_PKEY_ML_KEM_768:
-	case EVP_PKEY_ML_KEM_1024:
-		return 1;
-	default:
-		return 0;
-	}
-#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
-	return 0;
-}
-
-int has_encoded_public_key(int type)
-{
-	switch (type) {
-#ifndef OPENSSL_NO_EC
-	case EVP_PKEY_EC:
-#endif /* OPENSSL_NO_EC */
-#ifndef OPENSSL_NO_ECX
-	case EVP_PKEY_X25519:
-	case EVP_PKEY_X448:
-#endif /* OPENSSL_NO_ECX */
-#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
-	case EVP_PKEY_ML_KEM_512:
-	case EVP_PKEY_ML_KEM_768:
-	case EVP_PKEY_ML_KEM_1024:
-#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
-		return 1;
-	default:
-		return 0;
-	}
-}
-
-
-/******************************************************************************/
-/* ASYM CIPHER helper functions                                               */
-/******************************************************************************/
-
-/* Allocate and initialize asymmetric cipher context structure. */
-P11_ASYM_CIPHER_CTX *p11_asym_cipher_ctx_new(PROVIDER_CTX *ctx)
-{
-	P11_ASYM_CIPHER_CTX *asym_ctx;
-
-	asym_ctx = OPENSSL_zalloc(sizeof(P11_ASYM_CIPHER_CTX));
-	if (!asym_ctx)
-		return NULL;
-
-	asym_ctx->prov_ctx = ctx;
-	return asym_ctx;
-}
-
-/* Release asymmetric cipher context and associated resources. */
-void p11_asym_cipher_ctx_free(P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return;
-
-	p11_keydata_free(asym_ctx->keydata);
-	OPENSSL_free(asym_ctx->oaep_mdname);
-	OPENSSL_free(asym_ctx->mgf1_mdname);
-	OPENSSL_free(asym_ctx->oaep_label);
-	OPENSSL_free(asym_ctx);
-}
-
-/*
- * Duplicate asymmetric cipher context. This must be a real duplicate, not just
- * another reference to the same mutable object.
- */
-P11_ASYM_CIPHER_CTX *p11_asym_cipher_dupctx(P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	P11_ASYM_CIPHER_CTX *dst = NULL;
-
-	if (asym_ctx == NULL)
-		return NULL;
-
-	dst = p11_asym_cipher_ctx_new(asym_ctx->prov_ctx);
-	if (dst == NULL)
-		return NULL;
-
-	/* copy simple scalar state */
-	dst->pad_mode = asym_ctx->pad_mode;
-	dst->oaep_labellen = asym_ctx->oaep_labellen;
-
-	/* share keydata by reference */
-	if (asym_ctx->keydata != NULL) {
-		if (!p11_keydata_up_ref(asym_ctx->keydata))
-			goto err;
-		dst->keydata = asym_ctx->keydata;
-	}
-
-	/* deep-copy OAEP/MGF1 parameters (mutable per-context state) */
-	if (asym_ctx->oaep_mdname != NULL) {
-		dst->oaep_mdname = OPENSSL_strdup(asym_ctx->oaep_mdname);
-		if (dst->oaep_mdname == NULL)
-			goto err;
-	}
-
-	if (asym_ctx->mgf1_mdname != NULL) {
-		dst->mgf1_mdname = OPENSSL_strdup(asym_ctx->mgf1_mdname);
-		if (dst->mgf1_mdname == NULL)
-			goto err;
-	}
-
-	if (asym_ctx->oaep_label != NULL && asym_ctx->oaep_labellen > 0) {
-		dst->oaep_label = OPENSSL_memdup(asym_ctx->oaep_label,
-			asym_ctx->oaep_labellen);
-		if (dst->oaep_label == NULL)
-			goto err;
-	}
-
-	return dst;
-
-err:
-	p11_asym_cipher_ctx_free(dst);
-	return NULL;
-}
-
-/* Initialize asymmetric cipher context with key and reset OAEP defaults. */
-int p11_asym_cipher_ctx_init(P11_ASYM_CIPHER_CTX *asym_ctx, P11_KEYDATA *keydata,
-	const OSSL_PARAM params[])
-{
-	(void)params; /* unused */
-
-	if (asym_ctx == NULL || keydata == NULL)
-		return 0;
-
-	/* replace previous key */
-	if (asym_ctx->keydata != NULL) {
-		p11_keydata_free(asym_ctx->keydata);
-		asym_ctx->keydata = NULL;
-	}
-
-	if (!p11_keydata_up_ref(keydata))
-		return 0;
-
-	asym_ctx->keydata = keydata;
-
-	/* defaults (important when params don't include them) */
-	asym_ctx->pad_mode = RSA_PKCS1_OAEP_PADDING;
-
-	OPENSSL_free(asym_ctx->oaep_mdname);
-	asym_ctx->oaep_mdname = NULL; /* default = SHA1 */
-
-	OPENSSL_free(asym_ctx->mgf1_mdname);
-	asym_ctx->mgf1_mdname = NULL; /* default = oaep_mdname */
-
-	OPENSSL_free(asym_ctx->oaep_label);
-	asym_ctx->oaep_label = NULL;
-	asym_ctx->oaep_labellen = 0;
-
-	return 1;
-}
-
-/* Encrypt input data using a temporary public key copy in the default provider */
-int p11_asym_cipher_ctx_encrypt(P11_ASYM_CIPHER_CTX *asym_ctx,
-	unsigned char *out, size_t *outlen,
-	size_t outsize, const unsigned char *in, size_t inlen)
-{
-	EVP_PKEY *pub = NULL;
-	EVP_PKEY_CTX *pctx = NULL;
-	size_t tmplen = 0;
-	int ok = 0;
-
-	if (asym_ctx == NULL || asym_ctx->keydata == NULL || outlen == NULL || in == NULL)
-		return 0;
-
-	if (asym_ctx->keydata->type != EVP_PKEY_RSA)
-		return 0;
-
-	pub = pubkey_from_params_default(asym_ctx->keydata);
-	if (pub == NULL)
-		return 0;
-
-	pctx = EVP_PKEY_CTX_new(pub, NULL);
-	if (pctx == NULL)
-		goto end;
-
-	if (EVP_PKEY_encrypt_init(pctx) <= 0)
-		goto end;
-
-	if (EVP_PKEY_CTX_set_rsa_padding(pctx, asym_ctx->pad_mode) <= 0)
-		goto end;
-
-	if (asym_ctx->pad_mode == RSA_PKCS1_OAEP_PADDING) {
-		const EVP_MD *oaep_md = NULL;
-		const EVP_MD *mgf1_md = NULL;
-
-		oaep_md = EVP_get_digestbyname(
-			asym_ctx->oaep_mdname != NULL ? asym_ctx->oaep_mdname : "SHA1");
-		if (oaep_md == NULL)
-			goto end;
-
-		if (EVP_PKEY_CTX_set_rsa_oaep_md(pctx, oaep_md) <= 0)
-			goto end;
-
-		mgf1_md = EVP_get_digestbyname(
-			asym_ctx->mgf1_mdname != NULL ? asym_ctx->mgf1_mdname :
-			(asym_ctx->oaep_mdname != NULL ? asym_ctx->oaep_mdname : "SHA1"));
-		if (mgf1_md == NULL)
-			goto end;
-
-		if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
-			goto end;
-
-		if (asym_ctx->oaep_label != NULL && asym_ctx->oaep_labellen > 0) {
-			unsigned char *label;
-
-			label = OPENSSL_memdup(asym_ctx->oaep_label, asym_ctx->oaep_labellen);
-			if (label == NULL)
-				goto end;
-
-			if (EVP_PKEY_CTX_set0_rsa_oaep_label(pctx, label,
-				(int)asym_ctx->oaep_labellen) <= 0) {
-				OPENSSL_free(label);
-				goto end;
-			}
-			/* ownership transferred to pctx */
-			label = NULL;
-		}
-	}
-
-	/* length query */
-	if (out == NULL) {
-		if (EVP_PKEY_encrypt(pctx, NULL, &tmplen, in, inlen) <= 0)
-			goto end;
-		*outlen = tmplen;
-		ok = 1;
-		goto end;
-	}
-
-	tmplen = outsize;
-	if (EVP_PKEY_encrypt(pctx, out, &tmplen, in, inlen) <= 0)
-		goto end;
-
-	*outlen = tmplen;
-	ok = 1;
-
-end:
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(pub);
-	return ok;
-}
-
-/* Return EVP_PKEY associated with asymmetric cipher context. */
-EVP_PKEY *p11_asym_cipher_ctx_get_evp_pkey(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return NULL;
-
-	return p11_keydata_get_evp_pkey(asym_ctx->keydata);
-}
-
-/* Return maximum output size for asymmetric cipher operation. */
-size_t p11_asym_cipher_ctx_get_outsize(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return 0;
-
-	/*
-	 * For RSA decrypt the plaintext is at most modulus size.
-	 * This is a safe upper bound for output buffer sizing.
-	 */
-	return p11_keydata_get_maxsize(asym_ctx->keydata);
-}
-
-/* Return key type used in asymmetric cipher context. */
-int p11_asym_cipher_ctx_get_type(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_type(asym_ctx->keydata);
-}
-
-/* Set OAEP digest algorithm name for asymmetric cipher operations. */
-int p11_asym_cipher_ctx_set_oaep_mdname(P11_ASYM_CIPHER_CTX *asym_ctx, const char *mdname)
-{
-	char *dup = NULL;
-
-	if (asym_ctx == NULL)
-		return 0;
-
-	if (mdname != NULL) {
-		dup = OPENSSL_strdup(mdname);
-		if (dup == NULL)
-			return 0;
-	}
-
-	OPENSSL_free(asym_ctx->oaep_mdname);
-	asym_ctx->oaep_mdname = dup;
-	return 1;
-}
-
-/* Return OAEP digest algorithm name used in asymmetric cipher context. */
-const char *p11_asym_cipher_ctx_get_oaep_mdname(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return NULL;
-
-	return asym_ctx->oaep_mdname;
-}
-
-/* Set padding mode for asymmetric cipher operations. */
-int p11_asym_cipher_ctx_set_pad_mode(P11_ASYM_CIPHER_CTX *asym_ctx, int pad_mode)
-{
-	if (asym_ctx == NULL)
-		return 0;
-
-	asym_ctx->pad_mode = pad_mode;
-	return 1;
-}
-
-/* Return padding mode used in asymmetric cipher context. */
-int p11_asym_cipher_ctx_get_pad_mode(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return 0;
-
-	return asym_ctx->pad_mode;
-}
-
-/* Set MGF1 digest algorithm name for asymmetric cipher operations. */
-int p11_asym_cipher_ctx_set_mgf1_mdname(P11_ASYM_CIPHER_CTX *asym_ctx, const char *mdname)
-{
-	char *dup = NULL;
-
-	if (asym_ctx == NULL)
-		return 0;
-
-	if (mdname != NULL) {
-		dup = OPENSSL_strdup(mdname);
-		if (dup == NULL)
-			return 0;
-	}
-
-	OPENSSL_free(asym_ctx->mgf1_mdname);
-	asym_ctx->mgf1_mdname = dup;
-	return 1;
-}
-
-/* Return MGF1 digest algorithm name used in asymmetric cipher context. */
-const char *p11_asym_cipher_ctx_get_mgf1_mdname(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return NULL;
-
-	return asym_ctx->mgf1_mdname;
-}
-
-/* Return OAEP label used in asymmetric cipher context. */
-unsigned char *p11_asym_cipher_ctx_get_oaep_label(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return NULL;
-
-	return asym_ctx->oaep_label;
-}
-
-/* Set OAEP label for asymmetric cipher operations. */
-int p11_asym_cipher_ctx_set_oaep_label(P11_ASYM_CIPHER_CTX *asym_ctx,
-	const unsigned char *label, size_t labellen)
-{
-	unsigned char *dup = NULL;
-
-	if (asym_ctx == NULL)
-		return 0;
-
-	if (labellen > 0) {
-		if (label == NULL)
-			return 0;
-
-		dup = OPENSSL_memdup(label, labellen);
-		if (dup == NULL)
-			return 0;
-	}
-
-	OPENSSL_free(asym_ctx->oaep_label);
-	asym_ctx->oaep_label = dup;
-	asym_ctx->oaep_labellen = labellen;
-	return 1;
-}
-
-/* Return OAEP label length used in asymmetric cipher context. */
-size_t p11_asym_cipher_ctx_get_oaep_labellen(const P11_ASYM_CIPHER_CTX *asym_ctx)
-{
-	if (asym_ctx == NULL)
-		return 0;
-
-	return asym_ctx->oaep_labellen;
-}
-
-/******************************************************************************/
-/* KEY EXCHANGE helper functions                                              */
-/******************************************************************************/
-
-/* Allocate a key exchange context. */
-P11_KEYEXCH_CTX *p11_keyexch_ctx_new(PROVIDER_CTX *ctx)
-{
-	P11_KEYEXCH_CTX *keyexch_ctx;
-
-	keyexch_ctx = OPENSSL_zalloc(sizeof(P11_KEYEXCH_CTX));
-	if (!keyexch_ctx)
-		return NULL;
-
-	keyexch_ctx->prov_ctx = ctx;
-	keyexch_ctx->cofactor_mode = -1; /* default */
-	return keyexch_ctx;
-}
-
-/* Free the key exchange context and release referenced keys. */
-void p11_keyexch_ctx_free(P11_KEYEXCH_CTX *keyexch_ctx)
-{
-	if (keyexch_ctx == NULL)
-		return;
-
-	p11_keydata_free(keyexch_ctx->keydata);
-	p11_keydata_free(keyexch_ctx->peerkeydata);
-	OPENSSL_free(keyexch_ctx);
-}
-
-/*
- * Duplicate a key exchange context.
- * Key objects are shared by reference; mutable context state is copied.
- */
-P11_KEYEXCH_CTX *p11_keyexch_dupctx(P11_KEYEXCH_CTX *keyexch_ctx)
-{
-	P11_KEYEXCH_CTX *dst = NULL;
-
-	if (keyexch_ctx == NULL)
-		return NULL;
-
-	dst = p11_keyexch_ctx_new(keyexch_ctx->prov_ctx);
-	if (dst == NULL)
-		return NULL;
-
-	/* copy simple scalar state */
-	dst->cofactor_mode = keyexch_ctx->cofactor_mode;
-
-	/* share local keydata by reference */
-	if (keyexch_ctx->keydata != NULL) {
-		if (!p11_keydata_up_ref(keyexch_ctx->keydata))
-			goto err;
-		dst->keydata = keyexch_ctx->keydata;
-	}
-
-	/* share peer keydata by reference */
-	if (keyexch_ctx->peerkeydata != NULL) {
-		if (!p11_keydata_up_ref(keyexch_ctx->peerkeydata))
-			goto err;
-		dst->peerkeydata = keyexch_ctx->peerkeydata;
-	}
-
-	return dst;
-
-err:
-	p11_keyexch_ctx_free(dst);
-	return NULL;
-}
-
-/* Set the local private key and reset per-operation state. */
-int p11_keyexch_ctx_init(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata,
-	const OSSL_PARAM params[])
-{
-	const OSSL_PARAM *p;
-
-	if (keyexch_ctx == NULL || keydata == NULL)
-		return 0;
-
-	/* Take a reference first, so replacing with the same object is safe. */
-	if (!p11_keydata_up_ref(keydata))
-		return 0;
-
-	p11_keydata_free(keyexch_ctx->keydata);
-	keyexch_ctx->keydata = keydata;
-
-	/* A new derive operation must not reuse the previous peer key. */
-	p11_keydata_free(keyexch_ctx->peerkeydata);
-	keyexch_ctx->peerkeydata = NULL;
-
-	/* Restore the default cofactor mode for the new operation. */
-	if (!p11_keyexch_ctx_set_cofactor_mode(keyexch_ctx, -1))
-		return 0;
-
-	if (params == NULL)
-		return 1;
-
-	/* Cofactor mode is meaningful only for ECDH.  It is accepted here
-	 * because the same key exchange implementation is shared with X25519/X448. */
-	p = OSSL_PARAM_locate_const(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
-	if (p != NULL) {
-		int mode;
-
-		if (!OSSL_PARAM_get_int(p, &mode))
-			return 0;
-
-		if (mode < -1 || mode > 1)
-			return 0;
-
-		return p11_keyexch_ctx_set_cofactor_mode(keyexch_ctx, mode);
-	}
-
-	return 1;
-}
-
-/* Set the peer public key for shared-secret derivation. */
-int p11_keyexch_set_peer(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata)
-{
-	if (keyexch_ctx == NULL || keydata == NULL)
-		return 0;
-
-	/* Take a reference first, so replacing with the same object is safe. */
-	if (!p11_keydata_up_ref(keydata))
-		return 0;
-
-	p11_keydata_free(keyexch_ctx->peerkeydata);
-	keyexch_ctx->peerkeydata = keydata;
-
-	return 1;
-}
-
-/* Set ECDH cofactor mode: -1 = default, 0 = disabled, 1 = enabled. */
-int p11_keyexch_ctx_set_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx, int cofactor_mode)
-{
-	if (keyexch_ctx == NULL)
-		return 0;
-
-	keyexch_ctx->cofactor_mode = cofactor_mode;
-	return 1;
-}
-
-/* Return ECDH cofactor mode. */
-int p11_keyexch_ctx_get_cofactor_mode(P11_KEYEXCH_CTX *keyexch_ctx)
-{
-	if (keyexch_ctx == NULL)
-		return 0;
-
-	return keyexch_ctx->cofactor_mode;
-}
-
-/* Return the local private EVP_PKEY. The returned pointer is borrowed. */
-EVP_PKEY *p11_keyexch_ctx_get_evp_pkey(const P11_KEYEXCH_CTX *keyexch_ctx)
-{
-	if (keyexch_ctx == NULL)
-		return NULL;
-
-	return p11_keydata_get_evp_pkey(keyexch_ctx->keydata);
-}
-
-/* Return the peer public key bytes. The returned buffer is borrowed. */
-int p11_keyexch_ctx_get_peer_pub(const P11_KEYEXCH_CTX *keyexch_ctx,
-	const unsigned char **buf, size_t *len)
-{
-	if (keyexch_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_pub(keyexch_ctx->peerkeydata, buf, len);
-}
-
-/* Return the local key type. */
-int p11_keyexch_ctx_get_type(const P11_KEYEXCH_CTX *keyexch_ctx)
-{
-	if (keyexch_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_type(keyexch_ctx->keydata);
-}
-
-/* Return the maximum shared-secret size in bytes. */
-size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx)
-{
-#ifndef OPENSSL_NO_EC
-	EVP_PKEY *pkey;
-	int bits;
-#endif /* OPENSSL_NO_EC */
-	size_t outsize = 0;
-
-	if (keyexch_ctx == NULL)
-		return 0;
-
-	switch (p11_keyexch_ctx_get_type(keyexch_ctx)) {
-#ifndef OPENSSL_NO_EC
-	case EVP_PKEY_EC:
-		/* ECDH output is at most the EC field size. */
-		pkey = p11_keyexch_ctx_get_evp_pkey(keyexch_ctx);
-		if (pkey == NULL)
-			return 0;
-
-		bits = EVP_PKEY_get_bits(pkey);
-		if (bits <= 0)
-			return 0;
-
-		outsize = ((size_t)bits + 7) / 8;
-		break;
-#endif /* OPENSSL_NO_EC */
-#ifndef OPENSSL_NO_ECX
-	case EVP_PKEY_X25519:
-		return 32; /* X25519 shared secret has fixed length. */
-
-	case EVP_PKEY_X448:
-		return 56; /* X448 shared secret has fixed length. */
-#endif /* OPENSSL_NO_ECX */
-	default:
-		return 0;
-	}
-	return outsize;
-}
-
-/******************************************************************************/
-/* ASYM KEM helper functions                                                  */
-/******************************************************************************/
-
-/* Allocate a asymmetric KEM context. */
-P11_KEM_CTX *p11_kem_ctx_new(PROVIDER_CTX *ctx)
-{
-	P11_KEM_CTX *kem_ctx;
-
-	kem_ctx = OPENSSL_zalloc(sizeof(P11_KEM_CTX));
-	if (!kem_ctx)
-		return NULL;
-
-	kem_ctx->prov_ctx = ctx;
-	return kem_ctx;
-}
-
-/* Free the asymmetric KEM context and release referenced keys. */
-void p11_kem_ctx_free(P11_KEM_CTX *kem_ctx)
-{
-	if (kem_ctx == NULL)
-		return;
-
-	p11_keydata_free(kem_ctx->keydata);
-	OPENSSL_free(kem_ctx);
-}
-
-/*
- * Duplicate a asymmetric KEM context.
- * Key objects are shared by reference; mutable context state is copied.
- */
-P11_KEM_CTX *p11_kem_ctx_dupctx(P11_KEM_CTX *kem_ctx)
-{
-	P11_KEM_CTX *dst = NULL;
-
-	if (kem_ctx == NULL)
-		return NULL;
-
-	dst = p11_kem_ctx_new(kem_ctx->prov_ctx);
-	if (dst == NULL)
-		return NULL;
-
-	/* share local keydata by reference */
-	if (kem_ctx->keydata != NULL) {
-		if (!p11_keydata_up_ref(kem_ctx->keydata))
-			goto err;
-		dst->keydata = kem_ctx->keydata;
-	}
-
-	return dst;
-
-err:
-	p11_kem_ctx_free(dst);
-	return NULL;
-}
-
-/* Initialize an asymmetric KEM context with a key. */
-int p11_kem_ctx_init(P11_KEM_CTX *kem_ctx, P11_KEYDATA *keydata, const OSSL_PARAM params[])
-{
-	if (kem_ctx == NULL || keydata == NULL)
-		return 0;
-
-	(void)params;
-
-	if (!p11_keydata_up_ref(keydata))
-		return 0;
-
-	p11_keydata_free(kem_ctx->keydata);
-	kem_ctx->keydata = keydata;
-
-	return 1;
-}
-
-/*
- * Encapsulate a shared secret using a temporary public key copy
- * in the default provider.
- */
-int p11_kem_ctx_encapsulate(P11_KEM_CTX *kem_ctx, unsigned char *out,
-	size_t *outlen, unsigned char *secret, size_t *secretlen)
-{
-	EVP_PKEY *pub = NULL;
-	EVP_PKEY_CTX *pctx = NULL;
-	int ok = 0;
-
-	if (kem_ctx == NULL || kem_ctx->keydata == NULL ||
-			outlen == NULL || secretlen == NULL)
-		return 0;
-
-	pub = pubkey_from_params_default(kem_ctx->keydata);
-	if (pub == NULL)
-		return 0;
-
-	pctx = EVP_PKEY_CTX_new(pub, NULL);
-	if (pctx == NULL)
-		goto end;
-
-	if (EVP_PKEY_encapsulate_init(pctx, NULL) <= 0)
-		goto end;
-
-	/* EVP_PKEY_encapsulate() also handles the length query when
-	 * out and secret are NULL. */
-	if (EVP_PKEY_encapsulate(pctx, out, outlen, secret, secretlen) <= 0)
-		goto end;
-
-	ok = 1;
-
-end:
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(pub);
-	return ok;
-}
-
-/* Return EVP_PKEY associated with asymmetric KEM context. */
-EVP_PKEY *p11_kem_ctx_get_evp_pkey(const P11_KEM_CTX *kem_ctx)
-{
-	if (kem_ctx == NULL)
-		return NULL;
-
-	return p11_keydata_get_evp_pkey(kem_ctx->keydata);
-}
-
-/* Return the local key type. */
-int p11_kem_ctx_get_type(const P11_KEM_CTX *kem_ctx)
-{
-	if (kem_ctx == NULL)
-		return 0;
-
-	return p11_keydata_get_type(kem_ctx->keydata);
-}
-
-/* Return the shared-secret size for an asymmetric KEM operation. */
-size_t p11_kem_ctx_get_secret_size(const P11_KEM_CTX *kem_ctx)
-{
-	int type;
-
-	if (kem_ctx == NULL || kem_ctx->keydata == NULL)
-		return 0;
-
-	type = p11_keydata_get_type(kem_ctx->keydata);
-
-	switch (type) {
-#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
-	case EVP_PKEY_ML_KEM_512:
-	case EVP_PKEY_ML_KEM_768:
-	case EVP_PKEY_ML_KEM_1024:
-		return ML_KEM_SHARED_SECRET_BYTES;
-#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
-	default:
-		return 0;
-	}
-}
-
-/******************************************************************************/
-/* Internal helper functions                                                  */
-/******************************************************************************/
-
-/* Update the provider context with environment variable values */
-static void PROVIDER_CTX_get_environment_parameters(PROVIDER_CTX *prov_ctx)
-{
-	char *str;
-
-	str = getenv("PKCS11_MODULE_PATH");
-	if (str != NULL && str[0] != '\0') {
-		OPENSSL_free(prov_ctx->pkcs11_module);
-		prov_ctx->pkcs11_module = OPENSSL_strdup(str);
-	}
-	str = getenv("PKCS11_PIN");
-	if (str != NULL && str[0] != '\0') {
-		OPENSSL_free(prov_ctx->pin);
-		prov_ctx->pin = OPENSSL_strdup(str);
-	}
-	str = getenv("PKCS11_DEBUG_LEVEL");
-	if (str != NULL && str[0] != '\0') {
-		OPENSSL_free(prov_ctx->p_debug_level);
-		prov_ctx->p_debug_level = OPENSSL_strdup(str);
-	}
-	str = getenv("PKCS11_FORCE_LOGIN");
-	if (str != NULL && str[0] != '\0') {
-		OPENSSL_free(prov_ctx->p_force_login);
-		prov_ctx->p_force_login = OPENSSL_strdup(str);
-	}
-}
-
-/*
- * Retrieve provider-specific parameters. The parameters are returned by
- * reference, not as copies, and so the elements of the param array must have
- * OSSL_PARAM_UTF8_PTR as their data_type.
- */
-static int PROVIDER_CTX_get_specific_parameters(PROVIDER_CTX *prov_ctx)
-{
-	int rv;
-	PROVIDER_PARAMS params = {0};
-	OSSL_PARAM specific_params[] = {
-		{"pkcs11_module", OSSL_PARAM_UTF8_PTR, &params.pkcs11_module, 0, 0},
-		{"pin", OSSL_PARAM_UTF8_PTR, &params.pin, 0, 0},
-		{"debug_level", OSSL_PARAM_UTF8_PTR, &params.debug_level, 0, 0},
-		{"force_login", OSSL_PARAM_UTF8_PTR, &params.force_login, 0, 0},
-		{"init_args", OSSL_PARAM_UTF8_PTR, &params.init_args, 0, 0},
-		OSSL_PARAM_END
-	};
-
-	if (!prov_ctx || !prov_ctx->handle || !prov_ctx->core_get_params)
-		return 0;
-
-	/* Retrieve provider-specific settings */
-	rv = prov_ctx->core_get_params(prov_ctx->handle, specific_params);
-
-	if (params.pkcs11_module && (!prov_ctx->params.pkcs11_module
-		|| strcmp(params.pkcs11_module, prov_ctx->params.pkcs11_module))) {
-		OPENSSL_free(prov_ctx->pkcs11_module);
-		prov_ctx->pkcs11_module = OPENSSL_strdup(params.pkcs11_module);
-	}
-#ifdef DEFAULT_PKCS11_MODULE
-	if (!prov_ctx->pkcs11_module) {
-		prov_ctx->pkcs11_module = OPENSSL_strdup(DEFAULT_PKCS11_MODULE);
-	}
-#endif
-	if (params.pin && (!prov_ctx->params.pin || strcmp(params.pin, prov_ctx->params.pin))) {
-		OPENSSL_free(prov_ctx->pin);
-		prov_ctx->pin = OPENSSL_strdup(params.pin);
-	}
-	if (params.debug_level && (!prov_ctx->params.debug_level
-		|| strcmp(params.debug_level, prov_ctx->params.debug_level))) {
-		OPENSSL_free(prov_ctx->p_debug_level);
-		prov_ctx->p_debug_level = OPENSSL_strdup(params.debug_level);
-	}
-	if (params.force_login && (!prov_ctx->params.force_login
-		|| strcmp(params.force_login, prov_ctx->params.force_login))) {
-		OPENSSL_free(prov_ctx->p_force_login);
-		prov_ctx->p_force_login = OPENSSL_strdup(params.force_login);
-	}
-	if (params.init_args && (!prov_ctx->params.init_args
-		|| strcmp(params.init_args, prov_ctx->params.init_args))) {
-		OPENSSL_free(prov_ctx->init_args);
-		prov_ctx->init_args = OPENSSL_strdup(params.init_args);
-	}
-	return rv;
-}
-
-/* Build public EVP_PKEY (default provider) from OSSL_PARAM[] */
-static EVP_PKEY *pubkey_from_params_default(P11_KEYDATA *keydata)
-{
-	EVP_PKEY *pkey = NULL;
-	EVP_PKEY_CTX *pctx = NULL;
-
-	if (keydata == NULL || keydata->name == NULL || keydata->params == NULL)
-		return NULL;
-
-	/* Force default provider to avoid recursion into pkcs11 provider */
-	pctx = EVP_PKEY_CTX_new_from_name(NULL, keydata->name, "provider=default");
-	if (pctx == NULL)
-		return NULL;
-
-	if (EVP_PKEY_fromdata_init(pctx) <= 0)
-		goto err;
-
-	if (EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_PUBLIC_KEY,
-		(OSSL_PARAM *)keydata->params) <= 0)
-		goto err;
-
-	EVP_PKEY_CTX_free(pctx);
-	return pkey;
-
-err:
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(pkey);
-
-	return NULL;
-}
-
-/* Return EVP_PKEY stored in keydata. */
-static EVP_PKEY *p11_keydata_get_evp_pkey(P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return NULL;
-
-	return keydata->pkey;
+	memset(&keydata->pubdata, 0, sizeof(keydata->pubdata));
 }
 
 /* Set and store raw public key data. */
@@ -2602,6 +1014,139 @@ static int p11_keydata_set_pub(P11_KEYDATA *keydata, const void *buf, size_t len
 	pubkey->pub_len = len;
 	return 1;
 }
+
+static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len)
+{
+	if (p == NULL || out == NULL || out_len == NULL ||
+		p->data == NULL || p->data_size == 0)
+		return 0;
+
+	*out = OPENSSL_memdup(p->data, p->data_size);
+	if (*out == NULL)
+		return 0;
+
+	*out_len = p->data_size;
+	return 1;
+}
+
+/*
+ * BN params built via OSSL_PARAM_BLD_push_BN use a canonical binary form,
+ * so a raw byte comparison is sufficient.
+ */
+static int param_blob_equal(const OSSL_PARAM *a, const OSSL_PARAM *b)
+{
+	if (a == NULL || b == NULL)
+		return 0;
+	if (a->data_type != b->data_type)
+		return 0;
+	if (a->data == NULL || b->data == NULL)
+		return 0;
+	if (a->data_size != b->data_size)
+		return 0;
+	return CRYPTO_memcmp(a->data, b->data, a->data_size) == 0;
+}
+
+#ifndef OPENSSL_NO_EC
+static int p11_dup_param_utf8(const OSSL_PARAM *p, char **out)
+{
+	const char *s = NULL;
+
+	if (p == NULL || out == NULL || p->data_type != OSSL_PARAM_UTF8_STRING)
+		return 0;
+
+	if (!OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
+		return 0;
+
+	*out = OPENSSL_strdup(s);
+	return (*out != NULL);
+}
+
+/* Compare two EC public points by value on the given curve. */
+static int ec_point_equal_by_value(const char *group_name,
+	const unsigned char *a, size_t alen, const unsigned char *b, size_t blen)
+{
+	int ok = 0;
+	int nid = NID_undef;
+	EC_GROUP *grp = NULL;
+	EC_POINT *pa = NULL, *pb = NULL;
+	BN_CTX *bnctx = NULL;
+
+	if (group_name == NULL || a == NULL || b == NULL)
+		return 0;
+
+	nid = OBJ_sn2nid(group_name);
+	if (nid == NID_undef)
+		nid = OBJ_ln2nid(group_name);
+	if (nid == NID_undef)
+		return 0;
+
+	grp = EC_GROUP_new_by_curve_name(nid);
+	if (grp == NULL)
+		goto err;
+
+	pa = EC_POINT_new(grp);
+	pb = EC_POINT_new(grp);
+	bnctx = BN_CTX_new();
+	if (pa == NULL || pb == NULL || bnctx == NULL)
+		goto err;
+
+	if (EC_POINT_oct2point(grp, pa, a, alen, bnctx) != 1)
+		goto err;
+	if (EC_POINT_oct2point(grp, pb, b, blen, bnctx) != 1)
+		goto err;
+
+	ok = (EC_POINT_cmp(grp, pa, pb, bnctx) == 0);
+
+err:
+	BN_CTX_free(bnctx);
+	EC_POINT_free(pa);
+	EC_POINT_free(pb);
+	EC_GROUP_free(grp);
+
+	return ok;
+}
+#endif /* OPENSSL_NO_EC */
+
+/* Compare two OSSL_PARAM octet strings for equality. */
+static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b)
+{
+	if (a == NULL || b == NULL)
+		return 0;
+	if (a->data_type != OSSL_PARAM_OCTET_STRING ||
+		b->data_type != OSSL_PARAM_OCTET_STRING)
+		return 0;
+	if (a->data == NULL || b->data == NULL)
+		return 0;
+	if (a->data_size != b->data_size)
+		return 0;
+	return CRYPTO_memcmp(a->data, b->data, a->data_size) == 0;
+}
+
+/*
+ * Covers:
+ *  - EC/EdDSA: OSSL_PKEY_PARAM_PRIV_KEY
+ *  - RSA:     OSSL_PKEY_PARAM_RSA_D (private exponent)
+ * Return 1 if params contain private key material, 0 otherwise.
+ */
+static int params_contains_private_key(const OSSL_PARAM *params)
+{
+	const OSSL_PARAM *p;
+
+	/* Generic private key bytes (EC / EdDSA / etc.) */
+	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PRIV_KEY);
+	if (p != NULL && p->data != NULL && p->data_size > 0)
+		return 1;
+
+	/* RSA private exponent */
+	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_RSA_D);
+	if (p != NULL && p->data != NULL && p->data_size > 0)
+		return 1;
+
+	return 0;
+}
+
+
+/* EVP_PKEY and OSSL_PARAM conversion helpers. */
 
 /* Build OSSL_PARAM list with public-key parameters extracted from an EVP_PKEY. */
 static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
@@ -2798,81 +1343,6 @@ err:
 	return params;
 }
 
-/* Initialize key type and size metadata from stored key parameters. */
-static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata)
-{
-	int type;
-
-	if (pkey == NULL || keydata == NULL || keydata->params == NULL)
-		return 0;
-
-	p11_keydata_clear_pubdata(keydata);
-
-	keydata->type = 0;
-	keydata->name = NULL;
-	keydata->keysize = 0;
-	keydata->maxsize = 0;
-
-	type = evp_pkey_get_type_id(pkey);
-
-	switch (type) {
-	case EVP_PKEY_RSA:
-	case EVP_PKEY_RSA_PSS:
-		return p11_keydata_init_rsa_from_params(keydata);
-
-#ifndef OPENSSL_NO_EC
-	case EVP_PKEY_EC:
-		return p11_keydata_init_ec_from_params(keydata);
-#endif /* OPENSSL_NO_EC */
-
-#ifndef OPENSSL_NO_ECX
-	case EVP_PKEY_ED25519:
-	case EVP_PKEY_ED448:
-	case EVP_PKEY_X25519:
-	case EVP_PKEY_X448:
-		return p11_keydata_init_ecx_from_params(keydata, type);
-#endif /* OPENSSL_NO_ECX */
-
-#if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#ifndef OPENSSL_NO_ML_DSA
-	case EVP_PKEY_ML_DSA_44:
-	case EVP_PKEY_ML_DSA_65:
-	case EVP_PKEY_ML_DSA_87:
-		return p11_keydata_init_mldsa_from_params(keydata, type);
-#endif /* OPENSSL_NO_ML_DSA */
-
-#ifndef OPENSSL_NO_ML_KEM
-	case EVP_PKEY_ML_KEM_512:
-	case EVP_PKEY_ML_KEM_768:
-	case EVP_PKEY_ML_KEM_1024:
-		return p11_keydata_init_mlkem_from_params(keydata, type);
-#endif /* OPENSSL_NO_ML_KEM */
-
-#ifndef OPENSSL_NO_SLH_DSA
-	case EVP_PKEY_SLH_DSA_SHA2_128S:
-	case EVP_PKEY_SLH_DSA_SHA2_128F:
-	case EVP_PKEY_SLH_DSA_SHAKE_128S:
-	case EVP_PKEY_SLH_DSA_SHAKE_128F:
-	case EVP_PKEY_SLH_DSA_SHA2_192S:
-	case EVP_PKEY_SLH_DSA_SHA2_192F:
-	case EVP_PKEY_SLH_DSA_SHAKE_192S:
-	case EVP_PKEY_SLH_DSA_SHAKE_192F:
-	case EVP_PKEY_SLH_DSA_SHA2_256S:
-	case EVP_PKEY_SLH_DSA_SHA2_256F:
-	case EVP_PKEY_SLH_DSA_SHAKE_256S:
-	case EVP_PKEY_SLH_DSA_SHAKE_256F:
-		return p11_keydata_init_slhdsa_from_params(keydata, type);
-#endif /* OPENSSL_NO_SLH_DSA */
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000 */
-	case EVP_PKEY_FALCON512:
-	case EVP_PKEY_FALCON1024:
-		return p11_keydata_init_falcon_from_params(keydata, type);
-
-	default:
-		return 0;
-	}
-}
-
 static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata)
 {
 	const OSSL_PARAM *p;
@@ -2888,6 +1358,9 @@ static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata)
 		pe->data == NULL || pe->data_size == 0)
 		return 0;
 
+	keydata->type = EVP_PKEY_RSA;
+	keydata->name = "RSA";
+
 	if (!p11_dup_param_blob(p, &keydata->pubdata.rsa.n,
 			&keydata->pubdata.rsa.n_len))
 		return 0;
@@ -2896,8 +1369,6 @@ static int p11_keydata_init_rsa_from_params(P11_KEYDATA *keydata)
 			&keydata->pubdata.rsa.e_len))
 		return 0;
 
-	keydata->type = EVP_PKEY_RSA;
-	keydata->name = "RSA";
 	keydata->keysize = p->data_size;
 	keydata->maxsize = p->data_size; /* RSA signature == modulus size */
 	return 1;
@@ -2941,6 +1412,9 @@ static int p11_keydata_init_ec_from_params(P11_KEYDATA *keydata)
 	if (order_bytes == 0)
 		goto err;
 
+	keydata->type = EVP_PKEY_EC;
+	keydata->name = "EC";
+
 	if (!p11_dup_param_utf8(p, &keydata->pubdata.ec.group_name))
 		goto err;
 
@@ -2954,9 +1428,6 @@ static int p11_keydata_init_ec_from_params(P11_KEYDATA *keydata)
 				&keydata->pubdata.ec.pub_len))
 			goto err;
 	}
-
-	keydata->type = EVP_PKEY_EC;
-	keydata->name = "EC";
 
 	/* good approximation for "key size" */
 	keydata->keysize = order_bytes;
@@ -3011,6 +1482,8 @@ static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type)
 		return 0;
 	}
 
+	keydata->type = type;
+	keydata->name = name;
 	p = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
 	if (p != NULL && p->data_type == OSSL_PARAM_OCTET_STRING &&
 		p->data != NULL && p->data_size == keysize) {
@@ -3019,8 +1492,6 @@ static int p11_keydata_init_ecx_from_params(P11_KEYDATA *keydata, int type)
 			return 0;
 	}
 
-	keydata->type = type;
-	keydata->name = name;
 	keydata->keysize = keysize;
 	keydata->maxsize = maxsize;
 	return 1;
@@ -3056,6 +1527,9 @@ static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type)
 		return 0;
 	}
 
+	keydata->type = type;
+	keydata->name = name;
+
 	p = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
 	if (p != NULL && p->data_type == OSSL_PARAM_OCTET_STRING &&
 		p->data != NULL && p->data_size == keysize) {
@@ -3064,8 +1538,6 @@ static int p11_keydata_init_mldsa_from_params(P11_KEYDATA *keydata, int type)
 			return 0;
 	}
 
-	keydata->type = type;
-	keydata->name = name;
 	keydata->keysize = keysize;
 	keydata->maxsize = sigsize;
 	return 1;
@@ -3100,6 +1572,9 @@ static int p11_keydata_init_mlkem_from_params(P11_KEYDATA *keydata, int type)
 		return 0;
 	}
 
+	keydata->type = type;
+	keydata->name = name;
+
 	/*
 	 * OSSL_PKEY_PARAM_PUB_KEY is normally returned by
 	 * EVP_PKEY_todata(). Accept ENCODED_PUBLIC_KEY as a fallback;
@@ -3119,8 +1594,6 @@ static int p11_keydata_init_mlkem_from_params(P11_KEYDATA *keydata, int type)
 			&keydata->pubdata.raw.pub_len))
 		return 0;
 
-	keydata->type = type;
-	keydata->name = name;
 	keydata->keysize = keysize;
 	keydata->maxsize = ciphertext_size;
 	return 1;
@@ -3212,6 +1685,9 @@ static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type)
 		return 0;
 	}
 
+	keydata->type = type;
+	keydata->name = name;
+
 	p = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
 	if (p != NULL && p->data_type == OSSL_PARAM_OCTET_STRING &&
 		p->data != NULL && p->data_size == keysize) {
@@ -3220,8 +1696,6 @@ static int p11_keydata_init_slhdsa_from_params(P11_KEYDATA *keydata, int type)
 			return 0;
 	}
 
-	keydata->type = type;
-	keydata->name = name;
 	keydata->keysize = keysize;
 	keydata->maxsize = sigsize;
 	return 1;
@@ -3253,6 +1727,9 @@ static int p11_keydata_init_falcon_from_params(P11_KEYDATA *keydata, int type)
 		return 0;
 	}
 
+	keydata->type = type;
+	keydata->name = name;
+
 	p = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
 	if (p != NULL && p->data_type == OSSL_PARAM_OCTET_STRING &&
 		p->data != NULL && p->data_size == keysize) {
@@ -3261,188 +1738,808 @@ static int p11_keydata_init_falcon_from_params(P11_KEYDATA *keydata, int type)
 			return 0;
 	}
 
-	keydata->type = type;
-	keydata->name = name;
 	keydata->keysize = keysize;
 	keydata->maxsize = sigsize;
 
 	return 1;
 }
 
-/*
- * Covers:
- *  - EC/EdDSA: OSSL_PKEY_PARAM_PRIV_KEY
- *  - RSA:     OSSL_PKEY_PARAM_RSA_D (private exponent)
- * Return 1 if params contain private key material, 0 otherwise.
- */
-static int params_contains_private_key(const OSSL_PARAM *params)
+/* Initialize key type and size metadata from stored key parameters. */
+static int p11_keydata_init_from_params(EVP_PKEY *pkey, P11_KEYDATA *keydata)
 {
-	const OSSL_PARAM *p;
+	int type;
 
-	/* Generic private key bytes (EC / EdDSA / etc.) */
-	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PRIV_KEY);
-	if (p != NULL && p->data != NULL && p->data_size > 0)
-		return 1;
+	if (pkey == NULL || keydata == NULL || keydata->params == NULL)
+		return 0;
 
-	/* RSA private exponent */
-	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_RSA_D);
-	if (p != NULL && p->data != NULL && p->data_size > 0)
-		return 1;
+	p11_keydata_clear_pubdata(keydata);
 
-	return 0;
+	keydata->type = 0;
+	keydata->name = NULL;
+	keydata->keysize = 0;
+	keydata->maxsize = 0;
+
+	type = evp_pkey_get_type_id(pkey);
+
+	switch (type) {
+	case EVP_PKEY_RSA:
+	case EVP_PKEY_RSA_PSS:
+		return p11_keydata_init_rsa_from_params(keydata);
+
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		return p11_keydata_init_ec_from_params(keydata);
+#endif /* OPENSSL_NO_EC */
+
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+		return p11_keydata_init_ecx_from_params(keydata, type);
+#endif /* OPENSSL_NO_ECX */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#ifndef OPENSSL_NO_ML_DSA
+	case EVP_PKEY_ML_DSA_44:
+	case EVP_PKEY_ML_DSA_65:
+	case EVP_PKEY_ML_DSA_87:
+		return p11_keydata_init_mldsa_from_params(keydata, type);
+#endif /* OPENSSL_NO_ML_DSA */
+
+#ifndef OPENSSL_NO_ML_KEM
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return p11_keydata_init_mlkem_from_params(keydata, type);
+#endif /* OPENSSL_NO_ML_KEM */
+
+#ifndef OPENSSL_NO_SLH_DSA
+	case EVP_PKEY_SLH_DSA_SHA2_128S:
+	case EVP_PKEY_SLH_DSA_SHA2_128F:
+	case EVP_PKEY_SLH_DSA_SHAKE_128S:
+	case EVP_PKEY_SLH_DSA_SHAKE_128F:
+	case EVP_PKEY_SLH_DSA_SHA2_192S:
+	case EVP_PKEY_SLH_DSA_SHA2_192F:
+	case EVP_PKEY_SLH_DSA_SHAKE_192S:
+	case EVP_PKEY_SLH_DSA_SHAKE_192F:
+	case EVP_PKEY_SLH_DSA_SHA2_256S:
+	case EVP_PKEY_SLH_DSA_SHA2_256F:
+	case EVP_PKEY_SLH_DSA_SHAKE_256S:
+	case EVP_PKEY_SLH_DSA_SHAKE_256F:
+		return p11_keydata_init_slhdsa_from_params(keydata, type);
+#endif /* OPENSSL_NO_SLH_DSA */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000 */
+	case EVP_PKEY_FALCON512:
+	case EVP_PKEY_FALCON1024:
+		return p11_keydata_init_falcon_from_params(keydata, type);
+
+	default:
+		return 0;
+	}
 }
 
-/*
- * BN params built via OSSL_PARAM_BLD_push_BN use a canonical binary form,
- * so a raw byte comparison is sufficient.
- */
-static int param_blob_equal(const OSSL_PARAM *a, const OSSL_PARAM *b)
+/* Build public EVP_PKEY (default provider) from OSSL_PARAM[] */
+static EVP_PKEY *pubkey_from_params_default(P11_KEYDATA *keydata)
 {
-	if (a == NULL || b == NULL)
+	EVP_PKEY *pkey = NULL;
+	EVP_PKEY_CTX *pctx = NULL;
+
+	if (keydata == NULL || keydata->name == NULL || keydata->params == NULL)
+		return NULL;
+
+	/* Force default provider to avoid recursion into pkcs11 provider */
+	pctx = EVP_PKEY_CTX_new_from_name(NULL, keydata->name, "provider=default");
+	if (pctx == NULL)
+		return NULL;
+
+	if (EVP_PKEY_fromdata_init(pctx) <= 0)
+		goto err;
+
+	if (EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_PUBLIC_KEY,
+		(OSSL_PARAM *)keydata->params) <= 0)
+		goto err;
+
+	EVP_PKEY_CTX_free(pctx);
+	return pkey;
+
+err:
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pkey);
+
+	return NULL;
+}
+
+static int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
+{
+	OSSL_PARAM params[3];
+
+	if (!keydata_has_rsa_pub(keydata))
 		return 0;
-	if (a->data_type != b->data_type)
-		return 0;
-	if (a->data == NULL || b->data == NULL)
-		return 0;
-	if (a->data_size != b->data_size)
-		return 0;
-	return CRYPTO_memcmp(a->data, b->data, a->data_size) == 0;
+
+	params[0] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_RSA_N,
+		keydata->pubdata.rsa.n, keydata->pubdata.rsa.n_len);
+	params[1] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_RSA_E,
+		keydata->pubdata.rsa.e, keydata->pubdata.rsa.e_len);
+	params[2] = OSSL_PARAM_construct_end();
+
+	return param_cb(params, cbarg);
 }
 
 #ifndef OPENSSL_NO_EC
-static int p11_dup_param_utf8(const OSSL_PARAM *p, char **out)
+static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
 {
-	const char *s = NULL;
+	OSSL_PARAM params[3];
 
-	if (p == NULL || out == NULL || p->data_type != OSSL_PARAM_UTF8_STRING)
+	if (!keydata_has_ec_pub(keydata))
 		return 0;
 
-	if (!OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
-		return 0;
+	params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
+		keydata->pubdata.ec.group_name, 0);
+	params[1] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+		keydata->pubdata.ec.pub, keydata->pubdata.ec.pub_len);
+	params[2] = OSSL_PARAM_construct_end();
 
-	*out = OPENSSL_strdup(s);
-	return (*out != NULL);
-}
-
-/* Compare two EC public points by value on the given curve. */
-static int ec_point_equal_by_value(const char *group_name,
-	const unsigned char *a, size_t alen, const unsigned char *b, size_t blen)
-{
-	int ok = 0;
-	int nid = NID_undef;
-	EC_GROUP *grp = NULL;
-	EC_POINT *pa = NULL, *pb = NULL;
-	BN_CTX *bnctx = NULL;
-
-	if (group_name == NULL || a == NULL || b == NULL)
-		return 0;
-
-	nid = OBJ_sn2nid(group_name);
-	if (nid == NID_undef)
-		nid = OBJ_ln2nid(group_name);
-	if (nid == NID_undef)
-		return 0;
-
-	grp = EC_GROUP_new_by_curve_name(nid);
-	if (grp == NULL)
-		goto err;
-
-	pa = EC_POINT_new(grp);
-	pb = EC_POINT_new(grp);
-	bnctx = BN_CTX_new();
-	if (pa == NULL || pb == NULL || bnctx == NULL)
-		goto err;
-
-	if (EC_POINT_oct2point(grp, pa, a, alen, bnctx) != 1)
-		goto err;
-	if (EC_POINT_oct2point(grp, pb, b, blen, bnctx) != 1)
-		goto err;
-
-	ok = (EC_POINT_cmp(grp, pa, pb, bnctx) == 0);
-
-err:
-	BN_CTX_free(bnctx);
-	EC_POINT_free(pa);
-	EC_POINT_free(pb);
-	EC_GROUP_free(grp);
-
-	return ok;
+	return param_cb(params, cbarg);
 }
 #endif /* OPENSSL_NO_EC */
 
-/* Compare two OSSL_PARAM octet strings for equality. */
-static int octet_equal(const OSSL_PARAM *a, const OSSL_PARAM *b)
+static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
 {
-	if (a == NULL || b == NULL)
+	OSSL_PARAM params[2];
+	const unsigned char *pub = NULL;
+	size_t pub_len = 0;
+
+	if (keydata_has_raw_pub(keydata))
+		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+			keydata->pubdata.raw.pub, keydata->pubdata.raw.pub_len);
+	else if (p11_keydata_get_pub(keydata, &pub, &pub_len) && pub != NULL && pub_len != 0)
+		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+			(void *)pub, pub_len);
+	else
 		return 0;
-	if (a->data_type != OSSL_PARAM_OCTET_STRING ||
-		b->data_type != OSSL_PARAM_OCTET_STRING)
-		return 0;
-	if (a->data == NULL || b->data == NULL)
-		return 0;
-	if (a->data_size != b->data_size)
-		return 0;
-	return CRYPTO_memcmp(a->data, b->data, a->data_size) == 0;
+
+	params[1] = OSSL_PARAM_construct_end();
+
+	return param_cb(params, cbarg);
 }
 
-static void p11_keydata_clear_pubdata(P11_KEYDATA *keydata)
+
+/* Create and initialize P11_KEYDATA structure with refcount and lock. */
+P11_KEYDATA *p11_keydata_new(PROVIDER_CTX *ctx)
 {
+	P11_KEYDATA *keydata = OPENSSL_zalloc(sizeof(P11_KEYDATA));
 	if (keydata == NULL)
-		return;
+		return NULL;
 
-	OPENSSL_free(keydata->pubdata.rsa.n);
-	OPENSSL_free(keydata->pubdata.rsa.e);
-	OPENSSL_free(keydata->pubdata.ec.group_name);
-	OPENSSL_free(keydata->pubdata.ec.pub);
-	OPENSSL_free(keydata->pubdata.raw.pub);
-	memset(&keydata->pubdata, 0, sizeof(keydata->pubdata));
+	keydata->refcnt = 1;
+	keydata->lock = CRYPTO_THREAD_lock_new();
+	if (keydata->lock == NULL) {
+		OPENSSL_free(keydata);
+		return NULL;
+	}
+	keydata->prov_ctx = ctx;
+	return keydata;
 }
 
-static int p11_dup_param_blob(const OSSL_PARAM *p, unsigned char **out, size_t *out_len)
+/* Increment the reference count of a P11_KEY. */
+int p11_keydata_up_ref(P11_KEYDATA *keydata)
 {
-	if (p == NULL || out == NULL || out_len == NULL ||
-		p->data == NULL || p->data_size == 0)
+	if (keydata == NULL || keydata->lock == NULL)
 		return 0;
 
-	*out = OPENSSL_memdup(p->data, p->data_size);
-	if (*out == NULL)
+	if (!CRYPTO_THREAD_write_lock(keydata->lock))
 		return 0;
 
-	*out_len = p->data_size;
+	keydata->refcnt++;
+
+	CRYPTO_THREAD_unlock(keydata->lock);
 	return 1;
 }
 
-/* Get stored raw public key data. The returned buffer is not owned. */
-static int p11_keydata_get_pub(const P11_KEYDATA *keydata,
-		const unsigned char **buf, size_t *len)
+/* Decrement refcount and free the key when it reaches zero. */
+void p11_keydata_free(P11_KEYDATA *keydata)
 {
-	if (keydata == NULL || buf == NULL || len == NULL)
+	int ref = 0;
+
+	if (keydata == NULL)
+		return;
+
+	if (!CRYPTO_THREAD_write_lock(keydata->lock))
+		return;
+
+	ref = --keydata->refcnt;
+	CRYPTO_THREAD_unlock(keydata->lock);
+
+	if (ref > 0)
+		return;
+
+	OSSL_PARAM_free(keydata->params);
+	EVP_PKEY_free(keydata->pkey);
+	p11_keydata_clear_pubdata(keydata);
+
+	if (keydata->pubkey != NULL) {
+		OPENSSL_free(keydata->pubkey->pub);
+		OPENSSL_free(keydata->pubkey);
+	}
+
+	CRYPTO_THREAD_lock_free(keydata->lock);
+	OPENSSL_free(keydata);
+}
+
+/* Create keydata object from EVP_PKEY and initialize key metadata. */
+P11_KEYDATA *p11_keydata_from_evp_pkey(PROVIDER_CTX *ctx, EVP_PKEY *pkey, int is_private)
+{
+	P11_KEYDATA *keydata = NULL;
+
+	if (pkey == NULL)
+		return NULL;
+
+	keydata = p11_keydata_new(ctx);
+	if (keydata == NULL)
+		goto err;
+
+	keydata->type = evp_pkey_get_type_id(pkey);
+	keydata->is_private = is_private;
+
+	/* optional, params may be unavailable for some private keys */
+	keydata->params = public_params_from_evp_pkey(pkey);
+	if (keydata->params != NULL && p11_keydata_init_from_params(pkey, keydata) != 1)
+		goto err;
+
+	/* take our own reference before storing the pointer */
+	if (EVP_PKEY_up_ref(pkey) != 1)
+		goto err;
+
+	keydata->pkey = pkey;
+	return keydata;
+
+err:
+	p11_keydata_free(keydata);
+	return NULL;
+}
+
+/* Return key name associated with keydata. */
+const char *p11_keydata_get_name(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
+		return NULL;
+
+	return keydata->name;
+}
+
+/* Return whether keydata represents a private key. */
+int p11_keydata_is_private(const P11_KEYDATA *keydata)
+{
+	if (keydata == NULL)
 		return 0;
 
-	*buf = NULL;
-	*len = 0;
+	return keydata->is_private;
+}
 
-	if (keydata->pubkey != NULL &&
-			keydata->pubkey->pub != NULL &&
-			keydata->pubkey->pub_len != 0) {
-		*buf = keydata->pubkey->pub;
-		*len = keydata->pubkey->pub_len;
-		return 1;
+
+/* Duplicate and set key parameters, extracting and storing public key data if present. */
+int p11_keydata_set_params(P11_KEYDATA *keydata, const OSSL_PARAM *params)
+{
+	const OSSL_PARAM *p;
+	const void *pub = NULL;
+	size_t publen = 0;
+	OSSL_PARAM *dup;
+
+	/* Both the keydata object and parameter set are required. */
+	if (keydata == NULL || params == NULL)
+		return 0;
+
+	dup = OSSL_PARAM_dup(params);
+	if (dup == NULL)
+		return 0;
+
+	p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PUB_KEY);
+	if (p != NULL) {
+		if (!OSSL_PARAM_get_octet_string_ptr(p, &pub, &publen) ||
+			pub == NULL || publen == 0 ||
+			!p11_keydata_set_pub(keydata, pub, publen)) {
+			OSSL_PARAM_free(dup);
+			return 0;
+		}
 	}
-#ifndef OPENSSL_NO_EC
-	if (keydata_has_ec_pub(keydata)) {
-		*buf = keydata->pubdata.ec.pub;
-		*len = keydata->pubdata.ec.pub_len;
+	/* replace existing parameter set in key object with new OSSL_PARAM array */
+	OSSL_PARAM_free(keydata->params);
+	keydata->params = dup;
+	keydata->is_private = params_contains_private_key(dup);
+	return 1;
+}
+
+/*
+ * Populate requested key attributes, including size, security properties,
+ * and encoded public key when available.
+ */
+int p11_keymgmt_get_params(P11_KEYDATA *keydata, OSSL_PARAM params[])
+{
+	const OSSL_PARAM *pub = NULL;
+	OSSL_PARAM *encoded_pub;
+	OSSL_PARAM *raw_pub;
+	OSSL_PARAM *p;
+	int type, bits, secbits;
+#if OPENSSL_VERSION_NUMBER >= 0x30600000L
+	int category;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
+
+	if (keydata == NULL)
+		return 0;
+
+	/* NULL means no parameters were requested; treat it as success. */
+	if (params == NULL)
 		return 1;
+
+	type = p11_keydata_get_type(keydata);
+	bits = p11_keydata_get_bits(keydata);
+	secbits = p11_keydata_get_security_bits(keydata);
+#if OPENSSL_VERSION_NUMBER >= 0x30600000L
+	category = p11_keydata_get_security_category(keydata);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
+
+	/* EVP_PKEY_get_bits(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_BITS);
+	if (p != NULL && !OSSL_PARAM_set_int(p, bits))
+		return 0;
+
+	/* EVP_PKEY_get_security_bits(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_SECURITY_BITS);
+	if (p != NULL && !OSSL_PARAM_set_int(p, secbits))
+		return 0;
+
+	/* EVP_PKEY_get_size() */
+	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_MAX_SIZE);
+	if (p != NULL && !OSSL_PARAM_set_int(p, (int)p11_keydata_get_maxsize(keydata)))
+		return 0;
+
+#if OPENSSL_VERSION_NUMBER >= 0x30600000L
+	/* EVP_PKEY_get_security_category(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_SECURITY_CATEGORY);
+	if (p != NULL && !OSSL_PARAM_set_int(p, category))
+		return 0;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30600000L */
+
+	encoded_pub = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY);
+	raw_pub = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
+
+	if ((encoded_pub != NULL && has_encoded_public_key(type)) ||
+		(raw_pub != NULL && has_raw_public_key(type))) {
+		pub = OSSL_PARAM_locate_const(keydata->params, OSSL_PKEY_PARAM_PUB_KEY);
+		if (pub == NULL || pub->data_type != OSSL_PARAM_OCTET_STRING ||
+			pub->data == NULL || pub->data_size == 0)
+			return 0;
+	}
+
+	/* EVP_PKEY_get1_encoded_public_key(), not covered by tests */
+	if (encoded_pub != NULL && has_encoded_public_key(type) &&
+		!OSSL_PARAM_set_octet_string(encoded_pub, pub->data, pub->data_size))
+		return 0;
+
+	if (raw_pub != NULL && has_raw_public_key(type) &&
+		!OSSL_PARAM_set_octet_string(raw_pub, pub->data, pub->data_size))
+		return 0;
+
+	/*
+	 * EVP_PKEY_get_default_digest_name(), "pkeyutl -sign -rawin".
+	 * Hash-and-sign algorithms such as RSA and ECDSA use SHA256 as the
+	 * default digest. One-shot signature algorithms do not accept an
+	 * external digest and therefore report a mandatory digest of UNDEF.
+	 */
+	if (is_oneshot_sig_type(type)) {
+		p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_MANDATORY_DIGEST);
+		if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "UNDEF"))
+			return 0;
+	} else {
+		p = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_DEFAULT_DIGEST);
+		if (p != NULL && !OSSL_PARAM_set_utf8_string(p, "SHA256"))
+			return 0;
+	}
+
+	return 1;
+}
+
+/*
+ * Compare two public keys represented as OSSL_PARAM arrays.
+ *
+ * The key type is inferred from the available parameters:
+ *   - RSA keys are identified by the presence of RSA modulus and exponent.
+ *   - Classical EC keys are identified by GROUP_NAME and compared using
+ *     curve-aware point comparison.
+ *   - EdDSA, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms
+ *     are compared as raw public-key octet strings.
+ *
+ * Returns 1 if the public keys are equal, 0 otherwise.
+ */
+int p11_public_equal(const P11_KEYDATA *k1, const P11_KEYDATA *k2)
+{
+	const OSSL_PARAM *n1, *e1, *n2, *e2;
+	const OSSL_PARAM *pub1, *pub2;
+#ifndef OPENSSL_NO_EC
+	const OSSL_PARAM *g1, *g2;
+	const char *group1 = NULL, *group2 = NULL;
+#endif /* OPENSSL_NO_EC */
+
+	if (k1 == NULL || k2 == NULL ||
+	    k1->params == NULL || k2->params == NULL)
+		return 0;
+
+	/* RSA: compare modulus (n) and public exponent (e). */
+	n1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_RSA_N);
+	e1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_RSA_E);
+	n2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_RSA_N);
+	e2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_RSA_E);
+
+	if (n1 != NULL || e1 != NULL || n2 != NULL || e2 != NULL)
+		return (n1 && e1 && n2 && e2 &&
+			param_blob_equal(n1, n2) && param_blob_equal(e1, e2));
+
+	pub1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_PUB_KEY);
+	pub2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_PUB_KEY);
+
+	if (pub1 == NULL || pub2 == NULL)
+		return 0;
+
+#ifndef OPENSSL_NO_EC
+	/* Classical EC keys include GROUP_NAME and must be compared using
+	 * curve-aware point comparison. Ed25519/Ed448 and X25519/X448 also may
+	 * expose GROUP_NAME, but their public keys are raw octet strings. */
+	g1 = OSSL_PARAM_locate_const(k1->params, OSSL_PKEY_PARAM_GROUP_NAME);
+	g2 = OSSL_PARAM_locate_const(k2->params, OSSL_PKEY_PARAM_GROUP_NAME);
+
+	if (g1 != NULL && g2 != NULL) {
+		if (g1->data_type != OSSL_PARAM_UTF8_STRING ||
+			g2->data_type != OSSL_PARAM_UTF8_STRING)
+			return 0;
+
+		if (!OSSL_PARAM_get_utf8_string_ptr(g1, &group1) ||
+			!OSSL_PARAM_get_utf8_string_ptr(g2, &group2) ||
+			group1 == NULL || group2 == NULL)
+			return 0;
+
+		if (OPENSSL_strcasecmp(group1, group2) != 0)
+			return 0;
+
+		if (OPENSSL_strcasecmp(group1, "ed25519") == 0 ||
+			OPENSSL_strcasecmp(group1, "ed448") == 0 ||
+			OPENSSL_strcasecmp(group1, "x25519") == 0 ||
+			OPENSSL_strcasecmp(group1, "x448") == 0)
+			return octet_equal(pub1, pub2); /* compare raw octet strings */
+
+		return ec_point_equal_by_value(group1,
+			(const unsigned char *)pub1->data, pub1->data_size,
+			(const unsigned char *)pub2->data, pub2->data_size);
 	}
 #endif /* OPENSSL_NO_EC */
-	if (keydata_has_raw_pub(keydata)) {
-		*buf = keydata->pubdata.raw.pub;
-		*len = keydata->pubdata.raw.pub_len;
+
+	/* EdDSA, ECX, ML-DSA, SLH-DSA, Falcon and other raw public-key algorithms. */
+	return octet_equal(pub1, pub2);
+}
+
+
+int p11_keydata_export_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
+{
+	if (keydata == NULL || param_cb == NULL)
+		return 0;
+
+	if (keydata_has_rsa_pub(keydata))
+		return export_rsa_pub(keydata, param_cb, cbarg);
+#ifndef OPENSSL_NO_EC
+	if (keydata_has_ec_pub(keydata))
+		return export_ec_pub(keydata, param_cb, cbarg);
+#endif /* OPENSSL_NO_EC */
+	return export_raw_pub(keydata, param_cb, cbarg);
+}
+
+
+/******************************************************************************/
+/* KEY GENERATION helper functions                                            */
+/******************************************************************************/
+
+P11_KEYGEN_CTX *p11_keygen_ctx_new(PROVIDER_CTX *prov_ctx, int type,
+	const OSSL_PARAM params[])
+{
+	P11_KEYGEN_CTX *gen_ctx;
+
+	if (prov_ctx == NULL)
+		return NULL;
+
+	if (!PROVIDER_CTX_is_initialized(prov_ctx)) {
+		if (!PROVIDER_CTX_set_parameters(prov_ctx))
+			return NULL;
+		PROVIDER_CTX_initialize(prov_ctx);
+	}
+
+	gen_ctx = OPENSSL_zalloc(sizeof(P11_KEYGEN_CTX));
+	if (gen_ctx == NULL)
+		return NULL;
+
+	gen_ctx->prov_ctx = prov_ctx;
+	gen_ctx->type = type;
+	if (type == EVP_PKEY_RSA)
+		gen_ctx->param = 2048;
+
+	if (!p11_keygen_ctx_set_params(gen_ctx, params)) {
+		p11_keygen_ctx_free(gen_ctx);
+		return NULL;
+	}
+	return gen_ctx;
+}
+
+void p11_keygen_ctx_free(P11_KEYGEN_CTX *gen_ctx)
+{
+	if (gen_ctx == NULL)
+		return;
+
+	OPENSSL_free(gen_ctx->uri);
+	OPENSSL_free(gen_ctx);
+}
+
+int p11_keygen_ctx_set_params(P11_KEYGEN_CTX *gen_ctx, const OSSL_PARAM params[])
+{
+	const OSSL_PARAM *p;
+
+	if (gen_ctx == NULL)
+		return 0;
+
+	/* Passing NULL for params should return true. */
+	if (params == NULL)
+		return 1;
+
+	p = OSSL_PARAM_locate_const(params, "pkcs11_uri");
+	if (p != NULL) {
+		char *uri = NULL;
+
+		if (!OSSL_PARAM_get_utf8_string(p, &uri, 0))
+			return 0;
+
+		OPENSSL_free(gen_ctx->uri);
+		gen_ctx->uri = uri;
+	}
+
+	switch (gen_ctx->type) {
+	case EVP_PKEY_RSA:
+		p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_BITS);
+		if (p != NULL && !OSSL_PARAM_get_uint(p, &gen_ctx->param))
+			return 0;
+		break;
+
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME);
+		if (p != NULL) {
+			const char *group;
+			int nid;
+
+			if (!OSSL_PARAM_get_utf8_string_ptr(p, &group))
+				return 0;
+
+			nid = OBJ_txt2nid(group);
+			if (nid == NID_undef)
+				nid = EC_curve_nist2nid(group);
+			if (nid == NID_undef)
+				return 0;
+
+			gen_ctx->param = (unsigned int)nid;
+		}
+		break;
+#endif /* OPENSSL_NO_EC */
+
+	default:
+		break;
+	}
+
+	return 1;
+}
+
+P11_KEYDATA *p11_keygen_ctx_generate(P11_KEYGEN_CTX *gen_ctx)
+{
+	EVP_PKEY *key;
+	P11_KEYDATA *keydata;
+
+	if (gen_ctx == NULL || gen_ctx->prov_ctx == NULL ||
+			gen_ctx->uri == NULL)
+		return NULL;
+
+	key = UTIL_CTX_generate_key(gen_ctx->prov_ctx->util_ctx,
+		gen_ctx->uri, gen_ctx->type, gen_ctx->param);
+	if (key == NULL)
+		return NULL;
+
+	keydata = p11_keydata_from_evp_pkey(gen_ctx->prov_ctx, key, 1);
+
+	EVP_PKEY_free(key);
+	return keydata;
+}
+
+
+/******************************************************************************/
+/* SIGNATURE helper functions                                                 */
+/******************************************************************************/
+
+/* Signature parameter and digest helpers. */
+
+/* Parse RSA padding mode from OSSL_PARAM (integer or string). */
+static int pad_mode_from_param(const OSSL_PARAM *p, int *pad_mode)
+{
+	if (p == NULL || pad_mode == NULL)
+		return 0;
+
+	if (p->data_type == OSSL_PARAM_INTEGER) {
+		return OSSL_PARAM_get_int(p, pad_mode);
+	}
+
+	if (p->data_type == OSSL_PARAM_UTF8_STRING) {
+		const char *s = NULL;
+
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &s) || s == NULL)
+			return 0;
+
+		if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_PKCSV15) == 0)
+			*pad_mode = RSA_PKCS1_PADDING;
+		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_NONE) == 0)
+			*pad_mode = RSA_NO_PADDING;
+		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_X931) == 0)
+			*pad_mode = RSA_X931_PADDING;
+		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_PSS) == 0)
+			*pad_mode = RSA_PKCS1_PSS_PADDING;
+		else if (OPENSSL_strcasecmp(s, OSSL_PKEY_RSA_PAD_MODE_OAEP) == 0)
+			*pad_mode = RSA_PKCS1_OAEP_PADDING;
+		else
+			return 0;
+
 		return 1;
 	}
+
 	return 0;
 }
+
+/* Initialize or reset digest context for signature operation. */
+static int p11_signature_ctx_init_digest(P11_SIGNATURE_CTX *sig_ctx)
+{
+	if (sig_ctx == NULL)
+		return 0;
+
+	if (sig_ctx->mdctx == NULL) {
+		sig_ctx->mdctx = EVP_MD_CTX_new();
+		return sig_ctx->mdctx != NULL;
+	}
+
+	return EVP_MD_CTX_reset(sig_ctx->mdctx) == 1;
+}
+
+/* Set digest algorithm name for signature context. */
+static int p11_signature_ctx_set_mdname(P11_SIGNATURE_CTX *sig_ctx, const char *mdname)
+{
+	char *name = NULL;
+
+	if (sig_ctx == NULL)
+		return 0;
+
+	if (mdname != NULL) {
+		name = OPENSSL_strdup(mdname);
+		if (name == NULL)
+			return 0;
+	}
+
+	OPENSSL_free(sig_ctx->mdname);
+	sig_ctx->mdname = name;
+	return 1;
+}
+
+/* Set MGF1 digest algorithm name for RSA-PSS operations. */
+static int p11_signature_ctx_set_mgf1_mdname(P11_SIGNATURE_CTX *sig_ctx, const char *mdname)
+{
+	char *dup = NULL;
+
+	if (sig_ctx == NULL)
+		return 0;
+
+	if (mdname != NULL) {
+		dup = OPENSSL_strdup(mdname);
+		if (dup == NULL)
+			return 0;
+	}
+
+	OPENSSL_free(sig_ctx->mgf1_mdname);
+	sig_ctx->mgf1_mdname = dup;
+	return 1;
+}
+
+static int pss_saltlen_from_param(const OSSL_PARAM *p, int *saltlen)
+{
+	const char *str;
+	char *end = NULL;
+	long value;
+
+	if (p == NULL || saltlen == NULL)
+		return 0;
+
+	if (p->data_type == OSSL_PARAM_INTEGER)
+		return OSSL_PARAM_get_int(p, saltlen);
+
+	if (p->data_type != OSSL_PARAM_UTF8_STRING ||
+			!OSSL_PARAM_get_utf8_string_ptr(p, &str) || str == NULL)
+		return 0;
+
+	if (OPENSSL_strcasecmp(str, OSSL_PKEY_RSA_PSS_SALT_LEN_DIGEST) == 0)
+		*saltlen = RSA_PSS_SALTLEN_DIGEST;
+	else if (OPENSSL_strcasecmp(str, OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO) == 0)
+		*saltlen = RSA_PSS_SALTLEN_AUTO;
+	else if (OPENSSL_strcasecmp(str, OSSL_PKEY_RSA_PSS_SALT_LEN_MAX) == 0)
+		*saltlen = RSA_PSS_SALTLEN_MAX;
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+	else if (OPENSSL_strcasecmp(str, OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO_DIGEST_MAX) == 0)
+		*saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX;
+#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
+	else {
+		errno = 0;
+		value = strtol(str, &end, 10);
+		if (errno != 0 || end == str || *end != '\0' ||
+				value < 0 || value > INT_MAX)
+			return 0;
+		*saltlen = (int)value;
+	}
+
+	return 1;
+}
+
+/* Convert RSA-PSS salt length value to its string representation. */
+static const char *pss_saltlen_to_string(int saltlen)
+{
+	switch (saltlen) {
+	case RSA_PSS_SALTLEN_DIGEST:
+		return OSSL_PKEY_RSA_PSS_SALT_LEN_DIGEST; /* "digest" */
+	case RSA_PSS_SALTLEN_AUTO:
+		return OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO; /* "auto" */
+	case RSA_PSS_SALTLEN_MAX:
+		return OSSL_PKEY_RSA_PSS_SALT_LEN_MAX; /* "max" */
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+	case RSA_PSS_SALTLEN_AUTO_DIGEST_MAX:
+		return OSSL_PKEY_RSA_PSS_SALT_LEN_AUTO_DIGEST_MAX; /* "auto-digestmax" */
+#endif /* RSA_PSS_SALTLEN_AUTO_DIGEST_MAX */
+	default:
+		return NULL;
+	}
+}
+
+/* Convert RSA padding mode to its string representation. */
+static const char *pad_mode_to_string(int pad_mode)
+{
+	switch (pad_mode) {
+	case RSA_PKCS1_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_PKCSV15;
+	case RSA_PKCS1_PSS_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_PSS;
+	case RSA_NO_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_NONE;
+	case RSA_X931_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_X931;
+	case RSA_PKCS1_OAEP_PADDING:
+		return OSSL_PKEY_RSA_PAD_MODE_OAEP;
+	default:
+		return NULL;
+	}
+}
+
+/* Return whether the key type uses an external digest before signing. */
+static int is_digest_sig_type(int type)
+{
+	switch (type) {
+	case EVP_PKEY_RSA:
+	case EVP_PKEY_RSA_PSS:
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+#endif /* OPENSSL_NO_EC */
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+
+/* RSA verification and AlgorithmIdentifier helpers. */
 
 /*
  * Configure RSA verification parameters on an EVP_PKEY_CTX.
@@ -3515,181 +2612,6 @@ static int p11_signature_ctx_setup_rsa_verify(P11_SIGNATURE_CTX *sig_ctx,
 }
 
 /*
- * Return a legacy EVP_PKEY_* type identifier for the given EVP_PKEY.
- *
- * OpenSSL 3.x deprecates the use of EVP_PKEY_base_id() in favor of
- * provider-aware type checks via EVP_PKEY_is_a(). This helper maps an
- * EVP_PKEY object to the corresponding EVP_PKEY_* identifier used by
- * the existing PKCS#11 code paths and switch statements.
- *
- * Returns:
- *   EVP_PKEY_* identifier on success
- *   EVP_PKEY_NONE if the key type is unknown or unsupported
- */
-static int evp_pkey_get_type_id(const EVP_PKEY *pkey)
-{
-	if (pkey == NULL)
-		return EVP_PKEY_NONE;
-
-	if (EVP_PKEY_is_a(pkey, "RSA"))
-		return EVP_PKEY_RSA;
-	if (EVP_PKEY_is_a(pkey, "RSA-PSS"))
-		return EVP_PKEY_RSA_PSS;
-
-#ifndef OPENSSL_NO_EC
-	if (EVP_PKEY_is_a(pkey, "EC"))
-		return EVP_PKEY_EC;
-#endif /* OPENSSL_NO_EC */
-
-#ifndef OPENSSL_NO_ECX
-	if (EVP_PKEY_is_a(pkey, "ED25519"))
-		return EVP_PKEY_ED25519;
-	if (EVP_PKEY_is_a(pkey, "ED448"))
-		return EVP_PKEY_ED448;
-	if (EVP_PKEY_is_a(pkey, "X25519"))
-		return EVP_PKEY_X25519;
-	if (EVP_PKEY_is_a(pkey, "X448"))
-		return EVP_PKEY_X448;
-#endif /* OPENSSL_NO_ECX */
-
-#if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#ifndef OPENSSL_NO_ML_DSA
-	if (EVP_PKEY_is_a(pkey, "ML-DSA-44"))
-		return EVP_PKEY_ML_DSA_44;
-	if (EVP_PKEY_is_a(pkey, "ML-DSA-65"))
-		return EVP_PKEY_ML_DSA_65;
-	if (EVP_PKEY_is_a(pkey, "ML-DSA-87"))
-		return EVP_PKEY_ML_DSA_87;
-#endif /* OPENSSL_NO_ML_DSA */
-
-#ifndef OPENSSL_NO_ML_KEM
-	if (EVP_PKEY_is_a(pkey, "ML-KEM-512"))
-		return EVP_PKEY_ML_KEM_512;
-	if (EVP_PKEY_is_a(pkey, "ML-KEM-768"))
-		return EVP_PKEY_ML_KEM_768;
-	if (EVP_PKEY_is_a(pkey, "ML-KEM-1024"))
-		return EVP_PKEY_ML_KEM_1024;
-#endif /* OPENSSL_NO_ML_KEM */
-
-#ifndef OPENSSL_NO_SLH_DSA
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-128s"))
-		return EVP_PKEY_SLH_DSA_SHA2_128S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-128f"))
-		return EVP_PKEY_SLH_DSA_SHA2_128F;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-192s"))
-		return EVP_PKEY_SLH_DSA_SHA2_192S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-192f"))
-		return EVP_PKEY_SLH_DSA_SHA2_192F;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-256s"))
-		return EVP_PKEY_SLH_DSA_SHA2_256S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHA2-256f"))
-		return EVP_PKEY_SLH_DSA_SHA2_256F;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-128s"))
-		return EVP_PKEY_SLH_DSA_SHAKE_128S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-128f"))
-		return EVP_PKEY_SLH_DSA_SHAKE_128F;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-192s"))
-		return EVP_PKEY_SLH_DSA_SHAKE_192S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-192f"))
-		return EVP_PKEY_SLH_DSA_SHAKE_192F;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-256s"))
-		return EVP_PKEY_SLH_DSA_SHAKE_256S;
-	if (EVP_PKEY_is_a(pkey, "SLH-DSA-SHAKE-256f"))
-		return EVP_PKEY_SLH_DSA_SHAKE_256F;
-#endif /* OPENSSL_NO_SLH_DSA */
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
-
-	if (EVP_PKEY_is_a(pkey, "FALCON-512"))
-		return EVP_PKEY_FALCON512;
-	if (EVP_PKEY_is_a(pkey, "FALCON-1024"))
-		return EVP_PKEY_FALCON1024;
-
-	return EVP_PKEY_NONE;
-}
-
-static int export_rsa_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
-{
-	OSSL_PARAM params[3];
-
-	if (!keydata_has_rsa_pub(keydata))
-		return 0;
-
-	params[0] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_RSA_N,
-		keydata->pubdata.rsa.n, keydata->pubdata.rsa.n_len);
-	params[1] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_RSA_E,
-		keydata->pubdata.rsa.e, keydata->pubdata.rsa.e_len);
-	params[2] = OSSL_PARAM_construct_end();
-
-	return param_cb(params, cbarg);
-}
-
-#ifndef OPENSSL_NO_EC
-static int export_ec_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
-{
-	OSSL_PARAM params[3];
-
-	if (!keydata_has_ec_pub(keydata))
-		return 0;
-
-	params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
-		keydata->pubdata.ec.group_name, 0);
-	params[1] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-		keydata->pubdata.ec.pub, keydata->pubdata.ec.pub_len);
-	params[2] = OSSL_PARAM_construct_end();
-
-	return param_cb(params, cbarg);
-}
-#endif /* OPENSSL_NO_EC */
-
-static int export_raw_pub(P11_KEYDATA *keydata, OSSL_CALLBACK *param_cb, void *cbarg)
-{
-	OSSL_PARAM params[2];
-	const unsigned char *pub = NULL;
-	size_t pub_len = 0;
-
-	if (keydata_has_raw_pub(keydata))
-		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-			keydata->pubdata.raw.pub, keydata->pubdata.raw.pub_len);
-	else if (p11_keydata_get_pub(keydata, &pub, &pub_len) && pub != NULL && pub_len != 0)
-		params[0] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-			(void *)pub, pub_len);
-	else
-		return 0;
-
-	params[1] = OSSL_PARAM_construct_end();
-
-	return param_cb(params, cbarg);
-}
-
-static int keydata_has_rsa_pub(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return 0;
-
-	return keydata->pubdata.rsa.n != NULL && keydata->pubdata.rsa.n_len != 0 &&
-		keydata->pubdata.rsa.e != NULL && keydata->pubdata.rsa.e_len != 0;
-}
-
-#ifndef OPENSSL_NO_EC
-static int keydata_has_ec_pub(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL || keydata->type != EVP_PKEY_EC)
-		return 0;
-
-	return keydata->pubdata.ec.group_name != NULL &&
-		keydata->pubdata.ec.pub != NULL && keydata->pubdata.ec.pub_len != 0;
-}
-#endif /* OPENSSL_NO_EC */
-
-static int keydata_has_raw_pub(const P11_KEYDATA *keydata)
-{
-	if (keydata == NULL)
-		return 0;
-
-	return keydata->pubdata.raw.pub != NULL && keydata->pubdata.raw.pub_len != 0;
-}
-
-/*
  * Build and return a DER-encoded RSASSA-PSS AlgorithmIdentifier
  * using the digest, MGF1 digest and salt length from the signature context.
  */
@@ -3712,11 +2634,11 @@ static int p11_signature_set_pss_algorithm_id(OSSL_PARAM *p,
 	if (p == NULL || sig_ctx == NULL || mdname == NULL)
 		return 0;
 
-	pkey = p11_signature_ctx_get_evp_pkey(sig_ctx);
+	pkey = p11_keydata_get_evp_pkey(sig_ctx->keydata);
 	if (pkey == NULL)
 		return 0;
 
-	mgf1_mdname = p11_signature_ctx_get_mgf1_mdname(sig_ctx);
+	mgf1_mdname = sig_ctx->mgf1_mdname;
 	if (mgf1_mdname == NULL)
 		mgf1_mdname = mdname;
 
@@ -3739,9 +2661,9 @@ static int p11_signature_set_pss_algorithm_id(OSSL_PARAM *p,
 	if (max_salt < 0)
 		goto end;
 
-	saltlen = p11_signature_ctx_get_pss_saltlen(sig_ctx);
+	saltlen = sig_ctx->pss_saltlen;
 
-	switch (saltlen) {
+	switch (sig_ctx->pss_saltlen) {
 	case RSA_PSS_SALTLEN_DIGEST: /* -1 */
 		/* sets the salt length to the digest length */
 		saltlen = digest_salt;
@@ -3841,6 +2763,1662 @@ end:
 	X509_ALGOR_free(alg);
 	OPENSSL_free(der);
 	return ret;
+}
+
+/*
+ * Build and return a DER-encoded signature AlgorithmIdentifier
+ * for the current key type, digest and signature parameters.
+ */
+static int param_set_algorithm_id(OSSL_PARAM *p, const P11_SIGNATURE_CTX *sig_ctx)
+{
+	X509_ALGOR *alg = NULL;
+	ASN1_OBJECT *obj = NULL;
+	unsigned char *der = NULL;
+	const char *mdname;
+	int key_type;
+	int md_nid;
+	int sig_nid;
+	int param_type;
+	int der_len;
+	int ret = 0;
+
+	if (p == NULL || sig_ctx == NULL)
+		return 0;
+
+	key_type = p11_keydata_get_type(sig_ctx->keydata);
+	mdname = sig_ctx->mdname;
+
+	/* RSA-PSS requires RSASSA-PSS-params and must be handled separately. */
+	if ((key_type == EVP_PKEY_RSA || key_type == EVP_PKEY_RSA_PSS) &&
+		sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING)
+		return p11_signature_set_pss_algorithm_id(p, sig_ctx, mdname);
+
+	if (mdname != NULL && *mdname != '\0') {
+		/* RSA PKCS#1, ECDSA, DSA, SM2 and other algorithms
+		 * combining a digest with a key algorithm */
+		md_nid = OBJ_txt2nid(mdname);
+		if (md_nid == NID_undef || !OBJ_find_sigid_by_algs(&sig_nid, md_nid, key_type))
+			goto end;
+
+		obj = OBJ_dup(OBJ_nid2obj(sig_nid));
+		if (obj == NULL)
+			goto end;
+
+		/* RSA PKCS#1 uses NULL; ECDSA/DSA parameters are absent. */
+		param_type = key_type == EVP_PKEY_RSA ? V_ASN1_NULL : V_ASN1_UNDEF;
+	} else {
+		/* Ed25519, Ed448, ML-DSA, SLH-DSA, Falcon: parameters are absent */
+		const char *algname = p11_keydata_get_name(sig_ctx->keydata);
+
+		if (algname == NULL)
+			goto end;
+
+		obj = OBJ_txt2obj(algname, 0);
+		if (obj == NULL)
+			goto end;
+
+		param_type = V_ASN1_UNDEF;
+	}
+
+	alg = X509_ALGOR_new();
+	if (alg == NULL)
+		goto end;
+
+	if (!X509_ALGOR_set0(alg, obj, param_type, NULL))
+		goto end;
+
+	obj = NULL; /* owned by alg */
+
+	der_len = i2d_X509_ALGOR(alg, &der);
+	if (der_len <= 0)
+		goto end;
+
+	ret = OSSL_PARAM_set_octet_string(p, der, (size_t)der_len);
+
+end:
+	ASN1_OBJECT_free(obj);
+	X509_ALGOR_free(alg);
+	OPENSSL_free(der);
+	return ret;
+}
+
+
+/* Allocate and initialize signature context structure. */
+P11_SIGNATURE_CTX *p11_signature_ctx_new(PROVIDER_CTX *ctx, const char *propq)
+{
+	P11_SIGNATURE_CTX *sig_ctx;
+
+	sig_ctx = OPENSSL_zalloc(sizeof(P11_SIGNATURE_CTX));
+	if (!sig_ctx)
+		return NULL;
+
+	if (propq != NULL) {
+		sig_ctx->propq = OPENSSL_strdup(propq);
+		if (sig_ctx->propq == NULL) {
+			OPENSSL_free(sig_ctx);
+			return NULL;
+		}
+	}
+	/* prov_ctx is shared, not owned */
+	sig_ctx->prov_ctx = ctx;
+	return sig_ctx;
+}
+
+/* Release signature context and associated resources. */
+void p11_signature_ctx_free(P11_SIGNATURE_CTX *sig_ctx)
+{
+	if (sig_ctx == NULL)
+		return;
+
+	p11_keydata_free(sig_ctx->keydata);
+	EVP_MD_CTX_free(sig_ctx->mdctx);
+	OPENSSL_free(sig_ctx->mdname);
+	OPENSSL_free(sig_ctx->mgf1_mdname);
+	OPENSSL_free(sig_ctx->propq);
+	OPENSSL_free(sig_ctx);
+}
+
+/*
+ * Duplicate signature context. This must be a real duplicate, not just another
+ * reference to the same mutable object.
+ */
+P11_SIGNATURE_CTX *p11_signature_dupctx(P11_SIGNATURE_CTX *sig_ctx)
+{
+	P11_SIGNATURE_CTX *dst;
+
+	if (sig_ctx == NULL)
+		return NULL;
+
+	dst = p11_signature_ctx_new(sig_ctx->prov_ctx, sig_ctx->propq);
+	if (dst == NULL)
+		return NULL;
+
+	/* deep-copy dynamically allocated operation parameters */
+	if (sig_ctx->mdname != NULL) {
+		dst->mdname = OPENSSL_strdup(sig_ctx->mdname);
+		if (dst->mdname == NULL)
+			goto err;
+	}
+
+	if (sig_ctx->mgf1_mdname != NULL) {
+		dst->mgf1_mdname = OPENSSL_strdup(sig_ctx->mgf1_mdname);
+		if (dst->mgf1_mdname == NULL)
+			goto err;
+	}
+
+	/* copy simple scalar state */
+	dst->pad_mode = sig_ctx->pad_mode;
+	dst->pss_saltlen = sig_ctx->pss_saltlen;
+
+	/* share keydata by reference */
+	if (sig_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(sig_ctx->keydata))
+			goto err;
+		dst->keydata = sig_ctx->keydata;
+	}
+
+	/* duplicate digest state so EVP_DigestVerifyFinal() on the duplicate
+	 * does not mutate the original context */
+	if (sig_ctx->mdctx != NULL) {
+		dst->mdctx = EVP_MD_CTX_new();
+		if (dst->mdctx == NULL)
+			goto err;
+		if (EVP_MD_CTX_copy_ex(dst->mdctx, sig_ctx->mdctx) <= 0)
+			goto err;
+	}
+
+	return dst;
+
+err:
+	p11_signature_ctx_free(dst);
+	return NULL;
+}
+
+/* Initialize signature context with key and reset operation defaults. */
+int p11_signature_ctx_init(P11_SIGNATURE_CTX *sig_ctx, P11_KEYDATA *keydata,
+	const OSSL_PARAM params[])
+{
+	if (sig_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(sig_ctx->keydata);
+	sig_ctx->keydata = keydata;
+
+	/* (re)set defaults (important when params don't include them) */
+	sig_ctx->pad_mode = RSA_PKCS1_PADDING;
+#ifdef RSA_PSS_SALTLEN_AUTO_DIGEST_MAX
+	/* Maximize up to digest length for sign */
+	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO_DIGEST_MAX; /* -4 */
+#else
+	sig_ctx->pss_saltlen = RSA_PSS_SALTLEN_AUTO; /* -2 */
+#endif
+
+	OPENSSL_free(sig_ctx->mdname);
+	sig_ctx->mdname = NULL;
+
+	OPENSSL_free(sig_ctx->mgf1_mdname);
+	sig_ctx->mgf1_mdname = NULL;
+
+	if (!p11_signature_ctx_set_params(sig_ctx, params))
+		return 0;
+
+	return 1;
+}
+
+int p11_signature_ctx_set_params(P11_SIGNATURE_CTX *sig_ctx, const OSSL_PARAM params[])
+{
+	const OSSL_PARAM *p;
+	const char *str;
+
+	if (sig_ctx == NULL)
+		return 0;
+
+	/* Passing NULL for params should return true. */
+	if (params == NULL)
+		return 1;
+
+	/* digest, EVP_PKEY_CTX_set_signature_md() */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_DIGEST);
+	if (p != NULL) {
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &str) || str == NULL)
+			return 0;
+
+		if (!p11_signature_ctx_set_mdname(sig_ctx, str))
+			return 0;
+	}
+
+	/* pad-mode (RSA), EVP_PKEY_CTX_set_rsa_padding(), -pkeyopt rsa_padding_mode */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PAD_MODE);
+	if (p != NULL && !pad_mode_from_param(p, &sig_ctx->pad_mode))
+		return 0;
+
+	/* PSS parameters may arrive before pad-mode, so store them if present. */
+
+	/* mgf1-digest, EVP_PKEY_CTX_set_rsa_mgf1_md() */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_MGF1_DIGEST);
+	if (p != NULL) {
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &str) || str == NULL)
+			return 0;
+
+		if (!p11_signature_ctx_set_mgf1_mdname(sig_ctx, str))
+			return 0;
+	}
+
+	/* pss-saltlen, EVP_PKEY_CTX_set_rsa_pss_saltlen(), -pkeyopt rsa_pss_saltlen */
+	p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_PSS_SALTLEN);
+	if (p != NULL && !pss_saltlen_from_param(p, &sig_ctx->pss_saltlen))
+		return 0;
+
+	return 1;
+}
+
+int p11_signature_ctx_get_params(P11_SIGNATURE_CTX *sig_ctx, OSSL_PARAM params[])
+{
+	OSSL_PARAM *p;
+	const char *mdname;
+	const char *mgf1_mdname;
+	int pss_saltlen;
+
+	if (sig_ctx == NULL)
+		return 0;
+
+	/* NULL means no parameters were requested; treat it as success. */
+	if (params == NULL)
+		return 1;
+
+	mdname = sig_ctx->mdname;
+	mgf1_mdname = sig_ctx->mgf1_mdname;
+	pss_saltlen = sig_ctx->pss_saltlen;
+
+	/* digest, EVP_PKEY_CTX_get_signature_md() */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_DIGEST);
+	if (p != NULL && mdname != NULL) {
+		if (!OSSL_PARAM_set_utf8_string(p, mdname))
+			return 0;
+	}
+
+	/* algorithm-id */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_ALGORITHM_ID);
+	if (p != NULL && !param_set_algorithm_id(p, sig_ctx))
+		return 0;
+
+	/* pad-mode (RSA), EVP_PKEY_CTX_get_rsa_padding() */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_PAD_MODE);
+	if (p != NULL) {
+		if (p->data_type == OSSL_PARAM_INTEGER) {
+			if (!OSSL_PARAM_set_int(p, sig_ctx->pad_mode))
+				return 0;
+		} else if (p->data_type == OSSL_PARAM_UTF8_STRING) {
+			const char *padding = pad_mode_to_string(sig_ctx->pad_mode);
+
+			if (padding == NULL || !OSSL_PARAM_set_utf8_string(p, padding))
+				return 0;
+		} else {
+			return 0;
+		}
+	}
+
+	/* mgf1-digest,
+	 * EVP_PKEY_CTX_get_rsa_mgf1_md(),
+	 * EVP_PKEY_CTX_get_rsa_mgf1_md_name() */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_MGF1_DIGEST);
+	if (p != NULL && sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING) {
+		const char *mgf1 = (mgf1_mdname != NULL) ? mgf1_mdname : mdname;
+
+		if (mgf1 == NULL || !OSSL_PARAM_set_utf8_string(p, mgf1))
+			return 0;
+	}
+
+	/* pss-saltlen, EVP_PKEY_CTX_get_rsa_pss_saltlen() */
+	p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_PSS_SALTLEN);
+	if (p != NULL && sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING) {
+		if (p->data_type == OSSL_PARAM_INTEGER) {
+			if (!OSSL_PARAM_set_int(p, pss_saltlen))
+				return 0;
+		} else if (p->data_type == OSSL_PARAM_UTF8_STRING) {
+			char saltlen_buf[32];
+			const char *saltlen_str = pss_saltlen_to_string(pss_saltlen);
+
+			if (saltlen_str == NULL) {
+				if (pss_saltlen < 0 ||
+					snprintf(saltlen_buf, sizeof(saltlen_buf), "%d",
+						pss_saltlen) <= 0)
+					return 0;
+				saltlen_str = saltlen_buf;
+			}
+
+			if (!OSSL_PARAM_set_utf8_string(p, saltlen_str))
+				return 0;
+		} else {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+int p11_signature_ctx_sign(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *sig, size_t *siglen, size_t sigsize,
+	const unsigned char *tbs, size_t tbslen)
+{
+	EVP_PKEY *pkey;
+	int type;
+	size_t need;
+
+	if (sig_ctx == NULL || siglen == NULL || tbs == NULL)
+		return 0;
+
+	pkey = p11_keydata_get_evp_pkey(sig_ctx->keydata);
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	need = p11_keydata_get_maxsize(sig_ctx->keydata);
+	if (pkey == NULL || type == EVP_PKEY_NONE || need == 0)
+		return 0;
+
+	if (sig == NULL) {
+		*siglen = need;
+		return 1; /* length query */
+	}
+
+	if (sigsize < need) {
+		*siglen = need;
+		return 0; /* buffer too small */
+	}
+
+	*siglen = sigsize;
+	return PKCS11_evp_pkey_sign(
+		pkey, type,
+		sig_ctx->mdname,
+		sig_ctx->pad_mode,
+		sig_ctx->pss_saltlen,
+		sig_ctx->mgf1_mdname,
+		sig, siglen, tbs, tbslen);
+}
+
+
+/*
+ * Verify signature against precomputed input using a temporary public key copy
+ * in the default provider.
+ */
+int p11_signature_ctx_verify(P11_SIGNATURE_CTX *sig_ctx,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	EVP_PKEY *pub = NULL;
+	EVP_PKEY_CTX *pctx = NULL;
+	EVP_MD_CTX *mdctx = NULL;
+	EVP_PKEY *pkey;
+	int type;
+	int ok = 0;
+
+	if (sig_ctx == NULL || sig == NULL || tbs == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	if (type == EVP_PKEY_NONE)
+		return 0;
+
+	if (type == EVP_PKEY_FALCON512 || type == EVP_PKEY_FALCON1024) {
+		/* FALCON is not supported by the OpenSSL verify path. */
+		pkey = p11_keydata_get_evp_pkey(sig_ctx->keydata);
+		if (pkey == NULL)
+			return 0;
+		return PKCS11_evp_pkey_verify(pkey, type,
+			sig, siglen, tbs, tbslen);
+	}
+
+	pub = pubkey_from_params_default(sig_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	if (is_oneshot_sig_type(type)) {
+		mdctx = EVP_MD_CTX_new();
+		if (mdctx == NULL)
+			goto end;
+
+		if (EVP_DigestVerifyInit(mdctx, NULL, NULL, NULL, pub) <= 0)
+			goto end;
+
+		if (EVP_DigestVerify(mdctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
+
+		ok = 1;
+		goto end;
+	}
+
+	switch (type) {
+	case EVP_PKEY_RSA:
+	case EVP_PKEY_RSA_PSS:
+		pctx = EVP_PKEY_CTX_new(pub, NULL);
+		if (pctx == NULL)
+			goto end;
+
+		if (EVP_PKEY_verify_init(pctx) <= 0)
+			goto end;
+
+		if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
+			goto end;
+
+		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
+
+		ok = 1;
+		break;
+
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		pctx = EVP_PKEY_CTX_new(pub, NULL);
+		if (pctx == NULL)
+			goto end;
+
+		if (EVP_PKEY_verify_init(pctx) <= 0)
+			goto end;
+
+		if (EVP_PKEY_verify(pctx, sig, siglen, tbs, tbslen) <= 0)
+			goto end;
+
+		ok = 1;
+		break;
+#endif /* OPENSSL_NO_EC */
+	default:
+		break;
+	}
+
+end:
+	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+
+	return ok;
+}
+
+/*
+ * Recover signed data using a temporary public key copy in the default provider.
+ * Applicable only to signature schemes that support signature recovery (such as RSA).
+ */
+int p11_signature_ctx_verifyrecover(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *rout, size_t *routlen, size_t routsize,
+	const unsigned char *sig, size_t siglen)
+{
+	EVP_PKEY *pub;
+	EVP_PKEY_CTX *pctx;
+	int ok = 0;
+
+	if (sig_ctx == NULL || sig_ctx->keydata == NULL || routlen == NULL || sig == NULL)
+		return 0;
+
+	if (p11_keydata_get_type(sig_ctx->keydata) != EVP_PKEY_RSA)
+		return 0;
+
+	/* RSASSA-PSS does not support signature recovery */
+	if (sig_ctx->pad_mode == RSA_PKCS1_PSS_PADDING)
+		return 0;
+
+	pub = pubkey_from_params_default(sig_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
+	if (pctx == NULL)
+		goto end;
+
+	if (EVP_PKEY_verify_recover_init(pctx) <= 0)
+		goto end;
+
+	if (!p11_signature_ctx_setup_rsa_verify(sig_ctx, pctx))
+		goto end;
+
+	if (rout == NULL) {
+		if (EVP_PKEY_verify_recover(pctx, NULL, routlen, sig, siglen) <= 0)
+			goto end;
+
+		ok = 1;
+		goto end;
+	}
+
+	*routlen = routsize;
+	if (EVP_PKEY_verify_recover(pctx, rout, routlen, sig, siglen) <= 0)
+		goto end;
+
+	ok = 1;
+
+end:
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+	return ok;
+}
+
+/*
+ * Initialize the signing context.
+ * For Ed25519/Ed448, mdname is ignored and one-shot DigestSign is used.
+ * For RSA/EC, mdname is required and DigestSignUpdate/Final use mdctx.
+ */
+int p11_signature_digest_sign_init(P11_SIGNATURE_CTX *sig_ctx,
+	const char *mdname, P11_KEYDATA *keydata, const OSSL_PARAM params[])
+{
+	const EVP_MD *md;
+	int type;
+
+	if (sig_ctx == NULL || keydata == NULL)
+		return 0;
+
+	if (!p11_signature_ctx_init(sig_ctx, keydata, params))
+		return 0;
+
+	type = p11_keydata_get_type(keydata);
+	if (is_oneshot_sig_type(type))
+		return p11_signature_ctx_set_mdname(sig_ctx, NULL);
+	if (!is_digest_sig_type(type))
+		return 0;
+
+	/* Prefer the explicit mdname, then a digest supplied via params. */
+	if (mdname == NULL)
+		mdname = sig_ctx->mdname;
+	if (mdname == NULL)
+		mdname = "SHA256";
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	if (!p11_signature_ctx_init_digest(sig_ctx))
+		return 0;
+
+	if (!p11_signature_ctx_set_mdname(sig_ctx, mdname))
+		return 0;
+
+	return EVP_DigestInit_ex2(sig_ctx->mdctx, md, NULL) == 1;
+}
+
+/*
+ * Update digest context with input data for signature operation.
+ */
+int p11_signature_digest_sign_update(P11_SIGNATURE_CTX *sig_ctx,
+	const unsigned char *data, size_t datalen)
+{
+	int type;
+
+	if (sig_ctx == NULL || data == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	if (!is_digest_sig_type(type) || sig_ctx->mdctx == NULL)
+		return 0;
+
+	return EVP_DigestUpdate(sig_ctx->mdctx, data, datalen) == 1;
+}
+
+/*
+ * Finalize digest-based signing operation and produce signature or required size.
+ */
+int p11_signature_digest_sign_final(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *sig, size_t *siglen, size_t sigsize)
+{
+	unsigned char md[EVP_MAX_MD_SIZE];
+	unsigned int mdlen = 0;
+	size_t need;
+
+	if (sig_ctx == NULL || siglen == NULL || sig_ctx->mdctx == NULL ||
+			!is_digest_sig_type(p11_keydata_get_type(sig_ctx->keydata)))
+		return 0;
+
+	need = p11_keydata_get_maxsize(sig_ctx->keydata);
+	if (need == 0)
+		return 0;
+
+	if (sig == NULL) {
+		*siglen = need;
+		return 1; /* length query */
+	}
+
+	if (sigsize < need) {
+		*siglen = need;
+		return 0; /* buffer too small */
+	}
+
+	if (EVP_DigestFinal_ex(sig_ctx->mdctx, md, &mdlen) != 1)
+		return 0;
+
+	*siglen = sigsize;
+	return PKCS11_evp_pkey_sign(
+		p11_keydata_get_evp_pkey(sig_ctx->keydata),
+		p11_keydata_get_type(sig_ctx->keydata),
+		sig_ctx->mdname,
+		sig_ctx->pad_mode,
+		sig_ctx->pss_saltlen,
+		sig_ctx->mgf1_mdname,
+		sig, siglen, md, (size_t)mdlen);
+}
+
+/*
+ * Sign input data and produce signature or required size.
+ */
+int p11_signature_digest_sign(P11_SIGNATURE_CTX *sig_ctx,
+	unsigned char *sig, size_t *siglen, size_t sigsize,
+	const unsigned char *tbs, size_t tbslen)
+{
+	unsigned char md[EVP_MAX_MD_SIZE];
+	unsigned int mdlen = 0;
+	const EVP_MD *mdalg;
+	EVP_PKEY *pkey;
+	int type;
+	size_t need;
+
+	if (sig_ctx == NULL || siglen == NULL || tbs == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	pkey = p11_keydata_get_evp_pkey(sig_ctx->keydata);
+	need = p11_keydata_get_maxsize(sig_ctx->keydata);
+	if (type == EVP_PKEY_NONE || pkey == NULL || need == 0)
+		return 0;
+
+	if (sig == NULL) {
+		*siglen = need;
+		return 1; /* length query */
+	}
+
+	if (sigsize < need) {
+		*siglen = need;
+		return 0; /* buffer too small */
+	}
+
+	if (is_oneshot_sig_type(type)) {
+		*siglen = sigsize;
+		return PKCS11_evp_pkey_sign(pkey, type, NULL, 0, 0, NULL,
+			sig, siglen, tbs, tbslen);
+	}
+
+	if (!is_digest_sig_type(type) || sig_ctx->mdname == NULL)
+		return 0;
+
+	mdalg = EVP_get_digestbyname(sig_ctx->mdname);
+	if (mdalg == NULL)
+		return 0;
+
+	if (EVP_Digest(tbs, tbslen, md, &mdlen, mdalg, NULL) != 1)
+		return 0;
+
+	*siglen = sigsize;
+	return PKCS11_evp_pkey_sign(
+		pkey, type,
+		sig_ctx->mdname,
+		sig_ctx->pad_mode,
+		sig_ctx->pss_saltlen,
+		sig_ctx->mgf1_mdname,
+		sig, siglen, md, (size_t)mdlen);
+}
+
+/*
+ * Initialize the verification context.
+ * For Ed25519/Ed448, mdname is ignored and one-shot DigestVerify is used.
+ * For RSA/EC, mdname selects the digest used by DigestVerifyUpdate/Final.
+ * If not provided, SHA256 is used by default.
+ */
+int p11_signature_digest_verify_init(P11_SIGNATURE_CTX *sig_ctx,
+	const char *mdname, P11_KEYDATA *keydata, const OSSL_PARAM params[])
+{
+	const EVP_MD *md;
+	int type;
+
+	if (sig_ctx == NULL || keydata == NULL)
+		return 0;
+
+	if (!p11_signature_ctx_init(sig_ctx, keydata, params))
+		return 0;
+
+	type = p11_keydata_get_type(keydata);
+	if (is_oneshot_sig_type(type))
+		return p11_signature_ctx_set_mdname(sig_ctx, NULL);
+	if (!is_digest_sig_type(type))
+		return 0;
+
+	/* Prefer the explicit mdname, then a digest supplied via params. */
+	if (mdname == NULL)
+		mdname = sig_ctx->mdname;
+	if (mdname == NULL)
+		mdname = "SHA256";
+
+	md = EVP_get_digestbyname(mdname);
+	if (md == NULL)
+		return 0;
+
+	if (!p11_signature_ctx_init_digest(sig_ctx))
+		return 0;
+
+	if (!p11_signature_ctx_set_mdname(sig_ctx, mdname))
+		return 0;
+
+	return EVP_DigestInit_ex2(sig_ctx->mdctx, md, NULL) == 1;
+}
+
+/*
+ * Update digest context with input data for verify operation.
+ */
+int p11_signature_digest_verify_update(P11_SIGNATURE_CTX *sig_ctx,
+	const unsigned char *data, size_t datalen)
+{
+	int type;
+
+	if (sig_ctx == NULL || data == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	if (!is_digest_sig_type(type) || sig_ctx->mdctx == NULL)
+		return 0;
+
+	return EVP_DigestUpdate(sig_ctx->mdctx, data, datalen) == 1;
+}
+
+/*
+ * Finalize digest-based verify operation and verify the signature.
+ */
+int p11_signature_digest_verify_final(P11_SIGNATURE_CTX *sig_ctx,
+	const unsigned char *sig, size_t siglen)
+{
+	unsigned char md[EVP_MAX_MD_SIZE];
+	unsigned int mdlen = 0;
+
+	if (sig_ctx == NULL || sig == NULL || sig_ctx->mdctx == NULL ||
+			!is_digest_sig_type(p11_keydata_get_type(sig_ctx->keydata)))
+		return 0;
+
+	if (EVP_DigestFinal_ex(sig_ctx->mdctx, md, &mdlen) != 1)
+		return 0;
+
+	return p11_signature_ctx_verify(sig_ctx,
+		sig, siglen, md, (size_t)mdlen);
+}
+
+/*
+ * Verify signature against input data in one-shot digest mode.
+ */
+int p11_signature_digest_verify(P11_SIGNATURE_CTX *sig_ctx,
+	const unsigned char *sig, size_t siglen,
+	const unsigned char *tbs, size_t tbslen)
+{
+	unsigned char md[EVP_MAX_MD_SIZE];
+	unsigned int mdlen = 0;
+	const EVP_MD *mdalg;
+	int type;
+
+	if (sig_ctx == NULL || sig == NULL || tbs == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(sig_ctx->keydata);
+	if (is_oneshot_sig_type(type))
+		return p11_signature_ctx_verify(sig_ctx, sig, siglen, tbs, tbslen);
+
+	if (!is_digest_sig_type(type) || sig_ctx->mdname == NULL)
+		return 0;
+
+	mdalg = EVP_get_digestbyname(sig_ctx->mdname);
+	if (mdalg == NULL)
+		return 0;
+
+	if (EVP_Digest(tbs, tbslen, md, &mdlen, mdalg, NULL) != 1)
+		return 0;
+
+	return p11_signature_ctx_verify(sig_ctx,
+		sig, siglen, md, (size_t)mdlen);
+}
+
+
+/******************************************************************************/
+/* ASYM CIPHER helper functions                                               */
+/******************************************************************************/
+
+/* Set OAEP digest algorithm name for asymmetric cipher operations. */
+static int p11_asym_cipher_ctx_set_oaep_mdname(P11_ASYM_CIPHER_CTX *asym_ctx,
+	const char *mdname)
+{
+	char *dup = NULL;
+
+	if (asym_ctx == NULL)
+		return 0;
+
+	if (mdname != NULL) {
+		dup = OPENSSL_strdup(mdname);
+		if (dup == NULL)
+			return 0;
+	}
+
+	OPENSSL_free(asym_ctx->oaep_mdname);
+	asym_ctx->oaep_mdname = dup;
+	return 1;
+}
+
+/* Set MGF1 digest algorithm name for asymmetric cipher operations. */
+static int p11_asym_cipher_ctx_set_mgf1_mdname(P11_ASYM_CIPHER_CTX *asym_ctx, const char *mdname)
+{
+	char *dup = NULL;
+
+	if (asym_ctx == NULL)
+		return 0;
+
+	if (mdname != NULL) {
+		dup = OPENSSL_strdup(mdname);
+		if (dup == NULL)
+			return 0;
+	}
+
+	OPENSSL_free(asym_ctx->mgf1_mdname);
+	asym_ctx->mgf1_mdname = dup;
+	return 1;
+}
+
+/* Set OAEP label for asymmetric cipher operations. */
+static int p11_asym_cipher_ctx_set_oaep_label(P11_ASYM_CIPHER_CTX *asym_ctx,
+	const unsigned char *label, size_t labellen)
+{
+	unsigned char *dup = NULL;
+
+	if (asym_ctx == NULL)
+		return 0;
+
+	if (labellen > 0) {
+		if (label == NULL)
+			return 0;
+
+		dup = OPENSSL_memdup(label, labellen);
+		if (dup == NULL)
+			return 0;
+	}
+
+	OPENSSL_free(asym_ctx->oaep_label);
+	asym_ctx->oaep_label = dup;
+	asym_ctx->oaep_labellen = labellen;
+	return 1;
+}
+
+
+/* Allocate and initialize asymmetric cipher context structure. */
+P11_ASYM_CIPHER_CTX *p11_asym_cipher_ctx_new(PROVIDER_CTX *ctx)
+{
+	P11_ASYM_CIPHER_CTX *asym_ctx;
+
+	asym_ctx = OPENSSL_zalloc(sizeof(P11_ASYM_CIPHER_CTX));
+	if (!asym_ctx)
+		return NULL;
+
+	asym_ctx->prov_ctx = ctx;
+	return asym_ctx;
+}
+
+/* Release asymmetric cipher context and associated resources. */
+void p11_asym_cipher_ctx_free(P11_ASYM_CIPHER_CTX *asym_ctx)
+{
+	if (asym_ctx == NULL)
+		return;
+
+	p11_keydata_free(asym_ctx->keydata);
+	OPENSSL_free(asym_ctx->oaep_mdname);
+	OPENSSL_free(asym_ctx->mgf1_mdname);
+	OPENSSL_free(asym_ctx->oaep_label);
+	OPENSSL_free(asym_ctx);
+}
+
+/*
+ * Duplicate asymmetric cipher context. This must be a real duplicate, not just
+ * another reference to the same mutable object.
+ */
+P11_ASYM_CIPHER_CTX *p11_asym_cipher_dupctx(P11_ASYM_CIPHER_CTX *asym_ctx)
+{
+	P11_ASYM_CIPHER_CTX *dst = NULL;
+
+	if (asym_ctx == NULL)
+		return NULL;
+
+	dst = p11_asym_cipher_ctx_new(asym_ctx->prov_ctx);
+	if (dst == NULL)
+		return NULL;
+
+	/* copy simple scalar state */
+	dst->pad_mode = asym_ctx->pad_mode;
+	dst->oaep_labellen = asym_ctx->oaep_labellen;
+
+	/* share keydata by reference */
+	if (asym_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(asym_ctx->keydata))
+			goto err;
+		dst->keydata = asym_ctx->keydata;
+	}
+
+	/* deep-copy OAEP/MGF1 parameters (mutable per-context state) */
+	if (asym_ctx->oaep_mdname != NULL) {
+		dst->oaep_mdname = OPENSSL_strdup(asym_ctx->oaep_mdname);
+		if (dst->oaep_mdname == NULL)
+			goto err;
+	}
+
+	if (asym_ctx->mgf1_mdname != NULL) {
+		dst->mgf1_mdname = OPENSSL_strdup(asym_ctx->mgf1_mdname);
+		if (dst->mgf1_mdname == NULL)
+			goto err;
+	}
+
+	if (asym_ctx->oaep_label != NULL && asym_ctx->oaep_labellen > 0) {
+		dst->oaep_label = OPENSSL_memdup(asym_ctx->oaep_label,
+			asym_ctx->oaep_labellen);
+		if (dst->oaep_label == NULL)
+			goto err;
+	}
+
+	return dst;
+
+err:
+	p11_asym_cipher_ctx_free(dst);
+	return NULL;
+}
+
+/* Initialize asymmetric cipher context with key and reset OAEP defaults. */
+int p11_asym_cipher_ctx_init(P11_ASYM_CIPHER_CTX *asym_ctx, P11_KEYDATA *keydata,
+	const OSSL_PARAM params[])
+{
+	if (asym_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(asym_ctx->keydata);
+	asym_ctx->keydata = keydata;
+
+	/* defaults (important when params don't include them) */
+	asym_ctx->pad_mode = RSA_PKCS1_OAEP_PADDING;
+
+	OPENSSL_free(asym_ctx->oaep_mdname);
+	asym_ctx->oaep_mdname = NULL; /* default = SHA1 */
+
+	OPENSSL_free(asym_ctx->mgf1_mdname);
+	asym_ctx->mgf1_mdname = NULL; /* default = oaep_mdname */
+
+	OPENSSL_free(asym_ctx->oaep_label);
+	asym_ctx->oaep_label = NULL;
+	asym_ctx->oaep_labellen = 0;
+
+	if (!p11_asym_cipher_ctx_set_params(asym_ctx, params))
+		return 0;
+
+	return 1;
+}
+
+/* Decrypt input data using asymmetric cipher context or return required output size. */
+int p11_asym_cipher_ctx_decrypt(P11_ASYM_CIPHER_CTX *asym_ctx,
+	unsigned char *out, size_t *outlen, size_t outsize,
+	const unsigned char *in, size_t inlen)
+{
+	size_t need;
+
+	if (asym_ctx == NULL || outlen == NULL || in == NULL)
+		return 0;
+
+	/*
+	 * For RSA decrypt the plaintext is at most modulus size.
+	 * This is a safe upper bound for output buffer sizing.
+	 */
+	need = p11_keydata_get_maxsize(asym_ctx->keydata);
+	if (need == 0)
+		return 0;
+
+	if (out == NULL) {
+		/* For RSA decrypt the plaintext is at most modulus size.
+		 * The exact OAEP plaintext length is only known after decrypt,
+		 * so return a safe upper bound. */
+		*outlen = need; /* length query */
+		return 1;
+	}
+
+	if (outsize < need) {
+		*outlen = need;
+		return 0; /* buffer too small */
+	}
+
+	*outlen = outsize; /* available signature buffer size */
+
+	return PKCS11_evp_pkey_decrypt(
+		p11_keydata_get_evp_pkey(asym_ctx->keydata),
+		p11_keydata_get_type(asym_ctx->keydata),
+		asym_ctx->oaep_mdname,
+		asym_ctx->pad_mode,
+		asym_ctx->mgf1_mdname,
+		asym_ctx->oaep_label,
+		asym_ctx->oaep_labellen,
+		out, outlen, in, inlen);
+}
+
+/* Set asymmetric cipher context parameters from OSSL_PARAM input */
+int p11_asym_cipher_ctx_set_params(P11_ASYM_CIPHER_CTX *asym_ctx,
+	const OSSL_PARAM params[])
+{
+	const OSSL_PARAM *p;
+	const char *str = NULL;
+
+	if (asym_ctx == NULL)
+		return 0;
+
+	/* Passing NULL for params should return true. */
+	if (params == NULL)
+		return 1;
+
+	/* PAD_MODE (can be int or string)
+	 * EVP_PKEY_CTX_set_rsa_padding(), -pkeyopt rsa_padding_mode:oaep */
+	p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_PAD_MODE);
+	if (p != NULL && !pad_mode_from_param(p, &asym_ctx->pad_mode))
+		return 0;
+
+	/* OAEP parameters may arrive before pad-mode, so store them if present. */
+
+	/* OAEP digest algorithm name
+	 * EVP_PKEY_CTX_set_rsa_oaep_md(), not covered by tests
+	 * EVP_PKEY_CTX_set_rsa_oaep_md_name(), not covered by tests */
+	p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_OAEP_DIGEST);
+	if (p != NULL) {
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &str) || str == NULL)
+			return 0;
+
+		if (!p11_asym_cipher_ctx_set_oaep_mdname(asym_ctx, str))
+			return 0;
+	}
+
+	/* MGF1 digest
+	 * EVP_PKEY_CTX_set_rsa_mgf1_md(), not covered by tests
+	 * EVP_PKEY_CTX_set_rsa_mgf1_md_name(), not covered by tests */
+	p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_MGF1_DIGEST);
+	if (p != NULL) {
+		if (!OSSL_PARAM_get_utf8_string_ptr(p, &str) || str == NULL)
+			return 0;
+
+		if (!p11_asym_cipher_ctx_set_mgf1_mdname(asym_ctx, str))
+			return 0;
+	}
+
+	/* OAEP label
+	 * EVP_PKEY_CTX_set0_rsa_oaep_label(), not covered by tests */
+	p = OSSL_PARAM_locate_const(params, OSSL_ASYM_CIPHER_PARAM_OAEP_LABEL);
+	if (p != NULL) {
+		if (p->data_type != OSSL_PARAM_OCTET_STRING)
+			return 0;
+
+		if (p->data_size > 0 && p->data == NULL)
+			return 0;
+
+		if (!p11_asym_cipher_ctx_set_oaep_label(asym_ctx, p->data, p->data_size))
+			return 0;
+	}
+
+	return 1;
+}
+
+/* Get asymmetric cipher context parameters. */
+int p11_asym_cipher_ctx_get_params(P11_ASYM_CIPHER_CTX *asym_ctx, OSSL_PARAM params[])
+{
+	OSSL_PARAM *p;
+	const char *oaep_mdname;
+	const char *mgf1_mdname;
+
+	if (asym_ctx == NULL)
+		return 0;
+
+	/* NULL means no parameters were requested; treat it as success. */
+	if (params == NULL)
+		return 1;
+
+	/* defaults */
+	oaep_mdname = asym_ctx->oaep_mdname;
+	if (oaep_mdname == NULL)
+		oaep_mdname = "SHA1";
+
+	mgf1_mdname = asym_ctx->mgf1_mdname;
+	if (mgf1_mdname == NULL)
+		mgf1_mdname = oaep_mdname;
+
+	/* EVP_PKEY_CTX_get_rsa_padding(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_ASYM_CIPHER_PARAM_PAD_MODE);
+	if (p != NULL) {
+		if (p->data_type == OSSL_PARAM_INTEGER) {
+			if (!OSSL_PARAM_set_int(p, asym_ctx->pad_mode))
+				return 0;
+		} else if (p->data_type == OSSL_PARAM_UTF8_STRING) {
+			const char *padding = pad_mode_to_string(asym_ctx->pad_mode);
+
+			if (padding == NULL || !OSSL_PARAM_set_utf8_string(p, padding))
+				return 0;
+		} else {
+			return 0;
+		}
+	}
+
+	/* EVP_PKEY_CTX_get_rsa_oaep_md(), not covered by tests
+	 * EVP_PKEY_CTX_get_rsa_oaep_md_name(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_ASYM_CIPHER_PARAM_OAEP_DIGEST);
+	if (p != NULL && asym_ctx->pad_mode == RSA_PKCS1_OAEP_PADDING &&
+		!OSSL_PARAM_set_utf8_string(p, oaep_mdname))
+		return 0;
+
+	/* EVP_PKEY_CTX_get_rsa_mgf1_md(), not covered by tests
+	 * EVP_PKEY_CTX_get_rsa_mgf1_md_name(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_ASYM_CIPHER_PARAM_MGF1_DIGEST);
+	if (p != NULL && asym_ctx->pad_mode == RSA_PKCS1_OAEP_PADDING &&
+		!OSSL_PARAM_set_utf8_string(p, mgf1_mdname))
+		return 0;
+
+	/* EVP_PKEY_CTX_get0_rsa_oaep_label(), not covered by tests */
+	p = OSSL_PARAM_locate(params, OSSL_ASYM_CIPHER_PARAM_OAEP_LABEL);
+	if (p != NULL && asym_ctx->pad_mode == RSA_PKCS1_OAEP_PADDING) {
+		unsigned char *label = asym_ctx->oaep_label;
+		size_t labellen = asym_ctx->oaep_labellen;
+
+		if (label != NULL) {
+			if (!OSSL_PARAM_set_octet_string(p, label, labellen))
+				return 0;
+		} else {
+			if (!OSSL_PARAM_set_octet_string(p, NULL, 0))
+				return 0;
+		}
+	}
+	return 1;
+}
+
+/* Encrypt input data using a temporary public key copy in the default provider */
+int p11_asym_cipher_ctx_encrypt(P11_ASYM_CIPHER_CTX *asym_ctx,
+	unsigned char *out, size_t *outlen,
+	size_t outsize, const unsigned char *in, size_t inlen)
+{
+	EVP_PKEY *pub = NULL;
+	EVP_PKEY_CTX *pctx = NULL;
+	size_t tmplen = 0;
+	int ok = 0;
+
+	if (asym_ctx == NULL || asym_ctx->keydata == NULL || outlen == NULL || in == NULL)
+		return 0;
+
+	if (p11_keydata_get_type(asym_ctx->keydata) != EVP_PKEY_RSA)
+		return 0;
+
+	pub = pubkey_from_params_default(asym_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
+	if (pctx == NULL)
+		goto end;
+
+	if (EVP_PKEY_encrypt_init(pctx) <= 0)
+		goto end;
+
+	if (EVP_PKEY_CTX_set_rsa_padding(pctx, asym_ctx->pad_mode) <= 0)
+		goto end;
+
+	if (asym_ctx->pad_mode == RSA_PKCS1_OAEP_PADDING) {
+		const EVP_MD *oaep_md = NULL;
+		const EVP_MD *mgf1_md = NULL;
+
+		oaep_md = EVP_get_digestbyname(
+			asym_ctx->oaep_mdname != NULL ? asym_ctx->oaep_mdname : "SHA1");
+		if (oaep_md == NULL)
+			goto end;
+
+		if (EVP_PKEY_CTX_set_rsa_oaep_md(pctx, oaep_md) <= 0)
+			goto end;
+
+		mgf1_md = EVP_get_digestbyname(
+			asym_ctx->mgf1_mdname != NULL ? asym_ctx->mgf1_mdname :
+			(asym_ctx->oaep_mdname != NULL ? asym_ctx->oaep_mdname : "SHA1"));
+		if (mgf1_md == NULL)
+			goto end;
+
+		if (EVP_PKEY_CTX_set_rsa_mgf1_md(pctx, mgf1_md) <= 0)
+			goto end;
+
+		if (asym_ctx->oaep_label != NULL && asym_ctx->oaep_labellen > 0) {
+			unsigned char *label;
+
+			label = OPENSSL_memdup(asym_ctx->oaep_label, asym_ctx->oaep_labellen);
+			if (label == NULL)
+				goto end;
+
+			if (EVP_PKEY_CTX_set0_rsa_oaep_label(pctx, label,
+				(int)asym_ctx->oaep_labellen) <= 0) {
+				OPENSSL_free(label);
+				goto end;
+			}
+			/* ownership transferred to pctx */
+			label = NULL;
+		}
+	}
+
+	/* length query */
+	if (out == NULL) {
+		if (EVP_PKEY_encrypt(pctx, NULL, &tmplen, in, inlen) <= 0)
+			goto end;
+		*outlen = tmplen;
+		ok = 1;
+		goto end;
+	}
+
+	tmplen = outsize;
+	if (EVP_PKEY_encrypt(pctx, out, &tmplen, in, inlen) <= 0)
+		goto end;
+
+	*outlen = tmplen;
+	ok = 1;
+
+end:
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+	return ok;
+}
+
+
+/******************************************************************************/
+/* KEY EXCHANGE helper functions                                              */
+/******************************************************************************/
+
+/* Return the maximum shared-secret size in bytes. */
+static size_t p11_keyexch_ctx_get_outsize(const P11_KEYEXCH_CTX *keyexch_ctx)
+{
+#ifndef OPENSSL_NO_EC
+	EVP_PKEY *pkey;
+	int bits;
+#endif /* OPENSSL_NO_EC */
+	size_t outsize = 0;
+
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	switch (p11_keydata_get_type(keyexch_ctx->keydata)) {
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC:
+		/* ECDH output is at most the EC field size. */
+		pkey = p11_keydata_get_evp_pkey(keyexch_ctx->keydata);
+		if (pkey == NULL)
+			return 0;
+
+		bits = EVP_PKEY_get_bits(pkey);
+		if (bits <= 0)
+			return 0;
+
+		outsize = ((size_t)bits + 7) / 8;
+		break;
+#endif /* OPENSSL_NO_EC */
+#ifndef OPENSSL_NO_ECX
+	case EVP_PKEY_X25519:
+		return 32; /* X25519 shared secret has fixed length. */
+
+	case EVP_PKEY_X448:
+		return 56; /* X448 shared secret has fixed length. */
+#endif /* OPENSSL_NO_ECX */
+	default:
+		return 0;
+	}
+	return outsize;
+}
+
+
+/* Allocate a key exchange context. */
+P11_KEYEXCH_CTX *p11_keyexch_ctx_new(PROVIDER_CTX *ctx)
+{
+	P11_KEYEXCH_CTX *keyexch_ctx;
+
+	keyexch_ctx = OPENSSL_zalloc(sizeof(P11_KEYEXCH_CTX));
+	if (!keyexch_ctx)
+		return NULL;
+
+	keyexch_ctx->prov_ctx = ctx;
+	keyexch_ctx->cofactor_mode = -1; /* default */
+	return keyexch_ctx;
+}
+
+/* Free the key exchange context and release referenced keys. */
+void p11_keyexch_ctx_free(P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	if (keyexch_ctx == NULL)
+		return;
+
+	p11_keydata_free(keyexch_ctx->keydata);
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	OPENSSL_free(keyexch_ctx);
+}
+
+/*
+ * Duplicate a key exchange context.
+ * Key objects are shared by reference; mutable context state is copied.
+ */
+P11_KEYEXCH_CTX *p11_keyexch_dupctx(P11_KEYEXCH_CTX *keyexch_ctx)
+{
+	P11_KEYEXCH_CTX *dst = NULL;
+
+	if (keyexch_ctx == NULL)
+		return NULL;
+
+	dst = p11_keyexch_ctx_new(keyexch_ctx->prov_ctx);
+	if (dst == NULL)
+		return NULL;
+
+	/* copy simple scalar state */
+	dst->cofactor_mode = keyexch_ctx->cofactor_mode;
+
+	/* share local keydata by reference */
+	if (keyexch_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(keyexch_ctx->keydata))
+			goto err;
+		dst->keydata = keyexch_ctx->keydata;
+	}
+
+	/* share peer keydata by reference */
+	if (keyexch_ctx->peerkeydata != NULL) {
+		if (!p11_keydata_up_ref(keyexch_ctx->peerkeydata))
+			goto err;
+		dst->peerkeydata = keyexch_ctx->peerkeydata;
+	}
+
+	return dst;
+
+err:
+	p11_keyexch_ctx_free(dst);
+	return NULL;
+}
+
+/* Set the local private key and reset per-operation state. */
+int p11_keyexch_ctx_init(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata,
+	const OSSL_PARAM params[])
+{
+	if (keyexch_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(keyexch_ctx->keydata);
+	keyexch_ctx->keydata = keydata;
+
+	/* A new derive operation must not reuse the previous peer key. */
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	keyexch_ctx->peerkeydata = NULL;
+
+	/* Restore the default cofactor mode for the new operation. */
+	keyexch_ctx->cofactor_mode = -1;
+
+	if (!p11_keyexch_ctx_set_params(keyexch_ctx, params))
+		return 0;
+
+	return 1;
+}
+
+/* Set key exchange context parameters. */
+int p11_keyexch_ctx_set_params(P11_KEYEXCH_CTX *keyexch_ctx, const OSSL_PARAM params[])
+{
+	const OSSL_PARAM *p;
+
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	/* Passing NULL for params should return true. */
+	if (params == NULL)
+		return 1;
+
+	/* Cofactor mode is meaningful only for ECDH.  It is accepted here
+	 * because the same key exchange implementation is shared with X25519/X448. */
+	p = OSSL_PARAM_locate_const(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
+	if (p != NULL) {
+		int mode;
+
+		if (!OSSL_PARAM_get_int(p, &mode))
+			return 0;
+
+		if (mode < -1 || mode > 1)
+			return 0;
+
+		/* Set ECDH cofactor mode: -1 = default, 0 = disabled, 1 = enabled */
+		keyexch_ctx->cofactor_mode = mode;
+		return 1;
+	}
+
+	return 1;
+}
+
+/* Return current key exchange context parameters. */
+int p11_keyexch_ctx_get_params(P11_KEYEXCH_CTX *keyexch_ctx, OSSL_PARAM params[])
+{
+	OSSL_PARAM *p;
+
+	if (keyexch_ctx == NULL)
+		return 0;
+
+	/* NULL means no parameters were requested; treat it as success. */
+	if (params == NULL)
+		return 1;
+
+	p = OSSL_PARAM_locate(params, OSSL_EXCHANGE_PARAM_EC_ECDH_COFACTOR_MODE);
+	if (p != NULL && !OSSL_PARAM_set_int(p, keyexch_ctx->cofactor_mode))
+		return 0;
+
+	return 1;
+}
+
+/* Set the peer public key for shared-secret derivation. */
+int p11_keyexch_ctx_set_peer(P11_KEYEXCH_CTX *keyexch_ctx, P11_KEYDATA *keydata)
+{
+	if (keyexch_ctx == NULL || keydata == NULL)
+		return 0;
+
+	/* Take a reference first, so replacing with the same object is safe. */
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(keyexch_ctx->peerkeydata);
+	keyexch_ctx->peerkeydata = keydata;
+
+	return 1;
+}
+
+/* Derive the shared secret, or return the required output size. */
+int p11_keyexch_ctx_derive(P11_KEYEXCH_CTX *keyexch_ctx, unsigned char *secret,
+	size_t *secretlen, size_t outlen)
+{
+	const unsigned char *peer_pub = NULL;
+	size_t peer_pub_len = 0;
+	size_t need;
+
+	if (keyexch_ctx == NULL || secretlen == NULL)
+		return 0;
+
+	if (!p11_keydata_get_pub(keyexch_ctx->peerkeydata, &peer_pub, &peer_pub_len))
+		return 0;
+
+	need = p11_keyexch_ctx_get_outsize(keyexch_ctx);
+	if (need == 0)
+		return 0;
+
+	if (secret == NULL) {
+		/* Return the maximum shared-secret output size. */
+		*secretlen = need;
+		return 1;
+	}
+
+	if (outlen < need) {
+		*secretlen = need;
+		return 0; /* buffer too small */
+	}
+
+	/* Request the required secret size, not the caller's buffer capacity. */
+	*secretlen = need;
+
+	return PKCS11_evp_pkey_derive(
+		p11_keydata_get_evp_pkey(keyexch_ctx->keydata),
+		p11_keydata_get_type(keyexch_ctx->keydata),
+		peer_pub, peer_pub_len,
+		keyexch_ctx->cofactor_mode,
+		secret, secretlen);
+}
+
+
+/******************************************************************************/
+/* ASYM KEM helper functions                                                  */
+/******************************************************************************/
+
+/* Return the shared-secret size for an asymmetric KEM operation. */
+static size_t p11_kem_ctx_get_secret_size(const P11_KEM_CTX *kem_ctx)
+{
+	int type;
+
+	if (kem_ctx == NULL || kem_ctx->keydata == NULL)
+		return 0;
+
+	type = p11_keydata_get_type(kem_ctx->keydata);
+
+	switch (type) {
+#if !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L
+	case EVP_PKEY_ML_KEM_512:
+	case EVP_PKEY_ML_KEM_768:
+	case EVP_PKEY_ML_KEM_1024:
+		return ML_KEM_SHARED_SECRET_BYTES;
+#endif /* !defined(OPENSSL_NO_ML_KEM) && OPENSSL_VERSION_NUMBER >= 0x30500000L */
+	default:
+		return 0;
+	}
+}
+
+/* Allocate a asymmetric KEM context. */
+P11_KEM_CTX *p11_kem_ctx_new(PROVIDER_CTX *ctx)
+{
+	P11_KEM_CTX *kem_ctx;
+
+	kem_ctx = OPENSSL_zalloc(sizeof(P11_KEM_CTX));
+	if (!kem_ctx)
+		return NULL;
+
+	kem_ctx->prov_ctx = ctx;
+	return kem_ctx;
+}
+
+/* Free the asymmetric KEM context and release referenced keys. */
+void p11_kem_ctx_free(P11_KEM_CTX *kem_ctx)
+{
+	if (kem_ctx == NULL)
+		return;
+
+	p11_keydata_free(kem_ctx->keydata);
+	OPENSSL_free(kem_ctx);
+}
+
+/*
+ * Duplicate a asymmetric KEM context.
+ * Key objects are shared by reference; mutable context state is copied.
+ */
+P11_KEM_CTX *p11_kem_ctx_dupctx(P11_KEM_CTX *kem_ctx)
+{
+	P11_KEM_CTX *dst = NULL;
+
+	if (kem_ctx == NULL)
+		return NULL;
+
+	dst = p11_kem_ctx_new(kem_ctx->prov_ctx);
+	if (dst == NULL)
+		return NULL;
+
+	/* share local keydata by reference */
+	if (kem_ctx->keydata != NULL) {
+		if (!p11_keydata_up_ref(kem_ctx->keydata))
+			goto err;
+		dst->keydata = kem_ctx->keydata;
+	}
+
+	return dst;
+
+err:
+	p11_kem_ctx_free(dst);
+	return NULL;
+}
+
+/* Initialize an asymmetric KEM context with a key. */
+int p11_kem_ctx_init(P11_KEM_CTX *kem_ctx, P11_KEYDATA *keydata, const OSSL_PARAM params[])
+{
+	if (kem_ctx == NULL || keydata == NULL)
+		return 0;
+
+	(void)params;
+
+	if (!p11_keydata_up_ref(keydata))
+		return 0;
+
+	p11_keydata_free(kem_ctx->keydata);
+	kem_ctx->keydata = keydata;
+
+	return 1;
+}
+
+/* Perform the actual decapsulation. */
+int p11_kem_ctx_decapsulate(P11_KEM_CTX *kem_ctx, unsigned char *out, size_t *outlen,
+	const unsigned char *in, size_t inlen)
+{
+	size_t secret_size;
+
+	if (kem_ctx == NULL || outlen == NULL || in == NULL)
+		return 0;
+
+	secret_size = p11_kem_ctx_get_secret_size(kem_ctx);
+	if (secret_size == 0)
+		return 0;
+
+	if (out == NULL) {
+		*outlen = secret_size;
+		return 1;
+	}
+
+	if (*outlen < secret_size) {
+		*outlen = secret_size;
+		return 0;
+	}
+
+	return PKCS11_evp_pkey_decapsulate(
+		p11_keydata_get_evp_pkey(kem_ctx->keydata),
+		p11_keydata_get_type(kem_ctx->keydata),
+		out, outlen, in, inlen);
+}
+
+/*
+ * Encapsulate a shared secret using a temporary public key copy
+ * in the default provider.
+ */
+int p11_kem_ctx_encapsulate(P11_KEM_CTX *kem_ctx, unsigned char *out,
+	size_t *outlen, unsigned char *secret, size_t *secretlen)
+{
+	EVP_PKEY *pub = NULL;
+	EVP_PKEY_CTX *pctx = NULL;
+	int ok = 0;
+
+	if (kem_ctx == NULL || kem_ctx->keydata == NULL ||
+			outlen == NULL || secretlen == NULL)
+		return 0;
+
+	pub = pubkey_from_params_default(kem_ctx->keydata);
+	if (pub == NULL)
+		return 0;
+
+	pctx = EVP_PKEY_CTX_new(pub, NULL);
+	if (pctx == NULL)
+		goto end;
+
+	if (EVP_PKEY_encapsulate_init(pctx, NULL) <= 0)
+		goto end;
+
+	/* EVP_PKEY_encapsulate() also handles the length query when
+	 * out and secret are NULL. */
+	if (EVP_PKEY_encapsulate(pctx, out, outlen, secret, secretlen) <= 0)
+		goto end;
+
+	ok = 1;
+
+end:
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_free(pub);
+	return ok;
 }
 
 /* vim: set noexpandtab: */
