@@ -40,7 +40,7 @@
 #include <openssl/params.h>
 #include <openssl/store.h>
 
-#define FIPS_PROPQ "provider=pkcs11prov,fips=yes"
+#define PKCS11_PROPQ "provider=pkcs11prov"
 
 typedef struct {
 	PROVIDER_CTX *prov_ctx;
@@ -362,111 +362,97 @@ DEFINE_KEYMGMT_FUNCTIONS(falcon1024, EVP_PKEY_FALCON1024,
  * Keymgmt algorithms: must be real key types (e.g. RSA, EC), not provider names.
  */
 static const OSSL_ALGORITHM p11_keymgmts[] = {
-	{"RSA:rsaEncryption", FIPS_PROPQ, rsa_keymgmt_functions,
+	{"RSA:rsaEncryption", PKCS11_PROPQ, rsa_keymgmt_functions,
 		"PKCS#11 RSA keymgm functions"},
 #ifndef OPENSSL_NO_EC
-	{"EC:id-ecPublicKey", FIPS_PROPQ, ec_keymgmt_functions,
+	{"EC:id-ecPublicKey", PKCS11_PROPQ, ec_keymgmt_functions,
 		"PKCS#11 EC keymgm functions"},
-	{"ECDH", FIPS_PROPQ, ec_keymgmt_functions,
+	{"ECDH", PKCS11_PROPQ, ec_keymgmt_functions,
 		"PKCS#11 key exchange functions"},
 #endif /* OPENSSL_NO_EC */
 #ifndef OPENSSL_NO_ECX
-	{"ED25519", FIPS_PROPQ, ed25519_keymgmt_functions,
+	{"ED25519", PKCS11_PROPQ, ed25519_keymgmt_functions,
 		"PKCS#11 Ed25519 keymgm functions"},
-	{"ED448", FIPS_PROPQ, ed448_keymgmt_functions,
+	{"ED448", PKCS11_PROPQ, ed448_keymgmt_functions,
 		"PKCS#11 Ed448 keymgm functions"},
-	{"X25519", FIPS_PROPQ, x25519_keymgmt_functions,
+	{"X25519", PKCS11_PROPQ, x25519_keymgmt_functions,
 		"PKCS#11 X25519 keymgm functions"},
-	{"X448", FIPS_PROPQ, x448_keymgmt_functions,
+	{"X448", PKCS11_PROPQ, x448_keymgmt_functions,
 		"PKCS#11 X448 keymgm functions"},
 #endif /* OPENSSL_NO_ECX */
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
 #ifndef OPENSSL_NO_ML_DSA
-	{"ML-DSA-44", FIPS_PROPQ, mldsa44_keymgmt_functions,
+	{"ML-DSA-44", PKCS11_PROPQ, mldsa44_keymgmt_functions,
 		"PKCS#11 ML-DSA-44 keymgmt functions"},
-	{"ML-DSA-65", FIPS_PROPQ, mldsa65_keymgmt_functions,
+	{"ML-DSA-65", PKCS11_PROPQ, mldsa65_keymgmt_functions,
 		"PKCS#11 ML-DSA-65 keymgmt functions"},
-	{"ML-DSA-87", FIPS_PROPQ, mldsa87_keymgmt_functions,
+	{"ML-DSA-87", PKCS11_PROPQ, mldsa87_keymgmt_functions,
 		"PKCS#11 ML-DSA-87 keymgmt functions"},
 #endif /* OPENSSL_NO_ML_DSA */
 #ifndef OPENSSL_NO_ML_KEM
-	{"ML-KEM-512", FIPS_PROPQ, mlkem512_keymgmt_functions,
+	{"ML-KEM-512", PKCS11_PROPQ, mlkem512_keymgmt_functions,
 		"PKCS#11 ML-KEM-512 keymgmt functions"},
-	{"ML-KEM-768", FIPS_PROPQ, mlkem768_keymgmt_functions,
+	{"ML-KEM-768", PKCS11_PROPQ, mlkem768_keymgmt_functions,
 		"PKCS#11 ML-KEM-768 keymgmt functions"},
-	{"ML-KEM-1024", FIPS_PROPQ, mlkem1024_keymgmt_functions,
+	{"ML-KEM-1024", PKCS11_PROPQ, mlkem1024_keymgmt_functions,
 		"PKCS#11 ML-KEM-1024 keymgmt functions"},
 #endif /* OPENSSL_NO_ML_KEM */
 #ifndef OPENSSL_NO_SLH_DSA
-	{"SLH-DSA-SHA2-128s", FIPS_PROPQ,
-		slhdsa_sha2_128s_keymgmt_functions,
+	{"SLH-DSA-SHA2-128s", PKCS11_PROPQ, slhdsa_sha2_128s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-128s keymgmt functions"},
-	{"SLH-DSA-SHA2-128f", FIPS_PROPQ,
-		slhdsa_sha2_128f_keymgmt_functions,
+	{"SLH-DSA-SHA2-128f", PKCS11_PROPQ, slhdsa_sha2_128f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-128f keymgmt functions"},
-	{"SLH-DSA-SHA2-192s", FIPS_PROPQ,
-		slhdsa_sha2_192s_keymgmt_functions,
+	{"SLH-DSA-SHA2-192s", PKCS11_PROPQ, slhdsa_sha2_192s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-192s keymgmt functions"},
-	{"SLH-DSA-SHA2-192f", FIPS_PROPQ,
-		slhdsa_sha2_192f_keymgmt_functions,
+	{"SLH-DSA-SHA2-192f", PKCS11_PROPQ, slhdsa_sha2_192f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-192f keymgmt functions"},
-	{"SLH-DSA-SHA2-256s", FIPS_PROPQ,
-		slhdsa_sha2_256s_keymgmt_functions,
+	{"SLH-DSA-SHA2-256s", PKCS11_PROPQ, slhdsa_sha2_256s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-256s keymgmt functions"},
-	{"SLH-DSA-SHA2-256f", FIPS_PROPQ,
-		slhdsa_sha2_256f_keymgmt_functions,
+	{"SLH-DSA-SHA2-256f", PKCS11_PROPQ, slhdsa_sha2_256f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHA2-256f keymgmt functions"},
-	{"SLH-DSA-SHAKE-128s", FIPS_PROPQ,
-		slhdsa_shake_128s_keymgmt_functions,
+	{"SLH-DSA-SHAKE-128s", PKCS11_PROPQ, slhdsa_shake_128s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-128s keymgmt functions"},
-	{"SLH-DSA-SHAKE-128f", FIPS_PROPQ,
-		slhdsa_shake_128f_keymgmt_functions,
+	{"SLH-DSA-SHAKE-128f", PKCS11_PROPQ, slhdsa_shake_128f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-128f keymgmt functions"},
-	{"SLH-DSA-SHAKE-192s", FIPS_PROPQ,
-		slhdsa_shake_192s_keymgmt_functions,
+	{"SLH-DSA-SHAKE-192s", PKCS11_PROPQ, slhdsa_shake_192s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-192s keymgmt functions"},
-	{"SLH-DSA-SHAKE-192f", FIPS_PROPQ,
-		slhdsa_shake_192f_keymgmt_functions,
+	{"SLH-DSA-SHAKE-192f", PKCS11_PROPQ, slhdsa_shake_192f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-192f keymgmt functions"},
-	{"SLH-DSA-SHAKE-256s", FIPS_PROPQ,
-		slhdsa_shake_256s_keymgmt_functions,
+	{"SLH-DSA-SHAKE-256s", PKCS11_PROPQ, slhdsa_shake_256s_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-256s keymgmt functions"},
-	{"SLH-DSA-SHAKE-256f", FIPS_PROPQ,
-		slhdsa_shake_256f_keymgmt_functions,
+	{"SLH-DSA-SHAKE-256f", PKCS11_PROPQ, slhdsa_shake_256f_keymgmt_functions,
 		"PKCS#11 SLH-DSA-SHAKE-256f keymgmt functions"},
 #endif /* OPENSSL_NO_SLH_DSA */
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
-	{"FALCON-512:FN-DSA-512:falcon512", FIPS_PROPQ,
-		falcon512_keymgmt_functions,
+	{"FALCON-512:FN-DSA-512:falcon512", PKCS11_PROPQ, falcon512_keymgmt_functions,
 		"PKCS#11 Falcon-512 keymgmt"},
-	{"FALCON-1024:FN-DSA-1024:falcon1024", FIPS_PROPQ,
-		falcon1024_keymgmt_functions,
+	{"FALCON-1024:FN-DSA-1024:falcon1024", PKCS11_PROPQ, falcon1024_keymgmt_functions,
 		"PKCS#11 Falcon-1024 keymgmt"},
 	{NULL, NULL, NULL, NULL}
 };
 
 const OSSL_ALGORITHM p11_signatures[] = {
-	{"PKCS11", FIPS_PROPQ, signature_functions, "PKCS#11 signature functions"},
+	{"PKCS11", PKCS11_PROPQ, signature_functions, "PKCS#11 signature functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
 static const OSSL_ALGORITHM p11_asym_cipher[] = {
-	{"PKCS11", FIPS_PROPQ, asym_cipher_functions, "PKCS#11 asym_cipher functions"},
+	{"PKCS11", PKCS11_PROPQ, asym_cipher_functions, "PKCS#11 asym_cipher functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
 static const OSSL_ALGORITHM p11_keyexch[] = {
-	{"PKCS11", FIPS_PROPQ, keyexch_functions, "PKCS#11 key exchange functions"},
+	{"PKCS11", PKCS11_PROPQ, keyexch_functions, "PKCS#11 key exchange functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
 static const OSSL_ALGORITHM p11_asym_kem[] = {
-	{"PKCS11", FIPS_PROPQ, asym_kem_functions, "PKCS#11 asymmetric kem functions"},
+	{"PKCS11", PKCS11_PROPQ, asym_kem_functions, "PKCS#11 asymmetric kem functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
 static const OSSL_ALGORITHM p11_storemgmt[] = {
-	{"PKCS11", FIPS_PROPQ, store_functions, "PKCS#11 storage functions"},
+	{"PKCS11", PKCS11_PROPQ, store_functions, "PKCS#11 storage functions"},
 	{NULL, NULL, NULL, NULL}
 };
 
