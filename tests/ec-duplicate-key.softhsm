@@ -27,6 +27,10 @@ init_db
 # Create token
 init_card "token1"
 
+# Load OpenSSL settings
+. ${srcdir}/openssl-settings.sh
+
+# Restore OpenSSL settings on exit
 trap cleanup EXIT
 
 ${WRAPPER} ./ec-duplicate-key ${MODULE} token1 ${PIN}
