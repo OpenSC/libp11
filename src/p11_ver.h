@@ -18,7 +18,7 @@
 
 #define LIBP11_VERSION_MAJOR 0
 #define LIBP11_VERSION_MINOR 4
-#define LIBP11_VERSION_FIX   21
+#define LIBP11_VERSION_FIX   22
 
 /*
  * The LIBP11_VERSION_NUMBER layout is 0xMMmmffff, where
