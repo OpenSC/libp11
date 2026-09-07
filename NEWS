@@ -1,13 +1,23 @@
 NEWS for Libp11 -- History of user visible changes
 
-New in 0.4.21; unreleased
-* Fixed EVP_PKEY_METHOD use-after-free when multiple ENGINE instances are used.
-  As a compatibility regression, registering PKCS11_pkey_meths() directly as
-  an ENGINE callback now leaks methods; use the bundled engine, which caches
-  methods per ENGINE.
+New in 0.4.21; 2026-09-07; Michał Trojnara
 * Added PKCS#11 provider support for `openssl genpkey` (Małgorzata Olszówka)
-* Documented RSA-OAEP as the default padding mode for RSA encryption and
-  decryption in the PKCS#11 provider
+* Added the PKCS11_generate_key_ext() API (Małgorzata Olszówka)
+* Added the PKCS11_CTX_set_pkey_callback() API (Michał Trojnara)
+* Removed incorrect `fips=yes` properties from provider algorithms
+  (Małgorzata Olszówka)
+* Isolated ENGINE EVP_PKEY methods from unrelated OpenSSL keys
+  (Michał Trojnara)
+* Fixed ENGINE EVP_PKEY method races and lifetime issues (Małgorzata Olszówka,
+  Michał Trojnara). Direct use of PKCS11_pkey_meths() as an ENGINE callback now
+  leaks methods; use the bundled engine.
+* Fixed public-key association for generated key pairs with duplicate CKA_ID
+  values (Małgorzata Olszówka)
+* Added all-zero shared-secret checks for X25519 and X448 (Małgorzata Olszówka)
+* Fixed a provider EC public-point NULL dereference with affected OpenSSL 3.x
+  versions (Małgorzata Olszówka)
+* Fixed building with OpenSSL 1.0.2 (Michał Trojnara)
+* Improved Git build and RSA-OAEP documentation (Małgorzata Olszówka)
 
 New in 0.4.20; 2026-08-08; Michał Trojnara
 * Added PKCS#11 3.2 interface discovery and updated the bundled header
