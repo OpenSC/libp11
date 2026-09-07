@@ -42,6 +42,15 @@
 #define DISABLE_OSSL3_DEPRECATED_END
 #endif
 
+/* OpenSSL versions affected by the EC_POINT_point2oct() NULL pointer bug. */
+#define P11_OPENSSL_EC_POINT_NULL_BUG ( \
+	(OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_VERSION_NUMBER < 0x30000100L) || \
+	(OPENSSL_VERSION_NUMBER >= 0x30100000L && OPENSSL_VERSION_NUMBER < 0x30100080L) || \
+	(OPENSSL_VERSION_NUMBER >= 0x30200000L && OPENSSL_VERSION_NUMBER < 0x30200040L) || \
+	(OPENSSL_VERSION_NUMBER >= 0x30300000L && OPENSSL_VERSION_NUMBER < 0x30300030L) || \
+	(OPENSSL_VERSION_NUMBER >= 0x30400000L && OPENSSL_VERSION_NUMBER < 0x30400010L) \
+)
+
 #define PKCS11_PROVIDER_NAME "libp11 PKCS#11 provider"
 
 #ifndef OPENSSL_NO_ECX
@@ -1196,11 +1205,12 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 			group, 0))
 			goto err;
 
-#if OPENSSL_VERSION_NUMBER < 0x30000100L
+#if P11_OPENSSL_EC_POINT_NULL_BUG
 		/*
-		 * OpenSSL < 3.0.16 lacks a NULL check for 'point' in the
+		 * These OpenSSL versions lack a NULL check for 'point' in the
 		 * EC_POINT_point2oct() path, which may lead to invalid memory
-		 * access. Fixed upstream in 3.0.16:
+		 * access when an EC private key has no associated public point.
+		 * Fixed upstream in:
 		 * https://github.com/openssl/openssl/commit/8ac42a5f418cbe2797bc423b694ac5af605b5c7a
 		 */
 		{
@@ -1216,7 +1226,7 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 			DISABLE_OSSL3_DEPRECATED_END
 
 			if (point != NULL) {
-#endif
+#endif /* P11_OPENSSL_EC_POINT_NULL_BUG */
 				if (EVP_PKEY_get_octet_string_param(pkey,
 					OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &publen)) {
 					pub = OPENSSL_malloc(publen);
@@ -1226,14 +1236,14 @@ static OSSL_PARAM *public_params_from_evp_pkey(EVP_PKEY *pkey)
 					if (!EVP_PKEY_get_octet_string_param(pkey,
 						OSSL_PKEY_PARAM_PUB_KEY, pub, publen, &publen))
 						goto err;
-#if OPENSSL_VERSION_NUMBER < 0x30000100L
+#if P11_OPENSSL_EC_POINT_NULL_BUG
 				}
 			}
-#endif
+#endif /* P11_OPENSSL_EC_POINT_NULL_BUG */
 			if (!OSSL_PARAM_BLD_push_octet_string(bld,
 				OSSL_PKEY_PARAM_PUB_KEY, pub, publen))
 				goto err;
-			}
+		}
 		break;
 	}
 #endif /* OPENSSL_NO_EC */
