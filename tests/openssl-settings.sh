@@ -18,20 +18,22 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 # Save original library path for later restoration
-TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+TEMP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH-}
 
-# Use the configured OpenSSL library path if found
+# Resolve OpenSSL paths before modifying LD_LIBRARY_PATH
 OPENSSL_LIBDIR=$(pkg-config --variable=libdir --silence-errors openssl)
-if test -n "${OPENSSL_LIBDIR}"; then
-    export LD_LIBRARY_PATH="${OPENSSL_LIBDIR}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-fi
+OPENSSL_PREFIX=$(pkg-config --variable=prefix --silence-errors openssl)
 
 # Use the configured OpenSSL executable path if found
-OPENSSL_PREFIX=$(pkg-config --variable=prefix --silence-errors openssl)
 if test -n "${OPENSSL_PREFIX}"; then
     OPENSSL=$(PATH="${OPENSSL_PREFIX}/bin:${PATH}" command -v openssl 2>/dev/null || echo openssl)
 else
     OPENSSL=openssl
+fi
+
+# Use the configured OpenSSL library path if found
+if test -n "${OPENSSL_LIBDIR}"; then
+    LD_LIBRARY_PATH="${OPENSSL_LIBDIR}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
 # Use the compiled and not the installed libp11.so
