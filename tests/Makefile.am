@@ -93,7 +93,8 @@ dist_check_SCRIPTS = \
 	provider-case-insensitive.softhsm \
 	provider-pkcs11-uri-without-token.softhsm \
 	provider-search-all-matching-tokens.softhsm \
-	provider-genpkey.softhsm
+	provider-genpkey.softhsm \
+	provider-ambiguous-public-key.softhsm
 dist_check_DATA = \
 	rsa-cert.der rsa-privkey.der rsa-pubkey.der \
 	ec-cert.der ec-privkey.der ec-pubkey.der \

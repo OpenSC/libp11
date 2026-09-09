@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# Copyright © 2026 Mobi - Com Polska Sp. z o.o.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+outdir="output.$$"
+. "${srcdir}/common.sh"
+init_db
+
+unset OPENSSL_ENGINES
+export OPENSSL_MODULES="../src/.libs/"
+export PKCS11_MODULE_PATH="${MODULE}"
+. "${srcdir}/openssl-settings.sh"
+trap cleanup EXIT
+
+if ! "${OPENSSL}" list -key-managers -provider pkcs11prov -provider default 2>/dev/null |
+	grep -qi ED25519; then
+	echo "Skipping test: Ed25519 provider support unavailable."
+	rm -rf "$outdir"
+	exit 77
+fi
+if ! has_mechanism EDDSA; then
+	rm -rf "$outdir"
+	exit 77
+fi
+
+# Import directly: provider generation now assigns IDs even to empty URI IDs.
+import_object() {
+	local type="$1" label="$2" fixture="$3"
+	"${PKCS11_TOOL}" --module "${MODULE}" --token-label "$token" \
+		--login --pin "${PIN}" --write-object "${srcdir}/$fixture" \
+		--type "$type" --label "$label" "${id_args[@]}"
+}
+
+load_public() {
+	"${OPENSSL}" pkey -provider pkcs11prov -provider default \
+		-propquery '?provider=pkcs11prov' -in "$uri" -pubout \
+		-out "$outdir/public.pem" >"$outdir/load.log" 2>&1
+}
+
+expect_ambiguous() {
+	if load_public; then
+		echo "Unexpectedly loaded a key with ambiguous $1 objects ($token)."
+		exit 1
+	fi
+	if ! grep -q 'Ambiguous PKCS#11 object lookup' "$outdir/load.log"; then
+		echo "Key loading failed for an unexpected reason ($token)."
+		exit 1
+	fi
+}
+
+for token in empty-id duplicate-id; do
+	init_card "$token"
+	id_args=()
+	if [[ "$token" == duplicate-id ]]; then
+		id_args=(--id 01020304)
+	fi
+	uri="pkcs11:token=$token;object=private;type=private;pin-value=${PIN}"
+	import_object privkey private ed25519-privkey.der || exit 1
+	import_object pubkey public ed25519-pubkey.der || exit 1
+
+	# A unique match must still work, even with an empty ID and different labels.
+	load_public || exit 1
+	import_object pubkey other-public ed25519-pubkey.der || exit 1
+	expect_ambiguous public-key
+
+	# Certificate fallback must also reject multiple matches.
+	for label in public other-public; do
+		"${PKCS11_TOOL}" --module "${MODULE}" --token-label "$token" \
+			--login --pin "${PIN}" --delete-object --type pubkey \
+			--label "$label" || exit 1
+	done
+	import_object cert certificate ed25519-cert.der || exit 1
+	load_public || exit 1
+	import_object cert other-certificate ed25519-cert.der || exit 1
+	expect_ambiguous certificate
+done
+
+rm -rf "$outdir"
+exit 0

@@ -113,12 +113,12 @@ static PKCS11_OBJECT_private *pkcs11_get_ex_data_evp_pkey(const EVP_PKEY *pkey);
 static void alloc_evp_pkey_ex_index(void);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
-/* Helper to acquire object handle from given template */
+/* Acquire an object handle only if the template matches exactly one object. */
 static CK_OBJECT_HANDLE pkcs11_handle_from_template(PKCS11_SLOT_private *slot,
 	CK_SESSION_HANDLE session, PKCS11_TEMPLATE *tmpl)
 {
 	PKCS11_CTX_private *ctx = slot->ctx;
-	CK_OBJECT_HANDLE object = CK_INVALID_HANDLE;
+	CK_OBJECT_HANDLE object = CK_INVALID_HANDLE, extra;
 	CK_ULONG count = 0;
 	CK_RV rv;
 
@@ -127,9 +127,20 @@ static CK_OBJECT_HANDLE pkcs11_handle_from_template(PKCS11_SLOT_private *slot,
 	if (rv == CKR_OK) {
 		rv = CRYPTOKI_call(ctx,
 			C_FindObjects(session, &object, 1, &count));
+		if (rv == CKR_OK && count == 1) {
+			/* A single returned object does not imply a unique match. */
+			rv = CRYPTOKI_call(ctx,
+				C_FindObjects(session, &extra, 1, &count));
+			if (rv == CKR_OK && count != 0) {
+				pkcs11_log(ctx, LOG_ERR, "Ambiguous PKCS#11 object lookup\n");
+				object = CK_INVALID_HANDLE;
+			}
+		} else {
+			object = CK_INVALID_HANDLE;
+		}
 		CRYPTOKI_call(ctx, C_FindObjectsFinal(session));
 	}
-	if (rv == CKR_OK && count == 1)
+	if (rv == CKR_OK)
 		return object;
 
 	return CK_INVALID_HANDLE;
