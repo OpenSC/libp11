@@ -85,9 +85,17 @@ genpkey_with_id()
 	for type in pubkey privkey; do
 		objects=$(${PKCS11_TOOL} --module "${MODULE}" --login --pin "${PIN}" \
 			--list-objects --type "$type" --label "$label") || return 1
-		# OpenSC versions print IDs as hex, colon-separated hex, or
-		# decimal followed by parenthesized hex for short IDs.
-		ids=$(printf '%s\n' "$objects" | awk '/^[[:space:]]*ID:/ {
+		# Older OpenSC versions ignore --label when listing objects.
+		# IDs may be hex, colon-separated hex, or decimal followed by
+		# parenthesized hex for short IDs.
+		ids=$(printf '%s\n' "$objects" | awk -v label="$label" '
+		/^[^[:space:]]/ { matches = 0 }
+		/^[[:space:]]*label:/ {
+			value = $0
+			sub(/^[[:space:]]*label:[[:space:]]*/, "", value)
+			matches = value == label
+		}
+		matches && /^[[:space:]]*ID:/ {
 			id = $3 ~ /^\(0x/ ? $3 : $2
 			sub(/^\(0x/, "", id)
 			gsub(/[:)]/, "", id)

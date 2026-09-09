@@ -30,9 +30,18 @@ fi
 # Import directly: provider generation now assigns IDs even to empty URI IDs.
 import_object() {
 	local type="$1" label="$2" fixture="$3"
+	local status=0
 	"${PKCS11_TOOL}" --module "${MODULE}" --token-label "$token" \
 		--login --pin "${PIN}" --write-object "${srcdir}/$fixture" \
-		--type "$type" --label "$label" "${id_args[@]}"
+		--type "$type" --label "$label" "${id_args[@]}" \
+		>"$outdir/import.log" 2>&1 || status=$?
+	cat "$outdir/import.log"
+	if [[ "$status" -ne 0 ]] && grep -q 'Unsupported key type' "$outdir/import.log"; then
+		echo "Skipping test: pkcs11-tool cannot import Ed25519 keys."
+		rm -rf "$outdir"
+		exit 77
+	fi
+	return "$status"
 }
 
 load_public() {
