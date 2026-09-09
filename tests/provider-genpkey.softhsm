@@ -48,15 +48,25 @@ echo "PKCS11_MODULE_PATH=${PKCS11_MODULE_PATH}"
 trap cleanup EXIT
 
 GENPKEY_ID=1
+GENERATED_IDS=" "
 
 genpkey()
 {
-	algorithm="$1"
-	label="$2"
+	local algorithm="$1" label="$2" id
 	shift 2
 
-	id=$(printf '%%01%%02%%03%%%02X' "${GENPKEY_ID}")
+	id=$(printf '%%01%%02%%03%%%02x' "${GENPKEY_ID}")
 	GENPKEY_ID=$((GENPKEY_ID + 1))
+	genpkey_with_id "$algorithm" "$label" "id=${id};" "${id//%/}" "$@" || return 1
+	genpkey_with_id "$algorithm" "${label}-auto" "" "" "$@" || return 1
+	genpkey_with_id "$algorithm" "${label}-empty" "id=;" "" "$@"
+}
+
+genpkey_with_id()
+{
+	local algorithm="$1" label="$2" id_attr="$3" expected_id="$4"
+	local objects ids public_id private_id type
+	shift 4
 
 	echo "Generating ${algorithm} key"
 
@@ -67,13 +77,47 @@ genpkey()
 		-provider default -provider pkcs11prov \
 		-propquery "?provider=pkcs11prov" \
 		-algorithm "${algorithm}" \
-		-pkeyopt "pkcs11_uri:pkcs11:token=libp11-0;object=${label};id=${id};pin-value=${PIN}" \
+		-pkeyopt "pkcs11_uri:pkcs11:token=libp11-0;object=${label};${id_attr}pin-value=${PIN}" \
 		"$@" || true
 
-	# This is a workaround until genpkey can skip private-key output explicitly
-	if ! list_objects | grep "label:" | grep -qF "${label}"; then
-		echo "${algorithm} key generation failed."
+	# Inspect both objects even if private-key output failed. The pair must
+	# share a nonempty ID, preserving explicit IDs and generating new ones.
+	for type in pubkey privkey; do
+		objects=$(${PKCS11_TOOL} --module "${MODULE}" --login --pin "${PIN}" \
+			--list-objects --type "$type" --label "$label") || return 1
+		# OpenSC versions print IDs as hex, colon-separated hex, or
+		# decimal followed by parenthesized hex for short IDs.
+		ids=$(printf '%s\n' "$objects" | awk '/^[[:space:]]*ID:/ {
+			id = $3 ~ /^\(0x/ ? $3 : $2
+			sub(/^\(0x/, "", id)
+			gsub(/[:)]/, "", id)
+			print tolower(id)
+		}')
+		if [[ ! "$ids" =~ ^[0-9a-f]+$ ]]; then
+			echo "Expected exactly one ${type} key with a nonempty ID: ${label}"
+			return 1
+		fi
+		if [[ "$type" == pubkey ]]; then
+			public_id="$ids"
+		else
+			private_id="$ids"
+		fi
+	done
+	if [[ "$public_id" != "$private_id" ]]; then
+		echo "Public/private key IDs differ: ${label}"
 		return 1
+	fi
+	if [[ -n "$expected_id" ]]; then
+		if [[ "$public_id" != "$expected_id" ]]; then
+			echo "Explicit key ID changed: ${label}"
+			return 1
+		fi
+	else
+		if [[ ${#public_id} -ne 64 || "$GENERATED_IDS" == *" $public_id "* ]]; then
+			echo "Invalid or duplicate generated key ID: ${label}"
+			return 1
+		fi
+		GENERATED_IDS+="$public_id "
 	fi
 
 	echo "${algorithm} key generation succeeded."

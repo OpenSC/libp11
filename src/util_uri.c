@@ -28,6 +28,7 @@
 
 #include "util.h"
 #include "p11_pthread.h"
+#include <openssl/rand.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -1618,7 +1619,8 @@ int UTIL_CTX_keygen(UTIL_CTX *ctx, PKCS11_KGEN_ATTRS *kg_attrs)
 
 /*
  * Generate a key pair on the token uniquely selected by the PKCS#11 URI.
- * The URI also specifies the generated key label and ID.
+ * The URI also specifies the generated key label and ID. If the ID is empty
+ * or omitted, generate a random ID shared by the public and private objects.
  * Returns an EVP_PKEY for the generated private key, or NULL on error.
  */
 EVP_PKEY *UTIL_CTX_generate_key(UTIL_CTX *ctx, const char *uri, int algorithm,
@@ -1628,6 +1630,9 @@ EVP_PKEY *UTIL_CTX_generate_key(UTIL_CTX *ctx, const char *uri, int algorithm,
 	PKCS11_SLOT *slot = NULL;
 	PKCS11_KEY *pkey = NULL;
 	EVP_PKEY *key = NULL;
+	unsigned char generated_id[32];
+	unsigned char *id;
+	size_t id_len;
 	size_t i;
 	unsigned int count = 0;
 	int rv;
@@ -1667,9 +1672,19 @@ EVP_PKEY *UTIL_CTX_generate_key(UTIL_CTX *ctx, const char *uri, int algorithm,
 	if (!util_ctx_login(ctx, slot, slot->token, ctx->ui_method, ctx->ui_data))
 		goto end;
 
+	id = (unsigned char *)parsed.obj_id;
+	id_len = parsed.obj_id_len;
+	if (id_len == 0) {
+		if (RAND_bytes(generated_id, sizeof(generated_id)) != 1) {
+			UTIL_CTX_log(ctx, LOG_ERR, "Failed to generate a key ID\n");
+			goto end;
+		}
+		id = generated_id;
+		id_len = sizeof(generated_id);
+	}
+
 	rv = PKCS11_generate_key_ext(slot->token, algorithm, param,
-		parsed.obj_label, (unsigned char *)parsed.obj_id,
-		parsed.obj_id_len, &pkey);
+		parsed.obj_label, id, id_len, &pkey);
 	if (rv < 0 || pkey == NULL) {
 		UTIL_CTX_log(ctx, LOG_ERR,
 			"Failed to generate a key pair on the token. Error code: %d\n",
