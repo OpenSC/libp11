@@ -929,6 +929,7 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
 				parsed->obj_id, &parsed->obj_id_len, tmp_pin, &tmp_pin_len, &parsed->obj_label);
 			if (!n) {
+				OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 				UTIL_CTX_log(ctx, LOG_ERR,
 					"The %s ID is not a valid PKCS#11 URI\n"
 					"The PKCS#11 URI format is defined by RFC7512\n",
@@ -938,9 +939,11 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				tmp_pin[tmp_pin_len] = 0;
 				if (!UTIL_CTX_set_pin(ctx, tmp_pin)) {
+					OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 					goto cleanup;
 				}
 			}
+			OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 		} else {
 			n = parse_slot_id_string(ctx, object_uri, &parsed->slot_nr,
 				parsed->obj_id, &parsed->obj_id_len, &parsed->obj_label);
