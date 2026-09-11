@@ -257,7 +257,7 @@ error:
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 #define ASN1_STRING_get0_data(os) ((os)->data)
-#define ASN1_STRING_length(x) ((os)->length)
+#define ASN1_STRING_length(os) ((os)->length)
 #endif
 
 /* Retrieve EC point from key into ec
