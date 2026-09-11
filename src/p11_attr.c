@@ -141,7 +141,7 @@ void pkcs11_addattr_bn(PKCS11_TEMPLATE *tmpl, int type, const BIGNUM *bn)
 
 	if (buf && BN_bn2bin(bn, buf) == n) {
 		i = pkcs11_addattr(tmpl, type, buf, n);
-		tmpl->allocated |= 1<<i;
+		tmpl->allocated |= 1UL<<i;
 	}
 }
 
@@ -161,7 +161,7 @@ void pkcs11_addattr_obj(PKCS11_TEMPLATE *tmpl, int type, pkcs11_i2d_fn enc, cons
 
 	enc(obj, &p);
 	i = pkcs11_addattr(tmpl, type, buf, n);
-	tmpl->allocated |= 1<<i;
+	tmpl->allocated |= 1UL<<i;
 }
 
 void pkcs11_zap_attrs(PKCS11_TEMPLATE *tmpl)
@@ -171,7 +171,7 @@ void pkcs11_zap_attrs(PKCS11_TEMPLATE *tmpl)
 	if (!tmpl->allocated)
 		return;
 	for (i = 0; i < 32; i++) {
-		if (tmpl->allocated & (1<<i))
+		if (tmpl->allocated & (1UL<<i))
 			OPENSSL_free(tmpl->attrs[i].pValue);
 	}
 	tmpl->allocated = 0;

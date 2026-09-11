@@ -69,6 +69,8 @@ static int (*ossl_ec_copy)(EC_KEY *, const EC_KEY *);
 #endif /* OPENSSL_VERSION_NUMBER */
 
 static int ec_ex_index = 0;
+static pthread_mutex_t ec_init_lock = {0};
+static int ec_init_lock_initialized = 0;
 
 /********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
 
@@ -178,16 +180,24 @@ void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
 static void alloc_ec_ex_index(void)
 {
 	if (ec_ex_index == 0) {
-		while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
+		if (!ec_init_lock_initialized) {
+			pthread_mutex_init(&ec_init_lock, 0);
+			ec_init_lock_initialized = 1;
+		}
+		pthread_mutex_lock(&ec_init_lock);
+		if (ec_ex_index == 0) {
+			while (ec_ex_index == 0) /* Workaround for OpenSSL RT3710 */
 #if OPENSSL_VERSION_NUMBER >= 0x10100002L && !defined(LIBRESSL_VERSION_NUMBER)
-			ec_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
-				NULL, NULL, NULL);
+				ec_ex_index = EC_KEY_get_ex_new_index(0, "libp11 ec_key",
+					NULL, NULL, NULL);
 #else
-			ec_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
-				NULL, NULL, NULL);
+				ec_ex_index = ECDSA_get_ex_new_index(0, "libp11 ecdsa",
+					NULL, NULL, NULL);
 #endif
-		if (ec_ex_index < 0)
-			ec_ex_index = 0; /* Fallback to app_data */
+			if (ec_ex_index < 0)
+				ec_ex_index = 0; /* Fallback to app_data */
+		}
+		pthread_mutex_unlock(&ec_init_lock);
 	}
 }
 
@@ -257,7 +267,7 @@ error:
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 #define ASN1_STRING_get0_data(os) ((os)->data)
-#define ASN1_STRING_length(x) ((os)->length)
+#define ASN1_STRING_length(os) ((os)->length)
 #endif
 
 /* Retrieve EC point from key into ec
@@ -731,16 +741,26 @@ EC_KEY_METHOD *PKCS11_get_ec_key_method(void)
 		unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
 
 	if (!pkcs11_ec_key_method) {
-		alloc_ec_ex_index();
-		pkcs11_ec_key_method = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
-		EC_KEY_METHOD_get_init(pkcs11_ec_key_method, &orig_init, &ossl_ec_finish, &ossl_ec_copy,
-			&orig_set_group, &orig_set_private, &orig_set_public);
-		EC_KEY_METHOD_set_init(pkcs11_ec_key_method, orig_init, pkcs11_ec_finish, pkcs11_ec_copy,
-			orig_set_group, orig_set_private, orig_set_public);
-		EC_KEY_METHOD_get_sign(pkcs11_ec_key_method, &orig_sign, NULL, NULL);
-		EC_KEY_METHOD_set_sign(pkcs11_ec_key_method, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
-		EC_KEY_METHOD_get_compute_key(pkcs11_ec_key_method, &ossl_ecdh_compute_key);
-		EC_KEY_METHOD_set_compute_key(pkcs11_ec_key_method, pkcs11_ec_ckey);
+		if (!ec_init_lock_initialized) {
+			pthread_mutex_init(&ec_init_lock, 0);
+			ec_init_lock_initialized = 1;
+		}
+		pthread_mutex_lock(&ec_init_lock);
+		if (!pkcs11_ec_key_method) {
+			alloc_ec_ex_index();
+			pkcs11_ec_key_method = EC_KEY_METHOD_new((EC_KEY_METHOD *)EC_KEY_OpenSSL());
+			if (pkcs11_ec_key_method) {
+				EC_KEY_METHOD_get_init(pkcs11_ec_key_method, &orig_init, &ossl_ec_finish, &ossl_ec_copy,
+					&orig_set_group, &orig_set_private, &orig_set_public);
+				EC_KEY_METHOD_set_init(pkcs11_ec_key_method, orig_init, pkcs11_ec_finish, pkcs11_ec_copy,
+					orig_set_group, orig_set_private, orig_set_public);
+				EC_KEY_METHOD_get_sign(pkcs11_ec_key_method, &orig_sign, NULL, NULL);
+				EC_KEY_METHOD_set_sign(pkcs11_ec_key_method, orig_sign, NULL, pkcs11_ecdsa_sign_sig);
+				EC_KEY_METHOD_get_compute_key(pkcs11_ec_key_method, &ossl_ecdh_compute_key);
+				EC_KEY_METHOD_set_compute_key(pkcs11_ec_key_method, pkcs11_ec_ckey);
+			}
+		}
+		pthread_mutex_unlock(&ec_init_lock);
 	}
 	return pkcs11_ec_key_method;
 }

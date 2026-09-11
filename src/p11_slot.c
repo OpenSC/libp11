@@ -502,7 +502,7 @@ int pkcs11_init_token(PKCS11_SLOT_private *slot, const char *pin, const char *la
 
 	rv = CRYPTOKI_call(ctx,
 		C_InitToken(slot->id,
-			(CK_UTF8CHAR *) pin, (unsigned long) strlen(pin),
+			(CK_UTF8CHAR *) pin, pin ? (unsigned long) strlen(pin) : 0,
 			(CK_UTF8CHAR *) ck_label));
 	CRYPTOKI_checkerr(CKR_F_PKCS11_INIT_TOKEN, rv);
 
