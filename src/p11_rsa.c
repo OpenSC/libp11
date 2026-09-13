@@ -69,7 +69,6 @@ int pkcs11_private_encrypt(int flen,
 {
 	PKCS11_SLOT_private *slot;
 	size_t siglen;
-	CK_SESSION_HANDLE session;
 
 	if (!key)
 		return -1;
@@ -77,11 +76,6 @@ int pkcs11_private_encrypt(int flen,
 	slot = key->slot;
 	if (!slot)
 		return -1;
-
-	if (pkcs11_session_pool_acquire(slot, 0, &session))
-		return -1;
-
-	pkcs11_session_pool_release(slot, session);
 
 	siglen = pkcs11_get_key_size(key);
 	if (pkcs11_evp_pkey_rsa_sign(key,
@@ -102,7 +96,6 @@ int pkcs11_private_decrypt(int flen,
 {
 	PKCS11_SLOT_private *slot;
 	size_t outlen;
-	CK_SESSION_HANDLE session;
 
 	if (padding != RSA_PKCS1_OAEP_PADDING)
 		return -1; /* unsupported */
@@ -113,11 +106,6 @@ int pkcs11_private_decrypt(int flen,
 	slot = key->slot;
 	if (!slot)
 		return -1;
-
-	if (pkcs11_session_pool_acquire(slot, 0, &session))
-		return -1;
-
-	pkcs11_session_pool_release(slot, session);
 
 	/* Openssl API for RSA_private_decrypt() allows to use
 	 * RSA_PKCS1_OAEP_PADDING only with SHA_1 hash and and MGF1_SHA1 mask
