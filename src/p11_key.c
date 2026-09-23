@@ -82,13 +82,16 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *, const char *,
 	const unsigned char *, size_t, const PKCS11_params *);
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
+#if !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM) || \
+	!defined(OPENSSL_NO_SLH_DSA)
+static void pkcs11_reset_nowrap_key_attrs(PKCS11_TEMPLATE *, PKCS11_TEMPLATE *,
+	const char *, const unsigned char *, size_t, const PKCS11_params *);
+#endif /* OPENSSL_NO_ML_DSA || OPENSSL_NO_ML_KEM || OPENSSL_NO_SLH_DSA */
+
 #ifndef OPENSSL_NO_ML_DSA
-static void pkcs11_luna_pubkey_attr(PKCS11_TEMPLATE *, const char *,
-	const unsigned char *, size_t);
-static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *, const char *,
-	const unsigned char *, size_t, const PKCS11_params *);
 static PKCS11_OBJECT_ops *pkcs11_mldsa_ops_from_param(CK_ULONG param_set);
 #endif /* OPENSSL_NO_ML_DSA */
+
 #ifndef OPENSSL_NO_ML_KEM
 static PKCS11_OBJECT_ops *pkcs11_mlkem_ops_from_param(CK_ULONG param_set);
 #endif /* OPENSSL_NO_ML_KEM */
@@ -897,22 +900,15 @@ int pkcs11_mldsa_keygen(PKCS11_SLOT_private *slot,
 		&pub_key_obj, &priv_key_obj));
 
 	if (rv != CKR_OK) {
-		/* Thales Luna HSM firmware does not support the wrapping
-		 * or unwrapping of CK_ML_DSA private key objects.
-		 * Retry with these attributes explicitly disabled. */
-		pkcs11_zap_attrs(&privtmpl);
-		pkcs11_zap_attrs(&pubtmpl);
-		memset(&privtmpl, 0, sizeof(privtmpl));
-		memset(&pubtmpl, 0, sizeof(pubtmpl));
+		/* Some HSMs do not support CKA_WRAP or CKA_UNWRAP for ML-DSA keys.
+		 * Retry without these attributes. */
+		pkcs11_reset_nowrap_key_attrs(&pubtmpl, &privtmpl,
+			label, id, id_len, params);
 
-		pkcs11_luna_pubkey_attr(&pubtmpl, label, id, id_len);
 		pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
 			&signParamSet, sizeof(signParamSet));
 		pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
-
-		pkcs11_luna_privkey_attr(&privtmpl, label, id, id_len, params);
 		pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
-
 		pub_key_obj = CK_INVALID_HANDLE;
 		priv_key_obj = CK_INVALID_HANDLE;
 
@@ -994,22 +990,15 @@ int pkcs11_mlkem_keygen(PKCS11_SLOT_private *slot, int nid,
 		&pub_key_obj, &priv_key_obj));
 
 	if (rv != CKR_OK) {
-		/* Thales Luna HSM firmware does not support the wrapping
-		 * or unwrapping of CK_ML_KEM private key objects.
-		 * Retry with these attributes explicitly disabled. */
-		pkcs11_zap_attrs(&privtmpl);
-		pkcs11_zap_attrs(&pubtmpl);
-		memset(&privtmpl, 0, sizeof(privtmpl));
-		memset(&pubtmpl, 0, sizeof(pubtmpl));
+		/* Some HSMs do not support CKA_WRAP or CKA_UNWRAP for ML-KEM keys.
+		 * Retry without these attributes. */
+		pkcs11_reset_nowrap_key_attrs(&pubtmpl, &privtmpl,
+			label, id, id_len, params);
 
-		pkcs11_luna_pubkey_attr(&pubtmpl, label, id, id_len);
 		pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
 			&kemParamSet, sizeof(kemParamSet));
 		pkcs11_addattr_bool(&pubtmpl, CKA_ENCAPSULATE, TRUE);
-
-		pkcs11_luna_privkey_attr(&privtmpl, label, id, id_len, params);
 		pkcs11_addattr_bool(&privtmpl, CKA_DECAPSULATE, TRUE);
-
 		pub_key_obj = CK_INVALID_HANDLE;
 		priv_key_obj = CK_INVALID_HANDLE;
 
@@ -1115,6 +1104,26 @@ int pkcs11_slhdsa_keygen(PKCS11_SLOT_private *slot,
 		pubtmpl.attrs, pubtmpl.nattr,
 		privtmpl.attrs, privtmpl.nattr,
 		&pub_key_obj, &priv_key_obj));
+
+	if (rv != CKR_OK) {
+		/* Some HSMs do not support CKA_WRAP or CKA_UNWRAP for SLH-DSA keys.
+		 * Retry without these attributes. */
+		pkcs11_reset_nowrap_key_attrs(&pubtmpl, &privtmpl,
+			label, id, id_len, params);
+
+		pkcs11_addattr(&pubtmpl, CKA_PARAMETER_SET,
+			&signParamSet, sizeof(signParamSet));
+		pkcs11_addattr_bool(&pubtmpl, CKA_VERIFY, TRUE);
+		pkcs11_addattr_bool(&privtmpl, CKA_SIGN, TRUE);
+		pub_key_obj = CK_INVALID_HANDLE;
+		priv_key_obj = CK_INVALID_HANDLE;
+
+		rv = CRYPTOKI_call(ctx, C_GenerateKeyPair(
+			session, (CK_MECHANISM_PTR)&mechanism,
+			pubtmpl.attrs, pubtmpl.nattr,
+			privtmpl.attrs, privtmpl.nattr,
+			&pub_key_obj, &priv_key_obj));
+	}
 
 	if (rv == CKR_OK && ret_key != NULL &&
 		pkcs11_init_generated_key(slot, session,
@@ -1740,22 +1749,32 @@ static void pkcs11_common_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 }
 
 #if OPENSSL_VERSION_NUMBER >= 0x30500000L
-#if !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM)
-static void pkcs11_luna_pubkey_attr(PKCS11_TEMPLATE *pubtmpl,
-		const char *label, const unsigned char *id, size_t id_len)
+#if !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM) || \
+	!defined(OPENSSL_NO_SLH_DSA)
+
+/*
+ * Reset key templates and add the common attributes without CKA_WRAP
+ * and CKA_UNWRAP.
+ *
+ * Used as a fallback for HSMs that reject these attributes for some
+ * post-quantum key types. Known examples include Thales Luna and
+ * Entrust nShield HSMs.
+ */
+static void pkcs11_reset_nowrap_key_attrs(PKCS11_TEMPLATE *pubtmpl,
+		PKCS11_TEMPLATE *privtmpl, const char *label,
+		const unsigned char *id, size_t id_len,
+		const PKCS11_params *params)
 {
-	/* Thales Luna HSM pubkey attributes */
+	pkcs11_zap_attrs(privtmpl);
+	pkcs11_zap_attrs(pubtmpl);
+	memset(privtmpl, 0, sizeof(*privtmpl));
+	memset(pubtmpl, 0, sizeof(*pubtmpl));
+
 	pkcs11_addattr(pubtmpl, CKA_ID, (void *)id, id_len);
 	if (label)
 		pkcs11_addattr_s(pubtmpl, CKA_LABEL, label);
 	pkcs11_addattr_bool(pubtmpl, CKA_TOKEN, TRUE);
-}
 
-static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *privtmpl,
-		const char *label, const unsigned char *id, size_t id_len,
-		const PKCS11_params *params)
-{
-	/* Thales Luna HSM privkey attributes */
 	pkcs11_addattr(privtmpl, CKA_ID, (void *)id, id_len);
 	if (label)
 		pkcs11_addattr_s(privtmpl, CKA_LABEL, label);
@@ -1764,7 +1783,8 @@ static void pkcs11_luna_privkey_attr(PKCS11_TEMPLATE *privtmpl,
 	pkcs11_addattr_bool(privtmpl, CKA_SENSITIVE, params->sensitive);
 	pkcs11_addattr_bool(privtmpl, CKA_EXTRACTABLE, params->extractable);
 }
-#endif /* !defined(OPENSSL_NO_ML_DSA) || !defined(OPENSSL_NO_ML_KEM) */
+
+#endif /* OPENSSL_NO_ML_DSA || OPENSSL_NO_ML_KEM || OPENSSL_NO_SLH_DSA */
 
 #ifndef OPENSSL_NO_ML_DSA
 static PKCS11_OBJECT_ops *pkcs11_mldsa_ops_from_param(CK_ULONG param_set)
