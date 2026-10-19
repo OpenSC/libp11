@@ -4,6 +4,11 @@ name: Codespell
 on:
   pull_request:
   push:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   codespell:
