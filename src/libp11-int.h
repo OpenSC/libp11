@@ -77,6 +77,7 @@ struct pkcs11_ctx_private {
 	void *handle;
 	char *init_args;
 	CK_VERSION cryptoki_version;
+	CK_VERSION library_version;
 	UI_METHOD *ui_method; /* UI_METHOD for CKU_CONTEXT_SPECIFIC PINs */
 	void *ui_user_data;
 	pthread_mutex_t fork_lock;

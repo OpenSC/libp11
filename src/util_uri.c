@@ -27,8 +27,11 @@
  */
 
 #include "util.h"
-#include "p11_pthread.h"
+#include "libp11-int.h"
 #include <openssl/rand.h>
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -288,7 +291,7 @@ void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 	va_end(args);
 }
 
-static char *dump_hex(unsigned char *val, const size_t len)
+char *dump_hex(unsigned char *val, const size_t len)
 {
 	int j = 0;
 	size_t i, size = 2 * len + 1;
@@ -681,7 +684,7 @@ static int parse_slot_id_string(UTIL_CTX *ctx,
 }
 
 static int parse_uri_attr_len(UTIL_CTX *ctx,
-		const char *attr, int attrlen, char *field,
+		const char *attr, size_t attrlen, char *field,
 		size_t *field_len)
 {
 	size_t max = *field_len, outlen = 0;
@@ -727,6 +730,11 @@ static int parse_uri_attr(UTIL_CTX *ctx,
 	int ret = 1;
 	size_t outlen = attrlen;
 	char *out;
+
+	if (*field != NULL) {
+		/* Duplicate attributes not allowed */
+		return 0;
+	}
 
 	out = OPENSSL_malloc(outlen + 1); /* reserve 1 byte for NUL terminator */
 	if (out == NULL)
@@ -781,7 +789,7 @@ static int parse_pin_source(UTIL_CTX *ctx,
 		const char *attr, size_t attrlen, char *field,
 		size_t *field_len)
 {
-	char *val;
+	char *val = NULL;
 	int ret = 1;
 
 	if (!parse_uri_attr(ctx, attr, attrlen, &val)) {
@@ -803,14 +811,15 @@ static int parse_pin_source(UTIL_CTX *ctx,
 }
 
 static int parse_pkcs11_uri(UTIL_CTX *ctx,
-		const char *uri, PKCS11_TOKEN **p_tok,
-		char *id, size_t *id_len, char *pin, size_t *pin_len,
-		char **label)
+		const char *uri, PARSED *parsed,
+		char *pin, size_t *pin_len)
 {
 	PKCS11_TOKEN *tok;
-	char *newlabel = NULL;
 	const char *end, *p;
 	int rv = 1, id_set = 0, pin_set = 0;
+	char tmp_id[MAX_PIN_LENGTH];
+	size_t tmp_id_len = sizeof(tmp_id);
+	char *tmp_str = NULL;
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
 	if (!tok) {
@@ -818,6 +827,7 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		return 0;
 	}
 	memset(tok, 0, sizeof(PKCS11_TOKEN));
+	parsed->match_tok = tok;
 
 	/* We are only ever invoked if the string starts with 'pkcs11:' */
 	end = uri + 6;
@@ -839,28 +849,95 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		} else if (!strncmp(p, "serial=", 7)) {
 			p += 7;
 			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tok->serialnr);
+		} else if (!strncmp(p, "slot-description=", 17)) {
+			p += 17;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->slot_description);
+		} else if (!strncmp(p, "slot-manufacturer=", 18)) {
+			p += 18;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->slot_manufacturer);
+		} else if (!strncmp(p, "slot-id=", 8)) {
+			p += 8;
+			if (parsed->slot_id != -1) {
+				/* Duplicate attributes not allowed */
+				rv = 0;
+			} else {
+				rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tmp_str);
+				if (rv) {
+					char *endptr = NULL;
+					long val;
+
+					errno = 0;
+					val = strtol(tmp_str, &endptr, 10);
+					if (!isdigit((unsigned char)*tmp_str) || *endptr != '\0' ||
+							errno != 0 || val < 0 || val > INT_MAX) {
+						UTIL_CTX_log(ctx, LOG_ERR, "Invalid slot-id in PKCS#11 URI: %s\n", tmp_str);
+						rv = 0;
+					} else {
+						parsed->slot_id = (int)val;
+					}
+				}
+				OPENSSL_free(tmp_str);
+				tmp_str = NULL;
+			}
+		} else if (!strncmp(p, "library-description=", 20)) {
+			p += 20;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->library_description);
+		} else if (!strncmp(p, "library-manufacturer=", 21)) {
+			p += 21;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->library_manufacturer);
+		} else if (!strncmp(p, "library-version=", 16)) {
+			p += 16;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->library_version);
 		} else if (!strncmp(p, "object=", 7)) {
 			p += 7;
-			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &newlabel);
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->obj_label);
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
-			rv = parse_uri_attr_len(ctx, p, (size_t)(end - p), id, id_len);
+			if (parsed->obj_id) {
+				/* Duplicate attributes not allowed */
+				rv = 0;
+			} else {
+				tmp_id_len = sizeof(tmp_id);
+				rv = parse_uri_attr_len(ctx, p, (size_t)(end - p), tmp_id, &tmp_id_len);
+			}
+			if (rv && tmp_id_len > 0) {
+				parsed->obj_id = OPENSSL_malloc(tmp_id_len);
+				if (parsed->obj_id) {
+					memcpy(parsed->obj_id, tmp_id, tmp_id_len);
+					parsed->obj_id_len = tmp_id_len;
+				} else {
+					rv = 0;
+				}
+			}
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
 			rv = pin_set ? 0 : parse_uri_attr_len(ctx, p, (size_t)(end - p), pin, pin_len);
+			if (rv) {
+				parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_value);
+			}
 			pin_set = 1;
 		} else if (!strncmp(p, "pin-source=", 11)) {
 			p += 11;
 			rv = pin_set ? 0 : parse_pin_source(ctx, p, (size_t)(end - p), pin, pin_len);
+			if (rv) {
+				parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_source);
+			}
 			pin_set = 1;
+		} else if (!strncmp(p, "module-name=", 12)) {
+			p += 12;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->module_name);
+		} else if (!strncmp(p, "module-path=", 12)) {
+			p += 12;
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->module_path);
 		} else if (!strncmp(p, "type=", 5) || !strncmp(p, "object-type=", 12)) {
 			p = strchr(p, '=') + 1;
 
-			if ((end - p == 4 && !strncmp(p, "cert", 4)) ||
-					(end - p == 6 && !strncmp(p, "public", 6)) ||
-					(end - p == 7 && !strncmp(p, "private", 7))) {
-				/* Actually, just ignore it */
+			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->type);
+			if (rv && parsed->type && (!strcmp(parsed->type, "cert") ||
+						!strcmp(parsed->type, "public") ||
+						!strcmp(parsed->type, "private"))) {
+				/* valid object type */
 			} else {
 				UTIL_CTX_log(ctx, LOG_ERR, "Unknown object type\n");
 				rv = 0;
@@ -870,41 +947,53 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		}
 	}
 
-	if (!id_set)
-		*id_len = 0;
+	if (!id_set && !parsed->obj_id)
+		parsed->obj_id_len = 0;
 	if (!pin_set)
 		*pin_len = 0;
 
-	if (rv) {
-		*label = newlabel;
-		*p_tok = tok;
-	} else {
-		OPENSSL_free(tok->model);
-		OPENSSL_free(tok->manufacturer);
-		OPENSSL_free(tok->serialnr);
-		OPENSSL_free(tok->label);
-		OPENSSL_free(tok);
-		tok = NULL;
-		OPENSSL_free(newlabel);
-	}
-
 	return rv;
+}
+
+void util_parsed_free(PARSED *parsed)
+{
+	if (!parsed)
+		return;
+	OPENSSL_free(parsed->obj_id);
+	OPENSSL_free(parsed->obj_label);
+	if (parsed->pin_len) {
+		OPENSSL_cleanse(parsed->pin, parsed->pin_len);
+		OPENSSL_free(parsed->pin);
+	}
+	if (parsed->pin_value) {
+		OPENSSL_cleanse(parsed->pin_value, strlen(parsed->pin_value));
+		OPENSSL_free(parsed->pin_value);
+	}
+	OPENSSL_free(parsed->pin_source);
+	OPENSSL_free(parsed->type);
+	OPENSSL_free(parsed->slot_description);
+	OPENSSL_free(parsed->slot_manufacturer);
+	OPENSSL_free(parsed->library_description);
+	OPENSSL_free(parsed->library_manufacturer);
+	OPENSSL_free(parsed->library_version);
+	OPENSSL_free(parsed->module_name);
+	OPENSSL_free(parsed->module_path);
+	OPENSSL_free(parsed->matched_slots);
+	if (parsed->match_tok) {
+		OPENSSL_free(parsed->match_tok->model);
+		OPENSSL_free(parsed->match_tok->manufacturer);
+		OPENSSL_free(parsed->match_tok->serialnr);
+		OPENSSL_free(parsed->match_tok->label);
+		OPENSSL_free(parsed->match_tok);
+	}
+	memset(parsed, 0, sizeof(PARSED));
 }
 
 /******************************************************************************/
 /* Utilities common to public, private key and certificate handling           */
 /******************************************************************************/
 
-typedef struct {
-	int slot_nr;
-	char *obj_id;
-	size_t obj_id_len;
-	char *obj_label;
-	PKCS11_SLOT **matched_slots;
-	size_t matched_count;
-} PARSED;
-
-static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
+int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 		const char *object_typestr, const char *object_uri)
 {
 	PKCS11_SLOT *slot;
@@ -915,19 +1004,13 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 	int rv = 0;
 
 	parsed->slot_nr = -1;
+	parsed->slot_id = -1;
 	if (object_uri && *object_uri) {
-		parsed->obj_id_len = strlen(object_uri) + 1;
-		parsed->obj_id = OPENSSL_malloc(parsed->obj_id_len);
-		if (!parsed->obj_id) {
-			UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
-			goto cleanup;
-		}
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
 			char tmp_pin[MAX_PIN_LENGTH+1];
 			size_t tmp_pin_len = MAX_PIN_LENGTH;
 
-			n = parse_pkcs11_uri(ctx, object_uri, &match_tok,
-				parsed->obj_id, &parsed->obj_id_len, tmp_pin, &tmp_pin_len, &parsed->obj_label);
+			n = parse_pkcs11_uri(ctx, object_uri, parsed, tmp_pin, &tmp_pin_len);
 			if (!n) {
 				OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 				UTIL_CTX_log(ctx, LOG_ERR,
@@ -936,15 +1019,50 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 					object_typestr);
 				goto cleanup;
 			}
+			match_tok = parsed->match_tok;
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				tmp_pin[tmp_pin_len] = 0;
+				parsed->pin = OPENSSL_strdup(tmp_pin);
+				parsed->pin_len = tmp_pin_len;
 				if (!UTIL_CTX_set_pin(ctx, tmp_pin)) {
 					OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 					goto cleanup;
 				}
 			}
 			OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
+			if (parsed->type) {
+				if (!strcmp(parsed->type, "cert")) {
+					if (strcmp(object_typestr, "certificate") != 0 &&
+						strcmp(object_typestr, "public key") != 0) {
+						UTIL_CTX_log(ctx, LOG_NOTICE,
+							"Requested object type '%s' does not match URI type '%s'\n",
+							object_typestr, parsed->type);
+						goto cleanup;
+					}
+				} else if (!strcmp(parsed->type, "public")) {
+					if (strcmp(object_typestr, "public key") != 0) {
+						UTIL_CTX_log(ctx, LOG_NOTICE,
+							"Requested object type '%s' does not match URI type '%s'\n",
+							object_typestr, parsed->type);
+						goto cleanup;
+					}
+				} else if (!strcmp(parsed->type, "private")) {
+					if (strcmp(object_typestr, "private key") != 0 &&
+						strcmp(object_typestr, "key") != 0) {
+						UTIL_CTX_log(ctx, LOG_NOTICE,
+							"Requested object type '%s' does not match URI type '%s'\n",
+							object_typestr, parsed->type);
+						goto cleanup;
+					}
+				}
+			}
 		} else {
+			parsed->obj_id_len = strlen(object_uri) + 1;
+			parsed->obj_id = OPENSSL_malloc(parsed->obj_id_len);
+			if (!parsed->obj_id) {
+				UTIL_CTX_log(ctx, LOG_ERR, "Could not allocate memory for ID\n");
+				goto cleanup;
+			}
 			n = parse_slot_id_string(ctx, object_uri, &parsed->slot_nr,
 				parsed->obj_id, &parsed->obj_id_len, &parsed->obj_label);
 			if (!n) {
@@ -957,6 +1075,11 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 				goto cleanup;
 			}
 		}
+	}
+
+	if (!ctx || !ctx->slot_list || ctx->slot_count == 0) {
+		/* Slot list not initialized / no slots; parsing succeeded */
+		return 1;
 	}
 
 	parsed->matched_slots = (PKCS11_SLOT **)OPENSSL_malloc(ctx->slot_count * sizeof(PKCS11_SLOT *));
@@ -984,21 +1107,82 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 			flags[m - 2] = '\0';
 		}
 
-		if (parsed->slot_nr != -1 &&
-			parsed->slot_nr == (int)PKCS11_get_slotid_from_slot(slot)) {
-			found_slot = slot;
-		}
+		if (match_tok || parsed->slot_nr != -1) {
+			int match = 1;
 
-		if (match_tok && slot->token &&
-				(!match_tok->label ||
-					!strcmp(match_tok->label, slot->token->label)) &&
-				(!match_tok->manufacturer ||
-					!strcmp(match_tok->manufacturer, slot->token->manufacturer)) &&
-				(!match_tok->serialnr ||
-					!strcmp(match_tok->serialnr, slot->token->serialnr)) &&
-				(!match_tok->model ||
-					!strcmp(match_tok->model, slot->token->model))) {
-			found_slot = slot;
+			if (parsed->slot_nr != -1 &&
+				parsed->slot_nr != (int)PKCS11_get_slotid_from_slot(slot)) {
+				match = 0;
+			}
+			if (match_tok) {
+				if (parsed->slot_id != -1 &&
+					parsed->slot_id != (int)PKCS11_get_slotid_from_slot(slot)) {
+					match = 0;
+				}
+				if (parsed->slot_description &&
+					(!slot->description ||
+						strcmp(parsed->slot_description, slot->description) != 0)) {
+					match = 0;
+				}
+				if (parsed->slot_manufacturer &&
+					(!slot->manufacturer ||
+						strcmp(parsed->slot_manufacturer, slot->manufacturer) != 0)) {
+					match = 0;
+				}
+				if (parsed->library_description &&
+					(!ctx->pkcs11_ctx || !ctx->pkcs11_ctx->description ||
+						strcmp(parsed->library_description, ctx->pkcs11_ctx->description) != 0)) {
+					match = 0;
+				}
+				if (parsed->library_manufacturer &&
+					(!ctx->pkcs11_ctx || !ctx->pkcs11_ctx->manufacturer ||
+						strcmp(parsed->library_manufacturer, ctx->pkcs11_ctx->manufacturer) != 0)) {
+					match = 0;
+				}
+				if (parsed->library_version) {
+					if (!ctx->pkcs11_ctx || !ctx->pkcs11_ctx->_private) {
+						match = 0;
+					} else {
+						PKCS11_CTX_private *cpriv = ctx->pkcs11_ctx->_private;
+						unsigned int maj = 0, min = 0;
+						int count = sscanf(parsed->library_version, "%u.%u", &maj, &min);
+
+						if (count == 2) {
+							if ((unsigned int)cpriv->library_version.major != maj ||
+								(unsigned int)cpriv->library_version.minor != min)
+								match = 0;
+						} else if (count == 1) {
+							if ((unsigned int)cpriv->library_version.major != maj)
+								match = 0;
+						} else {
+							match = 0;
+						}
+					}
+				}
+				if (match_tok->label &&
+					(!slot->token || !slot->token->label ||
+						strcmp(match_tok->label, slot->token->label) != 0)) {
+					match = 0;
+				}
+				if (match_tok->manufacturer &&
+					(!slot->token || !slot->token->manufacturer ||
+						strcmp(match_tok->manufacturer, slot->token->manufacturer) != 0)) {
+					match = 0;
+				}
+				if (match_tok->serialnr &&
+					(!slot->token || !slot->token->serialnr ||
+						strcmp(match_tok->serialnr, slot->token->serialnr) != 0)) {
+					match = 0;
+				}
+				if (match_tok->model &&
+					(!slot->token || !slot->token->model ||
+						strcmp(match_tok->model, slot->token->model) != 0)) {
+					match = 0;
+				}
+			}
+			if (match) {
+				found_slot = slot;
+			}
 		}
 		UTIL_CTX_log(ctx, LOG_NOTICE, "- [%lu] %-25.25s  %-36s  (%s)\n",
 			PKCS11_get_slotid_from_slot(slot),
@@ -1042,17 +1226,10 @@ static int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 	}
 
 	rv = 1; /* Success */
+	return rv;
 
 cleanup:
-	/* Free the searched token data */
-	if (match_tok) {
-		OPENSSL_free(match_tok->model);
-		OPENSSL_free(match_tok->manufacturer);
-		OPENSSL_free(match_tok->serialnr);
-		OPENSSL_free(match_tok->label);
-		OPENSSL_free(match_tok);
-	}
-	return rv;
+	return 0;
 }
 
 /* In several tokens, certificates are marked as private */
@@ -1231,9 +1408,7 @@ static void *util_ctx_load_object(UTIL_CTX *ctx,
 
 	pthread_mutex_unlock(&ctx->lock);
 
-	OPENSSL_free(parsed.obj_label);
-	OPENSSL_free(parsed.matched_slots);
-	OPENSSL_free(parsed.obj_id);
+	util_parsed_free(&parsed);
 
 	if (!obj) {
 		UTIL_CTX_log(ctx, LOG_ERR, "The %s was not found at: %s\n",
@@ -1702,9 +1877,7 @@ EVP_PKEY *UTIL_CTX_generate_key(UTIL_CTX *ctx, const char *uri, int algorithm,
 
 end:
 	pthread_mutex_unlock(&ctx->lock);
-	OPENSSL_free(parsed.obj_label);
-	OPENSSL_free(parsed.matched_slots);
-	OPENSSL_free(parsed.obj_id);
+	util_parsed_free(&parsed);
 	return key;
 }
 

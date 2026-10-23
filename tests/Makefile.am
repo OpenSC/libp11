@@ -39,7 +39,8 @@ check_PROGRAMS = \
 	mldsa87-keygen-prov \
 	mlkem768-keygen-prov \
 	session-pool-test \
-	session-pool-stress
+	session-pool-stress \
+	parse-uri
 dist_check_SCRIPTS = \
 	rsa-testpkcs11.softhsm \
 	rsa-testfork.softhsm \
@@ -119,6 +120,7 @@ check_all_prov_SOURCES = check-all-prov.c helpers_prov.c
 ec_derive_prov_SOURCES = ec-derive-prov.c helpers_prov.c
 session_pool_test_SOURCES = session-pool-test.c session-pool-under-test.c
 session_pool_test_LDADD = $(OPENSSL_LIBS)
+parse_uri_SOURCES = parse-uri.c ../src/util_uri.c
 
 TESTS = $(dist_check_SCRIPTS)
 

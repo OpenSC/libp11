@@ -195,6 +195,8 @@ int pkcs11_CTX_load(PKCS11_CTX *ctx, const char *name)
 	ctx->description = PKCS11_DUP(ck_info.libraryDescription);
 	cpriv->cryptoki_version.major = ck_info.cryptokiVersion.major;
 	cpriv->cryptoki_version.minor = ck_info.cryptokiVersion.minor;
+	cpriv->library_version.major = ck_info.libraryVersion.major;
+	cpriv->library_version.minor = ck_info.libraryVersion.minor;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	register_falcon_oids();
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */

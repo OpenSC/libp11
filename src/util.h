@@ -50,6 +50,29 @@
 #define strcasecmp _stricmp
 #endif
 
+typedef struct {
+	int slot_nr;
+	char *obj_id;
+	size_t obj_id_len;
+	char *obj_label;
+	PKCS11_SLOT **matched_slots;
+	size_t matched_count;
+	PKCS11_TOKEN *match_tok;
+	char *pin;
+	size_t pin_len;
+	char *pin_value;
+	char *pin_source;
+	char *type;
+	char *slot_description;
+	char *slot_manufacturer;
+	int slot_id;
+	char *library_description;
+	char *library_manufacturer;
+	char *library_version;
+	char *module_name;
+	char *module_path;
+} PARSED;
+
 /* defined in util_uri.c */
 typedef struct util_ctx_st UTIL_CTX; /* opaque */
 
@@ -73,6 +96,11 @@ void UTIL_CTX_log(UTIL_CTX *ctx, int level, const char *format, ...)
 
 int UTIL_CTX_set_pin(UTIL_CTX *ctx, const char *pin);
 void UTIL_CTX_set_force_login(UTIL_CTX *ctx, int force_login);
+
+char *dump_hex(unsigned char *val, const size_t len);
+int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
+	const char *object_typestr, const char *object_uri);
+void util_parsed_free(PARSED *parsed);
 
 X509 *UTIL_CTX_get_cert_from_uri(UTIL_CTX *ctx, const char *uri,
 	UI_METHOD *ui_method, void *ui_data);
