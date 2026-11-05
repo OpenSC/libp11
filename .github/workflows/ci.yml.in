@@ -199,20 +199,36 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
-    - name: Prepare the vcpkg cache key
-      id: vcpkg-cache-key
+    - name: Identify vcpkg build inputs
+      id: vcpkg-inputs
       shell: pwsh
       run: |
         $revision = git -C "${{matrix.vcpkg_root}}" rev-parse HEAD
-        "value=$env:ImageVersion-$revision" >> $env:GITHUB_OUTPUT
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        "revision=$revision" >> $env:GITHUB_OUTPUT
+        "image=$env:ImageVersion" >> $env:GITHUB_OUTPUT
 
-    - name: Cache the vcpkg archives
-      uses: actions/cache@v5
+    # A PR run searches all of its own keys before any base-branch cache, so a
+    # broad fallback here would let a stale PR archive win over a matching one
+    # from master. Match the current build inputs in every scope first.
+    - name: Restore the vcpkg archives
+      id: vcpkg-cache
+      uses: actions/cache/restore@v5
       with:
         path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
-        key: ${{matrix.id}}-vcpkg-${{steps.vcpkg-cache-key.outputs.value}}-${{hashFiles('.github/workflows/ci.yml.in')}}
+        key: ${{matrix.id}}-vcpkg-${{steps.vcpkg-inputs.outputs.image}}-${{steps.vcpkg-inputs.outputs.revision}}-${{hashFiles('.github/workflows/ci.yml.in')}}
         restore-keys: |
-          ${{matrix.id}}-vcpkg-
+          ${{matrix.id}}-vcpkg-${{steps.vcpkg-inputs.outputs.image}}-${{steps.vcpkg-inputs.outputs.revision}}-
+          ${{matrix.id}}-vcpkg-${{steps.vcpkg-inputs.outputs.image}}-
+
+    # Older archives remain useful: vcpkg validates each package's ABI itself.
+    - name: Restore older vcpkg archives
+      if: steps.vcpkg-cache.outputs.cache-matched-key == ''
+      uses: actions/cache/restore@v5
+      with:
+        path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
+        key: ${{matrix.id}}-vcpkg-
+        restore-keys: |
           ${{matrix.id}}-
 
     - name: Configure Visual Studio
@@ -224,6 +240,14 @@ jobs:
       run: |
         vcpkg install --triplet=${{matrix.triplet}} openssl[tools]
         echo "C:\vcpkg\packages\openssl_${{matrix.triplet}}\tools\openssl" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    # Persist new binaries before build failures can prevent a cache save.
+    - name: Save the vcpkg archives
+      if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
+        key: ${{steps.vcpkg-cache.outputs.cache-primary-key}}
 
     - name: System information
       run: openssl version -a
