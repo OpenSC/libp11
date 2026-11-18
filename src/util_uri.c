@@ -913,15 +913,20 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		} else if (!strncmp(p, "pin-value=", 10)) {
 			p += 10;
 			rv = pin_set ? 0 : parse_uri_attr_len(ctx, p, (size_t)(end - p), pin, pin_len);
+			if (rv && memchr(pin, '\0', *pin_len) != NULL) {
+				/* The PIN is used as a C string */
+				UTIL_CTX_log(ctx, LOG_ERR, "The pin-value must not contain a NUL character\n");
+				rv = 0;
+			}
 			if (rv) {
-				parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_value);
+				rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_value);
 			}
 			pin_set = 1;
 		} else if (!strncmp(p, "pin-source=", 11)) {
 			p += 11;
 			rv = pin_set ? 0 : parse_pin_source(ctx, p, (size_t)(end - p), pin, pin_len);
 			if (rv) {
-				parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_source);
+				rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->pin_source);
 			}
 			pin_set = 1;
 		} else if (!strncmp(p, "module-name=", 12)) {
@@ -961,10 +966,6 @@ void util_parsed_free(PARSED *parsed)
 		return;
 	OPENSSL_free(parsed->obj_id);
 	OPENSSL_free(parsed->obj_label);
-	if (parsed->pin_len) {
-		OPENSSL_cleanse(parsed->pin, parsed->pin_len);
-		OPENSSL_free(parsed->pin);
-	}
 	if (parsed->pin_value) {
 		OPENSSL_cleanse(parsed->pin_value, strlen(parsed->pin_value));
 		OPENSSL_free(parsed->pin_value);
@@ -1022,8 +1023,6 @@ int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 			match_tok = parsed->match_tok;
 			if (tmp_pin_len > 0 && tmp_pin[0] != 0) {
 				tmp_pin[tmp_pin_len] = 0;
-				parsed->pin = OPENSSL_strdup(tmp_pin);
-				parsed->pin_len = tmp_pin_len;
 				if (!UTIL_CTX_set_pin(ctx, tmp_pin)) {
 					OPENSSL_cleanse(tmp_pin, sizeof(tmp_pin));
 					goto cleanup;

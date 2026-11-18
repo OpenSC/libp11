@@ -94,8 +94,6 @@ int main(int argc, char **argv)
 		print_hex("id", parsed.obj_id, parsed.obj_id_len);
 	if (parsed.pin_value)
 		printf("pin-value=%s\n", parsed.pin_value);
-	else if (parsed.pin)
-		printf("pin-value=%s\n", parsed.pin);
 	if (parsed.pin_source)
 		printf("pin-source=%s\n", parsed.pin_source);
 	if (parsed.module_name)

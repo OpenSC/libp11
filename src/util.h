@@ -58,8 +58,6 @@ typedef struct {
 	PKCS11_SLOT **matched_slots;
 	size_t matched_count;
 	PKCS11_TOKEN *match_tok;
-	char *pin;
-	size_t pin_len;
 	char *pin_value;
 	char *pin_source;
 	char *type;
