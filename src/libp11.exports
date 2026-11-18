@@ -4,6 +4,7 @@ PKCS11_CTX_new
 PKCS11_CTX_set_pkey_callback
 PKCS11_CTX_load
 PKCS11_CTX_unload
+PKCS11_CTX_get_library_version
 PKCS11_CTX_free
 PKCS11_open_session
 PKCS11_enumerate_slots

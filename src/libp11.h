@@ -241,6 +241,18 @@ extern int PKCS11_CTX_load(PKCS11_CTX *ctx, const char *ident);
 extern void PKCS11_CTX_unload(PKCS11_CTX *ctx);
 
 /**
+ * Get the version of the loaded PKCS#11 module (libraryVersion of CK_INFO)
+ *
+ * @param ctx context loaded with PKCS11_CTX_load()
+ * @param major receives the major version number
+ * @param minor receives the minor version number
+ * @retval 0 success
+ * @retval -1 error (no module loaded)
+ */
+extern int PKCS11_CTX_get_library_version(PKCS11_CTX *ctx,
+	unsigned char *major, unsigned char *minor);
+
+/**
  * Free a libp11 context
  *
  * @param ctx context allocated by PKCS11_CTX_new()
