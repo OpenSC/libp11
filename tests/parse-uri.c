@@ -53,9 +53,11 @@ int main(int argc, char **argv)
 {
 	UTIL_CTX *ctx;
 	PARSED parsed;
+	/* what the caller is loading, as checked against type= */
+	const char *object_typestr = argc > 2 ? argv[2] : "object";
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <pkcs11-uri>\n", argv[0]);
+	if (argc != 2 && argc != 3) {
+		fprintf(stderr, "Usage: %s <pkcs11-uri> [certificate|public key|private key]\n", argv[0]);
 		return 1;
 	}
 
@@ -66,7 +68,7 @@ int main(int argc, char **argv)
 	}
 
 	memset(&parsed, 0, sizeof(parsed));
-	if (!util_ctx_parse_uri(ctx, &parsed, "object", argv[1])) {
+	if (!util_ctx_parse_uri(ctx, &parsed, object_typestr, argv[1])) {
 		fprintf(stderr, "Failed to parse URI: %s\n", argv[1]);
 		util_parsed_free(&parsed);
 		UTIL_CTX_free(ctx);

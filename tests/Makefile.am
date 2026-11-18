@@ -62,6 +62,7 @@ dist_check_SCRIPTS = \
 	ec-keygen.softhsm \
 	ec-derive.softhsm \
 	session-pool-test.sh \
+	parse-uri.sh \
 	session-pool-stress.softhsm \
 	ed25519-keygen.softhsm \
 	ed448-keygen.softhsm \
@@ -121,6 +122,9 @@ ec_derive_prov_SOURCES = ec-derive-prov.c helpers_prov.c
 session_pool_test_SOURCES = session-pool-test.c session-pool-under-test.c
 session_pool_test_LDADD = $(OPENSSL_LIBS)
 parse_uri_SOURCES = parse-uri.c ../src/util_uri.c
+# util_uri.c is not part of libp11; it is built into the engine and the
+# provider modules, so compile it here the same way they do
+parse_uri_CFLAGS = $(AM_CFLAGS) $(OPENSSL_EXTRA_CFLAGS)
 
 TESTS = $(dist_check_SCRIPTS)
 
