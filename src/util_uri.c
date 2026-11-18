@@ -817,8 +817,6 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 	PKCS11_TOKEN *tok;
 	const char *end, *p;
 	int rv = 1, id_set = 0, pin_set = 0;
-	char tmp_id[MAX_PIN_LENGTH];
-	size_t tmp_id_len = sizeof(tmp_id);
 	char *tmp_str = NULL;
 
 	tok = OPENSSL_malloc(sizeof(PKCS11_TOKEN));
@@ -893,21 +891,16 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->obj_label);
 		} else if (!strncmp(p, "id=", 3)) {
 			p += 3;
-			if (parsed->obj_id) {
+			if (id_set) {
 				/* Duplicate attributes not allowed */
 				rv = 0;
 			} else {
-				tmp_id_len = sizeof(tmp_id);
-				rv = parse_uri_attr_len(ctx, p, (size_t)(end - p), tmp_id, &tmp_id_len);
-			}
-			if (rv && tmp_id_len > 0) {
-				parsed->obj_id = OPENSSL_malloc(tmp_id_len);
-				if (parsed->obj_id) {
-					memcpy(parsed->obj_id, tmp_id, tmp_id_len);
-					parsed->obj_id_len = tmp_id_len;
-				} else {
-					rv = 0;
-				}
+				/* URI decoding cannot increase the input length */
+				parsed->obj_id_len = (size_t)(end - p);
+				parsed->obj_id = OPENSSL_malloc(parsed->obj_id_len + 1);
+				rv = parsed->obj_id != NULL &&
+					parse_uri_attr_len(ctx, p, (size_t)(end - p),
+						parsed->obj_id, &parsed->obj_id_len);
 			}
 			id_set = 1;
 		} else if (!strncmp(p, "pin-value=", 10)) {
@@ -952,7 +945,7 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 		}
 	}
 
-	if (!id_set && !parsed->obj_id)
+	if (!id_set)
 		parsed->obj_id_len = 0;
 	if (!pin_set)
 		*pin_len = 0;
