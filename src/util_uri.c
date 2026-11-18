@@ -27,7 +27,7 @@
  */
 
 #include "util.h"
-#include "libp11-int.h"
+#include "p11_pthread.h"
 #include <openssl/rand.h>
 #include <ctype.h>
 #include <errno.h>
@@ -752,6 +752,75 @@ static int parse_uri_attr(UTIL_CTX *ctx,
 	return ret;
 }
 
+static int parse_version_number(const char **str, int *out)
+{
+	int val = 0;
+
+	if (!isdigit((unsigned char)**str))
+		return 0;
+	while (isdigit((unsigned char)**str)) {
+		val = val * 10 + (**str - '0');
+		if (val > 255) /* CK_VERSION holds bytes */
+			return 0;
+		(*str)++;
+	}
+	*out = val;
+	return 1;
+}
+
+/* RFC 7512: "M" or "M.N" in decimal, where "M" means "M.0" */
+static int parse_version(const char *str, int *major, int *minor)
+{
+	*minor = 0;
+	if (!parse_version_number(&str, major))
+		return 0;
+	if (*str == '.') {
+		str++;
+		if (!parse_version_number(&str, minor))
+			return 0;
+	}
+	return *str == '\0';
+}
+
+/*
+ * RFC 7512 module-name: the module file name without the directory,
+ * the "lib" prefix and the suffix, e.g. "softhsm2" for libsofthsm2.so
+ */
+static int module_name_matches(const char *name, const char *module)
+{
+	const char *base = strrchr(module, '/'), *dot;
+	size_t len;
+#ifdef _WIN32
+	const char *bs = strrchr(module, '\\');
+
+	if (bs && (!base || bs > base))
+		base = bs;
+#endif
+
+	base = base ? base + 1 : module;
+	if (!strncmp(base, "lib", 3) && base[3] != '\0' && base[3] != '.')
+		base += 3;
+	dot = strchr(base, '.');
+	len = dot ? (size_t)(dot - base) : strlen(base);
+	return strlen(name) == len && !strncmp(name, base, len);
+}
+
+static int module_path_matches(const char *path, const char *module)
+{
+	int ret = !strcmp(path, module);
+#ifndef _WIN32
+	if (!ret) {
+		/* The same file through a different path or a symlink */
+		char *a = realpath(path, NULL), *b = realpath(module, NULL);
+
+		ret = a && b && !strcmp(a, b);
+		free(a);
+		free(b);
+	}
+#endif
+	return ret;
+}
+
 static int read_from_file(UTIL_CTX *ctx,
 	const char *path, char *field, size_t *field_len)
 {
@@ -885,7 +954,19 @@ static int parse_pkcs11_uri(UTIL_CTX *ctx,
 			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->library_manufacturer);
 		} else if (!strncmp(p, "library-version=", 16)) {
 			p += 16;
-			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->library_version);
+			if (parsed->library_version_major != -1) {
+				/* Duplicate attributes not allowed */
+				rv = 0;
+			} else {
+				rv = parse_uri_attr(ctx, p, (size_t)(end - p), &tmp_str);
+				if (rv && !parse_version(tmp_str, &parsed->library_version_major,
+						&parsed->library_version_minor)) {
+					UTIL_CTX_log(ctx, LOG_ERR, "Invalid library-version in PKCS#11 URI: %s\n", tmp_str);
+					rv = 0;
+				}
+				OPENSSL_free(tmp_str);
+				tmp_str = NULL;
+			}
 		} else if (!strncmp(p, "object=", 7)) {
 			p += 7;
 			rv = parse_uri_attr(ctx, p, (size_t)(end - p), &parsed->obj_label);
@@ -969,7 +1050,6 @@ void util_parsed_free(PARSED *parsed)
 	OPENSSL_free(parsed->slot_manufacturer);
 	OPENSSL_free(parsed->library_description);
 	OPENSSL_free(parsed->library_manufacturer);
-	OPENSSL_free(parsed->library_version);
 	OPENSSL_free(parsed->module_name);
 	OPENSSL_free(parsed->module_path);
 	OPENSSL_free(parsed->matched_slots);
@@ -999,6 +1079,7 @@ int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 
 	parsed->slot_nr = -1;
 	parsed->slot_id = -1;
+	parsed->library_version_major = -1;
 	if (object_uri && *object_uri) {
 		if (!strncasecmp(object_uri, "pkcs11:", 7)) {
 			char tmp_pin[MAX_PIN_LENGTH+1];
@@ -1069,6 +1150,16 @@ int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 		}
 	}
 
+	/* Only one module is loaded, so it is the only one that can match */
+	if (ctx && ctx->module &&
+			((parsed->module_name && !module_name_matches(parsed->module_name, ctx->module)) ||
+			(parsed->module_path && !module_path_matches(parsed->module_path, ctx->module)))) {
+		UTIL_CTX_log(ctx, LOG_NOTICE,
+			"The PKCS#11 URI module-name or module-path does not match the module %s\n",
+			ctx->module);
+		goto cleanup;
+	}
+
 	if (!ctx || !ctx->slot_list || ctx->slot_count == 0) {
 		/* Slot list not initialized / no slots; parsing succeeded */
 		return 1;
@@ -1131,25 +1222,14 @@ int util_ctx_parse_uri(UTIL_CTX *ctx, PARSED *parsed,
 						strcmp(parsed->library_manufacturer, ctx->pkcs11_ctx->manufacturer) != 0)) {
 					match = 0;
 				}
-				if (parsed->library_version) {
-					if (!ctx->pkcs11_ctx || !ctx->pkcs11_ctx->_private) {
-						match = 0;
-					} else {
-						PKCS11_CTX_private *cpriv = ctx->pkcs11_ctx->_private;
-						unsigned int maj = 0, min = 0;
-						int count = sscanf(parsed->library_version, "%u.%u", &maj, &min);
+				if (parsed->library_version_major != -1) {
+					unsigned char major, minor;
 
-						if (count == 2) {
-							if ((unsigned int)cpriv->library_version.major != maj ||
-								(unsigned int)cpriv->library_version.minor != min)
-								match = 0;
-						} else if (count == 1) {
-							if ((unsigned int)cpriv->library_version.major != maj)
-								match = 0;
-						} else {
-							match = 0;
-						}
-					}
+					if (!ctx->pkcs11_ctx ||
+							PKCS11_CTX_get_library_version(ctx->pkcs11_ctx, &major, &minor) < 0 ||
+							major != parsed->library_version_major ||
+							minor != parsed->library_version_minor)
+						match = 0;
 				}
 				if (match_tok->label &&
 					(!slot->token || !slot->token->label ||

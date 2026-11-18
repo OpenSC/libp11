@@ -66,7 +66,8 @@ typedef struct {
 	int slot_id;
 	char *library_description;
 	char *library_manufacturer;
-	char *library_version;
+	int library_version_major; /* -1 if not set */
+	int library_version_minor;
 	char *module_name;
 	char *module_path;
 } PARSED;

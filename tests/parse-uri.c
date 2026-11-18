@@ -75,8 +75,9 @@ int main(int argc, char **argv)
 
 	print_hex_str("library-description", parsed.library_description);
 	print_hex_str("library-manufacturer", parsed.library_manufacturer);
-	if (parsed.library_version)
-		printf("library-version=%s\n", parsed.library_version);
+	if (parsed.library_version_major != -1)
+		printf("library-version=%d.%d\n",
+			parsed.library_version_major, parsed.library_version_minor);
 	if (parsed.match_tok) {
 		print_hex_str("token", parsed.match_tok->label);
 		print_hex_str("manufacturer", parsed.match_tok->manufacturer);
