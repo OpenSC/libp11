@@ -79,6 +79,18 @@ void PKCS11_CTX_unload(PKCS11_CTX *ctx)
 	pkcs11_CTX_unload(ctx);
 }
 
+int PKCS11_CTX_get_library_version(PKCS11_CTX *ctx,
+	unsigned char *major, unsigned char *minor)
+{
+	PKCS11_CTX_private *cpriv = ctx->_private;
+
+	if (check_fork(cpriv) < 0 || !cpriv->handle)
+		return -1;
+	*major = cpriv->library_version.major;
+	*minor = cpriv->library_version.minor;
+	return 0;
+}
+
 void PKCS11_CTX_free(PKCS11_CTX *ctx)
 {
 	if (check_fork(ctx->_private) < 0)
