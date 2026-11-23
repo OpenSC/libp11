@@ -63,21 +63,13 @@ int pkcs11_sign(int type, const unsigned char *m, unsigned int m_len,
  * RSA private key encryption (also invoked by OpenSSL for signing)
  * OpenSSL assumes that the output buffer is always big enough
  */
-int pkcs11_private_encrypt(int flen,
+static int pkcs11_private_encrypt_with_size(int flen,
 		const unsigned char *from, unsigned char *to,
-		PKCS11_OBJECT_private *key, int padding)
+		PKCS11_OBJECT_private *key, int padding, size_t siglen)
 {
-	PKCS11_SLOT_private *slot;
-	size_t siglen;
-
-	if (!key)
+	if (!siglen)
 		return -1;
 
-	slot = key->slot;
-	if (!slot)
-		return -1;
-
-	siglen = pkcs11_get_key_size(key);
 	if (pkcs11_evp_pkey_rsa_sign(key,
 		NULL, /* EVP_PKEY unused: RSA-PSS unsupported in ENGINE path */
 		NULL, /* digest metadata unavailable, input is already encoded/padded if needed */
@@ -87,6 +79,17 @@ int pkcs11_private_encrypt(int flen,
 		return -1;
 
 	return (int)siglen;
+}
+
+int pkcs11_private_encrypt(int flen,
+		const unsigned char *from, unsigned char *to,
+		PKCS11_OBJECT_private *key, int padding)
+{
+	if (!key || !key->slot)
+		return -1;
+
+	return pkcs11_private_encrypt_with_size(flen, from, to, key, padding,
+		pkcs11_get_key_size(key));
 }
 
 /* RSA private key decryption */
@@ -214,11 +217,6 @@ PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa)
 	return RSA_get_ex_data(rsa, rsa_ex_index);
 }
 
-void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key)
-{
-	RSA_set_ex_data(rsa, rsa_ex_index, key);
-}
-
 /*
  * Build an EVP_PKEY object
  */
@@ -231,14 +229,16 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 	if (!rsa)
 		return NULL;
 	pk = EVP_PKEY_new();
-	if (!pk) {
-		RSA_free(rsa);
-		return NULL;
-	}
+	if (!pk)
+		goto error;
 	if (key->object_class == CKO_PRIVATE_KEY) {
+		const RSA_METHOD *method = PKCS11_get_rsa_method();
+
 		/* The RSA object owns the reference stored in its ex_data. */
-		key = pkcs11_object_ref(key);
-		RSA_set_method(rsa, PKCS11_get_rsa_method());
+		if (!method || !RSA_set_method(rsa, method) ||
+				!RSA_set_ex_data(rsa, rsa_ex_index, key))
+			goto error;
+		pkcs11_object_ref(key);
 #if OPENSSL_VERSION_NUMBER >= 0x10100005L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
 		RSA_set_flags(rsa, RSA_FLAG_EXT_PKEY);
 #else
@@ -252,15 +252,15 @@ static EVP_PKEY *pkcs11_get_evp_key_rsa(PKCS11_OBJECT_private *key)
 	/* RSA_FLAG_SIGN_VER is no longer needed since OpenSSL 1.1 */
 	rsa->flags |= RSA_FLAG_SIGN_VER;
 #endif
-	pkcs11_set_ex_data_rsa(rsa, key);
 
-	if (!EVP_PKEY_set1_RSA(pk, rsa)) {
-		RSA_free(rsa);
-		EVP_PKEY_free(pk);
-		return NULL;
-	}
-	RSA_free(rsa); /* Drops our reference to it */
+	if (!EVP_PKEY_assign_RSA(pk, rsa))
+		goto error;
 	return pk;
+
+error:
+	RSA_free(rsa);
+	EVP_PKEY_free(pk);
+	return NULL;
 }
 
 /* TODO: remove this function in libp11 0.5.0 */
@@ -367,7 +367,9 @@ static int pkcs11_rsa_priv_enc_method(int flen, const unsigned char *from,
 		priv_enc = RSA_meth_get_priv_enc(RSA_get_default_method());
 		return priv_enc(flen, from, to, rsa, padding);
 	}
-	return pkcs11_private_encrypt(flen, from, to, key, padding);
+	/* OpenSSL has already supplied the RSA key and sized the output. */
+	return pkcs11_private_encrypt_with_size(flen, from, to, key, padding,
+		RSA_size(rsa));
 }
 
 static int pkcs11_rsa_free_method(RSA *rsa)
@@ -377,7 +379,7 @@ static int pkcs11_rsa_free_method(RSA *rsa)
 		RSA_meth_get_finish(RSA_get_default_method());
 
 	if (key) {
-		pkcs11_set_ex_data_rsa(rsa, NULL);
+		RSA_set_ex_data(rsa, rsa_ex_index, NULL);
 		pkcs11_object_free(key);
 	}
 	if (orig_rsa_free_method) {
