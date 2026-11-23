@@ -22,6 +22,30 @@
 
 #include "libp11-int.h"
 
+#ifdef HAVE_PTHREAD
+static pthread_mutex_t key_cache_lock = PTHREAD_MUTEX_INITIALIZER;
+#else
+static SRWLOCK key_cache_lock = SRWLOCK_INIT;
+#endif
+
+void pkcs11_key_cache_lock(void)
+{
+#ifdef HAVE_PTHREAD
+	pthread_mutex_lock(&key_cache_lock);
+#else
+	AcquireSRWLockExclusive(&key_cache_lock);
+#endif
+}
+
+void pkcs11_key_cache_unlock(void)
+{
+#ifdef HAVE_PTHREAD
+	pthread_mutex_unlock(&key_cache_lock);
+#else
+	ReleaseSRWLockExclusive(&key_cache_lock);
+#endif
+}
+
 #ifndef _WIN32
 
 static unsigned int P11_forkid = 0;
@@ -33,12 +57,16 @@ static unsigned int P11_forkid = 0;
 static void _P11_atfork_child(void)
 {
 	P11_forkid++;
+	pkcs11_key_cache_unlock();
 }
 
 __attribute__((constructor))
 int _P11_register_fork_handler(void)
 {
-	if (pthread_atfork(0, 0, _P11_atfork_child) != 0)
+	/* Drain cache operations before forking so the caller owns the lock
+	 * and can release it in both processes. */
+	if (pthread_atfork(pkcs11_key_cache_lock, pkcs11_key_cache_unlock,
+			_P11_atfork_child) != 0)
 		return -1;
 	return 0;
 }

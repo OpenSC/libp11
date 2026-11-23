@@ -68,8 +68,6 @@ static void (*ossl_ec_finish)(EC_KEY *);
 static int (*ossl_ec_copy)(EC_KEY *, const EC_KEY *);
 #endif /* OPENSSL_VERSION_NUMBER */
 
-static int ec_ex_index = 0;
-
 /********** Missing ECDSA_METHOD functions for OpenSSL < 1.1.0 */
 
 typedef ECDSA_SIG *(*sign_sig_fn)(const unsigned char *, int,
@@ -174,6 +172,27 @@ void ECDH_METHOD_set_compute_key(ECDH_METHOD *m, compute_key_fn f)
 
 /********** Manage EC ex_data */
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
+#define P11_LEGACY_EC_KEY_DATA
+
+/* OpenSSL 1.0.2 has no EC_KEY_METHOD finish hook. Keep the lifetime
+ * callbacks on the key, not in a process-wide ex_data index. */
+static void *pkcs11_ec_dup_object(void *ptr)
+{
+	return pkcs11_object_ref(ptr);
+}
+
+static void pkcs11_ec_free_object(void *ptr)
+{
+	pkcs11_object_free(ptr);
+}
+
+/* Per-key callbacks do not need an ex_data index. */
+static void alloc_ec_ex_index(void) {}
+static void free_ec_ex_index(void) {}
+#else
+static int ec_ex_index = 0;
+
 /* NOTE: ECDH also uses ECDSA ex_data and *not* ECDH ex_data */
 static void alloc_ec_ex_index(void)
 {
@@ -201,6 +220,7 @@ static void free_ec_ex_index(void)
 		ec_ex_index = 0;
 	}
 }
+#endif
 
 /********** EVP_PKEY retrieval */
 
@@ -354,19 +374,27 @@ static EC_KEY *pkcs11_get_ec(PKCS11_OBJECT_private *key)
 
 PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec)
 {
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	return EC_KEY_get_ex_data(ec, ec_ex_index);
-#else
+#if defined(P11_LEGACY_EC_KEY_DATA)
+	return EC_KEY_get_key_method_data((EC_KEY *)ec, pkcs11_ec_dup_object,
+		pkcs11_ec_free_object, pkcs11_ec_free_object);
+#elif defined(LIBRESSL_VERSION_NUMBER)
 	return ECDSA_get_ex_data((EC_KEY *)ec, ec_ex_index);
+#else
+	return EC_KEY_get_ex_data(ec, ec_ex_index);
 #endif
 }
 
-void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
+static int pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key)
 {
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	EC_KEY_set_ex_data(ec, ec_ex_index, key);
+#if defined(P11_LEGACY_EC_KEY_DATA)
+	/* Insertion returns NULL both on success and on allocation failure. */
+	EC_KEY_insert_key_method_data(ec, key, pkcs11_ec_dup_object,
+		pkcs11_ec_free_object, pkcs11_ec_free_object);
+	return pkcs11_get_ex_data_ec(ec) == key;
+#elif defined(LIBRESSL_VERSION_NUMBER)
+	return ECDSA_set_ex_data(ec, ec_ex_index, key);
 #else
-	ECDSA_set_ex_data(ec, ec_ex_index, key);
+	return EC_KEY_set_ex_data(ec, ec_ex_index, key);
 #endif
 }
 
@@ -399,11 +427,9 @@ static EVP_PKEY *pkcs11_get_evp_key_ec(PKCS11_OBJECT_private *key)
 		ECDSA_set_method(ec, PKCS11_get_ecdsa_method());
 		ECDH_set_method(ec, PKCS11_get_ecdh_method());
 #endif
-		/* Keep the PKCS11_OBJECT_private alive while referenced from EC ex_data.
-		 * With EC_KEY_METHOD, pkcs11_ec_finish() releases this reference;
-		 * legacy ECDSA/ECDH methods have no equivalent finish hook. */
-		key = pkcs11_object_ref(key);
-		pkcs11_set_ex_data_ec(ec, key);
+		if (!pkcs11_set_ex_data_ec(ec, key))
+			goto error;
+		pkcs11_object_ref(key);
 	}
 	/* TODO: Retrieve the ECDSA private key object attributes instead,
 	 * unless the key has the "sensitive" attribute set */

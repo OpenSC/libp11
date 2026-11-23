@@ -126,7 +126,9 @@ struct pkcs11_object_private {
 	size_t id_len;
 	char *label;
 	PKCS11_OBJECT_ops *ops;
+	/* Both fields are protected by the key cache lock. */
 	EVP_PKEY *evp_key;
+	int in_key_cache;
 	X509 *x509;
 	unsigned int forkid;
 	int refcnt;
@@ -225,6 +227,10 @@ extern unsigned int get_forkid(void);
 extern int check_fork(PKCS11_CTX_private *ctx);
 extern int check_slot_fork(PKCS11_SLOT_private *slot);
 extern int check_object_fork(PKCS11_OBJECT_private *key);
+
+/* EVP_PKEY cache synchronization (also used by the fork handlers) */
+extern void pkcs11_key_cache_lock(void);
+extern void pkcs11_key_cache_unlock(void);
 
 /* Other internal functions */
 extern void *C_LoadModule(const char *name, CK_FUNCTION_LIST_PTR_PTR,
@@ -577,15 +583,9 @@ extern int pkcs11_private_decrypt(
 /* Retrieve PKCS11_OBJECT_private from an RSA key */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_rsa(const RSA *rsa);
 
-/* Set PKCS11_OBJECT_private for an RSA key */
-void pkcs11_set_ex_data_rsa(RSA *rsa, PKCS11_OBJECT_private *key);
-
 #ifndef OPENSSL_NO_EC
 /* Retrieve PKCS11_OBJECT_private from an EC_KEY */
 extern PKCS11_OBJECT_private *pkcs11_get_ex_data_ec(const EC_KEY *ec);
-
-/* Set PKCS11_OBJECT_private for an EC_KEY */
-extern void pkcs11_set_ex_data_ec(EC_KEY *ec, PKCS11_OBJECT_private *key);
 #endif /* OPENSSL_NO_EC */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L

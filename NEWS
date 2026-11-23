@@ -1,6 +1,8 @@
 NEWS for Libp11 -- History of user visible changes
 
 New in 0.4.22; unreleased
+* Fixed a crash when signing with a retained RSA key after refreshing slots
+* Fixed a leak when freeing token-backed EC keys with OpenSSL 1.0.2
 
 New in 0.4.21; 2026-09-07; Michał Trojnara
 * Added PKCS#11 provider support for `openssl genpkey` (Małgorzata Olszówka)

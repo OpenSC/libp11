@@ -1339,94 +1339,114 @@ int pkcs11_get_key_type(PKCS11_OBJECT_private *key)
 	return EVP_PKEY_NONE;
 }
 
+static int pkcs11_evp_pkey_up_ref(EVP_PKEY *pkey)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || ( defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x3050000fL )
+	return EVP_PKEY_up_ref(pkey);
+#else
+	CRYPTO_add(&pkey->references, 1, CRYPTO_LOCK_EVP_PKEY);
+	return 1;
+#endif
+}
+
+/* Return a separate wrapper so callers cannot modify the cached EVP_PKEY. */
+static EVP_PKEY *pkcs11_dup_cached_key(EVP_PKEY *pkey)
+{
+	EVP_PKEY *ret;
+
+	if (EVP_PKEY_is_a(pkey, "RSA") || EVP_PKEY_is_a(pkey, "RSA-PSS")) {
+		/* Share the RSA object; duplicating a foreign RSA key is unsafe. */
+		RSA *rsa = EVP_PKEY_get1_RSA(pkey);
+
+		if (!rsa)
+			return NULL;
+		ret = EVP_PKEY_new();
+		if (ret && EVP_PKEY_assign_RSA(ret, rsa))
+			return ret;
+		RSA_free(rsa);
+		EVP_PKEY_free(ret);
+		return NULL;
+	}
+	if (EVP_PKEY_is_a(pkey, "EC")) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
+		EC_KEY *ec = EVP_PKEY_get1_EC_KEY(pkey);
+
+		if (!ec)
+			return NULL;
+		ret = EVP_PKEY_new();
+		if (ret && EVP_PKEY_assign_EC_KEY(ret, ec))
+			return ret;
+		EC_KEY_free(ec);
+		EVP_PKEY_free(ret);
+		return NULL;
+#else
+		return EVP_PKEY_dup(pkey);
+#endif
+	}
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	return pkcs11_dup_raw_public_key(pkey);
+#else
+	return NULL;
+#endif
+}
+
+static EVP_PKEY *pkcs11_get_key_cached(PKCS11_OBJECT_private *key)
+{
+	EVP_PKEY *cached, *ret;
+
+	/* Pin the wrapper before allowing eviction to drop the cache's ref. */
+	pkcs11_key_cache_lock();
+	cached = key->evp_key;
+	if (cached && !pkcs11_evp_pkey_up_ref(cached))
+		cached = NULL;
+	pkcs11_key_cache_unlock();
+
+	if (!cached) {
+		/* Session acquisition can re-enter cache eviction. */
+		ret = key->ops->get_evp_key(key);
+		if (!ret)
+			return NULL;
+
+		pkcs11_key_cache_lock();
+		/* Never repopulate an evicted or temporary object: there would
+		 * be no cache entry left to break the reference cycle. */
+		if (key->in_key_cache && !key->evp_key && pkcs11_evp_pkey_up_ref(ret))
+			cached = key->evp_key = ret;
+		pkcs11_key_cache_unlock();
+		if (!cached)
+			return ret;
+	}
+
+	ret = pkcs11_dup_cached_key(cached);
+	EVP_PKEY_free(cached);
+	return ret;
+}
+
 /*
  * Create an EVP_PKEY OpenSSL object for a given key
  * Returns the key type specified in object_class.
  */
 EVP_PKEY *pkcs11_get_key(PKCS11_OBJECT_private *key0, CK_OBJECT_CLASS object_class)
 {
-	PKCS11_OBJECT_private *key = key0;
+	PKCS11_OBJECT_private *key = pkcs11_object_ref(key0);
 	EVP_PKEY *ret = NULL;
-	RSA *rsa;
-#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
-	EC_KEY *ec_key;
-#endif
 
-	if (key->object_class != object_class)
-		key = pkcs11_object_from_object(key, CK_INVALID_HANDLE, object_class);
-	if (!key || !key->ops)
-		goto err;
-	if (!key->evp_key) {
-		key->evp_key = key->ops->get_evp_key(key);
-		if (!key->evp_key)
-			goto err;
+	/* Key construction can invalidate the slot cache when opening a session. */
+	if (key->object_class != object_class) {
+		key = pkcs11_object_from_object(key0, CK_INVALID_HANDLE, object_class);
+		pkcs11_object_free(key0);
 	}
-	/* We need a full copy of the EVP_PKEY as it will be modified later.
-	 * Using a reference would mean changes to the duplicated EVP_PKEY could
-	 * affect the original one.
-	 */
-	if (EVP_PKEY_is_a(key->evp_key, "RSA") ||
-		EVP_PKEY_is_a(key->evp_key, "RSA-PSS")) {
-		/* Do not try to duplicate foreign RSA keys */
-		rsa = EVP_PKEY_get1_RSA(key->evp_key);
-		if (!rsa)
-			goto err;
-		ret = EVP_PKEY_new();
-		if (!ret) {
-			RSA_free(rsa);
-			goto err;
-		}
-		if (!EVP_PKEY_assign_RSA(ret, rsa)) {
-			RSA_free(rsa);
-			EVP_PKEY_free(ret);
-			goto err;
-		}
-		if (key->object_class != CKO_PRIVATE_KEY)
-			pkcs11_set_ex_data_rsa(rsa, NULL);
-
-	} else if (EVP_PKEY_is_a(key->evp_key, "EC")) {
-#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
-		ec_key = EVP_PKEY_get1_EC_KEY(key->evp_key);
-		if (!ec_key)
-			goto err;
-		ret = EVP_PKEY_new();
-		if (!ret) {
-			EC_KEY_free(ec_key);
-			goto err;
-		}
-		if (!EVP_PKEY_assign_EC_KEY(ret, ec_key)) {
-			EC_KEY_free(ec_key);
-			EVP_PKEY_free(ret);
-			goto err;
-		}
-		if (key->object_class != CKO_PRIVATE_KEY)
-			pkcs11_set_ex_data_ec(ec_key, NULL);
-#else
-		/* pkcs11_ec_copy() method is only set for private keys,
-		 * so public keys do not have a PKCS11_OBJECT reference */
-		ret = EVP_PKEY_dup(key->evp_key);
-#endif
+	if (key && key->ops) {
+		ret = pkcs11_get_key_cached(key);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	} else {
-		ret = pkcs11_dup_raw_public_key(key->evp_key);
+		/* Also associate public keys for FALCON token-side verify. */
+		if (ret) {
+			alloc_evp_pkey_ex_index();
+			pkcs11_set_ex_data_evp_pkey(ret, key);
+		}
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 	}
-
-	if (!ret) {
-		pkcs11_log(key0->slot->ctx, LOG_DEBUG, "Unsupported key type\n");
-		goto err;
-	}
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	/* Store the backing PKCS#11 object in EVP_PKEY ex_data. Public key
-	 * ex_data is needed as a workaround for FALCON token-side verify. */
-	alloc_evp_pkey_ex_index();
-	pkcs11_set_ex_data_evp_pkey(ret, key);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-err:
-	if (key != key0)
-		pkcs11_object_free(key);
-
+	pkcs11_object_free(key);
 	return ret;
 }
 
@@ -1652,6 +1672,8 @@ static int pkcs11_init_key(PKCS11_SLOT_private *slot, CK_SESSION_HANDLE session,
 	key = keys->keys + keys->num++;
 	memset(key, 0, sizeof(PKCS11_KEY));
 
+	/* Set before publishing the key for lookup. */
+	kpriv->in_key_cache = 1;
 	/* Fill public properties */
 	key->_private = kpriv;
 	key->id = kpriv->id;
@@ -1854,9 +1876,7 @@ static PKCS11_OBJECT_ops *pkcs11_slhdsa_ops_from_param(CK_ULONG param_set)
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30500000L */
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-/*
- * Recreate a raw public key, since EVP_PKEY_dup() does not support raw keys.
- */
+/* Recreate a raw public key without reading the token again. */
 static EVP_PKEY *pkcs11_dup_raw_public_key(EVP_PKEY *pkey)
 {
 	const char *name;
@@ -1946,13 +1966,20 @@ void pkcs11_destroy_keys(PKCS11_SLOT_private *slot, unsigned int type)
 	PKCS11_keys *keys = (type == CKO_PRIVATE_KEY) ? &slot->prv : &slot->pub;
 
 	while (keys->num > 0) {
-		PKCS11_KEY *key = &keys->keys[--keys->num];
-		PKCS11_OBJECT_private *obj = key->_private;
+		PKCS11_OBJECT_private *obj = keys->keys[--keys->num]._private;
+		EVP_PKEY *pkey;
 
-		if (obj) {
-			EVP_PKEY_free(obj->evp_key);
-			pkcs11_object_free(obj);
-		}
+		if (!obj)
+			continue;
+		pkcs11_key_cache_lock();
+		obj->in_key_cache = 0;
+		pkey = obj->evp_key;
+		obj->evp_key = NULL;
+		pkcs11_key_cache_unlock();
+
+		/* Free outside the lock: OpenSSL cleanup may unref obj. */
+		EVP_PKEY_free(pkey);
+		pkcs11_object_free(obj);
 	}
 	if (keys->keys)
 		OPENSSL_free(keys->keys);

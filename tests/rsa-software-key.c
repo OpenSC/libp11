@@ -30,6 +30,12 @@
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 
+#ifndef _WIN32
+#include <errno.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 static EVP_PKEY *generate_software_key(void)
 {
 	EVP_PKEY_CTX *ctx;
@@ -77,15 +83,31 @@ cleanup:
 	return ret;
 }
 
+#ifndef _WIN32
+static int wait_for_child(pid_t child)
+{
+	pid_t waited;
+	int status;
+
+	do {
+		waited = waitpid(child, &status, 0);
+	} while (waited < 0 && errno == EINTR);
+	return waited == child && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
 	PKCS11_CTX *ctx = NULL;
 	PKCS11_SLOT *slots = NULL, *slot;
 	PKCS11_KEY *keys;
 	EVP_PKEY *software_key = NULL, *new_software_key = NULL;
-	EVP_PKEY *token_key = NULL;
+	EVP_PKEY *token_key = NULL, *second_token_key = NULL;
 	unsigned int nslots = 0, nkeys = 0;
 	int ret = EXIT_FAILURE;
+#ifndef _WIN32
+	pid_t child = -1;
+#endif
 
 	if (argc != 3) {
 		fprintf(stderr, "usage: %s [module] [PIN]\n", argv[0]);
@@ -127,6 +149,40 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
+	/* Cache hits must still give callers independent EVP_PKEY wrappers. */
+	second_token_key = PKCS11_get_private_key(&keys[0]);
+	if (!second_token_key || second_token_key == token_key) {
+		fprintf(stderr, "Failed to get another wrapper for the PKCS#11 key\n");
+		goto cleanup;
+	}
+
+#ifndef _WIN32
+	child = fork();
+	if (child < 0) {
+		perror("fork");
+		goto cleanup;
+	}
+	if (!child) {
+		alarm(15);
+		EVP_PKEY_free(second_token_key);
+		second_token_key = PKCS11_get_private_key(&keys[0]);
+		if (second_token_key && sign_certificate(second_token_key))
+			ret = EXIT_SUCCESS;
+		goto cleanup;
+	}
+	if (!wait_for_child(child)) {
+		fprintf(stderr, "Cached PKCS#11 key lookup or signing failed after fork\n");
+		goto cleanup;
+	}
+#endif
+
+	/* Refreshing the slots must not invalidate either retained wrapper. */
+	if (PKCS11_update_slots(ctx, &slots, &nslots) < 0 ||
+			!sign_certificate(token_key) || !sign_certificate(second_token_key)) {
+		fprintf(stderr, "Slot refresh or retained-key signing failed\n");
+		goto cleanup;
+	}
+
 	/* Loading a token key must not alter a provider-backed key that was
 	 * created earlier, or change how subsequent software keys are created. */
 	new_software_key = generate_software_key();
@@ -144,6 +200,7 @@ cleanup:
 	if (ret != EXIT_SUCCESS)
 		ERR_print_errors_fp(stderr);
 	EVP_PKEY_free(new_software_key);
+	EVP_PKEY_free(second_token_key);
 	EVP_PKEY_free(token_key);
 	EVP_PKEY_free(software_key);
 	if (slots)
@@ -152,6 +209,10 @@ cleanup:
 		PKCS11_CTX_unload(ctx);
 		PKCS11_CTX_free(ctx);
 	}
+#ifndef _WIN32
+	if (!child)
+		_exit(ret);
+#endif
 	return ret;
 }
 
